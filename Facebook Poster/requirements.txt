@@ -1,0 +1,6 @@
+requests
+requests-oauthlib
+huggingface_hub
+schedule
+python-dotenv
+flask
