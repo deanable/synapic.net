@@ -1,7 +1,7 @@
 {
   "target_page_id": "100814746063812",
   "target_page_token": "EAAKo1WxIoLkBQT61KurPv403d3mN2BxudObxmvvxQJwu7RmeQEr22Dg1xrBcVmqVhmmBu3wXnI2ceNnBxSvKqfrwyLgHmH3zxHZA0ydKClJQQBU1ksxSRFsJ62yGhTb1NsJL5uyaHTG8JD7YXAk1eZAG8yKPAo0c1V7bMzl8CBRg4IN4YuOhyRvZBjWZCSX54hw8fq8VjI9YwkZC9wGUJ",
-  "interval_minutes": 240,
+  "interval_minutes": 480,
   "topics_queue": [],
   "posted_log": [
     {
@@ -77,6 +77,139 @@
       "timestamp": "2026-01-05T20:54:32.741154",
       "scheduled_for": "2026-01-07T09:07:19.945448",
       "post_id": "847163371419833",
+      "status": "scheduled"
+    },
+    {
+      "topic": "Why \"Hands That Help\" Are Better Than \"Lips That Pray\"",
+      "timestamp": "2026-01-05T23:03:00.470371",
+      "scheduled_for": "2026-01-05T23:17:52.611509",
+      "post_id": "847223741413796",
+      "status": "scheduled"
+    },
+    {
+      "topic": "Parenting Without the Threat of Hell",
+      "timestamp": "2026-01-05T23:03:10.703655",
+      "scheduled_for": "2026-01-06T23:17:52.611509",
+      "post_id": "847223854747118",
+      "status": "scheduled"
+    },
+    {
+      "topic": "The Difference Between Respecting People and Respecting Beliefs",
+      "timestamp": "2026-01-05T23:03:20.371737",
+      "scheduled_for": "2026-01-07T23:17:52.611509",
+      "post_id": "847223934747110",
+      "status": "scheduled"
+    },
+    {
+      "topic": "Why Reading the Holy Books is the Quickest Path to Atheism",
+      "timestamp": "2026-01-05T23:03:28.810046",
+      "scheduled_for": "2026-01-08T23:17:52.611509",
+      "post_id": "847224001413770",
+      "status": "scheduled"
+    },
+    {
+      "topic": "Creating Your Own Meaning Instead of Being Assigned One",
+      "timestamp": "2026-01-05T23:03:38.915343",
+      "scheduled_for": "2026-01-09T23:17:52.611509",
+      "post_id": "847224114747092",
+      "status": "scheduled"
+    },
+    {
+      "topic": "The Problem with Believing \"Just in Case\" (Pascal\u2019s Wager)",
+      "timestamp": "2026-01-05T23:03:48.827075",
+      "scheduled_for": "2026-01-10T23:17:52.611509",
+      "post_id": "847224221413748",
+      "status": "scheduled"
+    },
+    {
+      "topic": "Why Atheism is Not a Religion or a Worldview",
+      "timestamp": "2026-01-05T23:03:58.712636",
+      "scheduled_for": "2026-01-11T23:17:52.611509",
+      "post_id": "847224411413729",
+      "status": "scheduled"
+    },
+    {
+      "topic": "How Secularism Actually Protects Religious Freedom",
+      "timestamp": "2026-01-05T23:04:08.231453",
+      "scheduled_for": "2026-01-12T23:17:52.611509",
+      "post_id": "847224521413718",
+      "status": "scheduled"
+    },
+    {
+      "topic": "Moving Past the Fear of Eternal Punishment",
+      "timestamp": "2026-01-05T23:04:16.971588",
+      "scheduled_for": "2026-01-13T23:17:52.611509",
+      "post_id": "847224651413705",
+      "status": "scheduled"
+    },
+    {
+      "topic": "Why I Don't Need a Holy Book to Know Killing is Wrong",
+      "timestamp": "2026-01-05T23:04:26.862037",
+      "scheduled_for": "2026-01-14T23:17:52.611509",
+      "post_id": "847224784747025",
+      "status": "scheduled"
+    },
+    {
+      "topic": "Why Does the Bible Have Rules for Owning People?",
+      "timestamp": "2026-01-05T23:06:42.433346",
+      "scheduled_for": "2026-01-05T23:21:33.511070",
+      "post_id": "847225794746924",
+      "status": "scheduled"
+    },
+    {
+      "topic": "The Biblical Case for Women as Property",
+      "timestamp": "2026-01-05T23:06:55.351843",
+      "scheduled_for": "2026-01-06T07:21:33.511070",
+      "post_id": "847225958080241",
+      "status": "scheduled"
+    },
+    {
+      "topic": "When God Ordered the Slaughter of Infants",
+      "timestamp": "2026-01-05T23:07:11.461567",
+      "scheduled_for": "2026-01-06T15:21:33.511070",
+      "post_id": "847226148080222",
+      "status": "scheduled"
+    },
+    {
+      "topic": "The Impossible Logistics of Noah's Zoo",
+      "timestamp": "2026-01-05T23:07:23.751807",
+      "scheduled_for": "2026-01-06T23:21:33.511070",
+      "post_id": "847226278080209",
+      "status": "scheduled"
+    },
+    {
+      "topic": "Plants Before Sunlight: The Science of Genesis",
+      "timestamp": "2026-01-05T23:07:34.381330",
+      "scheduled_for": "2026-01-07T07:21:33.511070",
+      "post_id": "847226361413534",
+      "status": "scheduled"
+    },
+    {
+      "topic": "How Did Judas Die? The Bible Can't Decide",
+      "timestamp": "2026-01-05T23:07:47.792088",
+      "scheduled_for": "2026-01-07T15:21:33.511070",
+      "post_id": "847226488080188",
+      "status": "scheduled"
+    },
+    {
+      "topic": "The Missing Evidence for the Exodus",
+      "timestamp": "2026-01-05T23:07:57.860253",
+      "scheduled_for": "2026-01-07T23:21:33.511070",
+      "post_id": "847226574746846",
+      "status": "scheduled"
+    },
+    {
+      "topic": "Punishing the Grandkids: The \"Sins of the Father\"",
+      "timestamp": "2026-01-05T23:08:07.456447",
+      "scheduled_for": "2026-01-08T07:21:33.511070",
+      "post_id": "847226724746831",
+      "status": "scheduled"
+    },
+    {
+      "topic": "Pharaoh\u2019s Hardened Heart: Did He Ever Have a Choice?",
+      "timestamp": "2026-01-05T23:08:16.589216",
+      "scheduled_for": "2026-01-08T15:21:33.511070",
+      "post_id": "847226791413491",
       "status": "scheduled"
     }
   ],
