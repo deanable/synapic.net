@@ -33,13 +33,13 @@ class FacebookAuth:
             return "Authentication failed."
 
         # Run server in a separate thread
-        server_thread = threading.Thread(target=lambda: app.run(port=5000, ssl_context='adhoc'))
+        server_thread = threading.Thread(target=lambda: app.run(port=5000))
         server_thread.daemon = True
         server_thread.start()
 
         # 2. Open Browser
-        # Scopes needed: pages_manage_posts, pages_read_engagement, public_profile
-        scopes = "pages_manage_posts,pages_read_engagement,public_profile"
+        # Scopes needed: pages_manage_posts, pages_read_engagement, public_profile, pages_show_list, business_management
+        scopes = "pages_manage_posts,pages_read_engagement,public_profile,pages_show_list,business_management"
         auth_url = (
             f"https://www.facebook.com/v18.0/dialog/oauth?"
             f"client_id={self.app_id}&"

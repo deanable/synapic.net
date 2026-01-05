@@ -1,7 +1,84 @@
 {
-    "target_page_id": "",
-    "target_page_token": "",
-    "interval_minutes": 240,
-    "topics_queue": [],
-    "posted_log": []
+  "target_page_id": "100814746063812",
+  "target_page_token": "EAAKo1WxIoLkBQT61KurPv403d3mN2BxudObxmvvxQJwu7RmeQEr22Dg1xrBcVmqVhmmBu3wXnI2ceNnBxSvKqfrwyLgHmH3zxHZA0ydKClJQQBU1ksxSRFsJ62yGhTb1NsJL5uyaHTG8JD7YXAk1eZAG8yKPAo0c1V7bMzl8CBRg4IN4YuOhyRvZBjWZCSX54hw8fq8VjI9YwkZC9wGUJ",
+  "interval_minutes": 240,
+  "topics_queue": [],
+  "posted_log": [
+    {
+      "topic": "What is atheism",
+      "timestamp": "2026-01-05T20:42:13.785938",
+      "post_id": "847157144753789"
+    },
+    {
+      "topic": "The \"Good Without God\" Argument",
+      "timestamp": "2026-01-05T20:52:29.475091",
+      "scheduled_for": "2026-01-05T21:07:19.945448",
+      "post_id": "847162144753289",
+      "status": "scheduled"
+    },
+    {
+      "topic": "Atheists Reclaiming Sunday Mornings",
+      "timestamp": "2026-01-05T20:52:44.050897",
+      "scheduled_for": "2026-01-06T01:07:19.945448",
+      "post_id": "847162288086608",
+      "status": "scheduled"
+    },
+    {
+      "topic": "The \"Angry Atheist\" Myth",
+      "timestamp": "2026-01-05T20:53:01.426929",
+      "scheduled_for": "2026-01-06T05:07:19.945448",
+      "post_id": "847162458086591",
+      "status": "scheduled"
+    },
+    {
+      "topic": "Awe Without the Supernatural",
+      "timestamp": "2026-01-05T20:53:14.857984",
+      "scheduled_for": "2026-01-06T09:07:19.945448",
+      "post_id": "847162601419910",
+      "status": "scheduled"
+    },
+    {
+      "topic": "Dealing with Grief Without an Afterlife",
+      "timestamp": "2026-01-05T20:53:30.921773",
+      "scheduled_for": "2026-01-06T13:07:19.945448",
+      "post_id": "847162774753226",
+      "status": "scheduled"
+    },
+    {
+      "topic": "We Are All Born Atheists",
+      "timestamp": "2026-01-05T20:53:44.601517",
+      "scheduled_for": "2026-01-06T17:07:19.945448",
+      "post_id": "847162901419880",
+      "status": "scheduled"
+    },
+    {
+      "topic": "Atheists Letting Go of \"Everything Happens for a Reason\"",
+      "timestamp": "2026-01-05T20:53:55.374930",
+      "scheduled_for": "2026-01-06T21:07:19.945448",
+      "post_id": "847163011419869",
+      "status": "scheduled"
+    },
+    {
+      "topic": "The Burden of Proof (The Teapot Analogy)",
+      "timestamp": "2026-01-05T20:54:06.150665",
+      "scheduled_for": "2026-01-07T01:07:19.945448",
+      "post_id": "847163128086524",
+      "status": "scheduled"
+    },
+    {
+      "topic": "Community Without the Pews",
+      "timestamp": "2026-01-05T20:54:20.023630",
+      "scheduled_for": "2026-01-07T05:07:19.945448",
+      "post_id": "847163268086510",
+      "status": "scheduled"
+    },
+    {
+      "topic": "Courage to Say \"I Don't Know\"",
+      "timestamp": "2026-01-05T20:54:32.741154",
+      "scheduled_for": "2026-01-07T09:07:19.945448",
+      "post_id": "847163371419833",
+      "status": "scheduled"
+    }
+  ],
+  "selected_model": "mistralai/mistral-7b-instruct:free"
 }

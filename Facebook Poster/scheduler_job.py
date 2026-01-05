@@ -1,6 +1,7 @@
 import json
 import os
 import datetime
+import time
 from content_engine import ContentEngine
 
 class JobManager:
@@ -42,6 +43,12 @@ class JobManager:
         topic = queue[0]
         print(f"Processing topic: {topic}")
 
+        # Update model_id from data
+        selected_model = self.data.get("selected_model")
+        if selected_model:
+            self.content_engine.model_id = selected_model
+            print(f"Using Model: {selected_model}")
+
         # 3. Generate Content
         # We catch errors here so one bad generation doesn't crash the loop
         try:
@@ -81,3 +88,101 @@ class JobManager:
 
         except Exception as e:
             print(f"Job failed with error: {e}")
+
+    def batch_schedule(self):
+        """Processes the entire queue and schedules posts on Facebook."""
+        print(f"\n[{datetime.datetime.now()}] Starting BATCH SCHEDULE process...")
+        
+        queue = self.data.get("topics_queue", [])
+        if not queue:
+            print("Queue is empty.")
+            return
+
+        interval_minutes = self.data.get("interval_minutes", 240)
+        
+        # Start scheduling from 15 minutes in the future to ensure we meet the 10-min minimum requirement + buffer
+        start_time = datetime.datetime.now() + datetime.timedelta(minutes=15)
+        
+        processed_count = 0
+        total_items = len(queue) # Copy length as we will pop
+
+        # We need to act on a copy or careful index since we modify self.data["queue"] on success
+        # Actually run_job modifies queue. But here we want to do it all at once.
+        # Let's write a custom loop here instead of reusing run_job because run_job is designed for "now".
+        
+        # We will pop items one by one.
+        while self.data.get("topics_queue"):
+            topic = self.data["topics_queue"][0]
+            current_index = processed_count
+            
+            # Calculate schedule time
+            # Post 0: start_time
+            # Post 1: start_time + interval
+            schedule_dt = start_time + datetime.timedelta(minutes=current_index * interval_minutes)
+            schedule_timestamp = int(schedule_dt.timestamp())
+            
+            print(f"--- Processing {current_index + 1}/{total_items}: '{topic}' ---")
+            print(f"Target Schedule Time: {schedule_dt}")
+
+            # Update model_id from data
+            selected_model = self.data.get("selected_model")
+            if selected_model:
+                self.content_engine.model_id = selected_model
+
+            try:
+                article_text = self.content_engine.generate_article(topic)
+                if not article_text:
+                    print("Failed to generate article text. Skipping item but keeping in queue (or moving to end?).")
+                    # For safety, let's keep it? Or skip to next? 
+                    # If we keep it, we get stuck. Let's move to end or remove.
+                    # Let's remove to avoid infinite loop of failures.
+                    self.data["topics_queue"].pop(0)
+                    self.save_data()
+                    continue
+
+                image_url = self.content_engine.get_image_url(topic)
+
+                page_id = self.data.get("target_page_id")
+                page_token = self.data.get("target_page_token")
+                
+                if not page_id or not page_token:
+                    print("No target page configured. Aborting batch.")
+                    return
+
+                post_id = self.content_engine.create_post(
+                    page_id, 
+                    page_token, 
+                    article_text, 
+                    image_url, 
+                    schedule_time=schedule_timestamp
+                )
+
+                # Success
+                self.data["topics_queue"].pop(0)
+                
+                log_entry = {
+                    "topic": topic,
+                    "timestamp": datetime.datetime.now().isoformat(),
+                    "scheduled_for": schedule_dt.isoformat(),
+                    "post_id": post_id,
+                    "status": "scheduled"
+                }
+                if "posted_log" not in self.data:
+                    self.data["posted_log"] = []
+                self.data["posted_log"].append(log_entry)
+                
+                self.save_data()
+                processed_count += 1
+                
+                # Sleep a little to respect rate limits if generating many
+                time.sleep(2) 
+
+            except Exception as e:
+                print(f"Failed to schedule topic '{topic}': {e}")
+                # If it's a critical error (like auth), we should probably stop.
+                # If it's just a one-off, maybe continue?
+                # Let's stop to be safe.
+                print("Stopping batch processing due to error.")
+                break
+        
+        print(f"Batch processing finished. Scheduled {processed_count} posts.")

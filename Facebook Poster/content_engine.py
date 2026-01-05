@@ -1,18 +1,41 @@
 import requests
-from huggingface_hub import InferenceClient
+
 from config import Config
 import random
 
 class ContentEngine:
-    def __init__(self):
-        self.hf_client = InferenceClient(token=Config.HF_TOKEN)
+    def __init__(self, model_id=None):
+        self.openrouter_api_key = Config.OPENROUTER_API_KEY
         self.pexels_api_key = Config.PEXELS_API_KEY
-        # Mistral-7B or Llama-3-8b are good choices. 
-        # Using mistralai/Mistral-7B-Instruct-v0.2 for now as it's reliable.
-        self.model_id = "mistralai/Mistral-7B-Instruct-v0.2"
+        # Use provided model_id or fallback to a known free one
+        self.model_id = model_id if model_id else "meta-llama/llama-3.1-8b-instruct:free"
+
+    @staticmethod
+    def get_available_free_models(api_key):
+        """Fetches available models from OpenRouter and filters for free ones."""
+        try:
+            response = requests.get(
+                "https://openrouter.ai/api/v1/models",
+                headers={"Authorization": f"Bearer {api_key}"}
+            )
+            response.raise_for_status()
+            data = response.json().get("data", [])
+            
+            # Filter for models ending in ':free' and return valid list of dicts {id, name}
+            free_models = [
+                {"id": m["id"], "name": m["name"]} 
+                for m in data 
+                if m["id"].endswith(":free")
+            ]
+            # Sort alphabetically by name
+            free_models.sort(key=lambda x: x["name"])
+            return free_models
+        except Exception as e:
+            print(f"Error fetching models: {e}")
+            return []
 
     def generate_article(self, topic):
-        """Generates a short, engaging Facebook post about the topic."""
+        """Generates a short, engaging Facebook post about the topic using OpenRouter."""
         print(f"Generating content for topic: {topic}")
         
         system_prompt = (
@@ -23,33 +46,33 @@ class ContentEngine:
             "Output ONLY the post text."
         )
         
-        prompt = f"Topic: {topic}\nPost:"
-        
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": prompt}
-        ]
-
         try:
-            # Using chat_completion for better structure if available, 
-            # or simple text_generation. InferenceClient adapts.
-            # For Mistral Instruct, straight generation with refined prompt is often safer 
-            # if chat templating isn't perfectly handled by the API wrapper.
-            # But let's try the modern chat method first.
-            
-            # Note: For free API, sometimes simple text generation is more stable. 
-            # Let's use text_generation with a formatted prompt.
-            full_prompt = f"<s>[INST] {system_prompt}\n\n{prompt} [/INST]"
-            
-            response = self.hf_client.text_generation(
-                full_prompt, 
-                model=self.model_id, 
-                max_new_tokens=300,
-                temperature=0.7
+            response = requests.post(
+                url="https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {self.openrouter_api_key}",
+                    "HTTP-Referer": "http://localhost:5000", # Ranking/stats
+                    "X-Title": "Facebook Auto Poster",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": self.model_id,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": f"Topic: {topic}\nPost:"}
+                    ],
+                    "temperature": 0.7,
+                    "max_tokens": 300
+                }
             )
-            return response.strip()
+            response.raise_for_status()
+            data = response.json()
+            return data['choices'][0]['message']['content'].strip()
+            
         except Exception as e:
             print(f"Error generating text: {e}")
+            if 'response' in locals() and hasattr(response, 'text'):
+                 print(f"Response body: {response.text}")
             return None
 
     def get_image_url(self, topic):
@@ -78,31 +101,37 @@ class ContentEngine:
             print(f"Error fetching image: {e}")
             return None
 
-    def create_post(self, page_id, page_access_token, message, image_url=None):
-        """Publishes the post to the Facebook Page."""
+    def create_post(self, page_id, page_access_token, message, image_url=None, schedule_time=None):
+        """Publishes the post to the Facebook Page.
+        
+        Args:
+            schedule_time (int): Unix timestamp for when to publish. Must be between 10 mins and 6 months from now.
+        """
         print(f"Posting to Page ID {page_id}...")
+        
+        payload = {
+            "access_token": page_access_token
+        }
+
+        if schedule_time:
+            payload["published"] = "false"
+            payload["scheduled_publish_time"] = schedule_time
         
         if image_url:
             # Post photo
             url = f"https://graph.facebook.com/v18.0/{page_id}/photos"
-            payload = {
-                "url": image_url,
-                "caption": message,
-                "access_token": page_access_token
-            }
+            payload["url"] = image_url
+            payload["caption"] = message
         else:
             # Post text only
             url = f"https://graph.facebook.com/v18.0/{page_id}/feed"
-            payload = {
-                "message": message,
-                "access_token": page_access_token
-            }
+            payload["message"] = message
             
         try:
             response = requests.post(url, data=payload)
             response.raise_for_status()
             result = response.json()
-            print(f"Successfully posted! ID: {result.get('id')}")
+            print(f"Successfully {'scheduled' if schedule_time else 'posted'}! ID: {result.get('id')}")
             return result.get('id')
         except Exception as e:
             print(f"Error posting to Facebook: {response.text if 'response' in locals() else e}")
