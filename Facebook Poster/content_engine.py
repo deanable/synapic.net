@@ -101,41 +101,51 @@ class ContentEngine:
             print(f"Error fetching image: {e}")
             return None
 
-    def create_post(self, page_id, page_access_token, message, image_url=None, schedule_time=None):
-        """Publishes the post to the Facebook Page.
-        
-        Args:
-            schedule_time (int): Unix timestamp for when to publish. Must be between 10 mins and 6 months from now.
-        """
-        print(f"Posting to Page ID {page_id}...")
-        
-        payload = {
-            "access_token": page_access_token
-        }
+    def publish_content(self, topic, article_text, image_url, fb_page_id=None, fb_access_token=None, schedule_time=None):
+        """Publishes content to all configured platforms."""
+        results = {}
+        from publishers import FacebookPublisher, TwitterPublisher, WordPressPublisher
 
-        if schedule_time:
-            payload["published"] = "false"
-            payload["scheduled_publish_time"] = schedule_time
+        # 1. Facebook
+        if fb_page_id and fb_access_token:
+            fb = FacebookPublisher(fb_page_id, fb_access_token)
+            fb_id = fb.post(article_text, image_url, schedule_time=schedule_time)
+            results['facebook'] = fb_id
+
+        # 2. X (Twitter)
+        # Only post to X if not scheduling (or handle scheduling if supported later, but for now immediate)
+        # X API doesn't support scheduling via API easily without Ads API.
+        if not schedule_time: 
+            tw = TwitterPublisher()
+            if tw.enabled:
+                # Twitter needs shorter text?
+                # For now, just truncating or using the text. 280 chars.
+                # Ideally we generate a specific tweet.
+                # Let's truncate aggressively or ask LLM for a tweet version?
+                # For simplicity, let's use the first 280 chars or full text.
+                tweet_text = article_text[:280]
+                tw_id = tw.post(tweet_text, image_url)
+                results['twitter'] = tw_id
+
+        # 3. WordPress
+        if not schedule_time:
+            wp = WordPressPublisher()
+            if wp.enabled:
+                wp_id = wp.post(text=article_text, image_url=image_url, title=topic)
+                results['wordpress'] = wp_id
         
-        if image_url:
-            # Post photo
-            url = f"https://graph.facebook.com/v18.0/{page_id}/photos"
-            payload["url"] = image_url
-            payload["caption"] = message
-        else:
-            # Post text only
-            url = f"https://graph.facebook.com/v18.0/{page_id}/feed"
-            payload["message"] = message
-            
-        try:
-            response = requests.post(url, data=payload)
-            response.raise_for_status()
-            result = response.json()
-            print(f"Successfully {'scheduled' if schedule_time else 'posted'}! ID: {result.get('id')}")
-            return result.get('id')
-        except Exception as e:
-            print(f"Error posting to Facebook: {response.text if 'response' in locals() else e}")
-            raise e
+        return results
+
+    # Legacy wrapper for backward compatibility if needed, but we will update caller
+    def create_post(self, page_id, page_access_token, message, image_url=None, schedule_time=None):
+        return self.publish_content(
+            topic="Unknown Topic", # We don't have topic here in legacy call, but it's optional for FB
+            article_text=message, 
+            image_url=image_url, 
+            fb_page_id=page_id, 
+            fb_access_token=page_access_token, 
+            schedule_time=schedule_time
+        ).get('facebook')
 
 if __name__ == "__main__":
     # Test

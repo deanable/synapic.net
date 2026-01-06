@@ -63,28 +63,37 @@ class JobManager:
             page_id = self.data.get("target_page_id")
             page_token = self.data.get("target_page_token")
             
-            if not page_id or not page_token:
-                print("No target page configured. Cannot post.")
-                return
-
-            post_id = self.content_engine.create_post(page_id, page_token, article_text, image_url)
+            # We allow running without FB if other platforms are enabled
+            # But currently logic relies on FB keys. Let's pass them if they exist.
+            
+            publish_results = self.content_engine.publish_content(
+                topic=topic,
+                article_text=article_text,
+                image_url=image_url,
+                fb_page_id=page_id,
+                fb_access_token=page_token
+            )
 
             # 5. Success - Update Queue
-            # Remove from queue
-            self.data["topics_queue"].pop(0)
-            
-            # Add to log
-            log_entry = {
-                "topic": topic,
-                "timestamp": datetime.datetime.now().isoformat(),
-                "post_id": post_id
-            }
-            if "posted_log" not in self.data:
-                self.data["posted_log"] = []
-            self.data["posted_log"].append(log_entry)
-            
-            self.save_data()
-            print("Job completed successfully.")
+            if any(publish_results.values()):
+                # Remove from queue if at least one platform worked
+                self.data["topics_queue"].pop(0)
+                
+                # Add to log
+                log_entry = {
+                    "topic": topic,
+                    "timestamp": datetime.datetime.now().isoformat(),
+                    "post_ids": publish_results
+                }
+                if "posted_log" not in self.data:
+                    self.data["posted_log"] = []
+                self.data["posted_log"].append(log_entry)
+                
+                self.save_data()
+                print(f"Job completed successfully. Results: {publish_results}")
+            else:
+                 print("Failed to post to any platform.")
+
 
         except Exception as e:
             print(f"Job failed with error: {e}")
@@ -145,43 +154,46 @@ class JobManager:
                 page_id = self.data.get("target_page_id")
                 page_token = self.data.get("target_page_token")
                 
-                if not page_id or not page_token:
-                    print("No target page configured. Aborting batch.")
-                    return
-
-                post_id = self.content_engine.create_post(
-                    page_id, 
-                    page_token, 
-                    article_text, 
-                    image_url, 
+                # Note: Scheduling is primarily supported for Facebook here.
+                # X and WP logic in publish_content skips if schedule_time is set.
+                
+                publish_results = self.content_engine.publish_content(
+                    topic=topic,
+                    article_text=article_text, 
+                    image_url=image_url, 
+                    fb_page_id=page_id,
+                    fb_access_token=page_token,
                     schedule_time=schedule_timestamp
                 )
 
                 # Success
-                self.data["topics_queue"].pop(0)
-                
-                log_entry = {
-                    "topic": topic,
-                    "timestamp": datetime.datetime.now().isoformat(),
-                    "scheduled_for": schedule_dt.isoformat(),
-                    "post_id": post_id,
-                    "status": "scheduled"
-                }
-                if "posted_log" not in self.data:
-                    self.data["posted_log"] = []
-                self.data["posted_log"].append(log_entry)
-                
-                self.save_data()
-                processed_count += 1
-                
-                # Sleep a little to respect rate limits if generating many
-                time.sleep(2) 
+                if any(publish_results.values()):
+                    self.data["topics_queue"].pop(0)
+                    
+                    log_entry = {
+                        "topic": topic,
+                        "timestamp": datetime.datetime.now().isoformat(),
+                        "scheduled_for": schedule_dt.isoformat(),
+                        "post_ids": publish_results,
+                        "status": "scheduled"
+                    }
+                    if "posted_log" not in self.data:
+                        self.data["posted_log"] = []
+                    self.data["posted_log"].append(log_entry)
+                    
+                    self.save_data()
+                    processed_count += 1
+                    
+                    # Sleep a little to respect rate limits if generating many
+                    time.sleep(2) 
+                else:
+                    print("Failed to schedule on any platform (likely FB not configured).")
+                    break
 
             except Exception as e:
                 print(f"Failed to schedule topic '{topic}': {e}")
                 # If it's a critical error (like auth), we should probably stop.
                 # If it's just a one-off, maybe continue?
-                # Let's stop to be safe.
                 print("Stopping batch processing due to error.")
                 break
         
