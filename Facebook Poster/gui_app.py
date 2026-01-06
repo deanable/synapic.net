@@ -169,9 +169,24 @@ class App(ctk.CTk):
         self.auth_btn = ctk.CTkButton(self.auth_frame, text="Connect Facebook Page", command=self.start_auth_flow_gui)
         self.auth_btn.pack(side="right", padx=20, pady=20)
 
+        # --- Integrations Status (X and WordPress) ---
+        self.integrations_frame = ctk.CTkFrame(self.settings_frame)
+        self.integrations_frame.grid(row=2, column=0, padx=20, pady=10, sticky="ew")
+        
+        ctk.CTkLabel(self.integrations_frame, text="Integrations Status", font=ctk.CTkFont(size=16, weight="bold")).pack(anchor="w", padx=20, pady=(20, 10))
+        
+        # Check config status
+        x_status = "Configured" if Config.X_API_KEY else "Not Configured (Check .env)"
+        wp_status = "Configured" if Config.WORDPRESS_URL else "Not Configured (Check .env)"
+        
+        ctk.CTkLabel(self.integrations_frame, text=f"X (Twitter): {x_status}", text_color="green" if "Configured" == x_status else "orange").pack(anchor="w", padx=20, pady=5)
+        ctk.CTkLabel(self.integrations_frame, text=f"WordPress: {wp_status}", text_color="green" if "Configured" == wp_status else "orange").pack(anchor="w", padx=20, pady=5)
+        
+        ctk.CTkLabel(self.integrations_frame, text="Note: To configure X and WordPress, please edit the .env file directly.", font=ctk.CTkFont(size=10)).pack(anchor="w", padx=20, pady=10)
+
         # --- Schedule Interval Settings ---
         self.interval_frame = ctk.CTkFrame(self.settings_frame)
-        self.interval_frame.grid(row=2, column=0, padx=20, pady=10, sticky="ew")
+        self.interval_frame.grid(row=3, column=0, padx=20, pady=10, sticky="ew")
         
         ctk.CTkLabel(self.interval_frame, text="Schedule Interval", font=ctk.CTkFont(size=16, weight="bold")).pack(anchor="w", padx=20, pady=(20, 10))
 
@@ -202,7 +217,7 @@ class App(ctk.CTk):
 
         # --- AI Model Settings ---
         self.model_frame = ctk.CTkFrame(self.settings_frame)
-        self.model_frame.grid(row=3, column=0, padx=20, pady=10, sticky="ew")
+        self.model_frame.grid(row=4, column=0, padx=20, pady=10, sticky="ew")
         
         ctk.CTkLabel(self.model_frame, text="AI Model (Content Generation)", font=ctk.CTkFont(size=16, weight="bold")).pack(anchor="w", padx=20, pady=(20, 10))
         
