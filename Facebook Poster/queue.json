@@ -2,9 +2,7 @@
   "target_page_id": "100814746063812",
   "target_page_token": "EAAKo1WxIoLkBQT61KurPv403d3mN2BxudObxmvvxQJwu7RmeQEr22Dg1xrBcVmqVhmmBu3wXnI2ceNnBxSvKqfrwyLgHmH3zxHZA0ydKClJQQBU1ksxSRFsJ62yGhTb1NsJL5uyaHTG8JD7YXAk1eZAG8yKPAo0c1V7bMzl8CBRg4IN4YuOhyRvZBjWZCSX54hw8fq8VjI9YwkZC9wGUJ",
   "interval_minutes": 480,
-  "topics_queue": [
-    "Indoctrination vs. Education"
-  ],
+  "topics_queue": [],
   "posted_log": [
     {
       "topic": "What is atheism",
@@ -253,6 +251,14 @@
       "post_ids": {
         "wordpress": 23,
         "facebook": "847988251337345"
+      }
+    },
+    {
+      "topic": "Indoctrination vs. Education",
+      "timestamp": "2026-01-06T23:57:24.281636",
+      "post_ids": {
+        "wordpress": 32,
+        "facebook": "848055847997252"
       }
     }
   ],
