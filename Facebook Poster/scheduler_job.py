@@ -52,10 +52,18 @@ class JobManager:
         # 3. Generate Content
         # We catch errors here so one bad generation doesn't crash the loop
         try:
-            article_text = self.content_engine.generate_article(topic)
-            if not article_text:
-                print("Failed to generate article text. Skipping.")
+            seo_data = self.content_engine.generate_seo_article(topic)
+            social_summary = self.content_engine.generate_social_summary(topic)
+            
+            if not seo_data or not social_summary:
+                print("Failed to generate content. Skipping.")
                 return
+
+            # Unpack SEO data
+            html_content = seo_data.get("html_content", "")
+            meta_title = seo_data.get("meta_title", topic)
+            meta_description = seo_data.get("meta_description", "")
+            alt_text = seo_data.get("image_alt_text", topic)
 
             image_url = self.content_engine.get_image_url(topic)
 
@@ -67,11 +75,14 @@ class JobManager:
             # But currently logic relies on FB keys. Let's pass them if they exist.
             
             publish_results = self.content_engine.publish_content(
-                topic=topic,
-                article_text=article_text,
+                topic=meta_title, # Use optimized title
+                article_content=html_content,
+                social_summary=social_summary,
                 image_url=image_url,
                 fb_page_id=page_id,
-                fb_access_token=page_token
+                fb_access_token=page_token,
+                meta_description=meta_description,
+                alt_text=alt_text
             )
 
             # 5. Success - Update Queue
@@ -139,15 +150,22 @@ class JobManager:
                 self.content_engine.model_id = selected_model
 
             try:
-                article_text = self.content_engine.generate_article(topic)
-                if not article_text:
-                    print("Failed to generate article text. Skipping item but keeping in queue (or moving to end?).")
+                seo_data = self.content_engine.generate_seo_article(topic)
+                social_summary = self.content_engine.generate_social_summary(topic)
+                
+                if not seo_data or not social_summary:
+                    print("Failed to generate content. Skipping item but keeping in queue (or moving to end?).")
                     # For safety, let's keep it? Or skip to next? 
                     # If we keep it, we get stuck. Let's move to end or remove.
                     # Let's remove to avoid infinite loop of failures.
                     self.data["topics_queue"].pop(0)
                     self.save_data()
                     continue
+
+                html_content = seo_data.get("html_content", "")
+                meta_title = seo_data.get("meta_title", topic)
+                meta_description = seo_data.get("meta_description", "")
+                alt_text = seo_data.get("image_alt_text", topic)
 
                 image_url = self.content_engine.get_image_url(topic)
 
@@ -158,12 +176,15 @@ class JobManager:
                 # X and WP logic in publish_content skips if schedule_time is set.
                 
                 publish_results = self.content_engine.publish_content(
-                    topic=topic,
-                    article_text=article_text, 
+                    topic=meta_title,
+                    article_content=html_content, 
+                    social_summary=social_summary,
                     image_url=image_url, 
                     fb_page_id=page_id,
                     fb_access_token=page_token,
-                    schedule_time=schedule_timestamp
+                    schedule_time=schedule_timestamp,
+                    meta_description=meta_description,
+                    alt_text=alt_text
                 )
 
                 # Success

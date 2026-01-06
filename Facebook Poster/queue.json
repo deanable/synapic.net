@@ -2,7 +2,9 @@
   "target_page_id": "100814746063812",
   "target_page_token": "EAAKo1WxIoLkBQT61KurPv403d3mN2BxudObxmvvxQJwu7RmeQEr22Dg1xrBcVmqVhmmBu3wXnI2ceNnBxSvKqfrwyLgHmH3zxHZA0ydKClJQQBU1ksxSRFsJ62yGhTb1NsJL5uyaHTG8JD7YXAk1eZAG8yKPAo0c1V7bMzl8CBRg4IN4YuOhyRvZBjWZCSX54hw8fq8VjI9YwkZC9wGUJ",
   "interval_minutes": 480,
-  "topics_queue": [],
+  "topics_queue": [
+    "Indoctrination vs. Education"
+  ],
   "posted_log": [
     {
       "topic": "What is atheism",
@@ -211,6 +213,47 @@
       "scheduled_for": "2026-01-08T15:21:33.511070",
       "post_id": "847226791413491",
       "status": "scheduled"
+    },
+    {
+      "topic": "The \"God of the Gaps\" Fallacy",
+      "timestamp": "2026-01-06T20:41:33.491660",
+      "post_ids": {
+        "facebook": "847962424673261",
+        "twitter": null,
+        "wordpress": 7
+      }
+    },
+    {
+      "topic": "Morality Without a Master",
+      "timestamp": "2026-01-06T21:05:06.314775",
+      "post_ids": {
+        "wordpress": 13,
+        "facebook": "847975088005328"
+      }
+    },
+    {
+      "topic": "Indoctrination vs. Education",
+      "timestamp": "2026-01-06T21:19:07.296340",
+      "post_ids": {
+        "wordpress": 17,
+        "facebook": "847982034671300"
+      }
+    },
+    {
+      "topic": "The Problem of Evil (and Suffering)",
+      "timestamp": "2026-01-06T21:32:11.557378",
+      "post_ids": {
+        "wordpress": 22,
+        "facebook": "847988224670681"
+      }
+    },
+    {
+      "topic": "The Problem of Evil (and Suffering)",
+      "timestamp": "2026-01-06T21:32:12.089866",
+      "post_ids": {
+        "wordpress": 23,
+        "facebook": "847988251337345"
+      }
     }
   ],
   "selected_model": "mistralai/mistral-7b-instruct:free"

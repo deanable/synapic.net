@@ -10,12 +10,7 @@ class Config:
     PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
     REDIRECT_URI = 'http://localhost:5000/callback' # Common for local testing
 
-    # X (Twitter)
-    X_API_KEY = os.getenv("X_API_KEY")
-    X_API_SECRET = os.getenv("X_API_SECRET")
-    X_ACCESS_TOKEN = os.getenv("X_ACCESS_TOKEN")
-    X_ACCESS_TOKEN_SECRET = os.getenv("X_ACCESS_TOKEN_SECRET")
-    X_BEARER_TOKEN = os.getenv("X_BEARER_TOKEN") # Optional for v2
+
 
     # WordPress
     WORDPRESS_URL = os.getenv("WORDPRESS_URL")

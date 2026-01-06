@@ -34,24 +34,66 @@ class ContentEngine:
             print(f"Error fetching models: {e}")
             return []
 
-    def generate_article(self, topic):
-        """Generates a short, engaging Facebook post about the topic using OpenRouter."""
-        print(f"Generating content for topic: {topic}")
+    def generate_seo_article(self, topic):
+        """Generates a detailed, SEO-optimized blog post for WordPress (JSON bundle)."""
+        print(f"Generating SEO article for topic: {topic}")
         
         system_prompt = (
-            "You are a social media manager for an intellectually curious Facebook Page. "
-            "Write a short, engaging, and conversational post about the following topic. "
-            "Include 1-2 relevant hashtags. Do not use emojis excessively. "
-            "Keep it under 200 words. "
-            "Output ONLY the post text."
+            "You are an expert SEO content writer. "
+            "Generate a JSON object containing the following fields:\n"
+            "1. 'html_content': A comprehensive blog post (min 600 words). Use HTML (<h3>, <p>, <ul>). NO <h1> (title is separate). \n"
+            "2. 'meta_title': An optimized 60 char title.\n"
+            "3. 'meta_description': A 150-160 char engaging description.\n"
+            "4. 'image_alt_text': SEO-optimized alt text for an image about this topic.\n"
+            "Output ONLY valid JSON."
         )
         
+        import json
+        
+        result = self._call_llm(system_prompt, topic)
+
+        # Clean up markdown code blocks if present
+        clean_result = result
+        if "```" in clean_result:
+            clean_result = clean_result.replace("```json", "").replace("```", "").strip()
+            
+        try:
+            return json.loads(clean_result)
+        except Exception as e:
+            print(f"Error parsing JSON from LLM: {e}")
+            print(f"Raw Result: {result}") # Debug
+            # Fallback for plain text if LLM fails JSON instruction
+            return {
+                "html_content": result, # We might still have artifacts here if we failed to parse, but stripping helps chances of parsing.
+                "meta_title": topic,
+                "meta_description": result[:160] if result else "",
+                "image_alt_text": topic
+            }
+
+    def generate_social_summary(self, topic):
+        """Generates a short, punchy social media summary."""
+        # ... (same as before) ...
+        print(f"Generating social summary for topic: {topic}")
+        
+        system_prompt = (
+            "You are a social media manager. "
+            "Write a short, engaging, and conversational hook about the following topic. "
+            "It should serve as a teaser to click a link to read more. "
+            "Include 1-2 relevant hashtags. "
+            "Max 100 words. "
+            "Output ONLY the text."
+        )
+        
+        return self._call_llm(system_prompt, topic)
+
+    def _call_llm(self, system_prompt, topic):
+        # ... (same as before) ...
         try:
             response = requests.post(
                 url="https://openrouter.ai/api/v1/chat/completions",
                 headers={
                     "Authorization": f"Bearer {self.openrouter_api_key}",
-                    "HTTP-Referer": "http://localhost:5000", # Ranking/stats
+                    "HTTP-Referer": "http://localhost:5000",
                     "X-Title": "Facebook Auto Poster",
                     "Content-Type": "application/json"
                 },
@@ -59,28 +101,21 @@ class ContentEngine:
                     "model": self.model_id,
                     "messages": [
                         {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": f"Topic: {topic}\nPost:"}
+                        {"role": "user", "content": f"Topic: {topic}\nContent:"}
                     ],
                     "temperature": 0.7,
-                    "max_tokens": 300
                 }
             )
             response.raise_for_status()
             data = response.json()
             return data['choices'][0]['message']['content'].strip()
-            
         except Exception as e:
             print(f"Error generating text: {e}")
-            if 'response' in locals() and hasattr(response, 'text'):
-                 print(f"Response body: {response.text}")
             return None
 
     def get_image_url(self, topic):
-        """Fetches a high-quality image URL from Pexels based on the topic."""
+        # ... (same as before) ...
         print(f"Fetching image for topic: {topic}")
-        
-        # Sometimes the topic is too abstract. 
-        # Ideally we'd ask LLM for a visual search term, but let's try direct first.
         
         url = "https://api.pexels.com/v1/search"
         headers = {"Authorization": self.pexels_api_key}
@@ -92,7 +127,6 @@ class ContentEngine:
             data = response.json()
             
             if data['photos']:
-                # Get the 'large2x' or 'original' for quality
                 return data['photos'][0]['src']['large2x']
             else:
                 print("No photos found on Pexels.")
@@ -101,46 +135,48 @@ class ContentEngine:
             print(f"Error fetching image: {e}")
             return None
 
-    def publish_content(self, topic, article_text, image_url, fb_page_id=None, fb_access_token=None, schedule_time=None):
-        """Publishes content to all configured platforms."""
+    def publish_content(self, topic, article_content, social_summary, image_url, fb_page_id=None, fb_access_token=None, schedule_time=None, meta_description=None, alt_text=None):
+        """Publishes content to WordPress then Facebook."""
         results = {}
-        from publishers import FacebookPublisher, TwitterPublisher, WordPressPublisher
+        from publishers import FacebookPublisher, WordPressPublisher
 
-        # 1. Facebook
+        # 1. WordPress (Primary source)
+        # We publish/schedule to WP first to get the link
+        wp_link = None
+        wp = WordPressPublisher()
+        if wp.enabled:
+            wp_result = wp.post(
+                text=article_content, 
+                image_url=image_url, 
+                title=topic, 
+                schedule_time=schedule_time,
+                meta_description=meta_description,
+                alt_text=alt_text
+            )
+            if wp_result:
+                results['wordpress'] = wp_result.get('id')
+                wp_link = wp_result.get('link')
+        
+        # 2. Facebook
         if fb_page_id and fb_access_token:
             fb = FacebookPublisher(fb_page_id, fb_access_token)
-            fb_id = fb.post(article_text, image_url, schedule_time=schedule_time)
+            
+            # Construct FB message
+            fb_message = social_summary
+            if wp_link:
+                fb_message += f"\n\nRead more: {wp_link}"
+            
+            fb_id = fb.post(fb_message, image_url, schedule_time=schedule_time)
             results['facebook'] = fb_id
 
-        # 2. X (Twitter)
-        # Only post to X if not scheduling (or handle scheduling if supported later, but for now immediate)
-        # X API doesn't support scheduling via API easily without Ads API.
-        if not schedule_time: 
-            tw = TwitterPublisher()
-            if tw.enabled:
-                # Twitter needs shorter text?
-                # For now, just truncating or using the text. 280 chars.
-                # Ideally we generate a specific tweet.
-                # Let's truncate aggressively or ask LLM for a tweet version?
-                # For simplicity, let's use the first 280 chars or full text.
-                tweet_text = article_text[:280]
-                tw_id = tw.post(tweet_text, image_url)
-                results['twitter'] = tw_id
-
-        # 3. WordPress
-        if not schedule_time:
-            wp = WordPressPublisher()
-            if wp.enabled:
-                wp_id = wp.post(text=article_text, image_url=image_url, title=topic)
-                results['wordpress'] = wp_id
-        
         return results
 
     # Legacy wrapper for backward compatibility if needed, but we will update caller
     def create_post(self, page_id, page_access_token, message, image_url=None, schedule_time=None):
         return self.publish_content(
-            topic="Unknown Topic", # We don't have topic here in legacy call, but it's optional for FB
-            article_text=message, 
+            topic="Unknown Topic", 
+            article_content=message, # Treat message as both if generic
+            social_summary=message,
             image_url=image_url, 
             fb_page_id=page_id, 
             fb_access_token=page_access_token, 

@@ -1,5 +1,5 @@
 import abc
-import tweepy
+
 import requests
 import os
 import tempfile
@@ -50,66 +50,7 @@ class FacebookPublisher(Publisher):
                 print(f"FB Response: {response.text}")
             return None
 
-class TwitterPublisher(Publisher):
-    def __init__(self):
-        self.api_key = Config.X_API_KEY
-        self.api_key_secret = Config.X_API_SECRET
-        self.access_token = Config.X_ACCESS_TOKEN
-        self.access_token_secret = Config.X_ACCESS_TOKEN_SECRET
-        
-        if all([self.api_key, self.api_key_secret, self.access_token, self.access_token_secret]):
-            try:
-                # Client for posting Tweets (v2)
-                self.client = tweepy.Client(
-                    consumer_key=self.api_key,
-                    consumer_secret=self.api_key_secret,
-                    access_token=self.access_token,
-                    access_token_secret=self.access_token_secret
-                )
-                # API v1.1 for media upload
-                auth = tweepy.OAuth1UserHandler(
-                    self.api_key, self.api_key_secret,
-                    self.access_token, self.access_token_secret
-                )
-                self.api = tweepy.API(auth)
-                self.enabled = True
-            except Exception as e:
-                print(f"Error initializing Twitter client: {e}")
-                self.enabled = False
-        else:
-            self.enabled = False
 
-    def post(self, text, image_url=None, **kwargs):
-        if not self.enabled:
-            print("Twitter not configured or disabled.")
-            return None
-
-        print("Posting to Twitter...")
-        try:
-            media_id = None
-            if image_url:
-                # Need to download image first
-                response = requests.get(image_url, stream=True)
-                if response.status_code == 200:
-                    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as temp:
-                        for chunk in response.iter_content(1024):
-                            temp.write(chunk)
-                        temp_path = temp.name
-                    
-                    try:
-                        media = self.api.media_upload(filename=temp_path)
-                        media_id = media.media_id
-                    finally:
-                        os.remove(temp_path)
-            
-            # Create Tweet
-            response = self.client.create_tweet(text=text, media_ids=[media_id] if media_id else None)
-            print(f"Successfully posted to Twitter! ID: {response.data['id']}")
-            return response.data['id']
-            
-        except Exception as e:
-            print(f"Error posting to Twitter: {e}")
-            return None
 
 class WordPressPublisher(Publisher):
     def __init__(self):
@@ -130,7 +71,7 @@ class WordPressPublisher(Publisher):
         else:
             self.enabled = False
 
-    def post(self, text, image_url=None, title=None, **kwargs):
+    def post(self, text, image_url=None, title=None, schedule_time=None, meta_description=None, alt_text=None, **kwargs):
         if not self.enabled:
             print("WordPress not configured.")
             return None
@@ -145,8 +86,10 @@ class WordPressPublisher(Publisher):
         
         try:
             featured_media_id = 0
+            attachment_url = None
+            
             if image_url:
-                # Upload Image
+                # 1. Upload Image
                 img_data = requests.get(image_url).content
                 filename = "post_image.jpg"
                 
@@ -162,15 +105,58 @@ class WordPressPublisher(Publisher):
                     auth=auth
                 )
                 media_res.raise_for_status()
-                featured_media_id = media_res.json().get("id", 0)
+                media_data = media_res.json()
+                featured_media_id = media_data.get("id", 0)
+                attachment_url = media_data.get("source_url")
 
-            # Create Post
+                # 2. Update Alt Text if provided
+                if alt_text and featured_media_id:
+                    try:
+                        requests.post(
+                            f"{self.api_url}/media/{featured_media_id}",
+                            json={"alt_text": alt_text},
+                            auth=auth
+                        )
+                    except Exception as e:
+                        print(f"Failed to update alt text: {e}")
+
+            # 3. Inject Image into Content (after first paragraph)
+            final_content = text
+            if attachment_url and featured_media_id:
+                # Construct Image HTML
+                # Using standard WP classes helps with styling
+                img_html = (
+                    f'\n<div class="wp-block-image">'
+                    f'<figure class="aligncenter size-large">'
+                    f'<img src="{attachment_url}" alt="{alt_text if alt_text else ""}" class="wp-image-{featured_media_id}"/>'
+                    f'</figure></div>\n'
+                )
+                
+                # Simple injection: replace first closing p tag
+                if "</p>" in final_content:
+                    final_content = final_content.replace("</p>", f"</p>{img_html}", 1)
+                else:
+                    # Fallback: Prepend
+                    final_content = img_html + final_content
+
+            # 4. Create Post
             post_data = {
                 "title": title,
-                "content": text, # In WP this is HTML content
+                "content": final_content, 
                 "status": "publish",
                 "featured_media": featured_media_id
             }
+            
+            # Add Excerpt (Meta Description)
+            if meta_description:
+                post_data["excerpt"] = meta_description
+
+            if schedule_time:
+                # WP expects ISO 8601
+                import datetime
+                dt = datetime.datetime.fromtimestamp(schedule_time)
+                post_data["date"] = dt.isoformat()
+                post_data["status"] = "future"
             
             post_res = requests.post(
                 f"{self.api_url}/posts",
@@ -180,7 +166,7 @@ class WordPressPublisher(Publisher):
             post_res.raise_for_status()
             result = post_res.json()
             print(f"Successfully posted to WordPress! ID: {result.get('id')}")
-            return result.get('id')
+            return {'id': result.get('id'), 'link': result.get('link')}
 
         except Exception as e:
             print(f"Error posting to WordPress: {e}")

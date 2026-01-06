@@ -176,13 +176,12 @@ class App(ctk.CTk):
         ctk.CTkLabel(self.integrations_frame, text="Integrations Status", font=ctk.CTkFont(size=16, weight="bold")).pack(anchor="w", padx=20, pady=(20, 10))
         
         # Check config status
-        x_status = "Configured" if Config.X_API_KEY else "Not Configured (Check .env)"
+        # Check config status
         wp_status = "Configured" if Config.WORDPRESS_URL else "Not Configured (Check .env)"
         
-        ctk.CTkLabel(self.integrations_frame, text=f"X (Twitter): {x_status}", text_color="green" if "Configured" == x_status else "orange").pack(anchor="w", padx=20, pady=5)
         ctk.CTkLabel(self.integrations_frame, text=f"WordPress: {wp_status}", text_color="green" if "Configured" == wp_status else "orange").pack(anchor="w", padx=20, pady=5)
         
-        ctk.CTkLabel(self.integrations_frame, text="Note: To configure X and WordPress, please edit the .env file directly.", font=ctk.CTkFont(size=10)).pack(anchor="w", padx=20, pady=10)
+        ctk.CTkLabel(self.integrations_frame, text="Note: To configure WordPress, please edit the .env file directly.", font=ctk.CTkFont(size=10)).pack(anchor="w", padx=20, pady=10)
 
         # --- Schedule Interval Settings ---
         self.interval_frame = ctk.CTkFrame(self.settings_frame)
