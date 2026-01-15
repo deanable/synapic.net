@@ -1,8 +1,13 @@
 {
   "target_page_id": "100814746063812",
   "target_page_token": "EAAKo1WxIoLkBQT61KurPv403d3mN2BxudObxmvvxQJwu7RmeQEr22Dg1xrBcVmqVhmmBu3wXnI2ceNnBxSvKqfrwyLgHmH3zxHZA0ydKClJQQBU1ksxSRFsJ62yGhTb1NsJL5uyaHTG8JD7YXAk1eZAG8yKPAo0c1V7bMzl8CBRg4IN4YuOhyRvZBjWZCSX54hw8fq8VjI9YwkZC9wGUJ",
-  "interval_minutes": 480,
-  "topics_queue": [],
+  "interval_minutes": 240,
+  "topics_queue": [
+    "Cherry Picking 101: A list of biblical rules that modern Christians completely ignore.",
+    "Famous Contradictions: Highlighting two verses that say completely opposite things.",
+    "The Telephone Game: How oral tradition changed holy texts before they were written down.",
+    "Horoscopes and Woo: Why atheists should be skeptical of astrology and psychics too."
+  ],
   "posted_log": [
     {
       "topic": "What is atheism",
@@ -260,6 +265,246 @@
         "wordpress": 32,
         "facebook": "848055847997252"
       }
+    },
+    {
+      "topic": "\"Coming Out\" as Atheist: Tips for telling parents or friends without starting a war.",
+      "timestamp": "2026-01-14T07:21:10.891048",
+      "scheduled_for": "2026-01-14T07:35:40.996469",
+      "post_ids": {
+        "wordpress": 906,
+        "facebook": "853210280815142"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "Dating While Godless: Navigating relationships when your partner is a believer.",
+      "timestamp": "2026-01-14T07:21:34.193943",
+      "scheduled_for": "2026-01-14T11:35:40.996469",
+      "post_ids": {
+        "wordpress": 908,
+        "facebook": "853210504148453"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "Secular Grief: How to cope with loss without believing in an afterlife.",
+      "timestamp": "2026-01-14T07:21:59.647062",
+      "scheduled_for": "2026-01-14T15:35:40.996469",
+      "post_ids": {
+        "wordpress": 910,
+        "facebook": "853210727481764"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "Raising Kids Without Religion: Teaching critical thinking instead of dogma.",
+      "timestamp": "2026-01-14T07:22:44.732404",
+      "scheduled_for": "2026-01-14T19:35:40.996469",
+      "post_ids": {
+        "wordpress": 912,
+        "facebook": "853211354148368"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "Surviving the Holidays: How to handle religious family gatherings without losing your cool.",
+      "timestamp": "2026-01-14T07:23:37.075101",
+      "scheduled_for": "2026-01-14T23:35:40.996469",
+      "post_ids": {
+        "wordpress": 914,
+        "facebook": "853211914148312"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "Finding Purpose: If God doesn\u2019t give your life meaning, who does? (Spoiler: You do).",
+      "timestamp": "2026-01-14T07:25:57.822714",
+      "scheduled_for": "2026-01-14T07:40:08.083350",
+      "post_ids": {
+        "wordpress": 916,
+        "facebook": "853213407481496"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "The \"Angry Atheist\" Stereotype: Why it exists and how to debunk it.",
+      "timestamp": "2026-01-14T07:26:31.539035",
+      "scheduled_for": "2026-01-14T11:40:08.083350",
+      "post_ids": {
+        "wordpress": 918,
+        "facebook": "853213854148118"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "Weddings and Funerals: Planning secular ceremonies that are still meaningful.",
+      "timestamp": "2026-01-14T07:27:03.115576",
+      "scheduled_for": "2026-01-14T15:40:08.083350",
+      "post_ids": {
+        "wordpress": 920,
+        "facebook": "853214177481419"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "Good Without God: Explaining where secular morals actually come from.",
+      "timestamp": "2026-01-14T07:27:21.911511",
+      "scheduled_for": "2026-01-14T19:40:08.083350",
+      "post_ids": {
+        "wordpress": 922,
+        "facebook": "853214367481400"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "The Problem of Prayer: Why \"thoughts and prayers\" often stop people from taking real action.",
+      "timestamp": "2026-01-14T07:27:49.489785",
+      "scheduled_for": "2026-01-14T23:40:08.083350",
+      "post_ids": {
+        "wordpress": 924,
+        "facebook": "853214730814697"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "Altruism vs. Heavenly Rewards: Doing good because it\u2019s right, not because you\u2019re scared of hell.",
+      "timestamp": "2026-01-14T07:28:12.913657",
+      "scheduled_for": "2026-01-15T03:40:08.083350",
+      "post_ids": {
+        "wordpress": 926,
+        "facebook": "853214954148008"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "Bodily Autonomy: Why religion is obsessed with what we do with our bodies.",
+      "timestamp": "2026-01-14T07:28:33.719858",
+      "scheduled_for": "2026-01-15T07:40:08.083350",
+      "post_ids": {
+        "wordpress": 928,
+        "facebook": "853215114147992"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "Forgiveness: A secular perspective on letting go of grudges without \"turning the other cheek.\"",
+      "timestamp": "2026-01-14T07:29:41.872569",
+      "scheduled_for": "2026-01-15T11:40:08.083350",
+      "post_ids": {
+        "wordpress": 930,
+        "facebook": "853215747481262"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "Pascal\u2019s Wager Failed: Why \"just believing in case\" is a bad bet.",
+      "timestamp": "2026-01-14T07:30:07.203436",
+      "scheduled_for": "2026-01-15T15:40:08.083350",
+      "post_ids": {
+        "wordpress": 932,
+        "facebook": "853215974147906"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "The \"Look at the Trees\" Argument: Why nature proves evolution, not design.",
+      "timestamp": "2026-01-14T07:31:09.713438",
+      "scheduled_for": "2026-01-15T19:40:08.083350",
+      "post_ids": {
+        "wordpress": 934,
+        "facebook": "853216610814509"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "\"You Just Hate God\": Addressing the strawman that atheists are just rebellious.",
+      "timestamp": "2026-01-14T07:31:44.376564",
+      "scheduled_for": "2026-01-15T23:40:08.083350",
+      "post_ids": {
+        "wordpress": 936,
+        "facebook": "853216937481143"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "Burden of Proof: Why it\u2019s not your job to disprove their God.",
+      "timestamp": "2026-01-14T07:32:14.771437",
+      "scheduled_for": "2026-01-16T03:40:08.083350",
+      "post_ids": {
+        "wordpress": 938,
+        "facebook": "853217210814449"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "The God of the Gaps: As science explains more, God explains less.",
+      "timestamp": "2026-01-14T07:33:44.832966",
+      "scheduled_for": "2026-01-16T07:40:08.083350",
+      "post_ids": {
+        "wordpress": 940,
+        "facebook": "853217980814372"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "Faith is Not a Virtue: Why believing without evidence is actually dangerous.",
+      "timestamp": "2026-01-14T07:34:22.270301",
+      "scheduled_for": "2026-01-16T11:40:08.083350",
+      "post_ids": {
+        "wordpress": 942,
+        "facebook": "853218370814333"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "Church and State: Why separation protects believers too.",
+      "timestamp": "2026-01-14T07:34:54.353931",
+      "scheduled_for": "2026-01-16T15:40:08.083350",
+      "post_ids": {
+        "wordpress": 944,
+        "facebook": "853218664147637"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "Tax the Churches: A look at religious tax exemptions and why they are controversial.",
+      "timestamp": "2026-01-14T07:35:34.422223",
+      "scheduled_for": "2026-01-16T19:40:08.083350",
+      "post_ids": {
+        "wordpress": 946,
+        "facebook": "853219004147603"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "Religion in Schools: The difference between teaching about religion and preaching.",
+      "timestamp": "2026-01-14T07:36:02.393488",
+      "scheduled_for": "2026-01-16T23:40:08.083350",
+      "post_ids": {
+        "wordpress": 948,
+        "facebook": "853219247480912"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "The Rise of the \"Nones\": Why more people are leaving religion than ever before.",
+      "timestamp": "2026-01-14T07:36:23.790885",
+      "scheduled_for": "2026-01-17T03:40:08.083350",
+      "post_ids": {
+        "wordpress": 950,
+        "facebook": "853219450814225"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "Religious Trauma Syndrome: Discussing the mental health effects of leaving high-control groups.",
+      "timestamp": "2026-01-14T07:36:47.379003",
+      "scheduled_for": "2026-01-17T07:40:08.083350",
+      "post_ids": {
+        "wordpress": 952,
+        "facebook": "853219657480871"
+      },
+      "status": "scheduled"
     }
   ],
   "selected_model": "mistralai/mistral-7b-instruct:free"
