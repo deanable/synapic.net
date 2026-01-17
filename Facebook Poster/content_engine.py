@@ -8,7 +8,7 @@ class ContentEngine:
         self.openrouter_api_key = Config.OPENROUTER_API_KEY
         self.pexels_api_key = Config.PEXELS_API_KEY
         # Use provided model_id or fallback to a known free one
-        self.model_id = model_id if model_id else "meta-llama/llama-3.1-8b-instruct:free"
+        self.model_id = model_id if model_id else "mistralai/devstral-2512:free"
 
     @staticmethod
     def get_available_free_models(api_key):
@@ -39,13 +39,23 @@ class ContentEngine:
         print(f"Generating SEO article for topic: {topic}")
         
         system_prompt = (
-            "You are an expert SEO content writer. "
+            "You are an expert SEO content writer who creates comprehensive, in-depth articles. "
+            "SEO articles perform best when they are thorough and satisfy user intent, typically falling in the 1,500 to 3,000-word range for in-depth topics. "
             "Generate a JSON object containing the following fields:\n"
-            "1. 'html_content': A comprehensive blog post (min 600 words). Use HTML (<h3>, <p>, <ul>). NO <h1> (title is separate). \n"
-            "2. 'meta_title': An optimized 60 char title.\n"
-            "3. 'meta_description': A 150-160 char engaging description.\n"
-            "4. 'image_alt_text': SEO-optimized alt text for an image about this topic.\n"
-            "Output ONLY valid JSON."
+            "1. 'html_content': A COMPREHENSIVE blog post (1,500-3,000 words). "
+            "Cover the topic thoroughly with multiple sections, examples, and actionable insights. "
+            "Use proper HTML structure (<h3> for section headings, <p> for paragraphs, <ul>/<ol> for lists, <strong> for emphasis). "
+            "NO <h1> tags (title is handled separately). "
+            "Include:\n"
+            "   - An engaging introduction that outlines what the reader will learn\n"
+            "   - Multiple well-organized sections with descriptive headings\n"
+            "   - Practical examples, tips, or step-by-step guidance\n"
+            "   - Data, statistics, or expert insights where relevant\n"
+            "   - A compelling conclusion with key takeaways or a call-to-action\n"
+            "2. 'meta_title': A compelling, keyword-rich title (50-60 characters) optimized for search engines.\n"
+            "3. 'meta_description': An engaging meta description (150-160 characters) that encourages clicks from search results.\n"
+            "4. 'image_alt_text': Descriptive, SEO-optimized alt text for a featured image related to this topic.\n"
+            "Output ONLY valid JSON. No additional text or explanations."
         )
         
         import json
@@ -82,6 +92,35 @@ class ContentEngine:
             "Include 1-2 relevant hashtags. "
             "Max 100 words. "
             "Output ONLY the text."
+        )
+        
+        return self._call_llm(system_prompt, topic)
+
+    def generate_topics(self, subject):
+        """Generates 15 topic ideas for the given subject/theme."""
+        print(f"Generating topic ideas for subject: {subject}")
+        
+        system_prompt = (
+            "You are a content strategist and topic ideation expert. "
+            "Generate 15 unique, engaging blog post topic ideas about the given subject. "
+            "Each topic should be formatted EXACTLY as: 'Title: One sentence description' "
+            "Each topic should be on a new line. "
+            "Make the titles attention-grabbing and SEO-friendly. "
+            "Output ONLY the 15 topics, one per line, nothing else."
+        )
+        
+        return self._call_llm(system_prompt, subject)
+
+    def generate_tags(self, topic):
+        """Generates 5-7 SEO-optimized tags for WordPress."""
+        print(f"Generating tags for topic: {topic}")
+        
+        system_prompt = (
+            "You are an SEO expert. "
+            "Generate 5-7 relevant, SEO-optimized tags for the given topic. "
+            "Tags should be single words or short phrases (2-3 words max). "
+            "Output ONLY the tags separated by commas, nothing else. "
+            "Example output: critical thinking, logic, reasoning, debate skills, philosophy"
         )
         
         return self._call_llm(system_prompt, topic)
@@ -145,13 +184,18 @@ class ContentEngine:
         wp_link = None
         wp = WordPressPublisher()
         if wp.enabled:
+            # Generate tags for WordPress
+            tags_str = self.generate_tags(topic)
+            
             wp_result = wp.post(
                 text=article_content, 
                 image_url=image_url, 
                 title=topic, 
                 schedule_time=schedule_time,
                 meta_description=meta_description,
-                alt_text=alt_text
+                alt_text=alt_text,
+                category_name="articles",  # Default category
+                tags_str=tags_str
             )
             if wp_result:
                 results['wordpress'] = wp_result.get('id')

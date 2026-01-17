@@ -127,30 +127,45 @@ class App(ctk.CTk):
         self.q_header = ctk.CTkLabel(self.queue_frame, text="Topic Queue", font=ctk.CTkFont(size=24, weight="bold"))
         self.q_header.grid(row=0, column=0, padx=20, pady=20, sticky="w")
 
-        # Input
+        # Topic Generation Frame
+        self.generation_frame = ctk.CTkFrame(self.queue_frame)
+        self.generation_frame.grid(row=1, column=0, padx=20, pady=10, sticky="ew")
+        
+        ctk.CTkLabel(self.generation_frame, text="AI Topic Generator:", font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=10, pady=(10, 5))
+        
+        self.subject_input = ctk.CTkEntry(self.generation_frame, placeholder_text="Enter a subject or theme (e.g., 'atheism', 'critical thinking')...", width=400)
+        self.subject_input.pack(side="left", padx=10, pady=10)
+        
+        self.generate_topics_btn = ctk.CTkButton(self.generation_frame, text="Generate 15 Topics", command=self.generate_topics, fg_color="#3D5A80")
+        self.generate_topics_btn.pack(side="left", padx=10, pady=10)
+
+        # Input for manual topics
         self.input_frame = ctk.CTkFrame(self.queue_frame)
-        self.input_frame.grid(row=1, column=0, padx=20, pady=10, sticky="ew")
+        self.input_frame.grid(row=2, column=0, padx=20, pady=10, sticky="ew")
+        
+        ctk.CTkLabel(self.input_frame, text="Add Topics Manually:", font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=10, pady=(10, 5))
         
         self.topic_input = ctk.CTkTextbox(self.input_frame, height=100, width=400)
         self.topic_input.pack(side="left", padx=10, pady=10)
-        self.topic_input.insert("1.0", "Paste a list of topics here (one per line)...")
-        # Bind focus in to clear placeholder? CustomTkinter placeholder for Textbox is not built-in same way as Entry.
-        # Let's just leave it empty or use a label.
-        self.topic_input.delete("1.0", "end") 
-        # Actually proper placeholder behavior is complex. Let's just put a label above it or tooltip.
-        # But for now, just empty box.
         
         self.add_btn = ctk.CTkButton(self.input_frame, text="Add Topics", command=self.add_topic)
         self.add_btn.pack(side="left", padx=10, pady=10, anchor="n")
 
         # List
         self.queue_list = ctk.CTkTextbox(self.queue_frame)
-        self.queue_list.grid(row=2, column=0, padx=20, pady=10, sticky="nsew")
+        self.queue_list.grid(row=3, column=0, padx=20, pady=10, sticky="nsew")
         
-        self.refresh_queue_btn = ctk.CTkButton(self.queue_frame, text="Refresh Queue View", command=self.refresh_queue_display)
-        self.refresh_queue_btn.grid(row=3, column=0, padx=20, pady=10)
+        # Queue action buttons frame
+        self.queue_actions_frame = ctk.CTkFrame(self.queue_frame, fg_color="transparent")
+        self.queue_actions_frame.grid(row=4, column=0, padx=20, pady=10, sticky="ew")
         
-        self.queue_frame.grid_rowconfigure(2, weight=1)
+        self.refresh_queue_btn = ctk.CTkButton(self.queue_actions_frame, text="Refresh Queue View", command=self.refresh_queue_display)
+        self.refresh_queue_btn.pack(side="left", padx=5)
+        
+        self.clear_queue_btn = ctk.CTkButton(self.queue_actions_frame, text="Clear Queue", command=self.clear_queue, fg_color="#DC3545", hover_color="#C82333")
+        self.clear_queue_btn.pack(side="left", padx=5)
+        
+        self.queue_frame.grid_rowconfigure(3, weight=1)
         self.queue_frame.grid_columnconfigure(0, weight=1)
 
     def create_settings_page(self):
@@ -446,6 +461,9 @@ class App(ctk.CTk):
 
 
     def add_topic(self):
+        """Add topics to queue with automatic cleanup of formatting."""
+        import re
+        
         raw_text = self.topic_input.get("1.0", "end")
         lines = raw_text.split('\n')
         
@@ -453,17 +471,91 @@ class App(ctk.CTk):
         for line in lines:
             line = line.strip()
             if line:
-                self.job_manager.add_topic(line)
-                added_count += 1
+                # Clean up formatting
+                # Remove numbered list markers (e.g., "1. ", "15. ", "10. ")
+                line = re.sub(r'^\d+\.\s*', '', line)
+                # Remove markdown bold markers (**)
+                line = line.replace('**', '')
+                # Strip any remaining whitespace
+                line = line.strip()
+                
+                if line:  # Check again after cleanup
+                    self.job_manager.add_topic(line)
+                    added_count += 1
                 
         if added_count > 0:
             self.topic_input.delete("1.0", "end")
             self.refresh_queue_display()
-            # self.status_label.configure(text=f"Added {added_count} topics.", text_color="green") 
-            # (If I had access to status label easily here, but it's on dashboard)
             print(f"Bulk added {added_count} topics.")
         else:
              messagebox.showwarning("Empty", "Please enter at least one topic.")
+
+    def generate_topics(self):
+        """Generate topics using AI and append to topic input."""
+        subject = self.subject_input.get().strip()
+        
+        if not subject:
+            messagebox.showwarning("Empty Subject", "Please enter a subject or theme first.")
+            return
+        
+        # Disable button during generation
+        self.generate_topics_btn.configure(state="disabled", text="Generating...")
+        
+        def worker():
+            try:
+                print(f"Generating topics for subject: {subject}")
+                topics_text = self.job_manager.content_engine.generate_topics(subject)
+                
+                if topics_text:
+                    # Append to topic input box
+                    def update_ui():
+                        current_text = self.topic_input.get("1.0", "end").strip()
+                        separator = "\n" if current_text else ""
+                        self.topic_input.insert("end", f"{separator}{topics_text}\n")
+                        self.generate_topics_btn.configure(state="normal", text="Generate 15 Topics")
+                        self.subject_input.delete(0, "end")
+                        print("Topics generated and added to input box!")
+                    
+                    self.after(0, update_ui)
+                else:
+                    def show_error():
+                        messagebox.showerror("Error", "Failed to generate topics. Check logs.")
+                        self.generate_topics_btn.configure(state="normal", text="Generate 15 Topics")
+                    self.after(0, show_error)
+                    
+            except Exception as e:
+                print(f"Error generating topics: {e}")
+                def show_error():
+                    messagebox.showerror("Error", f"Error: {e}")
+                    self.generate_topics_btn.configure(state="normal", text="Generate 15 Topics")
+                self.after(0, show_error)
+        
+        # Run in thread to avoid blocking UI
+        threading.Thread(target=worker, daemon=True).start()
+
+    def clear_queue(self):
+        """Clear all topics from the queue with confirmation."""
+        # Get current queue count
+        queue_count = len(self.job_manager.data.get("topics_queue", []))
+        
+        if queue_count == 0:
+            messagebox.showinfo("Empty Queue", "The queue is already empty.")
+            return
+        
+        # Ask for confirmation
+        if messagebox.askyesno(
+            "Confirm Clear Queue", 
+            f"Are you sure you want to clear all {queue_count} topics from the queue?\n\nThis action cannot be undone."
+        ):
+            # Clear the queue
+            self.job_manager.data["topics_queue"] = []
+            self.job_manager.save_data()
+            
+            # Refresh display
+            self.refresh_queue_display()
+            
+            print(f"✓ Cleared {queue_count} topics from queue.")
+            messagebox.showinfo("Queue Cleared", f"Successfully cleared {queue_count} topics from the queue.")
 
     def close_app(self):
         """Cleanly closes the application."""

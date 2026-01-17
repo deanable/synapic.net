@@ -154,10 +154,8 @@ class JobManager:
                 social_summary = self.content_engine.generate_social_summary(topic)
                 
                 if not seo_data or not social_summary:
-                    print("Failed to generate content. Skipping item but keeping in queue (or moving to end?).")
-                    # For safety, let's keep it? Or skip to next? 
-                    # If we keep it, we get stuck. Let's move to end or remove.
-                    # Let's remove to avoid infinite loop of failures.
+                    print(f"Failed to generate content for '{topic}'. Removing from queue.")
+                    # Remove from queue to avoid infinite loop
                     self.data["topics_queue"].pop(0)
                     self.save_data()
                     continue

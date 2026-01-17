@@ -6,7 +6,22 @@
     "Cherry Picking 101: A list of biblical rules that modern Christians completely ignore.",
     "Famous Contradictions: Highlighting two verses that say completely opposite things.",
     "The Telephone Game: How oral tradition changed holy texts before they were written down.",
-    "Horoscopes and Woo: Why atheists should be skeptical of astrology and psychics too."
+    "Horoscopes and Woo: Why atheists should be skeptical of astrology and psychics too.",
+    "Critical Thinking 101: How to Train Your Brain to Think Smarter, Not Harder",
+    "The Ultimate Guide to Critical Thinking: Skills You Need to Master Today",
+    "Why Critical Thinking is the Superpower You Didn\u2019t Know You Needed",
+    "Critical Thinking vs. Emotional Thinking: How to Strike the Perfect Balance",
+    "How to Spot Fake News: A Critical Thinker\u2019s Toolkit for the Digital Age",
+    "Critical Thinking in the Workplace: Why Employers Value It More Than Ever",
+    "The Science of Decision-Making: How Critical Thinking Leads to Better Choices",
+    "Critical Thinking for Kids: Fun Activities to Raise a Sharp-Minded Child",
+    "How to Improve Critical Thinking: 10 Exercises to Boost Your Brainpower",
+    "The Role of Critical Thinking in Problem-Solving: A Step-by-Step Guide",
+    "Critical Thinking in Education: Why Schools Should Teach It More",
+    "How to Avoid Cognitive Biases: A Critical Thinker\u2019s Guide to Clearer Judgment",
+    "Critical Thinking and Creativity: How They Work Together to Spark Innovation",
+    "The Dark Side of Critical Thinking: When Overanalyzing Leads to Paralysis",
+    "Critical Thinking in Everyday Life: Small Habits That Lead to Big Changes"
   ],
   "posted_log": [
     {
@@ -507,5 +522,5 @@
       "status": "scheduled"
     }
   ],
-  "selected_model": "mistralai/mistral-7b-instruct:free"
+  "selected_model": "mistralai/devstral-2512:free"
 }

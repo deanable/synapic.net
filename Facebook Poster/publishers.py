@@ -68,10 +68,82 @@ class WordPressPublisher(Publisher):
                  self.api_url = f"{base}/wp-json/wp/v2"
             else:
                 self.api_url = self.url
+            self.auth = (self.user, self.password)
         else:
             self.enabled = False
+            self.auth = None
 
-    def post(self, text, image_url=None, title=None, schedule_time=None, meta_description=None, alt_text=None, **kwargs):
+    def _get_or_create_category(self, category_name):
+        """Get category ID by name, create if doesn't exist."""
+        if not self.enabled:
+            return None
+        
+        try:
+            # First, try to find existing category
+            response = requests.get(
+                f"{self.api_url}/categories",
+                params={"search": category_name},
+                auth=self.auth
+            )
+            response.raise_for_status()
+            categories = response.json()
+            
+            # Check if exact match exists
+            for cat in categories:
+                if cat.get("name", "").lower() == category_name.lower():
+                    print(f"Found existing category '{category_name}' (ID: {cat['id']})")
+                    return cat["id"]
+            
+            # Category doesn't exist, create it
+            create_response = requests.post(
+                f"{self.api_url}/categories",
+                json={"name": category_name},
+                auth=self.auth
+            )
+            create_response.raise_for_status()
+            new_cat = create_response.json()
+            print(f"Created new category '{category_name}' (ID: {new_cat['id']})")
+            return new_cat["id"]
+            
+        except Exception as e:
+            print(f"Error getting/creating category '{category_name}': {e}")
+            return None
+
+    def _get_or_create_tag(self, tag_name):
+        """Get tag ID by name, create if doesn't exist."""
+        if not self.enabled:
+            return None
+        
+        try:
+            # First, try to find existing tag
+            response = requests.get(
+                f"{self.api_url}/tags",
+                params={"search": tag_name},
+                auth=self.auth
+            )
+            response.raise_for_status()
+            tags = response.json()
+            
+            # Check if exact match exists
+            for tag in tags:
+                if tag.get("name", "").lower() == tag_name.lower():
+                    return tag["id"]
+            
+            # Tag doesn't exist, create it
+            create_response = requests.post(
+                f"{self.api_url}/tags",
+                json={"name": tag_name},
+                auth=self.auth
+            )
+            create_response.raise_for_status()
+            new_tag = create_response.json()
+            return new_tag["id"]
+            
+        except Exception as e:
+            print(f"Error getting/creating tag '{tag_name}': {e}")
+            return None
+
+    def post(self, text, image_url=None, title=None, schedule_time=None, meta_description=None, alt_text=None, category_name=None, tags_str=None, **kwargs):
         if not self.enabled:
             print("WordPress not configured.")
             return None
@@ -139,13 +211,42 @@ class WordPressPublisher(Publisher):
                     # Fallback: Prepend
                     final_content = img_html + final_content
 
-            # 4. Create Post
+            # 4. Process Categories and Tags
+            category_ids = []
+            tag_ids = []
+            
+            # Get/create category (default to "articles" if not provided)
+            if category_name:
+                cat_id = self._get_or_create_category(category_name)
+                if cat_id:
+                    category_ids.append(cat_id)
+            else:
+                # Default category
+                cat_id = self._get_or_create_category("articles")
+                if cat_id:
+                    category_ids.append(cat_id)
+            
+            # Get/create tags
+            if tags_str:
+                tag_names = [tag.strip() for tag in tags_str.split(",") if tag.strip()]
+                for tag_name in tag_names:
+                    tag_id = self._get_or_create_tag(tag_name)
+                    if tag_id:
+                        tag_ids.append(tag_id)
+
+            # 5. Create Post
             post_data = {
                 "title": title,
                 "content": final_content, 
                 "status": "publish",
                 "featured_media": featured_media_id
             }
+            
+            # Add categories and tags
+            if category_ids:
+                post_data["categories"] = category_ids
+            if tag_ids:
+                post_data["tags"] = tag_ids
             
             # Add Excerpt (Meta Description)
             if meta_description:
