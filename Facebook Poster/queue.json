@@ -2,27 +2,7 @@
   "target_page_id": "100814746063812",
   "target_page_token": "EAAKo1WxIoLkBQT61KurPv403d3mN2BxudObxmvvxQJwu7RmeQEr22Dg1xrBcVmqVhmmBu3wXnI2ceNnBxSvKqfrwyLgHmH3zxHZA0ydKClJQQBU1ksxSRFsJ62yGhTb1NsJL5uyaHTG8JD7YXAk1eZAG8yKPAo0c1V7bMzl8CBRg4IN4YuOhyRvZBjWZCSX54hw8fq8VjI9YwkZC9wGUJ",
   "interval_minutes": 240,
-  "topics_queue": [
-    "Cherry Picking 101: A list of biblical rules that modern Christians completely ignore.",
-    "Famous Contradictions: Highlighting two verses that say completely opposite things.",
-    "The Telephone Game: How oral tradition changed holy texts before they were written down.",
-    "Horoscopes and Woo: Why atheists should be skeptical of astrology and psychics too.",
-    "Critical Thinking 101: How to Train Your Brain to Think Smarter, Not Harder",
-    "The Ultimate Guide to Critical Thinking: Skills You Need to Master Today",
-    "Why Critical Thinking is the Superpower You Didn\u2019t Know You Needed",
-    "Critical Thinking vs. Emotional Thinking: How to Strike the Perfect Balance",
-    "How to Spot Fake News: A Critical Thinker\u2019s Toolkit for the Digital Age",
-    "Critical Thinking in the Workplace: Why Employers Value It More Than Ever",
-    "The Science of Decision-Making: How Critical Thinking Leads to Better Choices",
-    "Critical Thinking for Kids: Fun Activities to Raise a Sharp-Minded Child",
-    "How to Improve Critical Thinking: 10 Exercises to Boost Your Brainpower",
-    "The Role of Critical Thinking in Problem-Solving: A Step-by-Step Guide",
-    "Critical Thinking in Education: Why Schools Should Teach It More",
-    "How to Avoid Cognitive Biases: A Critical Thinker\u2019s Guide to Clearer Judgment",
-    "Critical Thinking and Creativity: How They Work Together to Spark Innovation",
-    "The Dark Side of Critical Thinking: When Overanalyzing Leads to Paralysis",
-    "Critical Thinking in Everyday Life: Small Habits That Lead to Big Changes"
-  ],
+  "topics_queue": [],
   "posted_log": [
     {
       "topic": "What is atheism",
@@ -520,6 +500,14 @@
         "facebook": "853219657480871"
       },
       "status": "scheduled"
+    },
+    {
+      "topic": "Ask an Atheist: How Do You Find Meaning Without Religion?",
+      "timestamp": "2026-01-17T13:00:24.188256",
+      "post_ids": {
+        "wordpress": 1016,
+        "facebook": "855668267236010"
+      }
     }
   ],
   "selected_model": "mistralai/devstral-2512:free"
