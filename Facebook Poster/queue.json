@@ -1,7 +1,7 @@
 {
   "target_page_id": "100814746063812",
   "target_page_token": "EAAKo1WxIoLkBQT61KurPv403d3mN2BxudObxmvvxQJwu7RmeQEr22Dg1xrBcVmqVhmmBu3wXnI2ceNnBxSvKqfrwyLgHmH3zxHZA0ydKClJQQBU1ksxSRFsJ62yGhTb1NsJL5uyaHTG8JD7YXAk1eZAG8yKPAo0c1V7bMzl8CBRg4IN4YuOhyRvZBjWZCSX54hw8fq8VjI9YwkZC9wGUJ",
-  "interval_minutes": 240,
+  "interval_minutes": 720,
   "topics_queue": [],
   "posted_log": [
     {
@@ -508,6 +508,156 @@
         "wordpress": 1016,
         "facebook": "855668267236010"
       }
+    },
+    {
+      "topic": "10 Questions You've Always Wanted to Ask an Atheist\u2014Answered",
+      "timestamp": "2026-01-17T14:27:36.874289",
+      "scheduled_for": "2026-01-17T14:42:00.745653",
+      "post_ids": {
+        "wordpress": 1018,
+        "facebook": "855716317231205"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "What Do Atheists Really Believe? Debunking Common Myths",
+      "timestamp": "2026-01-17T14:30:19.055020",
+      "scheduled_for": "2026-01-18T02:42:00.745653",
+      "post_ids": {
+        "wordpress": 1020,
+        "facebook": "855718073897696"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "Ask an Atheist: How Do You Find Meaning Without Religion?",
+      "timestamp": "2026-01-17T14:31:53.027640",
+      "scheduled_for": "2026-01-18T14:42:00.745653",
+      "post_ids": {
+        "wordpress": 1022,
+        "facebook": "855719060564264"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "From Faith to Reason: One Atheist's Journey and Your Burning Questions",
+      "timestamp": "2026-01-17T14:34:43.884565",
+      "scheduled_for": "2026-01-19T02:42:00.745653",
+      "post_ids": {
+        "wordpress": 1024,
+        "facebook": "855720833897420"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "Morality Without God: How Atheists Define Right and Wrong",
+      "timestamp": "2026-01-17T14:36:57.338777",
+      "scheduled_for": "2026-01-19T14:42:00.745653",
+      "post_ids": {
+        "wordpress": 1026,
+        "facebook": "855722113897292"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "Ask an Atheist: What's the Most Annoying Question You Get?",
+      "timestamp": "2026-01-17T14:38:24.626155",
+      "scheduled_for": "2026-01-20T02:42:00.745653",
+      "post_ids": {
+        "wordpress": 1028,
+        "facebook": "855723023897201"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "Science vs. Faith: An Atheist's Perspective on the Big Debates",
+      "timestamp": "2026-01-17T14:41:22.797869",
+      "scheduled_for": "2026-01-20T14:42:00.745653",
+      "post_ids": {
+        "wordpress": 1030,
+        "facebook": "855724790563691"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "How Do Atheists Handle Grief, Death, and the Afterlife?",
+      "timestamp": "2026-01-17T14:42:50.503249",
+      "scheduled_for": "2026-01-21T02:42:00.745653",
+      "post_ids": {
+        "wordpress": 1032,
+        "facebook": "855725673896936"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "Ask an Atheist: Why Are You So Angry About Religion?",
+      "timestamp": "2026-01-17T14:44:43.280373",
+      "scheduled_for": "2026-01-21T14:42:00.745653",
+      "post_ids": {
+        "wordpress": 1034,
+        "facebook": "855727000563470"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "Raising Kids Without Religion: An Atheist Parent's Guide",
+      "timestamp": "2026-01-17T14:46:06.137360",
+      "scheduled_for": "2026-01-22T02:42:00.745653",
+      "post_ids": {
+        "wordpress": 1036,
+        "facebook": "855727763896727"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "The Atheist's Toolkit: How to Answer Tough Questions from Believers",
+      "timestamp": "2026-01-17T14:47:08.423464",
+      "scheduled_for": "2026-01-22T14:42:00.745653",
+      "post_ids": {
+        "wordpress": 1038,
+        "facebook": "855728473896656"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "Ask an Atheist: What's the One Thing You Wish Religious People Understood?",
+      "timestamp": "2026-01-17T14:48:56.216901",
+      "scheduled_for": "2026-01-23T02:42:00.745653",
+      "post_ids": {
+        "wordpress": 1040,
+        "facebook": "855729483896555"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "Why Do Some Atheists Still Celebrate Religious Holidays?",
+      "timestamp": "2026-01-17T14:50:28.553475",
+      "scheduled_for": "2026-01-23T14:42:00.745653",
+      "post_ids": {
+        "wordpress": 1042,
+        "facebook": "855730533896450"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "From Pew to None: Stories of People Who Left Religion Behind",
+      "timestamp": "2026-01-17T14:51:41.135343",
+      "scheduled_for": "2026-01-24T02:42:00.745653",
+      "post_ids": {
+        "wordpress": 1044,
+        "facebook": "855731307229706"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "Ask an Atheist: How Do You Deal with Family Who Disapprove?",
+      "timestamp": "2026-01-17T14:52:58.123763",
+      "scheduled_for": "2026-01-24T14:42:00.745653",
+      "post_ids": {
+        "wordpress": 1046,
+        "facebook": "855732067229630"
+      },
+      "status": "scheduled"
     }
   ],
   "selected_model": "mistralai/devstral-2512:free"

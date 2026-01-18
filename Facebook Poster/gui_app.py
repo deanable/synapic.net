@@ -474,6 +474,8 @@ class App(ctk.CTk):
                 # Clean up formatting
                 # Remove numbered list markers (e.g., "1. ", "15. ", "10. ")
                 line = re.sub(r'^\d+\.\s*', '', line)
+                # Remove "Title: " prefix (sometimes added by AI)
+                line = line.replace('Title: ', '')
                 # Remove markdown bold markers (**)
                 line = line.replace('**', '')
                 # Strip any remaining whitespace
