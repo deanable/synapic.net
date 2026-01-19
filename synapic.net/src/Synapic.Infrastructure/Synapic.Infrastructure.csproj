@@ -1,0 +1,22 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MetadataExtractor" Version="2.9.0" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.2" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
+    <PackageReference Include="TorchSharp" Version="0.105.2" />
+    <PackageReference Include="TorchSharp-cpu" Version="0.105.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Synapic.Core\Synapic.Core.csproj" />
+  </ItemGroup>
+
+</Project>

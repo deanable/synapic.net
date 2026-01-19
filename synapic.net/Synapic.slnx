@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Synapic.Application/Synapic.Application.csproj" />
+    <Project Path="src/Synapic.Core/Synapic.Core.csproj" />
+    <Project Path="src/Synapic.Infrastructure/Synapic.Infrastructure.csproj" />
+    <Project Path="src/Synapic.UI/Synapic.UI.csproj" />
+  </Folder>
+</Solution>
