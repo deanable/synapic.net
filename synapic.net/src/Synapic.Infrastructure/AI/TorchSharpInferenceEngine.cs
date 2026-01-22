@@ -208,7 +208,7 @@ public class TorchSharpInferenceEngine : IModelInferenceEngine
         }, cancellationToken);
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         await Task.Run(() =>
         {

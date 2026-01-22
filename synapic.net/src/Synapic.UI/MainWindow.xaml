@@ -1,12 +1,208 @@
-﻿<Window x:Class="Synapic.UI.MainWindow"
+<Window x:Class="Synapic.UI.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:Synapic.UI"
-        mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
-    <Grid>
-
+        xmlns:vm="clr-namespace:Synapic.UI.ViewModels"
+        Title="Synapic.NET - AI Image Metadata Tagger" Height="700" Width="900"
+        WindowStartupLocation="CenterScreen">
+    
+    <Window.DataContext>
+        <vm:MainViewModel/>
+    </Window.DataContext>
+    
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        
+        <!-- Title -->
+        <TextBlock Grid.Row="0" Text="Synapic.NET - AI Image Metadata Tagger" 
+                   FontSize="20" FontWeight="Bold" Margin="0,0,0,20"/>
+        
+        <!-- Main Content -->
+        <TabControl Grid.Row="1">
+            <!-- Data Source Tab -->
+            <TabItem Header="Data Source">
+                <Grid Margin="10">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    
+                    <!-- Data Source Type -->
+                    <StackPanel Grid.Row="0" Margin="0,0,0,10">
+                        <TextBlock Text="Data Source Type:" FontWeight="Bold"/>
+                        <ComboBox SelectedIndex="{Binding SelectedDataSourceType}" Margin="0,5,0,0">
+                            <ComboBoxItem Content="Local File System"/>
+                            <ComboBoxItem Content="Daminion DAMS"/>
+                        </ComboBox>
+                    </StackPanel>
+                    
+                    <!-- Data Source Configuration -->
+                    <Grid Grid.Row="1" IsEnabled="{Binding IsProcessing, Converter={StaticResource BoolToInvertedBoolConverter}}">
+                        <Grid.Style>
+                            <Style TargetType="Grid">
+                                <Setter Property="Margin" Value="0,0,0,10"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsLocalDataSource}" Value="True">
+                                        <Setter Property="RowDefinitions">
+                                            <Setter.Value>
+                                                <RowDefinitionCollection>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                </RowDefinitionCollection>
+                                            </Setter.Value>
+                                        </Setter>
+                                        <Setter Property="ColumnDefinitions">
+                                            <Setter.Value>
+                                                <ColumnDefinitionCollection>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </ColumnDefinitionCollection>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsDaminionDataSource}" Value="True">
+                                        <Setter Property="RowDefinitions">
+                                            <Setter.Value>
+                                                <RowDefinitionCollection>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                </RowDefinitionCollection>
+                                            </Setter.Value>
+                                        </Setter>
+                                        <Setter Property="ColumnDefinitions">
+                                            <Setter.Value>
+                                                <ColumnDefinitionCollection>
+                                                    <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </ColumnDefinitionCollection>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Grid.Style>
+                        
+                        <!-- Local File System Configuration -->
+                        <Grid Visibility="{Binding IsLocalDataSource, Converter={StaticResource BoolToVisibilityConverter}}">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            
+                            <Label Grid.Row="0" Grid.Column="0" Content="Folder Path:" VerticalAlignment="Center"/>
+                            <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding LocalPath}" Margin="5"/>
+                            <Button Grid.Row="0" Grid.Column="2" Content="Browse..." Command="{Binding BrowseFolderCommand}" Margin="5,0,0,0" Width="80"/>
+                            
+                            <CheckBox Grid.Row="1" Grid.Column="1" Content="Include Subdirectories" IsChecked="{Binding LocalRecursive}" Margin="5"/>
+                            
+                            <Label Grid.Row="2" Grid.Column="0" Content="Max Items:" VerticalAlignment="Center"/>
+                            <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding MaxItems}" Margin="5"/>
+                        </Grid>
+                        
+                        <!-- Daminion Configuration -->
+                        <Grid Visibility="{Binding IsDaminionDataSource, Converter={StaticResource BoolToVisibilityConverter}}">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            
+                            <Label Grid.Row="0" Grid.Column="0" Content="URL:" VerticalAlignment="Center"/>
+                            <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding DaminionUrl}" Margin="5"/>
+                            
+                            <Label Grid.Row="1" Grid.Column="0" Content="Username:" VerticalAlignment="Center"/>
+                            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding DaminionUser}" Margin="5"/>
+                            
+                            <Label Grid.Row="2" Grid.Column="0" Content="Password:" VerticalAlignment="Center"/>
+                            <PasswordBox Grid.Row="2" Grid.Column="1" Margin="5">
+                                <PasswordBoxHelper.Password>
+                                    <Binding Path="DaminionPassword" UpdateSourceTrigger="PropertyChanged"/>
+                                </PasswordBoxHelper.Password>
+                            </PasswordBox>
+                            
+                            <Label Grid.Row="3" Grid.Column="0" Content="Max Items:" VerticalAlignment="Center"/>
+                            <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding MaxItems}" Margin="5"/>
+                        </Grid>
+                    </Grid>
+                </Grid>
+            </TabItem>
+            
+            <!-- AI Engine Tab -->
+            <TabItem Header="AI Engine">
+                <Grid Margin="10">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" MinWidth="120"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <Label Grid.Row="0" Grid.Column="0" Content="Engine Provider:" VerticalAlignment="Center"/>
+                    <ComboBox Grid.Row="0" Grid.Column="1" SelectedIndex="{Binding SelectedEngineProvider}" Margin="5">
+                        <ComboBoxItem Content="Local (TorchSharp)"/>
+                        <ComboBoxItem Content="HuggingFace API"/>
+                        <ComboBoxItem Content="OpenRouter API"/>
+                    </ComboBox>
+                    
+                    <Label Grid.Row="1" Grid.Column="0" Content="Model ID:" VerticalAlignment="Center"/>
+                    <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding ModelId}" Margin="5"/>
+                    
+                    <Label Grid.Row="2" Grid.Column="0" Content="Task Type:" VerticalAlignment="Center"/>
+                    <ComboBox Grid.Row="2" Grid.Column="1" SelectedIndex="{Binding SelectedModelTask}" Margin="5">
+                        <ComboBoxItem Content="Image to Text (Captioning)"/>
+                        <ComboBoxItem Content="Image Classification"/>
+                        <ComboBoxItem Content="Zero-Shot Classification"/>
+                        <ComboBoxItem Content="Object Detection"/>
+                    </ComboBox>
+                    
+                    <Label Grid.Row="3" Grid.Column="0" Content="Device ID:" VerticalAlignment="Center"/>
+                    <StackPanel Grid.Row="3" Grid.Column="1" Orientation="Horizontal" Margin="5">
+                        <RadioButton Content="CPU" IsChecked="{Binding DeviceId, Converter={StaticResource IntToBoolConverter}, ConverterParameter=-1}" Margin="0,0,10,0"/>
+                        <RadioButton Content="GPU 0" IsChecked="{Binding DeviceId, Converter={StaticResource IntToBoolConverter}, ConverterParameter=0}" Margin="0,0,10,0"/>
+                        <RadioButton Content="GPU 1" IsChecked="{Binding DeviceId, Converter={StaticResource IntToBoolConverter}, ConverterParameter=1}"/>
+                    </StackPanel>
+                </Grid>
+            </TabItem>
+        </TabControl>
+        
+        <!-- Status and Controls -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,20,0,0">
+            <Button Content="Start Processing" Command="{Binding StartProcessingCommand}" 
+                    Width="120" Height="30" Margin="0,0,10,0" Padding="10,5"/>
+            <Button Content="Stop" Command="{Binding StopProcessingCommand}" 
+                    Width="80" Height="30" Margin="0,0,10,0" Padding="10,5"/>
+            <Button Content="Clear Results" Command="{Binding ClearResultsCommand}" 
+                    Width="100" Height="30" Margin="0,0,10,0" Padding="10,5"/>
+        </StackPanel>
     </Grid>
+    
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+        <BooleanToVisibilityConverter x:Key="BoolToInvertedBoolConverter" Inverted="True"/>
+        <IntToBoolConverter x:Key="IntToBoolConverter"/>
+    </Window.Resources>
 </Window>

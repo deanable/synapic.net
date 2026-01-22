@@ -1,13 +1,9 @@
-﻿using System.Text;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
+using Synapic.Application.Configuration;
+using Synapic.UI.ViewModels;
 
 namespace Synapic.UI;
 
@@ -16,8 +12,18 @@ namespace Synapic.UI;
 /// </summary>
 public partial class MainWindow : Window
 {
-    public MainWindow()
+    private readonly IServiceProvider _serviceProvider;
+    
+    public MainWindow(IServiceProvider serviceProvider)
     {
+        _serviceProvider = serviceProvider;
         InitializeComponent();
+    }
+    
+    private void Window_Loaded(object sender, RoutedEventArgs e)
+    {
+        // Set up logging to output to debug window
+        var logger = _serviceProvider.GetRequiredService<ILogger<MainWindow>>();
+        logger.LogInformation("Synapic.NET UI started");
     }
 }

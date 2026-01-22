@@ -24,8 +24,8 @@ public interface IModelInferenceEngine
     /// </summary>
     bool IsInitialized { get; }
     
-    /// <summary>
+/// <summary>
     /// Dispose of model resources
     /// </summary>
-    Task DisposeAsync();
+    ValueTask DisposeAsync();
 }
