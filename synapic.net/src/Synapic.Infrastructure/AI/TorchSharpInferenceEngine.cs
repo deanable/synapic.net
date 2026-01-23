@@ -18,7 +18,7 @@ public class TorchSharpInferenceEngine : IModelInferenceEngine
     private readonly IImageMetadataService _imageService;
     private EngineConfig? _config;
     private nn.Module? _model;
-    private Device _device;
+    private Device? _device;
     private bool _isInitialized;
 
     public bool IsInitialized => _isInitialized;
@@ -43,7 +43,7 @@ public class TorchSharpInferenceEngine : IModelInferenceEngine
 
             // Determine device (CPU or CUDA)
             _device = config.DeviceId >= 0 && cuda.is_available() 
-                ? CUDA(config.DeviceId) 
+                ? new Device(DeviceType.CUDA, config.DeviceId) 
                 : CPU;
 
             _logger.LogInformation("Using device: {Device}", _device);
@@ -89,35 +89,31 @@ public class TorchSharpInferenceEngine : IModelInferenceEngine
                 throw new NotSupportedException($"Task {config.Task} not yet implemented");
         }
 
-        _model?.to(_device);
+        _model?.to(_device!);
     }
 
     private nn.Module CreateImageClassificationModel()
     {
         // Placeholder for image classification model
         // In production, load actual ResNet, ViT, etc.
-        var modules = new List<(string, nn.Module)>
-        {
+        return nn.Sequential(
             ("flatten", nn.Flatten()),
             ("fc1", nn.Linear(224 * 224 * 3, 512)),
             ("relu", nn.ReLU()),
             ("fc2", nn.Linear(512, 1000))
-        };
-        return nn.Sequential(modules);
+        );
     }
 
     private nn.Module CreateImageToTextModel()
     {
         // Placeholder for image-to-text model
         // In production, load actual CLIP, BLIP, etc.
-        var modules = new List<(string, nn.Module)>
-        {
+        return nn.Sequential(
             ("flatten", nn.Flatten()),
             ("fc1", nn.Linear(224 * 224 * 3, 512)),
             ("relu", nn.ReLU()),
             ("fc2", nn.Linear(512, 256))
-        };
-        return nn.Sequential(modules);
+        );
     }
 
     public async Task<(string? category, List<string> keywords, string? description)> ProcessImageAsync(
@@ -137,10 +133,10 @@ public class TorchSharpInferenceEngine : IModelInferenceEngine
 
             // Run inference
             using var _ = torch.no_grad();
-            var output = _model.forward(tensor);
+            Tensor output = ((dynamic)_model).forward(tensor);
 
             // Post-process results based on task
-            var (category, keywords, description) = await PostProcessResultsAsync(output, cancellationToken);
+            (string? category, List<string> keywords, string? description) = await PostProcessResultsAsync(output, cancellationToken);
 
             _logger.LogDebug("Processed image successfully: {ImagePath}", imagePath);
             return (category, keywords, description);
@@ -184,7 +180,7 @@ public class TorchSharpInferenceEngine : IModelInferenceEngine
             });
 
             var tensor = torch.tensor(pixels, new long[] { 1, 3, 224, 224 });
-            return tensor.to(_device);
+            return tensor.to(_device!);
         }, cancellationToken);
     }
 

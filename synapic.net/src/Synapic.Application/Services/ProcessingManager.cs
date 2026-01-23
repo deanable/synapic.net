@@ -178,7 +178,7 @@ public class ProcessingManager
             Log($"Processing: {Path.GetFileName(item.FilePath)}");
 
             // Validate image
-            var (isValid, error) = await _imageMetadataService.ValidateImageAsync(item.FilePath);
+            (bool isValid, string? error) = await _imageMetadataService.ValidateImageAsync(item.FilePath);
             if (!isValid)
             {
                 result.Success = false;
@@ -187,7 +187,7 @@ public class ProcessingManager
             }
 
             // Run AI inference
-            var (category, keywords, description) = await _inferenceEngine.ProcessImageAsync(
+            (string? category, List<string> keywords, string? description) = await _inferenceEngine.ProcessImageAsync(
                 item.FilePath, 
                 cancellationToken);
 

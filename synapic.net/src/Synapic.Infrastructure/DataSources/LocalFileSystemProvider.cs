@@ -145,7 +145,7 @@ public class LocalFileSystemProvider : IDataSourceProvider
         var fileInfo = new FileInfo(filePath);
         
         // Read existing metadata
-        var (category, keywords, description) = await _imageService.ReadMetadataAsync(filePath);
+        (string? category, List<string> keywords, string? description) = await _imageService.ReadMetadataAsync(filePath);
 
         return new MediaItem
         {

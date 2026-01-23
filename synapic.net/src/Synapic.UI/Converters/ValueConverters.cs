@@ -64,18 +64,34 @@ public class IntToBoolConverter : IValueConverter
 {
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
-        if (value is int intValue && parameter is int paramValue)
+        if (value is int intValue && parameter != null)
         {
-            return intValue == paramValue;
+            // Parameter from XAML comes as string, need to parse it
+            if (parameter is int pInt)
+            {
+                return intValue == pInt;
+            }
+            else if (int.TryParse(parameter.ToString(), out int paramValue))
+            {
+                return intValue == paramValue;
+            }
         }
         return false;
     }
     
     public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
-        if (value is bool boolValue && parameter is int paramValue)
+        if (value is bool boolValue && boolValue && parameter != null)
         {
-            return boolValue ? paramValue : -1;
+            // Parameter from XAML comes as string, need to parse it
+            if (parameter is int pInt)
+            {
+                return pInt;
+            }
+            else if (int.TryParse(parameter.ToString(), out int paramValue))
+            {
+                return paramValue;
+            }
         }
         return -1;
     }

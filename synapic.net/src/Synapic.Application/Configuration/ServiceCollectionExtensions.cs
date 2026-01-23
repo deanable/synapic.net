@@ -12,12 +12,29 @@ namespace Synapic.Application.Configuration;
 
 /// <summary>
 /// Dependency injection configuration for Synapic services
+/// 
+/// This extension method configures all the services required for the Synapic.NET application.
+/// It sets up proper dependency injection, logging, and service lifetimes.
 /// </summary>
 public static class ServiceCollectionExtensions
 {
     /// <summary>
     /// Add Synapic services to the dependency injection container
     /// </summary>
+    /// <param name="services">The service collection to configure</param>
+    /// <param name="configureOptions">Optional action to configure Synapic options</param>
+    /// <returns>The configured service collection for chaining</returns>
+    /// <exception cref="ArgumentNullException">Thrown when services is null</exception>
+    /// <example>
+    /// <code>
+    /// var services = new ServiceCollection();
+    /// services.AddSynapicServices(options => {
+    ///     options.ModelCachePath = @"C:\Models";
+    ///     options.DefaultDeviceId = 0; // Use GPU
+    /// });
+    /// var serviceProvider = services.BuildServiceProvider();
+    /// </code>
+    /// </example>
     public static IServiceCollection AddSynapicServices(
         this IServiceCollection services, 
         Action<SynapicOptions>? configureOptions = null)

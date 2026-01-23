@@ -18,6 +18,10 @@ public partial class MainWindow : Window
     {
         _serviceProvider = serviceProvider;
         InitializeComponent();
+        
+        // Set DataContext with dependencies from service provider
+        var logger = _serviceProvider.GetRequiredService<ILogger<MainViewModel>>();
+        DataContext = new MainViewModel(_serviceProvider, logger);
     }
     
     private void Window_Loaded(object sender, RoutedEventArgs e)

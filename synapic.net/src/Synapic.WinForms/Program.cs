@@ -1,24 +1,26 @@
+using System;
+using System.Windows.Forms;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using System.Windows;
 using Synapic.Application.Configuration;
 
-namespace Synapic.UI;
+namespace Synapic.WinForms;
 
-/// <summary>
-/// App.xaml logic
-/// </summary>
-public partial class App : System.Windows.Application
+static class Program
 {
-    private IServiceProvider? _serviceProvider;
-    
-    protected override void OnStartup(StartupEventArgs e)
+    /// <summary>
+    ///  The main entry point for the application.
+    /// </summary>
+    [STAThread]
+    static void Main()
     {
+        ApplicationConfiguration.Initialize();
+
         try
         {
-            // Configure services
             var services = new ServiceCollection();
+            
+            // Configure services
             services.AddSynapicServices(options =>
             {
                 options.ModelCachePath = System.IO.Path.Combine(
@@ -36,21 +38,15 @@ public partial class App : System.Windows.Application
                 builder.AddDebug();
             });
             
-            _serviceProvider = services.BuildServiceProvider();
+            services.AddScoped<MainForm>();
             
-            // Create and show main window
-            var mainWindow = new MainWindow(_serviceProvider);
-            mainWindow.Show();
+            using var serviceProvider = services.BuildServiceProvider();
+            var mainForm = serviceProvider.GetRequiredService<MainForm>();
+            System.Windows.Forms.Application.Run(mainForm);
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Startup Error: {ex.Message}\n\n{ex.StackTrace}", "Critical Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            Shutdown(1);
+            MessageBox.Show($"Startup Error: {ex.Message}\n\n{ex.StackTrace}", "Critical Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
-    }
-    
-    protected override void OnExit(ExitEventArgs e)
-    {
-        (_serviceProvider as IDisposable)?.Dispose();
     }
 }

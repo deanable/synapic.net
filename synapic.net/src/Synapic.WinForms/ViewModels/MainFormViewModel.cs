@@ -1,30 +1,27 @@
-using System.Collections.ObjectModel;
-using System.IO;
-using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Input;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Synapic.Application.Services;
 using Synapic.Core.Entities;
 using Synapic.Core.Interfaces;
-using Synapic.UI.Commands;
 
-namespace Synapic.UI.ViewModels;
+namespace Synapic.WinForms.ViewModels;
 
 /// <summary>
-/// Main application view model
+/// Main form view model (adapted from WPF implementation)
 /// </summary>
-public class MainViewModel : ViewModelBase
+public class MainFormViewModel : INotifyPropertyChanged
 {
     private readonly IServiceProvider _serviceProvider;
-    private readonly ILogger<MainViewModel> _logger;
+    private readonly ILogger<MainFormViewModel> _logger;
+    private readonly Form _owner;
     private ProcessingManager? _processingManager;
     
     private bool _isProcessing;
     private int _currentProgress;
     private string _statusMessage = "Ready";
-    private ObservableCollection<ProcessingResult> _results = new();
+    private readonly BindingList<ProcessingResult> _results = new();
     private ProcessingSession _session = new();
     
     // Data Source Properties
@@ -41,24 +38,16 @@ public class MainViewModel : ViewModelBase
     private string _modelId = "resnet50";
     private ModelTask _selectedModelTask = ModelTask.ImageToText;
     private int _deviceId = -1;
-    
-    public MainViewModel(IServiceProvider serviceProvider, ILogger<MainViewModel> logger)
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    public MainFormViewModel(IServiceProvider serviceProvider, ILogger<MainFormViewModel> logger, Form owner)
     {
         _serviceProvider = serviceProvider;
         _logger = logger;
-        
-        StartProcessingCommand = new AsyncRelayCommand(StartProcessingAsync, _ => CanStartProcessing());
-        StopProcessingCommand = new AsyncRelayCommand(StopProcessingAsync, _ => CanStopProcessing());
-        BrowseFolderCommand = new RelayCommand(_ => BrowseFolder());
-        ClearResultsCommand = new RelayCommand(_ => ClearResults());
+        _owner = owner;
     }
-    
-    // Commands
-    public ICommand StartProcessingCommand { get; }
-    public ICommand StopProcessingCommand { get; }
-    public ICommand BrowseFolderCommand { get; }
-    public ICommand ClearResultsCommand { get; }
-    
+
     // Properties
     public bool IsProcessing
     {
@@ -78,27 +67,16 @@ public class MainViewModel : ViewModelBase
         set => SetProperty(ref _statusMessage, value);
     }
     
-    public ObservableCollection<ProcessingResult> Results
-    {
-        get => _results;
-        set => SetProperty(ref _results, value);
-    }
+    public BindingList<ProcessingResult> Results => _results;
     
     // Data Source Properties
     public DataSourceType SelectedDataSourceType
     {
         get => _selectedDataSourceType;
-        set => SetProperty(ref _selectedDataSourceType, value);
-    }
-    
-    public int SelectedDataSourceTypeIndex
-    {
-        get => (int)_selectedDataSourceType;
         set
         {
-            if (SetProperty(ref _selectedDataSourceType, (DataSourceType)value))
+            if (SetProperty(ref _selectedDataSourceType, value))
             {
-                OnPropertyChanged(nameof(SelectedDataSourceType));
                 OnPropertyChanged(nameof(IsLocalDataSource));
                 OnPropertyChanged(nameof(IsDaminionDataSource));
             }
@@ -145,19 +123,12 @@ public class MainViewModel : ViewModelBase
     public EngineProvider SelectedEngineProvider
     {
         get => _selectedEngineProvider;
-        set => SetProperty(ref _selectedEngineProvider, value);
-    }
-    
-    public int SelectedEngineProviderIndex
-    {
-        get => (int)_selectedEngineProvider;
         set
         {
-            if (SetProperty(ref _selectedEngineProvider, (EngineProvider)value))
-            {
-                OnPropertyChanged(nameof(SelectedEngineProvider));
-                OnPropertyChanged(nameof(IsLocalEngine));
-            }
+             if (SetProperty(ref _selectedEngineProvider, value))
+             {
+                 OnPropertyChanged(nameof(IsLocalEngine));
+             }
         }
     }
     
@@ -171,12 +142,6 @@ public class MainViewModel : ViewModelBase
     {
         get => _selectedModelTask;
         set => SetProperty(ref _selectedModelTask, value);
-    }
-    
-    public int SelectedModelTaskIndex
-    {
-        get => (int)_selectedModelTask;
-        set => SetProperty(ref _selectedModelTask, (ModelTask)value);
     }
     
     public int DeviceId
@@ -193,7 +158,21 @@ public class MainViewModel : ViewModelBase
         }
     }
     
-    // Radio button helper properties
+    // Helper Properties for Radio Buttons
+    public bool IsLocalDataSource
+    {
+        get => SelectedDataSourceType == DataSourceType.Local;
+        set { if (value) SelectedDataSourceType = DataSourceType.Local; }
+    }
+
+    public bool IsDaminionDataSource
+    {
+        get => SelectedDataSourceType == DataSourceType.Daminion;
+        set { if (value) SelectedDataSourceType = DataSourceType.Daminion; }
+    }
+    
+    public bool IsLocalEngine => SelectedEngineProvider == EngineProvider.Local;
+
     public bool IsDeviceCpu
     {
         get => DeviceId == -1;
@@ -211,16 +190,13 @@ public class MainViewModel : ViewModelBase
         get => DeviceId == 1;
         set { if (value) DeviceId = 1; }
     }
-    
-    // Computed Properties
-    public bool IsLocalDataSource => SelectedDataSourceType == DataSourceType.Local;
-    public bool IsDaminionDataSource => SelectedDataSourceType == DataSourceType.Daminion;
-    public bool IsLocalEngine => SelectedEngineProvider == EngineProvider.Local;
-    
-    private async Task StartProcessingAsync()
+
+    // Actions
+    public async Task StartProcessingAsync()
     {
-        // Validate with dialog when actually starting
-        if (!ValidateConfigurationWithDialog())
+        if (IsProcessing) return;
+        
+        if (!ValidateConfiguration())
             return;
             
         try
@@ -245,16 +221,10 @@ public class MainViewModel : ViewModelBase
                 DeviceId = DeviceId
             };
             
-            // Create processing manager
             _processingManager = _serviceProvider.GetRequiredService<ProcessingManager>();
             
-            // Subscribe to events
             _processingManager.LogMessage += OnLogMessage;
-            _processingManager.ProgressChanged += (s, e) => System.Windows.Application.Current?.Dispatcher.Invoke(() =>
-        {
-            CurrentProgress = (int)e.Percentage;
-            StatusMessage = $"Processing {e.Current} of {e.Total} items";
-        });
+            _processingManager.ProgressChanged += OnProgressChanged;
             
             IsProcessing = true;
             StatusMessage = "Initializing...";
@@ -268,7 +238,7 @@ public class MainViewModel : ViewModelBase
         {
             _logger.LogError(ex, "Error during processing");
             StatusMessage = $"Error: {ex.Message}";
-            MessageBox.Show($"Processing failed: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show($"Processing failed: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
         finally
         {
@@ -277,47 +247,47 @@ public class MainViewModel : ViewModelBase
         }
     }
     
-    private async Task StopProcessingAsync()
+    public async Task StopProcessingAsync()
     {
-        if (_processingManager != null)
+        if (_processingManager != null && IsProcessing)
         {
             await _processingManager.StopProcessingAsync();
             StatusMessage = "Processing cancelled";
         }
-        // No return needed for async void method
     }
     
-    private void BrowseFolder()
+    public void BrowseFolder()
     {
-        var dialog = new Microsoft.Win32.OpenFolderDialog
+        using var dialog = new FolderBrowserDialog
         {
-            Title = "Select Image Folder",
-            InitialDirectory = string.IsNullOrEmpty(LocalPath) ? Environment.GetFolderPath(Environment.SpecialFolder.MyPictures) : LocalPath
+            Description = "Select Image Folder",
+            InitialDirectory = string.IsNullOrEmpty(LocalPath) ? Environment.GetFolderPath(Environment.SpecialFolder.MyPictures) : LocalPath,
+            UseDescriptionForTitle = true
         };
         
-        if (dialog.ShowDialog() == true)
+        if (dialog.ShowDialog(_owner) == DialogResult.OK)
         {
-            LocalPath = dialog.FolderName;
+            LocalPath = dialog.SelectedPath;
         }
     }
     
-    private void ClearResults()
+    public void ClearResults()
     {
         Results.Clear();
         StatusMessage = "Results cleared";
     }
-    
+
     private void OnLogMessage(object? sender, string message)
     {
-        System.Windows.Application.Current?.Dispatcher.Invoke(() => StatusMessage = message);
+        _owner.Invoke(() => StatusMessage = message);
     }
     
-    private void OnProgressChanged(object? sender, (int Percentage, string Message) e)
+    private void OnProgressChanged(object? sender, ProgressEventArgs e)
     {
-        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        _owner.Invoke(() =>
         {
-            CurrentProgress = e.Percentage;
-            StatusMessage = e.Message;
+            CurrentProgress = (int)e.Percentage;
+            StatusMessage = $"Processing {e.Current} of {e.Total} items";
         });
     }
     
@@ -326,64 +296,52 @@ public class MainViewModel : ViewModelBase
         if (_processingManager != null)
         {
             _processingManager.LogMessage -= OnLogMessage;
-            // Remove progress event handler
-            // Note: Since we used a lambda, we don't need to remove it explicitly
+            _processingManager.ProgressChanged -= OnProgressChanged;
             
             // Add results to the collection
-            foreach (var result in _session.Results)
-            {
-                Results.Add(result);
-            }
+            _owner.Invoke(() => {
+                foreach (var result in _session.Results)
+                {
+                    Results.Add(result);
+                }
+            });
         }
     }
     
-    private bool CanStartProcessing()
+    private bool ValidateConfiguration()
     {
-        // Only check basic conditions - don't show validation dialogs here
-        // Validation dialogs will be shown when the command actually executes
-        if (IsProcessing)
-            return false;
-            
-        // Basic checks without showing dialogs
         if (SelectedDataSourceType == DataSourceType.Local && string.IsNullOrEmpty(LocalPath))
+        {
+            MessageBox.Show("Please select a local folder path.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return false;
-            
+        }
+        
         if (SelectedDataSourceType == DataSourceType.Daminion && 
             (string.IsNullOrEmpty(DaminionUrl) || string.IsNullOrEmpty(DaminionUser) || string.IsNullOrEmpty(DaminionPassword)))
+        {
+            MessageBox.Show("Please complete Daminion connection details.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return false;
-            
+        }
+        
         if (string.IsNullOrEmpty(ModelId))
+        {
+            MessageBox.Show("Please select a model.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return false;
-            
+        }
+        
         return true;
     }
-    
-    private bool CanStopProcessing()
+
+    protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {
-        return IsProcessing;
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
-    
-    private bool ValidateConfigurationWithDialog()
+
+    protected bool SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
     {
-        if (SelectedDataSourceType == DataSourceType.Local && string.IsNullOrEmpty(LocalPath))
-        {
-            MessageBox.Show("Please select a local folder path.", "Validation Error", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return false;
-        }
-        
-        if (SelectedDataSourceType == DataSourceType.Daminion && 
-            (string.IsNullOrEmpty(DaminionUrl) || string.IsNullOrEmpty(DaminionUser) || string.IsNullOrEmpty(DaminionPassword)))
-        {
-            MessageBox.Show("Please complete Daminion connection details.", "Validation Error", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return false;
-        }
-        
-        if (string.IsNullOrEmpty(ModelId))
-        {
-            MessageBox.Show("Please select a model.", "Validation Error", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return false;
-        }
-        
+        if (EqualityComparer<T>.Default.Equals(field, value)) return false;
+        field = value;
+        OnPropertyChanged(propertyName);
         return true;
     }
 }
