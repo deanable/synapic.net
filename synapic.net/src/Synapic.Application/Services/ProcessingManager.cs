@@ -14,7 +14,7 @@ public class ProcessingManager
     private readonly IDataSourceProvider _dataSourceProvider;
     private readonly IModelInferenceEngine _inferenceEngine;
     private readonly IImageMetadataService _imageMetadataService;
-    private readonly ProcessingSession _session;
+    private ProcessingSession? _session;
     
     private CancellationTokenSource? _cancellationTokenSource;
     private Task? _processingTask;
@@ -30,17 +30,15 @@ public class ProcessingManager
         ILogger<ProcessingManager> logger,
         IDataSourceProvider dataSourceProvider,
         IModelInferenceEngine inferenceEngine,
-        IImageMetadataService imageMetadataService,
-        ProcessingSession session)
+        IImageMetadataService imageMetadataService)
     {
         _logger = logger;
         _dataSourceProvider = dataSourceProvider;
         _inferenceEngine = inferenceEngine;
         _imageMetadataService = imageMetadataService;
-        _session = session;
     }
 
-    public async Task StartProcessingAsync()
+    public async Task StartProcessingAsync(ProcessingSession session)
     {
         if (IsProcessing)
         {
@@ -48,9 +46,10 @@ public class ProcessingManager
             return;
         }
 
+        _session = session;
         _cancellationTokenSource = new CancellationTokenSource();
         IsProcessing = true;
-        _session.IsProcessing = true;
+        if (_session != null) _session.IsProcessing = true;
 
         _processingTask = Task.Run(async () => await RunProcessingJobAsync(_cancellationTokenSource.Token));
         await _processingTask;
@@ -77,7 +76,7 @@ public class ProcessingManager
         }
 
         IsProcessing = false;
-        _session.IsProcessing = false;
+        if (_session != null) _session.IsProcessing = false;
     }
 
     private async Task RunProcessingJobAsync(CancellationToken cancellationToken)
@@ -85,6 +84,7 @@ public class ProcessingManager
         try
         {
             Log("Starting processing job...");
+            if (_session == null) throw new InvalidOperationException("Session is null");
             _session.Results.Clear();
 
             // Step 1: Fetch items
@@ -153,7 +153,7 @@ public class ProcessingManager
         finally
         {
             IsProcessing = false;
-            _session.IsProcessing = false;
+            if (_session != null) _session.IsProcessing = false;
             ProcessingCompleted?.Invoke(this, EventArgs.Empty);
         }
     }

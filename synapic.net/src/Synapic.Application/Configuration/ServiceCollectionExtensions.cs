@@ -59,6 +59,9 @@ public static class ServiceCollectionExtensions
         services.AddTransient<IDataSourceProvider, LocalFileSystemProvider>();
         services.AddTransient<IDataSourceProvider, DaminionProvider>();
         
+        // Model Repository
+        services.AddTransient<IModelRepository, LocalModelRepository>();
+
         // AI inference engine
         services.AddTransient<IModelInferenceEngine, TorchSharpInferenceEngine>();
         

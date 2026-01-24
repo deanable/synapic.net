@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Synapic.Core.Entities;
 using Synapic.Core.Interfaces;
@@ -125,21 +126,51 @@ public class TorchSharpInferenceEngine : IModelInferenceEngine
 
         try
         {
-            _logger.LogDebug("Processing image: {ImagePath}", imagePath);
+            _logger.LogInformation("Starting processing for image: {ImagePath}", imagePath);
+            var sw = Stopwatch.StartNew();
+            long stepStart = 0;
 
-            // Load and preprocess image
+            // Load image
             using var image = await _imageService.LoadImageAsync(imagePath);
+            long loadTime = sw.ElapsedMilliseconds;
+            _logger.LogInformation("Image loaded in {Elapsed}ms. Dimensions: {Width}x{Height}", 
+                loadTime, image.Width, image.Height);
+            
+            // Preprocess
+            stepStart = sw.ElapsedMilliseconds;
             var tensor = await PreprocessImageAsync(image, cancellationToken);
+            long preprocessTime = sw.ElapsedMilliseconds - stepStart;
+            _logger.LogInformation("Preprocessing completed in {Elapsed}ms. Input Tensor Shape: {Shape}", 
+                preprocessTime, string.Join("x", tensor.shape));
 
             // Run inference
-            using var _ = torch.no_grad();
-            Tensor output = ((dynamic)_model).forward(tensor);
+            try
+            {
+                stepStart = sw.ElapsedMilliseconds;
+                using var _ = torch.no_grad();
+                Tensor output = ((dynamic)_model).forward(tensor);
+                long inferenceTime = sw.ElapsedMilliseconds - stepStart;
+                
+                // Log output stats
+                float minVal = output.min().ToSingle();
+                float maxVal = output.max().ToSingle();
+                _logger.LogInformation("Inference completed in {Elapsed}ms. Output Tensor: Shape={Shape}, Min={Min}, Max={Max}", 
+                    inferenceTime, string.Join("x", output.shape), minVal, maxVal);
 
-            // Post-process results based on task
-            (string? category, List<string> keywords, string? description) = await PostProcessResultsAsync(output, cancellationToken);
-
-            _logger.LogDebug("Processed image successfully: {ImagePath}", imagePath);
-            return (category, keywords, description);
+                // Post-process results
+                stepStart = sw.ElapsedMilliseconds;
+                (string? category, List<string> keywords, string? description) = await PostProcessResultsAsync(output, cancellationToken);
+                long postProcessTime = sw.ElapsedMilliseconds - stepStart;
+                
+                _logger.LogInformation("Post-processing completed in {Elapsed}ms. Total pipeline time: {Total}ms", 
+                    postProcessTime, sw.ElapsedMilliseconds);
+                
+                return (category, keywords, description);
+            }
+            finally
+            {
+                tensor.Dispose();
+            }
         }
         catch (Exception ex)
         {

@@ -658,6 +658,306 @@
         "facebook": "855732067229630"
       },
       "status": "scheduled"
+    },
+    {
+      "topic": "\"Why Jesus Isn\u2019t Coming Back to Save You: A Bold Reinterpretation of Biblical Prophecy\"",
+      "timestamp": "2026-01-24T00:44:50.218087",
+      "scheduled_for": "2026-01-24T00:58:15.924285",
+      "post_ids": {
+        "wordpress": 1061,
+        "facebook": "860788146724022"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "\"The Shocking Truth: Jesus\u2019 Second Coming Isn\u2019t What You Think It Is\"",
+      "timestamp": "2026-01-24T00:47:21.319933",
+      "scheduled_for": "2026-01-24T12:58:15.924285",
+      "post_ids": {
+        "wordpress": 1063,
+        "facebook": "860789283390575"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "\"Stop Waiting for Jesus: Why Personal Responsibility Trumps Divine Rescue\"",
+      "timestamp": "2026-01-24T00:48:12.536760",
+      "scheduled_for": "2026-01-25T00:58:15.924285",
+      "post_ids": {
+        "wordpress": 1065,
+        "facebook": "860789706723866"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "\"Debunking the Rapture: Why Jesus\u2019 Return Isn\u2019t Your Escape Plan\"",
+      "timestamp": "2026-01-24T00:49:13.896869",
+      "scheduled_for": "2026-01-25T12:58:15.924285",
+      "post_ids": {
+        "wordpress": 1067,
+        "facebook": "860790446723792"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "\"The Misunderstood Message: What Jesus Really Meant by \u2018I Will Return\u2019\"",
+      "timestamp": "2026-01-24T00:50:41.879579",
+      "scheduled_for": "2026-01-26T00:58:15.924285",
+      "post_ids": {
+        "wordpress": 1069,
+        "facebook": "860791413390362"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "\"Why Jesus\u2019 Second Coming Is a Metaphor You\u2019ve Been Misreading\"",
+      "timestamp": "2026-01-24T00:52:44.615839",
+      "scheduled_for": "2026-01-26T12:58:15.924285",
+      "post_ids": {
+        "wordpress": 1071,
+        "facebook": "860792483390255"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "\"The Danger of Passivity: How Waiting for Jesus Harms Your Spiritual Growth\"",
+      "timestamp": "2026-01-24T00:55:27.301742",
+      "scheduled_for": "2026-01-27T00:58:15.924285",
+      "post_ids": {
+        "wordpress": 1073,
+        "facebook": "860793883390115"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "\"Jesus Isn\u2019t Your Savior\u2014Here\u2019s Why That\u2019s a Good Thing\"",
+      "timestamp": "2026-01-24T00:56:34.390880",
+      "scheduled_for": "2026-01-27T12:58:15.924285",
+      "post_ids": {
+        "wordpress": 1075,
+        "facebook": "860794430056727"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "\"The Second Coming Hoax: How Religion Uses Fear to Control You\"",
+      "timestamp": "2026-01-24T00:58:28.021106",
+      "scheduled_for": "2026-01-28T00:58:15.924285",
+      "post_ids": {
+        "wordpress": 1077,
+        "facebook": "860795353389968"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "\"Why Jesus\u2019 Return Is Irrelevant to Your Life (And What Actually Matters)\"",
+      "timestamp": "2026-01-24T00:59:17.699279",
+      "scheduled_for": "2026-01-28T12:58:15.924285",
+      "post_ids": {
+        "wordpress": 1079,
+        "facebook": "860795806723256"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "\"The Hidden Meaning Behind Jesus\u2019 \u2018Second Coming\u2019\u2014It\u2019s Not What You Think\"",
+      "timestamp": "2026-01-24T01:02:46.674752",
+      "scheduled_for": "2026-01-29T00:58:15.924285",
+      "post_ids": {
+        "wordpress": 1081,
+        "facebook": "860797436723093"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "\"Stop Praying for Jesus to Return: The Power of Taking Action Now\"",
+      "timestamp": "2026-01-24T01:06:09.647985",
+      "scheduled_for": "2026-01-29T12:58:15.924285",
+      "post_ids": {
+        "wordpress": 1083,
+        "facebook": "860799130056257"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "\"The Myth of the Messiah: Why Jesus\u2019 Return Is a Distraction from Real Change\"",
+      "timestamp": "2026-01-24T01:08:15.721608",
+      "scheduled_for": "2026-01-30T00:58:15.924285",
+      "post_ids": {
+        "wordpress": 1085,
+        "facebook": "860800286722808"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "\"Jesus\u2019 Second Coming: A Symbolic Wake-Up Call, Not a Literal Event\"",
+      "timestamp": "2026-01-24T01:10:39.886218",
+      "scheduled_for": "2026-01-30T12:58:15.924285",
+      "post_ids": {
+        "wordpress": 1087,
+        "facebook": "860801443389359"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "\"Why Waiting for Jesus to Save You Is the Ultimate Cop-Out\"",
+      "timestamp": "2026-01-24T01:11:26.927741",
+      "scheduled_for": "2026-01-31T00:58:15.924285",
+      "post_ids": {
+        "wordpress": 1089,
+        "facebook": "860801810055989"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "10 Controversial Aspects of Islam That Spark Global Debates",
+      "timestamp": "2026-01-24T01:12:18.307084",
+      "scheduled_for": "2026-01-31T12:58:15.924285",
+      "post_ids": {
+        "wordpress": 1091,
+        "facebook": "860802370055933"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "Unveiling the Dark Side: Human Rights Issues Within Islamic Practices",
+      "timestamp": "2026-01-24T01:13:11.925162",
+      "scheduled_for": "2026-02-01T00:58:15.924285",
+      "post_ids": {
+        "wordpress": 1093,
+        "facebook": "860802813389222"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "Why Islam\u2019s Treatment of Women Continues to Draw Criticism Worldwide",
+      "timestamp": "2026-01-24T01:14:45.449918",
+      "scheduled_for": "2026-02-01T12:58:15.924285",
+      "post_ids": {
+        "wordpress": 1095,
+        "facebook": "860803676722469"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "The Harsh Realities of Blasphemy Laws in Islamic Countries Explained",
+      "timestamp": "2026-01-24T01:18:42.992696",
+      "scheduled_for": "2026-02-02T00:58:15.924285",
+      "post_ids": {
+        "wordpress": 1097,
+        "facebook": "860805830055587"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "Apostasy in Islam: Why Leaving the Faith Can Be a Death Sentence",
+      "timestamp": "2026-01-24T01:22:23.712348",
+      "scheduled_for": "2026-02-02T12:58:15.924285",
+      "post_ids": {
+        "wordpress": 1099,
+        "facebook": "860807723388731"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "Child Marriage in Islam: A Deep Dive Into a Contentious Tradition",
+      "timestamp": "2026-01-24T01:23:11.510247",
+      "scheduled_for": "2026-02-03T00:58:15.924285",
+      "post_ids": {
+        "wordpress": 1101,
+        "facebook": "860808093388694"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "Sharia Law Uncovered: The Controversial Legal System Dividing Opinions",
+      "timestamp": "2026-01-24T01:24:21.050891",
+      "scheduled_for": "2026-02-03T12:58:15.924285",
+      "post_ids": {
+        "wordpress": 1103,
+        "facebook": "860808620055308"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "Islam and LGBTQ+ Rights: A Clash of Beliefs and Modern Values",
+      "timestamp": "2026-01-24T01:26:18.199875",
+      "scheduled_for": "2026-02-04T00:58:15.924285",
+      "post_ids": {
+        "wordpress": 1105,
+        "facebook": "860809696721867"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "The Problem With Jihad: How Interpretations Fuel Extremism and Violence",
+      "timestamp": "2026-01-24T01:29:17.903087",
+      "scheduled_for": "2026-02-04T12:58:15.924285",
+      "post_ids": {
+        "wordpress": 1107,
+        "facebook": "860811176721719"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "Honor Killings: The Disturbing Link to Islamic Cultural Practices",
+      "timestamp": "2026-01-24T01:30:12.267633",
+      "scheduled_for": "2026-02-05T00:58:15.924285",
+      "post_ids": {
+        "wordpress": 1109,
+        "facebook": "860811636721673"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "Why Islamic Countries Struggle With Freedom of Speech and Press",
+      "timestamp": "2026-01-24T01:32:20.421586",
+      "scheduled_for": "2026-02-05T12:58:15.924285",
+      "post_ids": {
+        "wordpress": 1111,
+        "facebook": "860812633388240"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "The Role of Islam in Perpetuating Sectarian Violence and Conflict",
+      "timestamp": "2026-01-24T01:34:44.536220",
+      "scheduled_for": "2026-02-06T00:58:15.924285",
+      "post_ids": {
+        "wordpress": 1113,
+        "facebook": "860813776721459"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "Female Genital Mutilation: The Shocking Connection to Some Islamic Communities",
+      "timestamp": "2026-01-24T01:38:06.583264",
+      "scheduled_for": "2026-02-06T12:58:15.924285",
+      "post_ids": {
+        "wordpress": 1115,
+        "facebook": "860815446721292"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "Islam\u2019s Stance on Non-Muslims: The Troubling Concept of Dhimmitude",
+      "timestamp": "2026-01-24T01:39:58.997783",
+      "scheduled_for": "2026-02-07T00:58:15.924285",
+      "post_ids": {
+        "wordpress": 1117,
+        "facebook": "860816366721200"
+      },
+      "status": "scheduled"
+    },
+    {
+      "topic": "The Education Crisis: How Madrassas Fuel Radicalization in Islam",
+      "timestamp": "2026-01-24T01:41:43.526288",
+      "scheduled_for": "2026-02-07T12:58:15.924285",
+      "post_ids": {
+        "wordpress": 1119,
+        "facebook": "860817233387780"
+      },
+      "status": "scheduled"
     }
   ],
   "selected_model": "mistralai/devstral-2512:free"

@@ -9,6 +9,7 @@ using Synapic.Application.Services;
 using Synapic.Core.Entities;
 using Synapic.Core.Interfaces;
 using Synapic.UI.Commands;
+using Microsoft.Win32;
 
 namespace Synapic.UI.ViewModels;
 
@@ -19,6 +20,7 @@ public class MainViewModel : ViewModelBase
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<MainViewModel> _logger;
+    private readonly IModelRepository _modelRepository;
     private ProcessingManager? _processingManager;
     
     private bool _isProcessing;
@@ -39,6 +41,8 @@ public class MainViewModel : ViewModelBase
     // Engine Properties
     private EngineProvider _selectedEngineProvider = EngineProvider.Local;
     private string _modelId = "resnet50";
+    private ModelInfo? _selectedModel;
+    private ObservableCollection<ModelInfo> _availableModels = new();
     private ModelTask _selectedModelTask = ModelTask.ImageToText;
     private int _deviceId = -1;
     
@@ -46,11 +50,15 @@ public class MainViewModel : ViewModelBase
     {
         _serviceProvider = serviceProvider;
         _logger = logger;
+        _modelRepository = serviceProvider.GetRequiredService<IModelRepository>();
         
         StartProcessingCommand = new AsyncRelayCommand(StartProcessingAsync, _ => CanStartProcessing());
         StopProcessingCommand = new AsyncRelayCommand(StopProcessingAsync, _ => CanStopProcessing());
         BrowseFolderCommand = new RelayCommand(_ => BrowseFolder());
         ClearResultsCommand = new RelayCommand(_ => ClearResults());
+
+        RefreshModels();
+        LoadSettings();
     }
     
     // Commands
@@ -108,7 +116,13 @@ public class MainViewModel : ViewModelBase
     public string LocalPath
     {
         get => _localPath;
-        set => SetProperty(ref _localPath, value);
+        set
+        {
+            if (SetProperty(ref _localPath, value))
+            {
+                SaveSettings();
+            }
+        }
     }
     
     public bool LocalRecursive
@@ -120,25 +134,49 @@ public class MainViewModel : ViewModelBase
     public string DaminionUrl
     {
         get => _daminionUrl;
-        set => SetProperty(ref _daminionUrl, value);
+        set
+        {
+            if (SetProperty(ref _daminionUrl, value))
+            {
+                SaveSettings();
+            }
+        }
     }
     
     public string DaminionUser
     {
         get => _daminionUser;
-        set => SetProperty(ref _daminionUser, value);
+        set
+        {
+            if (SetProperty(ref _daminionUser, value))
+            {
+                SaveSettings();
+            }
+        }
     }
     
     public string DaminionPassword
     {
         get => _daminionPassword;
-        set => SetProperty(ref _daminionPassword, value);
+        set
+        {
+            if (SetProperty(ref _daminionPassword, value))
+            {
+                SaveSettings();
+            }
+        }
     }
     
     public int MaxItems
     {
         get => _maxItems;
-        set => SetProperty(ref _maxItems, value);
+        set
+        {
+            if (SetProperty(ref _maxItems, value))
+            {
+                SaveSettings();
+            }
+        }
     }
     
     // Engine Properties
@@ -165,6 +203,25 @@ public class MainViewModel : ViewModelBase
     {
         get => _modelId;
         set => SetProperty(ref _modelId, value);
+    }
+    
+    public ObservableCollection<ModelInfo> AvailableModels
+    {
+        get => _availableModels;
+        set => SetProperty(ref _availableModels, value);
+    }
+
+    public ModelInfo? SelectedModel
+    {
+        get => _selectedModel;
+        set
+        {
+            if (SetProperty(ref _selectedModel, value) && value != null)
+            {
+                ModelId = value.Id;
+                SelectedModelTask = value.Task;
+            }
+        }
     }
     
     public ModelTask SelectedModelTask
@@ -260,7 +317,7 @@ public class MainViewModel : ViewModelBase
             StatusMessage = "Initializing...";
             CurrentProgress = 0;
             
-            await _processingManager.StartProcessingAsync();
+            await _processingManager.StartProcessingAsync(_session);
             
             StatusMessage = "Processing completed successfully";
         }
@@ -339,23 +396,7 @@ public class MainViewModel : ViewModelBase
     
     private bool CanStartProcessing()
     {
-        // Only check basic conditions - don't show validation dialogs here
-        // Validation dialogs will be shown when the command actually executes
-        if (IsProcessing)
-            return false;
-            
-        // Basic checks without showing dialogs
-        if (SelectedDataSourceType == DataSourceType.Local && string.IsNullOrEmpty(LocalPath))
-            return false;
-            
-        if (SelectedDataSourceType == DataSourceType.Daminion && 
-            (string.IsNullOrEmpty(DaminionUrl) || string.IsNullOrEmpty(DaminionUser) || string.IsNullOrEmpty(DaminionPassword)))
-            return false;
-            
-        if (string.IsNullOrEmpty(ModelId))
-            return false;
-            
-        return true;
+        return !IsProcessing;
     }
     
     private bool CanStopProcessing()
@@ -385,5 +426,73 @@ public class MainViewModel : ViewModelBase
         }
         
         return true;
+    }
+
+    private void LoadSettings()
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(@"Software\Synapic.NET");
+            if (key != null)
+            {
+                LocalPath = key.GetValue("LocalPath", "") as string ?? "";
+                DaminionUrl = key.GetValue("DaminionUrl", "") as string ?? "";
+                DaminionUser = key.GetValue("DaminionUser", "") as string ?? "";
+                DaminionPassword = key.GetValue("DaminionPassword", "") as string ?? "";
+                MaxItems = (int)(key.GetValue("MaxItems", 100) ?? 100);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load settings from registry");
+        }
+    }
+
+    private void SaveSettings()
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.CreateSubKey(@"Software\Synapic.NET");
+            if (key != null)
+            {
+                key.SetValue("LocalPath", LocalPath ?? "");
+                key.SetValue("DaminionUrl", DaminionUrl ?? "");
+                key.SetValue("DaminionUser", DaminionUser ?? "");
+                key.SetValue("DaminionPassword", DaminionPassword ?? "");
+                key.SetValue("MaxItems", MaxItems);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to save settings to registry");
+        }
+    }
+
+    private void RefreshModels()
+    {
+        try
+        {
+            AvailableModels.Clear();
+            var models = _modelRepository.GetAvailableModels();
+            foreach (var model in models)
+            {
+                AvailableModels.Add(model);
+            }
+
+            // Attempt to select current model ID
+            var current = AvailableModels.FirstOrDefault(m => m.Id == ModelId);
+            if (current != null)
+            {
+                SelectedModel = current;
+            }
+            else if (AvailableModels.Any())
+            {
+                SelectedModel = AvailableModels.First();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error refreshing models");
+        }
     }
 }

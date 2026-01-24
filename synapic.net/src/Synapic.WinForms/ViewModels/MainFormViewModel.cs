@@ -230,7 +230,7 @@ public class MainFormViewModel : INotifyPropertyChanged
             StatusMessage = "Initializing...";
             CurrentProgress = 0;
             
-            await _processingManager.StartProcessingAsync();
+            await _processingManager.StartProcessingAsync(_session);
             
             StatusMessage = "Processing completed successfully";
         }
