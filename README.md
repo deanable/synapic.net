@@ -130,15 +130,25 @@ This is a port from https://github.com/deanable/Synapic Located at C:\\Users\\De
 
 # \### Process Lifecycle
 
-# 1\. \*\*Avalonia starts\*\* → detects bundled `synapic-inference.exe` next to main exe
+# > **Design note:** The sidecar is now a *manual* companion process. It does **not** launch automatically on Avalonia startup — the user must start it from within the app (toolbar button or Settings → Options). The one exception is the opt-in "Launch server automatically" checkbox in the Options panel, which restores the old always-on behavior for users who want it.
 
-# 2\. \*\*Launches sidecar\*\* with `--port=0` (OS assigns free port) → sidecar writes actual port to `%TEMP%/synapic\_port\_{pid}.txt`
+# #### Manual Launch (default)
+# 1\. \*\*User action\*\* → clicks **Start Server** in the Avalonia UI (or via Settings → Options).
+# 2\. \*\*Avalonia launches sidecar\*\* with `--port=0` (OS assigns free port) → sidecar writes actual port to `%TEMP%/synapic\_port\_{pid}.txt`.
+# 3\. \*\*Avalonia reads port\*\*, polls `/health` until `{"status":"ready"}` (max 120s).
+# 4\. \*\*All inference requests\*\* route through `HttpClient` with 5-min timeout.
+# 5\. \*\*On Avalonia shutdown\*\* → `POST /shutdown` → sidecar exits gracefully; fallback `Process.Kill()` after 5s.
 
-# 3\. \*\*Avalonia reads port\*\*, polls `/health` until `{"status":"ready"}`
+# #### Auto-Launch (opt-in)
+# - A checkbox in the **Options panel** (`Settings → Options → Server`) labeled **"Launch server automatically when Synapic starts"**.
+# - When enabled, steps 1–2 run transparently on Avalonia startup (with a splash/status indicator while `/health` is polled).
+# - The setting persists in `config.json` (`ui.autoLaunchSidecar`, default `false`).
+# - When the app exits, the sidecar is always stopped (see shutdown flow below) — it never lingers as an orphan.
 
-# 4\. \*\*All inference requests\*\* route through `HttpClient` with 5-min timeout
-
-# 5\. \*\*On Avalonia shutdown\*\* → `POST /shutdown` → sidecar exits gracefully; fallback `Process.Kill()` after 5s
+# #### Server Status
+# - The UI shows a **server status indicator** (stopped / starting / ready / error).
+# - A **Stop Server** button is available while the server is running, so the user can shut it down early without closing the app.
+# - If the sidecar process dies unexpectedly, Avalonia detects it (PID liveness + failed `/health` polls) and shows the user a "Server stopped unexpectedly — restart?" prompt.
 
 # 
 
@@ -876,13 +886,15 @@ This is a port from https://github.com/deanable/Synapic Located at C:\\Users\\De
 
 # \*\*Implementation details:\*\*
 
-# \- `StartAsync`: resolves sidecar path (`AppContext.BaseDirectory/synapic-inference.exe`), launches with `--port=0`, reads assigned port from `%TEMP%/synapic\_port\_{pid}.txt`, polls `/health` (max 120s)
+# \- `StartAsync`: resolves sidecar path (`AppContext.BaseDirectory/synapic-inference.exe`), launches with `--port=0`, reads assigned port from `%TEMP%/synapic\_port\_{pid}.txt`, polls `/health` (max 120s). **Called manually by the user (Start Server button) or on startup if `ui.autoLaunchSidecar` is enabled.**
+
+# \- `StopAsync`: `POST /shutdown` → wait 5s → `Process.Kill(true)`. **Always invoked on Avalonia exit** so the sidecar never lingers as an orphan consuming CPU/memory.
 
 # \- `TagAsync`: `POST /tag` with 5-min timeout; retries once on 503 (model loading)
 
 # \- \*\*Port file protocol\*\*: sidecar writes `port\\npid\\n` on startup; Avalonia reads, validates PID alive
 
-# \- \*\*Graceful shutdown\*\*: `POST /shutdown` → wait 5s → `Process.Kill(true)`
+# \- \*\*Status tracking\*\*: `CurrentStatus` property (`Stopped` / `Starting` / `Ready` / `Error`) plus a `StatusChanged` event; the UI binds to this for the server indicator and Start/Stop buttons
 
 # 
 
@@ -1048,7 +1060,7 @@ This is a port from https://github.com/deanable/Synapic Located at C:\\Users\\De
 
 # &#x20; "processing": { "maxItems": 0, "autoPaginate": true, "resizeScale": 100, "useThumbnailOverride": false },
 
-# &#x20; "ui": { "theme": "system", "logLevel": "info" }
+# &#x20; "ui": { "theme": "system", "logLevel": "info", "autoLaunchSidecar": false }
 
 # }
 
@@ -1242,7 +1254,7 @@ This is a port from https://github.com/deanable/Synapic Located at C:\\Users\\De
 
 # 
 
-# \*\*Deliverable:\*\* `synapic-inference.exe` + empty Avalonia window that launches sidecar and calls `/health`
+# \*\*Deliverable:\*\* `synapic-inference.exe` + empty Avalonia window with a **Start Server** button that launches the sidecar and calls `/health` (manual launch by default; auto-launch opt-in via Options)
 
 # 
 
