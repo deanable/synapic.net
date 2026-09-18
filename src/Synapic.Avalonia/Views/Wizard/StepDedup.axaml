@@ -1,0 +1,47 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Synapic.Avalonia.ViewModels.Steps"
+             x:Class="Synapic.Avalonia.Views.Wizard.StepDedup"
+             x:DataType="vm:StepDedupViewModel">
+
+  <StackPanel Spacing="12">
+    <TextBlock Text="Deduplication Wizard" FontSize="22" FontWeight="Bold" />
+
+    <StackPanel Orientation="Horizontal" Spacing="12">
+      <TextBox Watermark="Folder to scan" Text="{Binding FolderPath}" Width="420" />
+      <ComboBox SelectedIndex="{Binding SelectedAlgorithm}" ItemsSource="{Binding Algorithms}" MinWidth="130" />
+      <TextBlock Text="Threshold:" VerticalAlignment="Center" />
+      <NumericUpDown Value="{Binding Threshold}" Minimum="0.5" Maximum="1" Increment="0.01" Width="100" />
+      <Button Content="Scan" Command="{Binding ScanCommand}" Classes="accent" />
+    </StackPanel>
+
+    <TextBlock Text="{Binding ScanSummary}" Opacity="0.8" />
+
+    <Grid ColumnDefinitions="2*,*" Margin="0,12" Height="380">
+      <ListBox Grid.Column="0" ItemsSource="{Binding Groups}" SelectedItem="{Binding SelectedGroup}">
+        <ListBox.ItemTemplate>
+          <DataTemplate>
+            <StackPanel>
+              <TextBlock FontWeight="SemiBold">
+                <Run Text="{Binding Items.Length, Mode=OneWay}" /><Run Text=" similar images" />
+              </TextBlock>
+              <ItemsControl ItemsSource="{Binding Items}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <TextBlock Text="{Binding}" FontSize="11" Opacity="0.75" Margin="12,0,0,0" />
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+
+      <StackPanel Grid.Column="1" Spacing="10">
+        <TextBlock Text="Action for selected group" FontWeight="SemiBold" />
+        <ComboBox SelectedIndex="{Binding SelectedAction}" ItemsSource="{Binding Actions}" />
+        <Button Content="Apply" Command="{Binding ApplyCommand}" Classes="accent" />
+      </StackPanel>
+    </Grid>
+  </StackPanel>
+</UserControl>

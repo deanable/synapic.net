@@ -1,0 +1,78 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Synapic.Avalonia.ViewModels"
+        xmlns:vms="using:Synapic.Avalonia.ViewModels.Steps"
+        xmlns:steps="using:Synapic.Avalonia.Views.Wizard"
+        x:Class="Synapic.Avalonia.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="Synapic — AI Image Tagging"
+        Width="1280" Height="800"
+        WindowStartupLocation="CenterScreen">
+
+  <Grid RowDefinitions="Auto,*,Auto">
+
+    <!-- Toolbar: server controls + status indicator -->
+    <Border Grid.Row="0" Classes="card" Padding="10,8" Margin="8">
+      <StackPanel Orientation="Horizontal" Spacing="10">
+        <Button Content="Start Server"
+                Command="{Binding StartServerCommand}" />
+        <Button Content="Stop Server"
+                Command="{Binding StopServerCommand}" />
+        <Ellipse Width="12" Height="12" VerticalAlignment="Center"
+                 Fill="{Binding ServerBrush}" />
+        <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center" FontWeight="SemiBold" />
+        <TextBlock Text="Synapic — AI-powered image tagging for DAM" Opacity="0.55"
+                   VerticalAlignment="Center" Margin="20,0,0,0" />
+      </StackPanel>
+    </Border>
+
+    <!-- Wizard body -->
+    <ScrollViewer Grid.Row="1" Margin="8,0">
+      <ContentControl Content="{Binding Wizard.CurrentStep}">
+        <ContentControl.DataTemplates>
+          <DataTemplate DataType="vms:Step1DatasourceViewModel">
+            <steps:Step1Datasource />
+          </DataTemplate>
+          <DataTemplate DataType="vms:Step2EngineViewModel">
+            <steps:Step2Engine />
+          </DataTemplate>
+          <DataTemplate DataType="vms:Step3ProcessViewModel">
+            <steps:Step3Process />
+          </DataTemplate>
+          <DataTemplate DataType="vms:Step4ResultsViewModel">
+            <steps:Step4Results />
+          </DataTemplate>
+          <DataTemplate DataType="vms:StepDedupViewModel">
+            <steps:StepDedup />
+          </DataTemplate>
+        </ContentControl.DataTemplates>
+      </ContentControl>
+    </ScrollViewer>
+
+    <!-- Live log -->
+    <Border Grid.Row="2" Classes="card" Height="160" Margin="8">
+      <Grid RowDefinitions="Auto,*" Margin="8">
+        <TextBlock Grid.Row="0" Text="Log" FontWeight="SemiBold" />
+        <ListBox Grid.Row="1" ItemsSource="{Binding LogEntries}" x:Name="LogList"
+                 Margin="0,4,0,0">
+          <ListBox.ItemTemplate>
+            <DataTemplate>
+              <TextBlock Text="{Binding RenderedMessage}" FontFamily="Consolas,monospace" FontSize="11"
+                         TextWrapping="Wrap" />
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </Grid>
+    </Border>
+
+  </Grid>
+
+  <Window.Styles>
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="{DynamicResource SystemRegionBrush}" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="12" />
+      <Setter Property="BoxShadow" Value="0 1 4 0 #22000000" />
+    </Style>
+  </Window.Styles>
+</Window>

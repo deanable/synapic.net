@@ -1,0 +1,86 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Synapic.Avalonia.ViewModels.Steps"
+             x:Class="Synapic.Avalonia.Views.Wizard.Step1Datasource"
+             x:DataType="vm:Step1DatasourceViewModel">
+
+  <StackPanel Spacing="12">
+    <TextBlock Text="Step 1 — Datasource" FontSize="22" FontWeight="Bold" />
+
+    <StackPanel Orientation="Horizontal" Spacing="12">
+      <RadioButton Content="Local Folder" GroupName="ds" IsChecked="{Binding IsLocal}" />
+      <RadioButton Content="Daminion Server" GroupName="ds" IsChecked="{Binding IsDaminion}" />
+    </StackPanel>
+
+    <!-- Local panel -->
+    <Border IsVisible="{Binding IsLocal}" Classes="card" Padding="14">
+      <StackPanel Spacing="8">
+        <TextBlock Text="Folder containing images" FontWeight="SemiBold" />
+        <TextBox Watermark="C:\Pictures or /home/user/pictures" Text="{Binding LocalPath}" />
+        <CheckBox Content="Include subfolders (recursive scan)" IsChecked="{Binding LocalRecursive}" />
+      </StackPanel>
+    </Border>
+
+    <!-- Daminion panel -->
+    <Border IsVisible="{Binding IsDaminion}" Classes="card" Padding="14">
+      <StackPanel Spacing="8">
+        <TextBox Watermark="Server URL, e.g. http://dam.local/daminion" Text="{Binding DaminionUrl}" />
+        <Grid ColumnDefinitions="*,*,Auto" Margin="0,0,0,0">
+          <TextBox Grid.Column="0" Watermark="Username" Text="{Binding DaminionUser}" />
+          <TextBox Grid.Column="1" Watermark="Password" Text="{Binding DaminionPass}" PasswordChar="●" />
+          <Button Grid.Column="2" Content="Test Connection" Command="{Binding ConnectCommand}" />
+        </Grid>
+        <TextBox Watermark="Catalog (optional)" Text="{Binding DaminionCatalogId}" />
+
+        <TextBlock Text="Scope" FontWeight="SemiBold" Margin="0,8,0,0" />
+        <ComboBox SelectedIndex="{Binding Scope}">
+          <ComboBoxItem Content="Entire catalog" />
+          <ComboBoxItem Content="Keyword search" />
+          <ComboBoxItem Content="Shared collection" />
+          <ComboBoxItem Content="Saved search" />
+        </ComboBox>
+
+        <TextBox Watermark="Search term (scope: keyword search)" Text="{Binding SearchTerm}" />
+        <TextBox Watermark="Saved search id" Text="{Binding SavedSearchId}" />
+        <TextBox Watermark="Collection id" Text="{Binding CollectionId}" />
+
+        <TextBlock Text="Identify untagged items (any of)" FontWeight="SemiBold" Margin="0,8,0,0" />
+        <StackPanel Orientation="Horizontal" Spacing="12">
+          <CheckBox Content="Keywords" IsChecked="{Binding UntaggedKeywords}" />
+          <CheckBox Content="Categories" IsChecked="{Binding UntaggedCategories}" />
+          <CheckBox Content="Description" IsChecked="{Binding UntaggedDescription}" />
+        </StackPanel>
+
+        <StackPanel Orientation="Horizontal" Spacing="16" Margin="0,8,0,0">
+          <TextBlock Text="Status filter:" VerticalAlignment="Center" />
+          <ComboBox SelectedIndex="{Binding StatusFilter}">
+            <ComboBoxItem Content="All" />
+            <ComboBoxItem Content="Approved" />
+            <ComboBoxItem Content="Rejected" />
+            <ComboBoxItem Content="Unassigned" />
+          </ComboBox>
+          <TextBlock Text="Max items:" VerticalAlignment="Center" />
+          <NumericUpDown Value="{Binding MaxItems}" Minimum="0" Maximum="100000" Increment="50" Width="120" />
+        </StackPanel>
+
+        <StackPanel Orientation="Horizontal" Spacing="16">
+          <TextBlock Text="AI image scale:" VerticalAlignment="Center" />
+          <ComboBox SelectedIndex="{Binding ResizeScale}" MinWidth="100">
+            <ComboBoxItem Content="100%" />
+            <ComboBoxItem Content="75%" />
+            <ComboBoxItem Content="50%" />
+            <ComboBoxItem Content="25%" />
+          </ComboBox>
+          <CheckBox Content="Use fixed 200px thumbnail (fast)"
+                    IsChecked="{Binding UseThumbnailOverride}" />
+        </StackPanel>
+
+        <TextBlock Text="{Binding ConnectionMessage}" IsVisible="{Binding ConnectionMessage}" />
+      </StackPanel>
+    </Border>
+
+    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+      <Button Content="Next: Engine →" />
+    </StackPanel>
+  </StackPanel>
+</UserControl>

@@ -1,0 +1,39 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Synapic.Avalonia.ViewModels.Steps"
+             x:Class="Synapic.Avalonia.Views.Wizard.Step3Process"
+             x:DataType="vm:Step3ProcessViewModel">
+
+  <StackPanel Spacing="12">
+    <TextBlock Text="Step 3 — Process" FontSize="22" FontWeight="Bold" />
+
+    <ProgressBar Value="{Binding ProgressPercent}" Maximum="100" Height="18" />
+
+    <StackPanel Orientation="Horizontal" Spacing="16">
+      <TextBlock Text="{Binding ProgressText}" FontWeight="SemiBold" />
+      <TextBlock Text="{Binding EtaText}" Opacity="0.7" />
+      <TextBlock Text="{Binding CurrentFile}" Opacity="0.7" />
+    </StackPanel>
+
+    <StackPanel Orientation="Horizontal" Spacing="8">
+      <Button Content="Start Processing" Command="{Binding StartCommand}"
+              Classes="accent" IsEnabled="{Binding IsIdle}" />
+      <Button Content="Abort" Command="{Binding AbortCommand}" />
+    </StackPanel>
+
+    <Border Classes="card" Height="320" Padding="8">
+      <ListBox ItemsSource="{Binding LogLines}">
+        <ListBox.ItemTemplate>
+          <DataTemplate>
+            <TextBlock Text="{Binding}" FontFamily="Consolas,monospace" FontSize="12" TextWrapping="Wrap" />
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </Border>
+
+    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+      <Button Content="← Back" />
+      <Button Content="Next: Results →" />
+    </StackPanel>
+  </StackPanel>
+</UserControl>

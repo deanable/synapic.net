@@ -1,0 +1,37 @@
+# Synapic inference sidecar — pinned deps for reproducible PyInstaller builds.
+# Trimmed subset of the original app's requirements.txt: dedup moved to C#
+# (NetVips), metadata writing moved to C#, UI deps removed entirely.
+
+# PyTorch — CPU-only for smaller bundles; CUDA wheels substituted by build
+# scripts (build/install-python-deps.ps1|.sh) when building GPU variants.
+torch==2.9.1
+torchvision==0.24.1
+timm==1.0.24
+
+# Hugging Face ecosystem
+# transformers 5.x is required for new checkpoints (e.g. LiquidAI LFM2.5*) that
+# ship only a tokenizer.json referencing the TokenizersBackend tokenizer class.
+transformers==5.0.0
+huggingface_hub==1.0.0
+hf_xet==1.2.0
+accelerate==1.12.0
+sentencepiece==0.2.1
+protobuf==6.33.3
+
+# Vision-language model helpers
+qwen-vl-utils==0.0.14
+
+# Imaging
+pillow==12.0.0
+
+# Progress + process metrics
+tqdm==4.67.1
+psutil==7.1.0
+
+# HTTP service
+fastapi==0.119.0
+uvicorn==0.38.0
+pydantic==2.12.0
+
+# Build tooling (not bundled into the exe itself)
+pyinstaller==6.18.0

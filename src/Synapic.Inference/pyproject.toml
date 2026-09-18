@@ -1,0 +1,40 @@
+[project]
+name = "synapic-inference"
+version = "1.0.0"
+description = "Synapic inference sidecar — FastAPI service wrapping the Synapic AI tagging engine"
+requires-python = ">=3.11"
+dependencies = [
+    # Core ML
+    "torch>=2.9.1",
+    "torchvision>=0.24.1",
+    "timm>=1.0.24",
+    "transformers>=5.0.0",
+    "huggingface_hub>=1.0.0",
+    "hf_xet>=1.2.0",
+    "accelerate>=1.12.0",
+    "sentencepiece>=0.2.1",
+    "qwen-vl-utils>=0.0.14",
+    "protobuf>=6.33.3",
+    # Imaging
+    "pillow>=10.0.0",
+    # Utilities
+    "tqdm>=4.67.1",
+    "psutil>=5.9.0",
+    # HTTP service
+    "fastapi>=0.115.0",
+    "uvicorn>=0.32.0",
+    "pydantic>=2.9.0",
+]
+
+[project.scripts]
+synapic-inference = "synapic_inference.service:main"
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["synapic_inference"]
+
+[tool.pytest.ini_options]
+testpaths = ["../../tests/Synapic.Inference.Tests"]

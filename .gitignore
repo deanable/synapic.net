@@ -1,0 +1,48 @@
+# .NET
+bin/
+obj/
+artifacts/
+publish/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+project.lock.json
+testresults/
+TestResults/
+[Ll]ogs/
+*.binlog
+.dotnet/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+build_sidecar/
+sidecar_build/
+dist/
+*.spec.bak
+
+# Sidecar build output
+synapic-inference
+synapic-inference.exe
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.swp
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Model caches (never commit weights)
+models/
+*.safetensors
+*.gguf

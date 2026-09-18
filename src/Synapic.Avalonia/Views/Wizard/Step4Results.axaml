@@ -1,0 +1,34 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Synapic.Avalonia.ViewModels.Steps"
+             xmlns:dg="clr-namespace:Avalonia.Controls;assembly=Avalonia.Controls.DataGrid"
+             x:Class="Synapic.Avalonia.Views.Wizard.Step4Results"
+             x:DataType="vm:Step4ResultsViewModel">
+
+  <StackPanel Spacing="12">
+    <TextBlock Text="Step 4 — Results" FontSize="22" FontWeight="Bold" />
+
+    <StackPanel Orientation="Horizontal" Spacing="12">
+      <Button Content="Export CSV" Command="{Binding ExportCsvCommand}" />
+      <Button Content="Refresh" Click="OnRefresh" />
+      <TextBlock Text="{Binding Summary}" VerticalAlignment="Center" Opacity="0.8" />
+    </StackPanel>
+
+    <dg:DataGrid ItemsSource="{Binding Results}" SelectedItem="{Binding SelectedResult}"
+                 AutoGenerateColumns="False" CanUserSortColumns="True" Height="420"
+                 GridLinesVisibility="Horizontal" IsReadOnly="True">
+      <dg:DataGrid.Columns>
+        <dg:DataGridTextColumn Header="File" Binding="{Binding FileName}" Width="260" />
+        <dg:DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="110" />
+        <dg:DataGridTextColumn Header="Category" Binding="{Binding Category}" Width="150" />
+        <dg:DataGridTextColumn Header="Keywords" Binding="{Binding KeywordsCsv}" Width="280" />
+        <dg:DataGridTextColumn Header="Description" Binding="{Binding Description}" Width="*" />
+      </dg:DataGrid.Columns>
+    </dg:DataGrid>
+
+    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+      <Button Content="← Back" />
+      <Button Content="Start Over" />
+    </StackPanel>
+  </StackPanel>
+</UserControl>

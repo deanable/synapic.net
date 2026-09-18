@@ -1,0 +1,72 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Synapic.Avalonia.ViewModels.Steps"
+             x:Class="Synapic.Avalonia.Views.Wizard.Step2Engine"
+             x:DataType="vm:Step2EngineViewModel">
+
+  <StackPanel Spacing="12">
+    <TextBlock Text="Step 2 — Tagging Engine (local Python sidecar)" FontSize="22" FontWeight="Bold" />
+
+    <StackPanel Spacing="10">
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <Button Content="Refresh local models" Command="{Binding RefreshModelsCommand}" />
+        <Button Content="Download model…" Command="{Binding DownloadSelectedCommand}" />
+        <ProgressBar IsIndeterminate="true" Width="80" IsVisible="{Binding IsLoadingModels}" />
+        <TextBlock Text="{Binding ModelsMessage}" VerticalAlignment="Center" Opacity="0.7" />
+      </StackPanel>
+
+      <ListBox ItemsSource="{Binding LocalModels}" SelectedItem="{Binding SelectedModel}" Height="180">
+        <ListBox.ItemTemplate>
+          <DataTemplate>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBlock Text="{Binding Id}" FontWeight="SemiBold" />
+              <TextBlock Text="{Binding Task}" Opacity="0.6" />
+              <TextBlock Text="{Binding SizeMb}" Opacity="0.6" />
+              <TextBlock Text="✓ downloaded" IsVisible="{Binding Downloaded}" Foreground="Green" />
+            </StackPanel>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+
+      <TextBox Watermark="Model id (Hugging Face repo)" Text="{Binding ManualModelId}" />
+
+      <StackPanel Orientation="Horizontal" Spacing="16">
+        <TextBlock Text="Device:" VerticalAlignment="Center" />
+        <ComboBox SelectedIndex="{Binding Device}" MinWidth="100">
+          <ComboBoxItem Content="CPU" />
+          <ComboBoxItem Content="CUDA" />
+          <ComboBoxItem Content="MPS" />
+        </ComboBox>
+        <TextBlock Text="Task:" VerticalAlignment="Center" />
+        <ComboBox SelectedIndex="{Binding Task}" MinWidth="220">
+          <ComboBoxItem Content="Description (image-text-to-text)" />
+          <ComboBoxItem Content="Keywords (image-classification)" />
+          <ComboBoxItem Content="Categories (zero-shot)" />
+        </ComboBox>
+      </StackPanel>
+
+      <StackPanel Orientation="Horizontal" Spacing="16">
+        <TextBlock Text="Confidence threshold:" VerticalAlignment="Center" />
+        <NumericUpDown Value="{Binding ConfidenceThreshold}" Minimum="0" Maximum="1" Increment="0.05" Width="110" />
+        <TextBlock Text="Probability mode:" VerticalAlignment="Center" />
+        <ComboBox SelectedIndex="{Binding ProbabilityMode}" MinWidth="130">
+          <ComboBoxItem Content="LLM only" />
+          <ComboBoxItem Content="Probability only" />
+          <ComboBoxItem Content="Both" />
+        </ComboBox>
+        <TextBlock Text="Prob. threshold:" VerticalAlignment="Center" />
+        <NumericUpDown Value="{Binding ProbabilityThreshold}" Minimum="0" Maximum="1" Increment="0.05" Width="110" />
+      </StackPanel>
+
+      <TextBox Watermark="Candidate labels (comma-separated, for probability/zero-shot)"
+               Text="{Binding ProbabilityCandidates}" />
+      <TextBox Watermark="Custom system prompt (VLM)" Text="{Binding SystemPrompt}"
+               AcceptsReturn="True" Height="60" />
+    </StackPanel>
+
+    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+      <Button Content="← Back" />
+      <Button Content="Next: Process →" />
+    </StackPanel>
+  </StackPanel>
+</UserControl>

@@ -1,0 +1,109 @@
+name: Build & Package
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  python-tests:
+    name: Python sidecar tests
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install test deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest httpx
+      - name: Run sidecar tests (no torch required)
+        run: python -m pytest tests/Synapic.Inference.Tests -v
+
+  dotnet-tests:
+    name: .NET tests
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - name: Build
+        run: dotnet build Synapic.Net.sln -c Release
+      - name: Test
+        run: dotnet test Synapic.Net.sln -c Release --no-build --nologo
+
+  build:
+    name: Build ${{ matrix.rid }}
+    runs-on: ${{ matrix.os }}
+    needs: [python-tests, dotnet-tests]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+            rid: win-x64
+            sidecar: synapic-inference.exe
+            pkg: ps1
+          - os: ubuntu-22.04
+            rid: linux-x64
+            sidecar: synapic-inference
+            pkg: sh
+          - os: macos-14
+            rid: osx-x64
+            sidecar: synapic-inference
+            pkg: sh
+          - os: macos-14
+            rid: osx-arm64
+            sidecar: synapic-inference
+            pkg: sh
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Fetch standalone Python
+        run: |
+          chmod +x build/*.sh
+          ./build/fetch-python.sh ${{ matrix.rid }}
+
+      - name: Install Python deps
+        run: ./build/install-python-deps.sh ${{ matrix.rid }}
+
+      - name: Build sidecar (PyInstaller)
+        run: ./build/build-sidecar.sh ${{ matrix.rid }}
+
+      - name: Publish Avalonia app
+        run: >
+          dotnet publish src/Synapic.Avalonia -c Release -r ${{ matrix.rid }}
+          --self-contained -p:PublishSingleFile=false
+          -o artifacts/${{ matrix.rid }}
+
+      - name: Stage bundle (sidecar next to app)
+        shell: bash
+        run: |
+          cp artifacts/${{ matrix.rid }}/synapic-inference* artifacts/${{ matrix.rid }}/ 2>/dev/null || true
+          ls -lh artifacts/${{ matrix.rid }}
+
+      - name: Package installer (Windows)
+        if: matrix.pkg == 'ps1'
+        shell: pwsh
+        run: ./build/package-windows.ps1 -Rid ${{ matrix.rid }} -AppVersion 1.0.0
+        continue-on-error: true  # ISCC not preinstalled on runners; installer built in release workflow
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Synapic-${{ matrix.rid }}
+          path: |
+            artifacts/${{ matrix.rid }}/*
+            !artifacts/${{ matrix.rid }}/**/*.pdb
+          retention-days: 7
