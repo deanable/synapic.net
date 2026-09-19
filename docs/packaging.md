@@ -50,8 +50,50 @@ build/package-macos.sh <rid>         # codesign + notarytool + create-dmg
 
 ## CI
 
-- `.github/workflows/build.yml` — every push/PR: unit tests (pytest + xUnit),
-  then a 4-RID matrix (win-x64, linux-x64, osx-x64, osx-arm64) building and
-  uploading bundles.
+- `.github/workflows/build.yml` — pushes to `main` and manual dispatch run
+  everything: unit tests (pytest + xUnit), a 4-RID matrix (win-x64,
+  linux-x64, osx-x64, osx-arm64) building and uploading bundles, and the
+  installer smoke test. PRs run the same but with a path filter (code/build
+  changes only — doc-only PRs skip CI) and **without** the installer smoke
+  job, which costs extra Windows runner minutes.
 - `.github/workflows/release.yml` — `v*` tags: same matrix, plus packaging,
   signing (when secrets are present), and a GitHub Release with all assets.
+
+## Manual test: upgrade path (same AppId)
+
+The installer uses a fixed AppId (`build/installer-windows.iss`), so
+installing a newer build over an older one is an **in-place upgrade**: Inno
+reuses the previous `{app}` directory, uninstaller, and Add/Remove Programs
+entry. Verify with two builds before every release:
+
+1. Build and set aside the old installer:
+   `./build/package-windows.ps1 -AppVersion 1.0.0`, then copy
+   `artifacts/win-x64/Synapic-Setup-win-x64.exe` aside (e.g. to
+   `Synapic-Setup-1.0.0.exe`) — the output filename does not include the
+   version, so the second build would overwrite it.
+2. Rebuild with the new version: `./build/package-windows.ps1 -AppVersion 1.0.1`.
+3. Run the 1.0.0 setup, launch the app once (creates user data), quit it.
+   Add/Remove Programs should show Synapic 1.0.0 (registry
+   `HKLM\...\Uninstall\{8A7C2C31-...}_is1` → `DisplayVersion`).
+4. Close the app, then run the 1.0.1 setup (GUI or
+   `/VERYSILENT /NORESTART`) — setup prompts to close a running app
+   otherwise (CloseApplications).
+
+Checklist:
+
+- [ ] No second Add/Remove Programs entry; `DisplayVersion` is now 1.0.1
+- [ ] Install directory unchanged; app launches
+- [ ] User data survived the upgrade: `%APPDATA%\Synapic\config.json`, logs
+- [ ] Desktop/group shortcuts still point at the same `{app}`
+- [ ] Files that 1.0.0 shipped but 1.0.1 does not remain until uninstall
+      (Inno does not diff old installs) — add explicit cleanup only if one
+      is ever harmful
+- [ ] Uninstalling afterwards empties `{app}` (including the model cache via
+      `[UninstallDelete]` `{localappdata}\Synapic\models`) but keeps
+      `%APPDATA%\Synapic` user data
+
+Caveat: the AppId string `{8A7C2C31-5E0D-4B21-9C4F-SYNAPICNET01}` is not a
+hex-valid GUID. Inno treats AppId as an opaque identifier, so this works —
+but it must **never change after the first public release**, or machines get
+two parallel installs with separate uninstall entries. Normalizing it to a
+real GUID is only safe before the first release.
