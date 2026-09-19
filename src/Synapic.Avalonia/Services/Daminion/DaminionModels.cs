@@ -83,6 +83,9 @@ public sealed class DaminionItem
 /// <summary>A named saved search (id = the queryLine value used for scoping).</summary>
 public sealed record DaminionSavedSearch(int Id, string Name, int Count);
 
+/// <summary>Outcome of re-reading a Daminion item's metadata after write-back.</summary>
+public sealed record DaminionVerifyResult(bool Ok, string Detail);
+
 /// <summary>A shared collection selectable as a Step 1 scope.</summary>
 public sealed record DaminionCollection(int Id, string Name, string Code, int ItemCount);
 

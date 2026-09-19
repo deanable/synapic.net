@@ -14,7 +14,8 @@ public sealed record ProcessItemResult(
     string[] Keywords,
     string? Description,
     Dictionary<string, double>? Probabilities,
-    ScoringResultDto? Scoring)
+    ScoringResultDto? Scoring,
+    int? DaminionId = null)
 {
     /// <summary>Grid-friendly joined keywords for the Step 4 DataGrid column.</summary>
     public string KeywordsCsv => string.Join(", ", Keywords);
@@ -141,6 +142,7 @@ public sealed class ProcessingOrchestrator
     /// Run the batch: per item — obtain an image (local path or Daminion temp
     /// download honoring resizeScale/thumbnailOverride), call /tag, write
     /// metadata, record the result. Never aborts the whole run on one failure.
+    /// While paused, queued items wait before starting; running items finish.
     /// </summary>
     public async Task RunAsync(
         DatasourceSelection ds,
@@ -148,9 +150,27 @@ public sealed class ProcessingOrchestrator
         IProgress<ProcessProgress> progress,
         Func<string, Task> log,
         CancellationToken ct,
-        List<ProcessItemResult>? results = null)
+        List<ProcessItemResult>? results = null,
+        PauseToken? pause = null)
     {
         var items = await FetchItemsAsync(ds, ct).ConfigureAwait(false);
+        await RunItemsAsync(ds, template, items, progress, log, ct, results, pause).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Run an explicit work-item subset (used by Step 4 “retry failed items”).
+    /// Same per-item pipeline and concurrency rules as <see cref="RunAsync"/>.
+    /// </summary>
+    public async Task RunItemsAsync(
+        DatasourceSelection ds,
+        TagRequest template,
+        IReadOnlyList<ProcessWorkItem> items,
+        IProgress<ProcessProgress> progress,
+        Func<string, Task> log,
+        CancellationToken ct,
+        List<ProcessItemResult>? results = null,
+        PauseToken? pause = null)
+    {
         var total = items.Count;
         var processed = 0;
         var failed = 0;
@@ -166,6 +186,8 @@ public sealed class ProcessingOrchestrator
             await throttle.WaitAsync(ct).ConfigureAwait(false);
             try
             {
+                ct.ThrowIfCancellationRequested();
+                if (pause is { } pauseToken) await pauseToken.WaitWhilePausedAsync(ct).ConfigureAwait(false);
                 ct.ThrowIfCancellationRequested();
                 var result = await ProcessSingleItemAsync(ds, template, item, log, ct).ConfigureAwait(false);
                 lock (resultsLock)
@@ -264,7 +286,8 @@ public sealed class ProcessingOrchestrator
                 item.FileName, status, tagsSummary,
                 response.Category, response.Keywords, response.Description,
                 response.Probabilities,
-                response.Scoring is null ? null : new ScoringResultDto(response.Scoring.Tier, response.Scoring.Calibrated));
+                response.Scoring is null ? null : new ScoringResultDto(response.Scoring.Tier, response.Scoring.Calibrated),
+                item.DaminionId);
         }
         finally
         {

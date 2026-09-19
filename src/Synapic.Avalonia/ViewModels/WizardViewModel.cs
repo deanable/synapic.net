@@ -25,7 +25,7 @@ public partial class WizardViewModel : ViewModelBase
         Step1 = new Step1DatasourceViewModel(session);
         Step2 = new Step2EngineViewModel(session, sidecar);
         Step3 = new Step3ProcessViewModel(session, sidecar, Step1);
-        Step4 = new Step4ResultsViewModel(session);
+        Step4 = new Step4ResultsViewModel(session, Step1, Step3);
         Dedup = new StepDedupViewModel();
 
         CurrentStep = Step1;

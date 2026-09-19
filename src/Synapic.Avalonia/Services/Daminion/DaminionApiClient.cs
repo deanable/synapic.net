@@ -579,6 +579,111 @@ public sealed class DaminionApiClient
         }
     }
 
+    /// <summary>Remove keywords from an item (BatchChange Remove=true) — used to undo test writes and by dedup tagging.</summary>
+    public async Task<bool> RemoveKeywordsAsync(int itemId, IEnumerable<string> keywords, CancellationToken ct = default)
+    {
+        var guid = GetTagGuid("keywords", "Keywords");
+        if (guid is null)
+        {
+            SynapicLog.Warning(nameof(DaminionApiClient), $"Cannot remove keywords from item {itemId} (keywords tag schema missing)");
+            return false;
+        }
+
+        try
+        {
+            await GetApi().BatchChange(new DaminionBatchChangeRequest
+            {
+                Ids = new[] { itemId },
+                Data = keywords.Select(k => new DaminionTagOperation { Guid = guid, Value = k, Remove = true }).ToArray(),
+                Delete = false,
+            }).ConfigureAwait(false);
+            SynapicLog.Info(nameof(DaminionApiClient), $"Removed keywords from item {itemId}");
+            return true;
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Error(nameof(DaminionApiClient), $"Failed to remove keywords from item {itemId}: {e.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Re-read an item via /api/ItemData/GetAll/{id} and check the expected
+    /// tags landed (Step 4 “Verify Daminion writes”). Field matching is
+    /// tolerant: tag keys are located case-insensitively anywhere in the
+    /// payload since Daminion's layout varies between versions.
+    /// </summary>
+    public async Task<DaminionVerifyResult> VerifyItemMetadataAsync(
+        int itemId,
+        string? category = null,
+        IReadOnlyList<string>? keywords = null,
+        string? description = null,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            var payload = await GetApi().GetItemDataAll(itemId).ConfigureAwait(false);
+            var found = new List<(string Key, string Value)>();
+            CollectKeyValuePairs(payload, found);
+
+            var missing = new List<string>();
+
+            if (!string.IsNullOrEmpty(category) &&
+                !found.Any(kv => kv.Key.Contains("categor", StringComparison.OrdinalIgnoreCase) &&
+                                 kv.Value.Contains(category, StringComparison.OrdinalIgnoreCase)))
+            {
+                missing.Add($"category '{category}'");
+            }
+
+            if (keywords is { Count: > 0 })
+            {
+                var stored = found
+                    .Where(kv => kv.Key.Contains("keyword", StringComparison.OrdinalIgnoreCase))
+                    .Select(kv => kv.Value)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var absent = keywords.Where(k => !stored.Contains(k)).ToList();
+                if (absent.Count > 0)
+                    missing.Add($"keywords {string.Join(", ", absent.Select(k => $"'{k}'"))}");
+            }
+
+            if (!string.IsNullOrEmpty(description) &&
+                !found.Any(kv =>
+                    (kv.Key.Contains("description", StringComparison.OrdinalIgnoreCase) ||
+                     kv.Key.Contains("caption", StringComparison.OrdinalIgnoreCase)) &&
+                    kv.Value.Contains(description[..Math.Min(description.Length, 40)], StringComparison.OrdinalIgnoreCase)))
+            {
+                missing.Add("description");
+            }
+
+            return missing.Count == 0
+                ? new DaminionVerifyResult(true, $"Item {itemId} verified")
+                : new DaminionVerifyResult(false, $"Item {itemId}: not found — {string.Join("; ", missing)}");
+        }
+        catch (Exception e)
+        {
+            return new DaminionVerifyResult(false, $"Item {itemId}: verify failed — {e.Message}");
+        }
+    }
+
+    private static void CollectKeyValuePairs(JsonElement node, List<(string Key, string Value)> found)
+    {
+        switch (node.ValueKind)
+        {
+            case JsonValueKind.Object:
+                foreach (var property in node.EnumerateObject())
+                {
+                    if (property.Value.ValueKind is JsonValueKind.String or JsonValueKind.Number)
+                        found.Add((property.Name, property.Value.ToString()));
+                    CollectKeyValuePairs(property.Value, found);
+                }
+                break;
+            case JsonValueKind.Array:
+                foreach (var element in node.EnumerateArray())
+                    CollectKeyValuePairs(element, found);
+                break;
+        }
+    }
+
     public async Task LogoutAsync(CancellationToken ct = default)
     {
         try

@@ -10,6 +10,8 @@
 
     <StackPanel Orientation="Horizontal" Spacing="12">
       <Button Content="Export CSV" Command="{Binding ExportCsvCommand}" />
+      <Button Content="Retry Failed" Command="{Binding RetryFailedCommand}" />
+      <Button Content="Verify Daminion Writes" Command="{Binding VerifyDaminionCommand}" />
       <Button Content="Refresh" Click="OnRefresh" />
       <TextBlock Text="{Binding Summary}" VerticalAlignment="Center" Opacity="0.8" />
     </StackPanel>

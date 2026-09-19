@@ -20,6 +20,7 @@ public partial class Step3ProcessViewModel : ViewModelBase
     private readonly Step1DatasourceViewModel _step1;
     private readonly ProcessingOrchestrator _orchestrator;
     private CancellationTokenSource? _cts;
+    private PauseTokenSource? _pauseSource;
 
     public Step3ProcessViewModel(Session session, IInferenceSidecar sidecar, Step1DatasourceViewModel step1)
     {
@@ -30,6 +31,9 @@ public partial class Step3ProcessViewModel : ViewModelBase
     }
 
     public ObservableCollection<string> LogLines { get; } = new();
+
+    /// <summary>The sidecar instance the orchestrator uses (Step 4 retries need it).</summary>
+    public IInferenceSidecar Sidecar => _sidecar;
 
     [ObservableProperty]
     private double _progressPercent;
@@ -46,6 +50,9 @@ public partial class Step3ProcessViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isRunning;
 
+    [ObservableProperty]
+    private bool _isPaused;
+
     public bool IsIdle => !IsRunning;
 
     partial void OnIsRunningChanged(bool value)
@@ -53,14 +60,24 @@ public partial class Step3ProcessViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsIdle));
         StartCommand.NotifyCanExecuteChanged();
         AbortCommand.NotifyCanExecuteChanged();
+        PauseCommand.NotifyCanExecuteChanged();
+        ResumeCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnIsPausedChanged(bool value)
+    {
+        PauseCommand.NotifyCanExecuteChanged();
+        ResumeCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand(CanExecute = nameof(CanStart))]
     private async Task StartAsync(CancellationToken ct)
     {
         IsRunning = true;
+        IsPaused = false;
         _session.ResetStats();
         _cts = new CancellationTokenSource();
+        _pauseSource = new PauseTokenSource();
 
         // Reuse the Step 1 authenticated client — creating a fresh, unauthenticated
         // connection would fail every Daminion fetch and metadata write.
@@ -87,7 +104,8 @@ public partial class Step3ProcessViewModel : ViewModelBase
                 progress,
                 async line => AppendLog(line),
                 _cts.Token,
-                _session.Results));
+                _session.Results,
+                _pauseSource.Token));
         }
         catch (OperationCanceledException)
         {
@@ -100,6 +118,8 @@ public partial class Step3ProcessViewModel : ViewModelBase
         }
         finally
         {
+            _pauseSource = null;
+            IsPaused = false;
             IsRunning = false;
             _cts.Dispose();
             _cts = null;
@@ -117,11 +137,31 @@ public partial class Step3ProcessViewModel : ViewModelBase
 
     private bool CanAbort() => IsRunning;
 
+    [RelayCommand(CanExecute = nameof(CanPause))]
+    private void Pause()
+    {
+        _pauseSource?.Pause();
+        IsPaused = true;
+        AppendLog("Paused — running items finishing, no new items start");
+    }
+
+    private bool CanPause() => IsRunning && !IsPaused;
+
+    [RelayCommand(CanExecute = nameof(CanResume))]
+    private void Resume()
+    {
+        _pauseSource?.Resume();
+        IsPaused = false;
+        AppendLog("Resumed");
+    }
+
+    private bool CanResume() => IsRunning && IsPaused;
+
     /// <summary>
     /// Build the /tag request from the engine state (local vs cloud routing
     /// happens in the orchestrator; local uses the sidecar contract).
     /// </summary>
-    private TagRequest BuildTagRequest()
+    public TagRequest BuildTagRequest()
     {
         var engine = _session.Engine;
         return new TagRequest
