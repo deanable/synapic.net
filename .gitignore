@@ -43,7 +43,8 @@ synapic-inference.exe
 Thumbs.db
 .DS_Store
 
-# Model caches (never commit weights)
-models/
+# Model caches (never commit weights) — anchored so the rule cannot
+# swallow source directories named Models/ (e.g. src/Synapic.Avalonia/Models).
+/models/
 *.safetensors
 *.gguf
