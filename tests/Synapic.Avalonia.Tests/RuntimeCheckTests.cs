@@ -38,4 +38,22 @@ public class RuntimeCheckTests
     {
         Assert.False(DotNetRuntimeCheckService.Satisfies(null));
     }
+
+    /// <summary>
+    /// No-op path of the startup flow: on a machine with the runtime (or a
+    /// non-Windows platform, where the check skips) the flow must log and
+    /// return without attempting any install.
+    /// </summary>
+    [Fact]
+    public async Task EnsureRuntime_noops_when_runtime_present_or_platform_skips()
+    {
+        var logs = new List<string>();
+        await new DotNetRuntimeCheckService().EnsureRuntimeAsync(logs.Add);
+
+        Assert.Contains(logs, l =>
+            l.Contains("detected", StringComparison.OrdinalIgnoreCase) ||   // Windows with runtime
+            l.Contains("skipped", StringComparison.OrdinalIgnoreCase));     // non-Windows
+        Assert.DoesNotContain(logs, l => l.Contains("Downloading"));
+        Assert.DoesNotContain(logs, l => l.Contains("silent install", StringComparison.OrdinalIgnoreCase));
+    }
 }

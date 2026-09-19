@@ -84,7 +84,8 @@ jobs:
       - name: Publish Avalonia app
         run: >
           dotnet publish src/Synapic.Avalonia -c Release -r ${{ matrix.rid }}
-          --self-contained -p:PublishSingleFile=false
+          --self-contained ${{ matrix.rid == 'win-x64' && 'false' || 'true' }}
+          -p:PublishSingleFile=false
           -o artifacts/${{ matrix.rid }}
 
       - name: Stage bundle (sidecar next to app)

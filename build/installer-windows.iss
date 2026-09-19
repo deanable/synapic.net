@@ -1,11 +1,17 @@
 ; Inno Setup script for Synapic (spec §7.2 Windows row)
 ; Preprocessor defines passed by package-windows.ps1:
 ;   /DAppVersion=1.0.0  /DRid=win-x64  /DArtifactsDir=artifacts\win-x64
+; Requires Inno Setup 6.3+ (DownloadTemporaryFile).
 
 #define AppName "Synapic"
 #define AppPublisher "Synapic Project"
 #define AppExe "Synapic.exe"
 #define SidecarExe "synapic-inference.exe"
+; Offline prerequisite: package-windows.ps1 stages the official .NET 10
+; Desktop Runtime installer next to the payload; when present it is bundled
+; into the setup and installed silently. When absent the installer downloads
+; it at the Ready step instead (DownloadTemporaryFile).
+#define RuntimeExe "windowsdesktop-runtime-win-x64.exe"
 
 #ifndef AppVersion
 #define AppVersion "1.0.0"
@@ -39,8 +45,13 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 [Files]
 Source: "{#ArtifactsDir}\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#ArtifactsDir}\{#SidecarExe}"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#ArtifactsDir}\*.dll"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Check: DirExists(ExpandConstant('{#ArtifactsDir}'))
+Source: "{#ArtifactsDir}\*.dll"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#ArtifactsDir}\*.pdb"; DestDir: "{app}"; Flags: skipifsourcedoesntexist
+#ifexist ArtifactsDir + "\" + RuntimeExe
+#define BundleRuntime
+; Bundled offline prerequisite — extracted to {tmp} and run silently when missing.
+Source: "{#ArtifactsDir}\{#RuntimeExe}"; DestDir: "{tmp}"; Flags: deleteafterinstall
+#endif
 
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"
@@ -49,6 +60,83 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopico
 
 [Run]
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+const
+  RuntimeSetupUrl =
+    'https://builds.dotnet.microsoft.com/dotnet/WindowsDesktop/10.0.12/windowsdesktop-runtime-win-x64.exe';
+  RuntimeExeName = 'windowsdesktop-runtime-win-x64.exe';
+#ifdef BundleRuntime
+  BundledRuntime = True;
+#else
+  BundledRuntime = False;
+#endif
+
+// Host-presence probe (official detection point, matches the in-app check):
+// HKLM\SOFTWARE\dotnet\Setup\InstalledVersions\x64\sharedhost → Version
+// (REG_SZ, e.g. "10.0.12"). Absent key ⇒ no .NET host at all.
+function IsDotNetMissing(): Boolean;
+var
+  Version: String;
+  Dot, Major: Integer;
+begin
+  Result := True;
+  if not RegQueryStringValue(HKEY_LOCAL_MACHINE,
+    'SOFTWARE\dotnet\Setup\InstalledVersions\x64\sharedhost', 'Version', Version) then
+    Exit;
+  Dot := Pos('.', Version + '.');
+  Major := StrToIntDef(Copy(Version, 1, Dot - 1), 0);
+  Result := Major < 10;
+end;
+
+// Canonical prerequisite hook: runs after the Ready page and before any app
+// files are copied. The app is framework-dependent, so when the runtime is
+// missing we resolve a local installer copy — the bundled one (extracted to
+// {tmp}) or a live download (built-in progress UI) — and run it silently.
+// Returning a non-empty string aborts setup with that message.
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  ResultCode: Integer;
+begin
+  Result := '';
+  if not IsDotNetMissing() then Exit;
+
+  if BundledRuntime then
+  begin
+    WizardForm.StatusLabel.Caption := 'Extracting the .NET 10 Desktop Runtime…';
+    ExtractTemporaryFile(RuntimeExeName);
+  end
+  else
+  begin
+    try
+      WizardForm.StatusLabel.Caption := 'Downloading the .NET 10 Desktop Runtime (prerequisite)…';
+      DownloadTemporaryFile(RuntimeSetupUrl, RuntimeExeName, '', nil);
+    except
+      Result := 'Could not download the .NET 10 Desktop Runtime.'#13#10 +
+        'An internet connection is required the first time you install.';
+      Exit;
+    end;
+  end;
+
+  WizardForm.StatusLabel.Caption := 'Installing the .NET 10 Desktop Runtime (prerequisite)…';
+  if not Exec(ExpandConstant('{tmp}\' + RuntimeExeName), '/install /quiet /norestart',
+    '', SW_SHOW, ewWaitUntilTerminated, ResultCode) then
+  begin
+    Result := 'The .NET 10 Desktop Runtime installer could not be started.';
+    Exit;
+  end;
+
+  // 0 = success; 3010 = success, reboot required.
+  if ResultCode = 3010 then
+  begin
+    NeedsRestart := True;
+    SuppressibleMsgBox('A restart is needed to finish the .NET runtime installation.'#13#10 +
+      'Setup will complete after you restart this computer.', mbInformation, MB_OK, IDOK);
+  end
+  else if ResultCode <> 0 then
+    Result := 'The .NET 10 Desktop Runtime installer exited with code ' +
+      IntToStr(ResultCode) + '.';
+end;
 
 [UninstallDelete]
 ; Optionally remove per-user model cache on uninstall (user choice via checkbox not supported here; kept)

@@ -56,8 +56,14 @@ jobs:
       - name: Publish Avalonia app
         run: >
           dotnet publish src/Synapic.Avalonia -c Release -r ${{ matrix.rid }}
-          --self-contained -p:PublishSingleFile=false
+          --self-contained ${{ matrix.rid == 'win-x64' && 'false' || 'true' }}
+          -p:PublishSingleFile=false
           -o artifacts/${{ matrix.rid }}
+
+      - name: Install Inno Setup (Windows)
+        if: matrix.pkg == 'ps1'
+        shell: pwsh
+        run: choco install innosetup -y --no-progress
 
       - name: Package (Windows)
         if: matrix.pkg == 'ps1'

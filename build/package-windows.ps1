@@ -22,6 +22,26 @@ if (-not $iscc) {
 }
 if (-not $iscc) { throw "Inno Setup 6 (ISCC.exe) not found - install from https://jrsoftware.org/isinfo.php" }
 
+# Stage the .NET 10 Desktop Runtime installer next to the payload so the Inno
+# setup bundles it as an offline prerequisite. The app is published
+# framework-dependent on Windows to keep the bundle small; when this file is
+# absent the installer falls back to a live download at install time.
+$runtimeExe = "windowsdesktop-runtime-win-x64.exe"
+$runtimePath = Join-Path $ArtifactsDir $runtimeExe
+if (-not (Test-Path $runtimePath)) {
+    Write-Host "Fetching .NET 10 Desktop Runtime installer (offline prerequisite)..."
+    $meta = Invoke-RestMethod -Uri 'https://builds.dotnet.microsoft.com/dotnet/release-metadata/10.0/releases.json'
+    $file = $meta.releases | ForEach-Object { $_.windowsdesktop } |
+        Where-Object { $_ } | ForEach-Object { $_.files } |
+        Where-Object { $_.rid -eq 'win-x64' -and $_.name -eq $runtimeExe } |
+        Select-Object -First 1
+    if (-not $file) { throw "Runtime installer not found in .NET release metadata" }
+    Invoke-WebRequest -Uri $file.url -OutFile $runtimePath
+    $size = (Get-Item $runtimePath).Length
+    if ($size -lt 10MB) { throw "Staged runtime installer looks invalid ($size bytes) - expected the full ~60 MB setup" }
+    Write-Host "Staged: $runtimePath ($([math]::Round($size / 1MB, 1)) MB)"
+}
+
 Write-Host "Compiling installer: $IssScript (version $AppVersion, RID $Rid)"
 & $iscc "/DAppVersion=$AppVersion" "/DRid=$Rid" "/DArtifactsDir=$ArtifactsDir" $IssScript
 if ($LASTEXITCODE -ne 0) { throw "ISCC failed with exit code $LASTEXITCODE" }

@@ -1,7 +1,9 @@
 # Packaging
 
-Per-platform single-bundle distribution (spec §7): the self-contained .NET app
-plus the PyInstaller sidecar, shipped together.
+Per-platform single-bundle distribution (spec §7): the .NET app plus the
+PyInstaller sidecar, shipped together. macOS/Linux payloads are
+self-contained; **Windows is framework-dependent** to keep the installer small
+(see the prerequisite note below).
 
 ## Layout
 
@@ -27,6 +29,13 @@ build/package-macos.sh <rid>         # codesign + notarytool + create-dmg
 
 ## Notes & mitigations (spec §9)
 
+- **Windows .NET prerequisite:** the Windows payload is published
+  framework-dependent; `package-windows.ps1` stages the official .NET 10
+  Desktop Runtime installer next to the payload and `installer-windows.iss`
+  bundles it as an offline prerequisite. At install time a missing runtime is
+  installed silently (`/install /quiet /norestart`); with no bundled copy the
+  installer downloads it live. The app's own startup check
+  (`DotNetRuntimeCheckService`) is the second line of defense.
 - **Bundle size:** the sidecar excludes `cv2`, `imagehash`, `faiss`,
   `sentence-transformers`, `customtkinter` (dedup and metadata writing moved to
   C#). UPX is on; disable in `synapic-inference.spec` if AV heuristics flag it.
