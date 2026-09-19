@@ -14,8 +14,8 @@
     <AvaloniaVersion>11.1.3</AvaloniaVersion>
     <CommunityToolkitMvvmVersion>8.3.2</CommunityToolkitMvvmVersion>
     <RefitVersion>7.2.22</RefitVersion>
-    <MetadataExtractorVersion>2.8.1</MetadataExtractorVersion>
-    <NetVipsVersion>2.4.1</NetVipsVersion>
+    <MetadataExtractorVersion>2.9.3</MetadataExtractorVersion>
+    <NetVipsVersion>3.2.0</NetVipsVersion>
     <SerilogVersion>4.0.2</SerilogVersion>
     <SerilogSinksFileVersion>6.0.0</SerilogSinksFileVersion>
     <XunitVersion>2.9.2</XunitVersion>

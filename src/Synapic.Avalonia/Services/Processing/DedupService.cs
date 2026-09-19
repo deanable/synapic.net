@@ -171,7 +171,7 @@ public sealed class DedupService : IDedupService
     private static ulong ComputeAHash(Image gray)
     {
         using var small = gray.Resize(8.0 / gray.Width, vscale: 8.0 / gray.Height);
-        var pixels = small.WriteToMemory();
+        var pixels = small.WriteToMemory<byte>();
         var avg = pixels.Average(p => (double)p);
         ulong hash = 0;
         for (var i = 0; i < 64; i++)
@@ -182,7 +182,7 @@ public sealed class DedupService : IDedupService
     private static ulong ComputeDHash(Image gray)
     {
         using var small = gray.Resize(9.0 / gray.Width, vscale: 8.0 / gray.Height);
-        var pixels = small.WriteToMemory();
+        var pixels = small.WriteToMemory<byte>();
         ulong hash = 0;
         var bit = 63;
         for (var row = 0; row < 8; row++)
@@ -202,7 +202,7 @@ public sealed class DedupService : IDedupService
     {
         // 32x32 grayscale, 2D DCT, top-left 8x8 → median threshold (imagehash phash).
         using var small = gray.Resize(32.0 / gray.Width, vscale: 32.0 / gray.Height);
-        var pixels = small.WriteToMemory();
+        var pixels = small.WriteToMemory<byte>();
         var matrix = new double[32 * 32];
         for (var i = 0; i < pixels.Length; i++) matrix[i] = pixels[i];
 
