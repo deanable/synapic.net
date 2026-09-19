@@ -16,6 +16,15 @@ public class RuntimeCheckTests
         var service = new DotNetRuntimeCheckService();
         var version = service.GetInstalledDesktopRuntimeVersion();
 
+        if (!OperatingSystem.IsWindows())
+        {
+            // Linux/macOS cannot host the Windows Desktop Runtime: no registry
+            // probe and no Microsoft.WindowsDesktop.App in `dotnet
+            // --list-runtimes` — detection must come up empty.
+            Assert.Null(version);
+            return;
+        }
+
         Assert.NotNull(version);
         Assert.True(
             DotNetRuntimeCheckService.Satisfies(version),
