@@ -25,6 +25,13 @@ public partial class App : Application
         SynapicLog.Initialize(minimumLevel: config.Ui.LogLevel);
         var log = SynapicLog.For(nameof(App));
 
+        // .NET 10 Desktop Runtime self-heal: when the targeted runtime is
+        // missing, silently download and install it, then continue startup.
+        // Fire-and-forget: it must never block or crash the app launch, and
+        // every step logs its outcome for diagnosis.
+        _ = new DotNetRuntimeCheckService().EnsureRuntimeAsync(
+            line => log.Information("[runtime] {RuntimeCheck}", line));
+
         log.Information("=== Synapic startup ===");
         log.Information("App version {Version}, app dir {AppDir}",
             typeof(App).Assembly.GetName().Version?.ToString() ?? "?", AppContext.BaseDirectory);
