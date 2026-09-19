@@ -25,9 +25,6 @@ jobs:
             rid: linux-x64
             pkg: sh
           - os: macos-14
-            rid: osx-x64
-            pkg: sh
-          - os: macos-14
             rid: osx-arm64
             pkg: sh
     steps:

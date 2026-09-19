@@ -69,10 +69,6 @@ jobs:
             sidecar: synapic-inference
             pkg: sh
           - os: macos-14
-            rid: osx-x64
-            sidecar: synapic-inference
-            pkg: sh
-          - os: macos-14
             rid: osx-arm64
             sidecar: synapic-inference
             pkg: sh

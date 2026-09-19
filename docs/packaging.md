@@ -51,9 +51,10 @@ build/package-macos.sh <rid>         # codesign + notarytool + create-dmg
 ## CI
 
 - `.github/workflows/build.yml` — pushes to `main` and manual dispatch run
-  everything: unit tests (pytest + xUnit), a 4-RID matrix (win-x64,
-  linux-x64, osx-x64, osx-arm64) building and uploading bundles, and the
-  installer smoke test. PRs run the same but with a path filter (code/build
+  everything: unit tests (pytest + xUnit), a 3-RID matrix (win-x64,
+  linux-x64, osx-arm64) building and uploading bundles, and the installer
+  smoke test. osx-x64 (Intel Mac) is not built: torch dropped x86_64 macOS
+  wheels after 2.2.2, so the sidecar cannot build there. PRs run the same but with a path filter (code/build
   changes only — doc-only PRs skip CI) and **without** the installer smoke
   job, which costs extra Windows runner minutes.
 - `.github/workflows/release.yml` — `v*` tags: same matrix, plus packaging,
