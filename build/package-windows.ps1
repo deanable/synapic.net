@@ -10,6 +10,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# ISCC anchors relative paths to the script's own directory (not the CWD),
+# so hand it an absolute artifacts path; create the dir if missing.
+$ArtifactsDir = (New-Item -ItemType Directory -Force $ArtifactsDir).FullName
+
 $iscc = Get-Command ISCC.exe -ErrorAction SilentlyContinue
 if (-not $iscc) {
     $candidates = @(
