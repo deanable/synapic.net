@@ -9,7 +9,7 @@
         Width="1280" Height="800"
         WindowStartupLocation="CenterScreen">
 
-  <Grid RowDefinitions="Auto,*,Auto">
+  <Grid RowDefinitions="Auto,Auto,*,Auto">
 
     <!-- Toolbar: server controls + status indicator -->
     <Border Grid.Row="0" Classes="card" Padding="10,8" Margin="8">
@@ -18,16 +18,56 @@
                 Command="{Binding StartServerCommand}" />
         <Button Content="Stop Server"
                 Command="{Binding StopServerCommand}" />
+        <Button Content="Build Server"
+                Command="{Binding BuildServerCommand}"
+                IsVisible="{Binding IsBuildButtonVisible}" />
         <Ellipse Width="12" Height="12" VerticalAlignment="Center"
                  Fill="{Binding ServerBrush}" />
         <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center" FontWeight="SemiBold" />
+        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"
+                    IsVisible="{Binding IsDownloadVisible}">
+          <ProgressBar Value="{Binding DownloadPercent}" Maximum="100"
+                       Width="150" Height="6" VerticalAlignment="Center" />
+          <TextBlock Text="{Binding DownloadText}" VerticalAlignment="Center" FontSize="11"
+                     Opacity="0.85" />
+        </StackPanel>
         <TextBlock Text="Synapic — AI-powered image tagging for DAM" Opacity="0.55"
                    VerticalAlignment="Center" Margin="20,0,0,0" />
       </StackPanel>
     </Border>
 
+    <!-- Wizard nav bar -->
+    <Border Grid.Row="1" Classes="card" Padding="10,8" Margin="8,0,8,8">
+      <StackPanel Orientation="Vertical" Spacing="6">
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <Button Content="1 · Datasource" Command="{Binding Wizard.BackCommand}"
+                  IsVisible="{Binding Wizard.CanStartOver}" Classes="stepTab" />
+          <Button Content="2 · Engine" Command="{Binding Wizard.GoToStep2Command}"
+                  IsEnabled="{Binding Wizard.CanGoToStep2Tab}" Classes="stepTab" />
+          <Button Content="3 · Process" Command="{Binding Wizard.GoToStep3Command}"
+                  IsEnabled="{Binding Wizard.CanGoToStep3Tab}" Classes="stepTab" />
+          <Button Content="4 · Results" Command="{Binding Wizard.GoToStep4Command}"
+                  IsEnabled="{Binding Wizard.CanGoToStep4Tab}" Classes="stepTab" />
+          <Button Content="🧹 Deduplication" Command="{Binding Wizard.GoToDedupCommand}"
+                  IsEnabled="{Binding Wizard.CanGoToDedupTab}" Classes="stepTab" />
+          <Button Content="↺ Start Over" Command="{Binding Wizard.StartOverCommand}"
+                  IsVisible="{Binding Wizard.CanStartOver}" />
+        </StackPanel>
+        <TextBlock Classes="validationError" IsVisible="{Binding Wizard.ValidationError}"
+                   Text="{Binding Wizard.ValidationError}" TextWrapping="Wrap" />
+        <Grid ColumnDefinitions="*,Auto,Auto">
+          <TextBlock Grid.Column="0" Text="{Binding Wizard.NavHintText}"
+                     VerticalAlignment="Center" Opacity="0.7" />
+          <Button Grid.Column="1" Content="← Back" Command="{Binding Wizard.BackCommand}"
+                  Margin="0,0,8,0" />
+          <Button Grid.Column="2" Content="{Binding Wizard.NextButtonText}"
+                  Command="{Binding Wizard.NextCommand}" Classes="accent" />
+        </Grid>
+      </StackPanel>
+    </Border>
+
     <!-- Wizard body -->
-    <ScrollViewer Grid.Row="1" Margin="8,0">
+    <ScrollViewer Grid.Row="2" Margin="8,0">
       <ContentControl Content="{Binding Wizard.CurrentStep}">
         <ContentControl.DataTemplates>
           <DataTemplate DataType="vms:Step1DatasourceViewModel">
@@ -50,7 +90,7 @@
     </ScrollViewer>
 
     <!-- Live log -->
-    <Border Grid.Row="2" Classes="card" Height="160" Margin="8">
+    <Border Grid.Row="3" Classes="card" Height="160" Margin="8">
       <Grid RowDefinitions="Auto,*" Margin="8">
         <TextBlock Grid.Row="0" Text="Log" FontWeight="SemiBold" />
         <ListBox Grid.Row="1" ItemsSource="{Binding LogEntries}" x:Name="LogList"
@@ -73,6 +113,16 @@
       <Setter Property="CornerRadius" Value="8" />
       <Setter Property="Padding" Value="12" />
       <Setter Property="BoxShadow" Value="0 1 4 0 #22000000" />
+    </Style>
+    <Style Selector="Button.stepTab">
+      <Setter Property="Padding" Value="10,4" />
+      <Setter Property="CornerRadius" Value="6" />
+    </Style>
+    <Style Selector="Button.accent">
+      <Setter Property="Padding" Value="14,4" />
+    </Style>
+    <Style Selector="TextBlock.validationError">
+      <Setter Property="Foreground" Value="#B3261E" />
     </Style>
   </Window.Styles>
 </Window>

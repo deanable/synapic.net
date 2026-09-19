@@ -42,8 +42,15 @@ _state: Dict[str, Any] = {
 _model_cache: Dict[Tuple[str, str, str], Any] = {}
 _model_cache_lock = threading.Lock()
 
-_DOWNLOAD_PROGRESS: Dict[str, Tuple[int, int]] = {}  # model_id -> (done, total)
+# Background download state for /health: model_id ->
+# {"status": "downloading"|"complete"|"failed", "done": int, "total": int,
+#  "expected_total": int|None, "error": str|None, "finished_at": float|None}
+_DOWNLOAD_PROGRESS: Dict[str, Dict[str, Any]] = {}
 _DOWNLOAD_PROGRESS_LOCK = threading.Lock()
+
+# How long a finished download (complete/failed) stays visible in /health so
+# the UI can show the outcome before it disappears.
+_DOWNLOAD_COMPLETE_TTL_SECONDS = 30.0
 
 
 def set_status(status: str, error: Optional[str] = None) -> None:
@@ -87,12 +94,109 @@ def get_state_snapshot() -> Dict[str, Any]:
 
 def get_download_progress(model_id: str) -> Tuple[int, int]:
     with _DOWNLOAD_PROGRESS_LOCK:
-        return _DOWNLOAD_PROGRESS.get(model_id, (0, 0))
+        entry = _DOWNLOAD_PROGRESS.get(model_id)
+        if not entry:
+            return (0, 0)
+        return (int(entry.get("done", 0)), int(entry.get("total", 0)))
 
 
 def _set_download_progress(model_id: str, done: int, total: int) -> None:
     with _DOWNLOAD_PROGRESS_LOCK:
-        _DOWNLOAD_PROGRESS[model_id] = (done, total)
+        entry = _DOWNLOAD_PROGRESS.setdefault(
+            model_id, {"status": "downloading", "done": 0, "total": 0}
+        )
+        entry["done"] = max(int(done), 0)
+        entry["total"] = max(int(total), 0)
+
+
+def reset_download_state() -> None:
+    """Clear all download state (test helper)."""
+    with _DOWNLOAD_PROGRESS_LOCK:
+        _DOWNLOAD_PROGRESS.clear()
+
+
+def mark_download_started(model_id: str, expected_total: Optional[int] = None) -> None:
+    with _DOWNLOAD_PROGRESS_LOCK:
+        _DOWNLOAD_PROGRESS[model_id] = {
+            "status": "downloading",
+            "done": 0,
+            "total": 0,
+            "expected_total": int(expected_total) if expected_total else None,
+            "error": None,
+            "finished_at": None,
+        }
+
+
+def mark_download_complete(model_id: str, done: int = 0, total: int = 0) -> None:
+    import time as _time
+
+    with _DOWNLOAD_PROGRESS_LOCK:
+        entry = _DOWNLOAD_PROGRESS.get(model_id) or {}
+        _DOWNLOAD_PROGRESS[model_id] = {
+            "status": "complete",
+            "done": max(int(done), 0),
+            "total": max(int(total), 0),
+            "expected_total": entry.get("expected_total"),
+            "error": None,
+            "finished_at": _time.time(),
+        }
+
+
+def mark_download_failed(model_id: str, error: str) -> None:
+    import time as _time
+
+    with _DOWNLOAD_PROGRESS_LOCK:
+        entry = _DOWNLOAD_PROGRESS.get(model_id) or {}
+        _DOWNLOAD_PROGRESS[model_id] = {
+            "status": "failed",
+            "done": int(entry.get("done", 0) or 0),
+            "total": int(entry.get("total", 0) or 0),
+            "expected_total": entry.get("expected_total"),
+            "error": error,
+            "finished_at": _time.time(),
+        }
+
+
+def get_active_download() -> Optional[Dict[str, Any]]:
+    """Snapshot of the download to surface via /health, or None.
+
+    Prefers an in-flight download; otherwise a download that finished
+    (complete/failed) within the TTL, most recent first.
+    """
+    import time as _time
+
+    now = _time.time()
+    with _DOWNLOAD_PROGRESS_LOCK:
+        active = None
+        finished = None
+        for model_id, entry in _DOWNLOAD_PROGRESS.items():
+            status = entry.get("status")
+            if status == "downloading":
+                active = (model_id, entry)
+                break
+            if (
+                status in ("complete", "failed")
+                and entry.get("finished_at")
+                and now - float(entry["finished_at"]) <= _DOWNLOAD_COMPLETE_TTL_SECONDS
+            ):
+                if finished is None or float(entry["finished_at"]) > float(
+                    finished[1].get("finished_at") or 0
+                ):
+                    finished = (model_id, entry)
+
+        chosen = active or finished
+        if chosen is None:
+            return None
+
+        model_id, entry = chosen
+        total = int(entry.get("total") or entry.get("expected_total") or 0)
+        return {
+            "model_id": model_id,
+            "status": entry.get("status"),
+            "done_bytes": int(entry.get("done") or 0),
+            "total_bytes": total,
+            "error": entry.get("error"),
+        }
 
 
 # ============================================================================
@@ -356,27 +460,80 @@ def find_local_models() -> List[Dict[str, Any]]:
 # ============================================================================
 
 
-def download_model(model_id: str, revision: str = "main", token: Optional[str] = None) -> None:
-    """Download a model in this thread (service runs it as a daemon job)."""
-    logger.info(f"[Download] Starting download for: {model_id} (revision {revision})")
-    try:
-        if is_model_downloaded(model_id, token=token):
-            logger.info(f"[Download] Model {model_id} already fully downloaded — skipping.")
-            _set_download_progress(model_id, 100, 100)
-            return
+def _total_repo_bytes(
+    model_id: str, revision: str = "main", token: Optional[str] = None
+) -> Optional[int]:
+    """Best-effort total payload size of a repo (for a real % display).
 
+    Queries the Hub for per-file sizes. Returns None when offline or on any
+    API failure — snapshot_download's running total is used as fallback.
+    """
+    try:
+        from huggingface_hub import HfApi
+
+        info = HfApi(token=token).model_info(
+            model_id, revision=revision, files_metadata=True
+        )
+        excluded = set(config.MODEL_FILE_EXCLUSIONS)
+        total = 0
+        for sibling in info.siblings or []:
+            filename = (sibling.rfilename or "").rsplit("/", 1)[-1]
+            if filename in excluded:
+                continue
+            size = getattr(sibling, "size", None)
+            if size:
+                total += int(size)
+        return total or None
+    except Exception as e:
+        logger.debug(f"Could not pre-compute repo size for {model_id}: {e}")
+        return None
+
+
+def download_model(model_id: str, revision: str = "main", token: Optional[str] = None) -> None:
+    """Download a model in this thread (service runs it as a daemon job).
+
+    Progress is tracked at byte level: snapshot_download aggregates every
+    file's chunk downloads into one shared bar built from our tqdm subclass,
+    whose (done, total) we mirror into the /health download state.
+    """
+    logger.info(f"[Download] Starting download for: {model_id} (revision {revision})")
+
+    if is_model_downloaded(model_id, token=token):
+        logger.info(f"[Download] Model {model_id} already fully downloaded — skipping.")
+        return
+
+    try:
         from huggingface_hub import snapshot_download
         from tqdm import tqdm
 
+        # Pre-compute the expected payload size so the UI can show a real
+        # percentage up front (best effort; falls back to the running total
+        # that snapshot_download accumulates as files register).
+        expected_total = _total_repo_bytes(model_id, revision=revision, token=token)
+        mark_download_started(model_id, expected_total=expected_total)
+        if expected_total:
+            logger.info(
+                f"[Download] {model_id}: ~{expected_total / (1024 * 1024):.0f} MB expected"
+            )
+
         class _ProgressTqdm(tqdm):
-            """tqdm subclass that mirrors progress into the sidecar state."""
+            """Mirrors snapshot_download's shared bytes bar into /health state.
+
+            snapshot_download builds exactly one byte-level bar from this class
+            (per-file downloads aggregate into it), so self.n / self.total are
+            the overall bytes done / expected.
+            """
+
+            def __init__(self, *args, **kwargs):
+                # hub passes name="huggingface_hub.snapshot_download" which
+                # plain tqdm rejects (TqdmKeyError) — drop it.
+                kwargs.pop("name", None)
+                super().__init__(*args, **kwargs)
 
             def update(self, n=1):
                 super().update(n)
                 try:
-                    done, total = get_download_progress(model_id)
-                    new_done = min(total, done + n) if total else done + n
-                    _set_download_progress(model_id, new_done, max(total, new_done))
+                    _set_download_progress(model_id, int(self.n or 0), int(self.total or 0))
                 except Exception:
                     pass
 
@@ -388,11 +545,12 @@ def download_model(model_id: str, revision: str = "main", token: Optional[str] =
             tqdm_class=_ProgressTqdm,
             max_workers=4,
         )
-        _set_download_progress(model_id, 100, 100)
+        done, total = get_download_progress(model_id)
+        mark_download_complete(model_id, done=done, total=total)
         logger.info(f"[Download] Download complete for {model_id}!")
     except Exception as e:
         logger.exception(f"[Download] Failed to download model: {model_id}")
-        set_status("error", f"Failed to download model: {e}")
+        mark_download_failed(model_id, str(e))
         raise
 
 

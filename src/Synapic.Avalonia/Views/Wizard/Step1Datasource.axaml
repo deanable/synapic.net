@@ -16,7 +16,11 @@
     <Border IsVisible="{Binding IsLocal}" Classes="card" Padding="14">
       <StackPanel Spacing="8">
         <TextBlock Text="Folder containing images" FontWeight="SemiBold" />
-        <TextBox Watermark="C:\Pictures or /home/user/pictures" Text="{Binding LocalPath}" />
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBox Grid.Column="0" Watermark="C:\Pictures or /home/user/pictures"
+                   Text="{Binding LocalPath}" />
+          <Button Grid.Column="1" Content="Browse…" Click="OnBrowseFolder" />
+        </Grid>
         <CheckBox Content="Include subfolders (recursive scan)" IsChecked="{Binding LocalRecursive}" />
       </StackPanel>
     </Border>
@@ -24,63 +28,94 @@
     <!-- Daminion panel -->
     <Border IsVisible="{Binding IsDaminion}" Classes="card" Padding="14">
       <StackPanel Spacing="8">
-        <TextBox Watermark="Server URL, e.g. http://dam.local/daminion" Text="{Binding DaminionUrl}" />
-        <Grid ColumnDefinitions="*,*,Auto" Margin="0,0,0,0">
-          <TextBox Grid.Column="0" Watermark="Username" Text="{Binding DaminionUser}" />
-          <TextBox Grid.Column="1" Watermark="Password" Text="{Binding DaminionPass}" PasswordChar="●" />
-          <Button Grid.Column="2" Content="Test Connection" Command="{Binding ConnectCommand}" />
+        <Grid ColumnDefinitions="2*,1*,1*,Auto">
+          <TextBox Grid.Column="0" Watermark="Server URL, e.g. http://dam.local/daminion"
+                   Text="{Binding DaminionUrl}" />
+          <TextBox Grid.Column="1" Watermark="Username" Text="{Binding DaminionUser}" />
+          <TextBox Grid.Column="2" Watermark="Password" Text="{Binding DaminionPass}" PasswordChar="*" />
+          <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="6">
+            <Button Content="Connect" Command="{Binding ConnectCommand}" Classes="accent" />
+            <Button Content="Disconnect" Command="{Binding DisconnectCommand}"
+                    IsVisible="{Binding IsDaminionConnected}" />
+          </StackPanel>
         </Grid>
-        <TextBox Watermark="Catalog (optional)" Text="{Binding DaminionCatalogId}" />
-
-        <TextBlock Text="Scope" FontWeight="SemiBold" Margin="0,8,0,0" />
-        <ComboBox SelectedIndex="{Binding Scope}">
-          <ComboBoxItem Content="Entire catalog" />
-          <ComboBoxItem Content="Keyword search" />
-          <ComboBoxItem Content="Shared collection" />
-          <ComboBoxItem Content="Saved search" />
-        </ComboBox>
-
-        <TextBox Watermark="Search term (scope: keyword search)" Text="{Binding SearchTerm}" />
-        <TextBox Watermark="Saved search id" Text="{Binding SavedSearchId}" />
-        <TextBox Watermark="Collection id" Text="{Binding CollectionId}" />
-
-        <TextBlock Text="Identify untagged items (any of)" FontWeight="SemiBold" Margin="0,8,0,0" />
-        <StackPanel Orientation="Horizontal" Spacing="12">
-          <CheckBox Content="Keywords" IsChecked="{Binding UntaggedKeywords}" />
-          <CheckBox Content="Categories" IsChecked="{Binding UntaggedCategories}" />
-          <CheckBox Content="Description" IsChecked="{Binding UntaggedDescription}" />
+        <TextBox Watermark="Catalog (optional)" Text="{Binding DaminionCatalogId}" MaxWidth="300"
+                 HorizontalAlignment="Left" />
+        <StackPanel Orientation="Horizontal" Spacing="10">
+          <ProgressBar IsIndeterminate="True" Width="90" Height="6"
+                       IsVisible="{Binding IsConnecting}" />
+          <ProgressBar IsIndeterminate="True" Width="90" Height="6"
+                       IsVisible="{Binding IsLoadingCatalog}" />
+          <TextBlock Text="{Binding ConnectionMessage}" Opacity="0.85"
+                     IsVisible="{Binding ConnectionMessage}" />
         </StackPanel>
 
-        <StackPanel Orientation="Horizontal" Spacing="16" Margin="0,8,0,0">
-          <TextBlock Text="Status filter:" VerticalAlignment="Center" />
-          <ComboBox SelectedIndex="{Binding StatusFilter}">
-            <ComboBoxItem Content="All" />
-            <ComboBoxItem Content="Approved" />
-            <ComboBoxItem Content="Rejected" />
-            <ComboBoxItem Content="Unassigned" />
-          </ComboBox>
-          <TextBlock Text="Max items:" VerticalAlignment="Center" />
-          <NumericUpDown Value="{Binding MaxItems}" Minimum="0" Maximum="100000" Increment="50" Width="120" />
-        </StackPanel>
+        <Separator Margin="0,6" />
 
+        <Grid ColumnDefinitions="*,16,*">
+          <!-- Scope column -->
+          <StackPanel Grid.Column="0" Spacing="8">
+            <TextBlock Text="Scope" FontWeight="SemiBold" />
+            <ComboBox SelectedIndex="{Binding ScopeIndex}" ItemsSource="{Binding ScopeOptions}" MinWidth="190" />
+            <TextBox Watermark="Search term"
+                     IsVisible="{Binding IsSearchScope}"
+                     Text="{Binding SearchTerm}" />
+            <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsCollectionScope}">
+              <ComboBox ItemsSource="{Binding Collections}"
+                        SelectedItem="{Binding SelectedCollection}"
+                        DisplayMemberBinding="{Binding Name}"
+                        MinWidth="240"
+                        IsEnabled="{Binding IsDaminionConnected}" />
+              <TextBox Watermark="Collection id (manual)" Text="{Binding CollectionId}" Width="110" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsSavedSearchScope}">
+              <ComboBox ItemsSource="{Binding SavedSearches}"
+                        SelectedItem="{Binding SelectedSavedSearch}"
+                        DisplayMemberBinding="{Binding Name}"
+                        MinWidth="240"
+                        IsEnabled="{Binding IsDaminionConnected}" />
+              <TextBox Watermark="Saved search id (manual)" Text="{Binding SavedSearchId}" Width="110" />
+            </StackPanel>
+          </StackPanel>
+
+          <!-- Filters column -->
+          <StackPanel Grid.Column="2" Spacing="8">
+            <TextBlock Text="Filters" FontWeight="SemiBold" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBlock Text="Status:" VerticalAlignment="Center" />
+              <ComboBox SelectedIndex="{Binding StatusFilterIndex}"
+                        ItemsSource="{Binding StatusFilterOptions}" MinWidth="120" />
+            </StackPanel>
+            <TextBlock Text="Only items with untagged:" Opacity="0.8" />
+            <WrapPanel Orientation="Horizontal">
+              <CheckBox Content="Keywords" IsChecked="{Binding UntaggedKeywords}" />
+              <CheckBox Content="Categories" IsChecked="{Binding UntaggedCategories}" />
+              <CheckBox Content="Description" IsChecked="{Binding UntaggedDescription}" />
+            </WrapPanel>
+            <Button Content="Select all untagged" Command="{Binding SelectAllUntaggedCommand}"
+                    HorizontalAlignment="Left" />
+          </StackPanel>
+        </Grid>
+
+        <Separator Margin="0,6" />
+
+        <!-- Processing limits + count -->
         <StackPanel Orientation="Horizontal" Spacing="16">
+          <TextBlock Text="Max items:" VerticalAlignment="Center" />
+          <NumericUpDown Value="{Binding MaxItems}" Minimum="0" Maximum="1000000"
+                         Increment="50" Width="120" />
           <TextBlock Text="AI image scale:" VerticalAlignment="Center" />
-          <ComboBox SelectedIndex="{Binding ResizeScale}" MinWidth="100">
-            <ComboBoxItem Content="100%" />
-            <ComboBoxItem Content="75%" />
-            <ComboBoxItem Content="50%" />
-            <ComboBoxItem Content="25%" />
-          </ComboBox>
+          <ComboBox SelectedIndex="{Binding ResizeScaleIndex}"
+                    ItemsSource="{Binding ResizeScaleOptions}" MinWidth="90" />
           <CheckBox Content="Use fixed 200px thumbnail (fast)"
-                    IsChecked="{Binding UseThumbnailOverride}" />
+                    IsChecked="{Binding UseThumbnailOverride}" VerticalAlignment="Center" />
+          <Button Content="Count matching items" Command="{Binding CountCommand}" />
+          <ProgressBar IsIndeterminate="True" Width="80" Height="6"
+                       IsVisible="{Binding IsCounting}" />
+          <TextBlock Text="{Binding CountText}" VerticalAlignment="Center" FontWeight="SemiBold"
+                     IsVisible="{Binding CountText}" />
         </StackPanel>
-
-        <TextBlock Text="{Binding ConnectionMessage}" IsVisible="{Binding ConnectionMessage}" />
       </StackPanel>
     </Border>
-
-    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
-      <Button Content="Next: Engine →" />
-    </StackPanel>
   </StackPanel>
 </UserControl>

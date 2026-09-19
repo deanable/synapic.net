@@ -9,6 +9,7 @@
 
     <StackPanel Orientation="Horizontal" Spacing="12">
       <TextBox Watermark="Folder to scan" Text="{Binding FolderPath}" Width="420" />
+      <Button Content="Browse…" Click="OnBrowseFolder" />
       <ComboBox SelectedIndex="{Binding SelectedAlgorithm}" ItemsSource="{Binding Algorithms}" MinWidth="130" />
       <TextBlock Text="Threshold:" VerticalAlignment="Center" />
       <NumericUpDown Value="{Binding Threshold}" Minimum="0.5" Maximum="1" Increment="0.01" Width="100" />

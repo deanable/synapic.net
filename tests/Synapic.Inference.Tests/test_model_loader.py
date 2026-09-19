@@ -5,6 +5,8 @@ suggestion, fuzzy matching — no network or torch downloads required.
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src" / "Synapic.Inference"))
 
 import model_loader  # noqa: E402
@@ -106,3 +108,116 @@ class TestState:
         assert model_loader.get_state_snapshot()["error"] == "boom"
         model_loader.set_status("loading", None)
         assert model_loader.get_state_snapshot()["error"] is None
+
+
+class TestDownloadProgress:
+    """Byte-level download progress surfaced via /health (hub calls mocked).
+
+    snapshot_download aggregates every file's chunk downloads into one shared
+    bytes bar built from our tqdm_class, whose (n, total) we mirror into the
+    download state.
+    """
+
+    def _fake_snapshot(self, total, chunks):
+        def fake(**kwargs):
+            bar = kwargs["tqdm_class"](
+                total=0, desc="Downloading (incomplete total...)",
+                disable=False, unit="B", unit_scale=True, name="test",
+            )
+            bar.total = total  # files register their sizes into the shared bar
+            for chunk in chunks:
+                bar.update(chunk)
+            return "/fake/snapshot"
+
+        return fake
+
+    def test_progress_lifecycle(self, monkeypatch):
+        model_loader.reset_download_state()
+        monkeypatch.setattr(model_loader, "_total_repo_bytes", lambda *a, **k: 500)
+        monkeypatch.setattr(model_loader, "is_model_downloaded", lambda *a, **k: False)
+        monkeypatch.setattr(
+            "huggingface_hub.snapshot_download", self._fake_snapshot(500, [200, 300])
+        )
+
+        model_loader.download_model("LiquidAI/LFM2.5-VL-450M")
+
+        snap = model_loader.get_active_download()
+        assert snap is not None
+        assert snap["model_id"] == "LiquidAI/LFM2.5-VL-450M"
+        assert snap["status"] == "complete"
+        assert snap["done_bytes"] == 500
+        assert snap["total_bytes"] == 500
+
+    def test_mid_download_partial_progress(self, monkeypatch):
+        model_loader.reset_download_state()
+        monkeypatch.setattr(model_loader, "is_model_downloaded", lambda *a, **k: False)
+        monkeypatch.setattr(model_loader, "_total_repo_bytes", lambda *a, **k: 400)
+
+        captured = {}
+        real_set = model_loader._set_download_progress
+
+        def spy(model_id, done, total):
+            real_set(model_id, done, total)
+            captured["last"] = (done, total)
+
+        monkeypatch.setattr(model_loader, "_set_download_progress", spy)
+        monkeypatch.setattr(
+            "huggingface_hub.snapshot_download", self._fake_snapshot(400, [150])
+        )
+
+        model_loader.download_model("org/model")
+
+        assert captured["last"] == (150, 400)
+        done, total = model_loader.get_download_progress("org/model")
+        assert (done, total) == (150, 400)
+
+    def test_already_downloaded_skips_network(self, monkeypatch):
+        model_loader.reset_download_state()
+        monkeypatch.setattr(model_loader, "is_model_downloaded", lambda *a, **k: True)
+        calls = []
+
+        def fail(**kwargs):
+            calls.append(True)
+            raise AssertionError("snapshot_download must not be called")
+
+        monkeypatch.setattr("huggingface_hub.snapshot_download", fail)
+        model_loader.download_model("org/model")
+        assert calls == []
+        assert model_loader.get_active_download() is None
+
+    def test_failure_recorded_not_fatal_to_server(self, monkeypatch):
+        model_loader.reset_download_state()
+        monkeypatch.setattr(model_loader, "is_model_downloaded", lambda *a, **k: False)
+        monkeypatch.setattr(model_loader, "_total_repo_bytes", lambda *a, **k: None)
+
+        def boom(**kwargs):
+            raise RuntimeError("hub down")
+
+        monkeypatch.setattr("huggingface_hub.snapshot_download", boom)
+        with pytest.raises(RuntimeError):
+            model_loader.download_model("org/model")
+
+        snap = model_loader.get_active_download()
+        assert snap is not None
+        assert snap["status"] == "failed"
+        assert "hub down" in snap["error"]
+        # A download failure must NOT flip the server into the error state.
+        assert model_loader.get_state_snapshot()["status"] != "error"
+
+    def test_finished_hidden_after_ttl(self, monkeypatch):
+        model_loader.reset_download_state()
+        model_loader.mark_download_started("org/model")
+        assert model_loader.get_active_download() is not None
+
+        monkeypatch.setattr(model_loader, "_DOWNLOAD_COMPLETE_TTL_SECONDS", 0)
+        model_loader.mark_download_complete("org/model", done=10, total=10)
+        assert model_loader.get_active_download() is None
+
+    def test_active_download_preferred_over_finished(self):
+        model_loader.reset_download_state()
+        model_loader.mark_download_complete("a/model", done=10, total=10)
+        model_loader.mark_download_started("b/model")
+        snap = model_loader.get_active_download()
+        assert snap is not None
+        assert snap["model_id"] == "b/model"
+        assert snap["status"] == "downloading"

@@ -6,8 +6,11 @@ using Serilog.Formatting.Display;
 namespace Synapic.Avalonia.Services;
 
 /// <summary>
-/// Static Serilog bootstrap (spec §5.3 LoggingService): rolling file sink in
-/// the app data directory plus an in-memory sink the UI log viewer binds to.
+/// Static Serilog bootstrap (spec §5.3 LoggingService): a single log file
+/// that is OVERWRITTEN on every run (one clean file per debugging session)
+/// in the application directory, plus an in-memory sink the UI log viewer
+/// binds to. The file captures everything from Debug up (regardless of the
+/// UI log level) so server startup failures can be diagnosed afterwards.
 /// </summary>
 public static class SynapicLog
 {
@@ -28,31 +31,83 @@ public static class SynapicLog
         {
             if (_initialized) return;
 
-            logDirectory ??= AppConfig.DefaultDirectory;
-            Directory.CreateDirectory(logDirectory);
-            LogFilePath = Path.Combine(logDirectory, "logs", "synapic-.log");
+            var dir = logDirectory ?? ResolveLogDirectory();
+            Directory.CreateDirectory(dir);
+            LogFilePath = Path.Combine(dir, "synapic.log");
+
+            // Overwrite per run: delete the previous session's file first.
+            // If it is locked (e.g. a second app instance), keep appending.
+            try
+            {
+                if (File.Exists(LogFilePath)) File.Delete(LogFilePath);
+            }
+            catch (IOException)
+            {
+                // Locked by another instance - append to it instead.
+            }
 
             _uiSink = new UiLogSink(MaxBufferedEvents);
-
-            var levelSwitch = new LoggingLevelSwitch(ParseLevel(minimumLevel));
+            var uiLevel = ParseLevel(minimumLevel);
 
             _logger = new LoggerConfiguration()
-                .MinimumLevel.ControlledBy(levelSwitch)
+                // The file always gets full detail; the UI sink is filtered below.
+                .MinimumLevel.Verbose()
                 .WriteTo.File(
                     LogFilePath,
-                    rollingInterval: RollingInterval.Day,
-                    retainedFileCountLimit: 7,
-                    outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {SourceContext}: {Message:lj}{NewLine}{Exception}")
-                .WriteTo.Sink(_uiSink)
+                    rollingInterval: RollingInterval.Infinite,
+                    restrictedToMinimumLevel: LogEventLevel.Debug,
+                    outputTemplate: "{Timestamp:HH:mm:ss.fff} [{Level:u4}] {SourceContext}: {Message:lj}{NewLine}{Exception}")
+                .WriteTo.Sink(_uiSink, restrictedToMinimumLevel: uiLevel)
                 .CreateLogger();
 
             Log.Logger = _logger;
             _initialized = true;
+
+            For("SynapicLog").Information(
+                "Synapic log started - file: {LogFilePath} (overwritten on each app run)", LogFilePath);
+        }
+    }
+
+    /// <summary>
+    /// Log location: next to the app executable (writable in dev checkouts and
+    /// portable installs); falls back to %LOCALAPPDATA%/Synapic/logs when the
+    /// install directory is read-only (e.g. Program Files).
+    /// </summary>
+    private static string ResolveLogDirectory()
+    {
+        var appLogs = Path.Combine(AppContext.BaseDirectory, "logs");
+        try
+        {
+            Directory.CreateDirectory(appLogs);
+            var probe = Path.Combine(appLogs, ".write-probe");
+            File.WriteAllText(probe, "ok");
+            File.Delete(probe);
+            return appLogs;
+        }
+        catch (Exception)
+        {
+            var local = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Synapic", "logs");
+            Directory.CreateDirectory(local);
+            return local;
+        }
+    }
+
+    /// <summary>Test hook: flush and dispose the logger so Initialize can run again.</summary>
+    public static void ResetForTests()
+    {
+        lock (InitLock)
+        {
+            Log.CloseAndFlush();
+            _logger = null;
+            _initialized = false;
         }
     }
 
     public static ILogger For(string sourceContext) => (_logger ?? Log.Logger).ForContext("SourceContext", sourceContext);
 
+    public static void Debug(string context, string message) => For(context).Debug(message);
     public static void Info(string context, string message) => For(context).Information(message);
     public static void Warning(string context, string message) => For(context).Warning(message);
     public static void Error(string context, string message) => For(context).Error(message);

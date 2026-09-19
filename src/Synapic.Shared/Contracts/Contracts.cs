@@ -19,6 +19,32 @@ public record HealthResponse
 
     [JsonPropertyName("error")]
     public string? Error { get; init; }
+
+    /// <summary>Present while a model download runs (and briefly after it ends).</summary>
+    [JsonPropertyName("download")]
+    public ModelDownloadProgress? Download { get; init; }
+}
+
+/// <summary>
+/// Background model download progress (sidecar /health "download" field).
+/// status: downloading | complete | failed. TotalBytes is 0 while unknown.
+/// </summary>
+public record ModelDownloadProgress
+{
+    [JsonPropertyName("model_id")]
+    public string ModelId { get; init; } = "";
+
+    [JsonPropertyName("status")]
+    public string Status { get; init; } = "downloading";
+
+    [JsonPropertyName("done_bytes")]
+    public long DoneBytes { get; init; }
+
+    [JsonPropertyName("total_bytes")]
+    public long TotalBytes { get; init; }
+
+    [JsonPropertyName("error")]
+    public string? Error { get; init; }
 }
 
 /// <summary>Model entry from GET /models/list (ModelInfo schema).</summary>

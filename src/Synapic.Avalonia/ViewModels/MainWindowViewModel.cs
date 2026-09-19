@@ -1,30 +1,67 @@
 using System.Collections.ObjectModel;
 using Avalonia.Media;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Synapic.Avalonia.Models;
 using Synapic.Avalonia.Services;
+using Synapic.Shared.Contracts;
 
 namespace Synapic.Avalonia.ViewModels;
 
 /// <summary>
+/// User-facing state of the inference server, shown by the always-visible
+/// toolbar indicator: black = not detected (no sidecar executable), red =
+/// stopped, orange = starting, green = running, orange-red = error,
+/// blue = building.
+/// </summary>
+public enum ServerUiState
+{
+    Detecting,
+    NotDetected,
+    Building,
+    Stopped,
+    Starting,
+    Running,
+    Error,
+}
+
+/// <summary>
 /// Main window shell: hosts the wizard steps, the server status indicator,
-/// Start/Stop Server controls, and the live log view (spec §2 Server Status).
+/// Start/Stop/Build Server controls, background model download progress,
+/// and the live log view.
+/// On launch the server is detected (executable + any already-running
+/// instance) and the Start/Stop buttons are enabled accordingly; when no
+/// executable exists a one-off Build Server button appears instead.
 /// </summary>
 public partial class MainWindowViewModel : ViewModelBase
 {
     private readonly IInferenceSidecar _sidecar;
+    private readonly ISidecarBuildService _build;
     private readonly Session _session;
+    private readonly Func<string?> _findSidecarExecutable;
+    private CancellationTokenSource? _healthPollCts;
+    private string _lastDownloadStatus = "";
 
-    public MainWindowViewModel(IInferenceSidecar sidecar, Session session)
+    public MainWindowViewModel(
+        IInferenceSidecar sidecar,
+        ISidecarBuildService build,
+        Session session,
+        Func<string?>? sidecarExecutableLocator = null)
     {
         _sidecar = sidecar;
+        _build = build;
         _session = session;
+        _findSidecarExecutable = sidecarExecutableLocator ?? InferenceSidecarService.FindExecutable;
 
         _sidecar.StatusChanged += OnSidecarStatusChanged;
 
+        // Surface Serilog events (server status transitions, sidecar lifecycle)
+        // in the UI log panel as well as the file log.
+        SynapicLog.UiSink.Emitted -= OnUiLogEmitted;
+        SynapicLog.UiSink.Emitted += OnUiLogEmitted;
+
         Wizard = new WizardViewModel(_session, _sidecar);
-        StatusText = "Server stopped";
     }
 
     public WizardViewModel Wizard { get; }
@@ -32,46 +69,131 @@ public partial class MainWindowViewModel : ViewModelBase
     public ObservableCollection<UiLogEvent> LogEntries { get; } = new();
 
     [ObservableProperty]
-    private string _statusText = "Server stopped";
+    private string _statusText = "Detecting server\u2026";
 
     [ObservableProperty]
-    private SidecarStatus _serverStatus = SidecarStatus.Stopped;
+    private ServerUiState _serverState = ServerUiState.Detecting;
 
     [ObservableProperty]
     private bool _isBusy;
 
-    public bool IsServerRunning => ServerStatus is SidecarStatus.Starting or SidecarStatus.Ready;
+    // ── Background model download panel (shown next to the status) ─────────
 
-    /// <summary>Status dot color for the server indicator (bound in MainWindow).</summary>
-    public IBrush ServerBrush => ServerStatus switch
+    [ObservableProperty]
+    private bool _isDownloadVisible;
+
+    [ObservableProperty]
+    private double _downloadPercent;
+
+    [ObservableProperty]
+    private string _downloadText = "";
+
+    public bool IsServerRunning => ServerState is ServerUiState.Starting or ServerUiState.Running;
+
+    /// <summary>True when no sidecar executable exists and building is possible.</summary>
+    public bool IsBuildButtonVisible => ServerState is ServerUiState.NotDetected && _build.CanBuild;
+
+    /// <summary>Status dot color for the always-visible server indicator.</summary>
+    public IBrush ServerBrush => ServerState switch
     {
-        SidecarStatus.Ready => Brushes.ForestGreen,
-        SidecarStatus.Starting => Brushes.Orange,
-        SidecarStatus.Error => Brushes.OrangeRed,
-        _ => Brushes.Gray,
+        ServerUiState.Running => Brushes.ForestGreen,
+        ServerUiState.Starting => Brushes.Orange,
+        ServerUiState.Error => Brushes.OrangeRed,
+        ServerUiState.Stopped => Brushes.Red,
+        ServerUiState.Building => Brushes.RoyalBlue,
+        ServerUiState.Detecting => Brushes.Gray,
+        _ => Brushes.Black,
     };
 
-    partial void OnServerStatusChanged(SidecarStatus value)
+    partial void OnServerStateChanged(ServerUiState value)
     {
         OnPropertyChanged(nameof(IsServerRunning));
+        OnPropertyChanged(nameof(IsBuildButtonVisible));
         OnPropertyChanged(nameof(ServerBrush));
         StatusText = value switch
         {
-            SidecarStatus.Stopped => "Server stopped",
-            SidecarStatus.Starting => "Server starting… (loading model may take up to 2 minutes)",
-            SidecarStatus.Ready => $"Server ready (port {_sidecar.SidecarPort})",
-            SidecarStatus.Error => "Server error — see log",
+            ServerUiState.Detecting => "Detecting server\u2026",
+            ServerUiState.NotDetected => "Server not detected",
+            ServerUiState.Building => "Building server\u2026 (first build downloads Python + packages)",
+            ServerUiState.Stopped => "Server stopped",
+            ServerUiState.Starting => "Server starting\u2026 (first launch can take up to 2 minutes)",
+            ServerUiState.Running => $"Server running (port {_sidecar.SidecarPort})",
+            ServerUiState.Error => "Server error \u2014 see log",
             _ => value.ToString(),
         };
+        EnsureHealthPolling(value is ServerUiState.Starting or ServerUiState.Running);
+        NotifyCommands();
+    }
+
+    partial void OnIsBusyChanged(bool value) => NotifyCommands();
+
+    private void NotifyCommands()
+    {
         StartServerCommand.NotifyCanExecuteChanged();
         StopServerCommand.NotifyCanExecuteChanged();
+        BuildServerCommand.NotifyCanExecuteChanged();
     }
 
     private void OnSidecarStatusChanged(object? sender, SidecarStatusChangedEventArgs e)
     {
-        ServerStatus = e.Status;
+        SetState(e.Status switch
+        {
+            SidecarStatus.Stopped => ServerUiState.Stopped,
+            SidecarStatus.Starting => ServerUiState.Starting,
+            SidecarStatus.Ready => ServerUiState.Running,
+            SidecarStatus.Error => ServerUiState.Error,
+            _ => ServerUiState.Error,
+        });
         if (e.Status == SidecarStatus.Error && e.Message is not null)
             AppendLog($"[server] {e.Message}");
+    }
+
+    private void SetState(ServerUiState state)
+    {
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Post(() => SetState(state));
+            return;
+        }
+        if (ServerState != state)
+            SynapicLog.Debug(nameof(MainWindowViewModel), $"Server indicator: {ServerState} -> {state}");
+        ServerState = state;
+    }
+
+    /// <summary>
+    /// Startup detection: if the sidecar executable exists, enable Start (or
+    /// Stop when an instance is already running); otherwise offer Build Server.
+    /// </summary>
+    public async Task DetectServerAsync(CancellationToken ct = default)
+    {
+        string? exe;
+        try
+        {
+            exe = _findSidecarExecutable();
+        }
+        catch (Exception e)
+        {
+            AppendLog($"[server] Server detection failed: {e.Message}");
+            SetState(ServerUiState.NotDetected);
+            return;
+        }
+
+        if (exe is null)
+        {
+            SetState(ServerUiState.NotDetected);
+            if (_build.CanBuild)
+                AppendLog("[server] Inference server not found. Use \"Build Server\" to build it from source (one-time).");
+            else
+                AppendLog("[server] Inference server not found in this installation.");
+            return;
+        }
+
+        AppendLog($"[server] Inference server executable: {exe}");
+        // Strict lifecycle: a fresh launch means the server is NOT running
+        // (leftover servers cannot exist - the sidecar runs in a kill-on-close
+        // job object). Only our own Start/auto-launch can make it running.
+        if (ServerState is not ServerUiState.Starting and not ServerUiState.Running)
+            SetState(ServerUiState.Stopped);
     }
 
     [RelayCommand(CanExecute = nameof(CanStartServer))]
@@ -92,7 +214,7 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
-    private bool CanStartServer() => ServerStatus is SidecarStatus.Stopped or SidecarStatus.Error && !IsBusy;
+    private bool CanStartServer() => ServerState is ServerUiState.Stopped or ServerUiState.Error && !IsBusy;
 
     [RelayCommand(CanExecute = nameof(CanStopServer))]
     private async Task StopServerAsync()
@@ -110,8 +232,150 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private bool CanStopServer() => IsServerRunning && !IsBusy;
 
+    [RelayCommand(CanExecute = nameof(CanBuildServer))]
+    private async Task BuildServerAsync(CancellationToken ct)
+    {
+        SetState(ServerUiState.Building);
+        IsBusy = true;
+        try
+        {
+            await _build.BuildAsync(AppendLog, ct);
+            await DetectServerAsync(ct);
+        }
+        catch (OperationCanceledException)
+        {
+            AppendLog("[build] Build cancelled.");
+            SetState(ServerUiState.NotDetected);
+        }
+        catch (Exception e)
+        {
+            AppendLog($"[build] Build failed: {e.Message}");
+            SetState(ServerUiState.NotDetected);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private bool CanBuildServer() => ServerState is ServerUiState.NotDetected && !IsBusy;
+
+    // ── Background model download progress (polled from /health) ───────────
+
+    private void EnsureHealthPolling(bool enabled)
+    {
+        if (enabled)
+        {
+            if (_healthPollCts is null)
+            {
+                _healthPollCts = new CancellationTokenSource();
+                _ = PollHealthAsync(_healthPollCts.Token);
+            }
+            return;
+        }
+        _healthPollCts?.Cancel();
+        _healthPollCts = null;
+    }
+
+    private async Task PollHealthAsync(CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                if (_sidecar.SidecarPort > 0) // idle while the port is still unknown
+                {
+                    var health = await _sidecar.GetHealthAsync(ct).ConfigureAwait(false);
+                    ApplyDownloadStatus(health);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch
+            {
+                // Server busy/restarting — keep polling.
+            }
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(2), ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+        }
+    }
+
+    /// <summary>Applies a /health payload to the download panel (public for tests).</summary>
+    public void ApplyDownloadStatus(HealthResponse health)
+    {
+        if (Dispatcher.UIThread.CheckAccess())
+            ApplyDownloadStatusCore(health);
+        else
+            Dispatcher.UIThread.Post(() => ApplyDownloadStatusCore(health));
+    }
+
+    private void ApplyDownloadStatusCore(HealthResponse health)
+    {
+        var d = health.Download;
+        if (d is null)
+        {
+            IsDownloadVisible = false;
+            _lastDownloadStatus = "";
+            return;
+        }
+
+        var status = d.Status switch
+        {
+            "complete" => "complete",
+            "failed" => "failed",
+            _ => "downloading",
+        };
+
+        DownloadPercent = status == "complete"
+            ? 100
+            : d.TotalBytes > 0 ? Math.Clamp(100.0 * d.DoneBytes / d.TotalBytes, 0, 100) : 0;
+
+        DownloadText = status switch
+        {
+            "complete" => $"Model ready: {d.ModelId}",
+            "failed" => "Model download failed \u2014 see log",
+            _ => d.TotalBytes > 0
+                ? $"Downloading model: {Mb(d.DoneBytes)} / {Mb(d.TotalBytes)} MB ({DownloadPercent:F0}%)"
+                : $"Downloading model: {Mb(d.DoneBytes)} MB",
+        };
+
+        if (_lastDownloadStatus != status)
+        {
+            switch (status)
+            {
+                case "complete":
+                    AppendLog($"[server] Model downloaded: {d.ModelId}");
+                    break;
+                case "failed":
+                    AppendLog($"[server] Model download failed for {d.ModelId}: {d.Error}");
+                    break;
+                case "downloading" when _lastDownloadStatus == "":
+                    AppendLog($"[server] Downloading model {d.ModelId}\u2026 (progress shown in the toolbar)");
+                    break;
+            }
+        }
+        _lastDownloadStatus = status;
+
+        IsDownloadVisible = true;
+    }
+
+    private static long Mb(long bytes) => (long)Math.Round(bytes / (1024.0 * 1024.0));
+
     public void AppendLog(string line)
     {
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Post(() => AppendLog(line));
+            return;
+        }
         LogEntries.Add(new UiLogEvent(line, Serilog.Events.LogEventLevel.Information));
         while (LogEntries.Count > 2000) LogEntries.RemoveAt(0);
     }
@@ -126,5 +390,16 @@ public partial class MainWindowViewModel : ViewModelBase
     private void OnSidecarLog(string line)
     {
         AppendLog(line);
+    }
+
+    private void OnUiLogEmitted(UiLogEvent evt)
+    {
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Post(() => OnUiLogEmitted(evt));
+            return;
+        }
+        LogEntries.Add(evt);
+        while (LogEntries.Count > 2000) LogEntries.RemoveAt(0);
     }
 }

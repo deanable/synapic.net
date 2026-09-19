@@ -62,7 +62,9 @@ public partial class Step3ProcessViewModel : ViewModelBase
         _session.ResetStats();
         _cts = new CancellationTokenSource();
 
-        var ds = _step1.ToSelectionForProcessing(null);
+        // Reuse the Step 1 authenticated client — creating a fresh, unauthenticated
+        // connection would fail every Daminion fetch and metadata write.
+        var ds = _step1.ToSelectionForProcessing(_step1.ConnectedClient);
         var request = BuildTagRequest();
 
         var progress = new Progress<ProcessProgress>(p =>
@@ -71,6 +73,10 @@ public partial class Step3ProcessViewModel : ViewModelBase
             CurrentFile = p.CurrentFile;
             ProgressText = $"{p.Processed}/{p.Total} ({p.Failed} failed)";
             EtaText = p.Eta is { } eta ? $"ETA {eta.Minutes}m {eta.Seconds}s" : "";
+            // Session stats feed Step 4's summary.
+            _session.TotalItems = p.Total;
+            _session.ProcessedItems = p.Processed;
+            _session.FailedItems = p.Failed;
         });
 
         try

@@ -33,6 +33,21 @@ except Exception:  # pragma: no cover - fallback when hub isn't importable
 MODEL_SEARCH_LIMIT = 20
 
 # ============================================================================
+# DEFAULT VISION MODEL
+# ============================================================================
+
+# The default local vision model. NOT baked into the application bundle
+# (that would inflate every installer by ~1 GB): on server startup the
+# sidecar checks the HF cache (HF_HOME) and downloads it in the background
+# when absent, surfacing byte-level progress through /health's "download"
+# field for the UI indicator.
+DEFAULT_MODEL_ID = "LiquidAI/LFM2.5-VL-450M"
+
+# Auto-download opt-out (used by tests and offline CI):
+# set SYNAPIC_DISABLE_AUTO_DOWNLOAD=1 to skip the startup check/download.
+AUTO_DOWNLOAD_DISABLE_ENV = "SYNAPIC_DISABLE_AUTO_DOWNLOAD"
+
+# ============================================================================
 # ZERO-SHOT CLASSIFICATION DEFAULTS
 # ============================================================================
 

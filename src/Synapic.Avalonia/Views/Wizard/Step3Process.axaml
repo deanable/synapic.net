@@ -30,10 +30,5 @@
         </ListBox.ItemTemplate>
       </ListBox>
     </Border>
-
-    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
-      <Button Content="← Back" />
-      <Button Content="Next: Results →" />
-    </StackPanel>
   </StackPanel>
 </UserControl>

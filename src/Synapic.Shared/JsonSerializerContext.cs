@@ -14,6 +14,7 @@ namespace Synapic.Shared;
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     NumberHandling = JsonNumberHandling.AllowReadingFromString)]
 [JsonSerializable(typeof(HealthResponse))]
+[JsonSerializable(typeof(ModelDownloadProgress))]
 [JsonSerializable(typeof(ModelInfo))]
 [JsonSerializable(typeof(ModelInfo[]))]
 [JsonSerializable(typeof(DownloadRequest))]

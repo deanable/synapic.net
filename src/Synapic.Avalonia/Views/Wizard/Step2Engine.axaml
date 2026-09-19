@@ -32,28 +32,16 @@
 
       <StackPanel Orientation="Horizontal" Spacing="16">
         <TextBlock Text="Device:" VerticalAlignment="Center" />
-        <ComboBox SelectedIndex="{Binding Device}" MinWidth="100">
-          <ComboBoxItem Content="CPU" />
-          <ComboBoxItem Content="CUDA" />
-          <ComboBoxItem Content="MPS" />
-        </ComboBox>
+        <ComboBox SelectedIndex="{Binding DeviceIndex}" ItemsSource="{Binding DeviceOptions}" MinWidth="100" />
         <TextBlock Text="Task:" VerticalAlignment="Center" />
-        <ComboBox SelectedIndex="{Binding Task}" MinWidth="220">
-          <ComboBoxItem Content="Description (image-text-to-text)" />
-          <ComboBoxItem Content="Keywords (image-classification)" />
-          <ComboBoxItem Content="Categories (zero-shot)" />
-        </ComboBox>
+        <ComboBox SelectedIndex="{Binding TaskIndex}" ItemsSource="{Binding TaskOptions}" MinWidth="220" />
       </StackPanel>
 
       <StackPanel Orientation="Horizontal" Spacing="16">
         <TextBlock Text="Confidence threshold:" VerticalAlignment="Center" />
         <NumericUpDown Value="{Binding ConfidenceThreshold}" Minimum="0" Maximum="1" Increment="0.05" Width="110" />
         <TextBlock Text="Probability mode:" VerticalAlignment="Center" />
-        <ComboBox SelectedIndex="{Binding ProbabilityMode}" MinWidth="130">
-          <ComboBoxItem Content="LLM only" />
-          <ComboBoxItem Content="Probability only" />
-          <ComboBoxItem Content="Both" />
-        </ComboBox>
+        <ComboBox SelectedIndex="{Binding ProbabilityModeIndex}" ItemsSource="{Binding ProbabilityModeOptions}" MinWidth="130" />
         <TextBlock Text="Prob. threshold:" VerticalAlignment="Center" />
         <NumericUpDown Value="{Binding ProbabilityThreshold}" Minimum="0" Maximum="1" Increment="0.05" Width="110" />
       </StackPanel>
@@ -62,11 +50,6 @@
                Text="{Binding ProbabilityCandidates}" />
       <TextBox Watermark="Custom system prompt (VLM)" Text="{Binding SystemPrompt}"
                AcceptsReturn="True" Height="60" />
-    </StackPanel>
-
-    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
-      <Button Content="← Back" />
-      <Button Content="Next: Process →" />
     </StackPanel>
   </StackPanel>
 </UserControl>

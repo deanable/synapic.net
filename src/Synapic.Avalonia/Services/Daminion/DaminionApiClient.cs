@@ -42,6 +42,7 @@ public sealed class DaminionApiClient
     private readonly string? _catalogId;
     private readonly SemaphoreSlim _rateLimit;
     private readonly Dictionary<string, string> _tagGuidMap = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, int> _tagIdMap = new(StringComparer.OrdinalIgnoreCase);
 
     private IDaminionApi? _api;
     private bool _authenticated;
@@ -137,6 +138,98 @@ public sealed class DaminionApiClient
         {
             SynapicLog.Warning(nameof(DaminionApiClient), $"Failed to load tag schema (metadata writes may degrade): {e.Message}");
         }
+
+        // Tag *ids* drive the saved-search scope and counts (Settings/GetTags).
+        try
+        {
+            var tags = await GetApi().GetAllTags().ConfigureAwait(false);
+            var entries = UnwrapCollection(tags, "tags", "items", "data");
+            lock (_tagIdMap)
+            {
+                _tagIdMap.Clear();
+                foreach (var element in entries)
+                {
+                    var name = element.TryGetProperty("name", out var n) ? n.GetString() : null;
+                    var id = element.TryGetProperty("id", out var idEl) && idEl.ValueKind == JsonValueKind.Number
+                        ? idEl.GetInt32() : (int?)null;
+                    if (!string.IsNullOrEmpty(name) && id is > 0)
+                        _tagIdMap[name] = id.Value;
+                }
+            }
+            SynapicLog.Info(nameof(DaminionApiClient), $"Loaded tag ids: {_tagIdMap.Count} tags");
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Warning(nameof(DaminionApiClient), $"Failed to load tag ids (saved searches fall back to id 39): {e.Message}");
+        }
+    }
+
+    /// <summary>Resolve a tag's numeric id by name ("saved searches", "flag"…), with a fallback.</summary>
+    private async Task<int> GetTagIdAsync(string tagName, int fallback)
+    {
+        lock (_tagIdMap)
+        {
+            if (_tagIdMap.TryGetValue(tagName, out var id)) return id;
+            if (_tagIdMap.TryGetValue(tagName.ToLowerInvariant(), out id)) return id;
+        }
+        try
+        {
+            var tags = await GetApi().GetAllTags().ConfigureAwait(false);
+            foreach (var element in UnwrapCollection(tags, "tags", "items", "data"))
+            {
+                var name = element.TryGetProperty("name", out var n) ? n.GetString() : null;
+                if (string.IsNullOrEmpty(name) || !name.Equals(tagName, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                if (element.TryGetProperty("id", out var idEl) && idEl.ValueKind == JsonValueKind.Number)
+                {
+                    var id = idEl.GetInt32();
+                    lock (_tagIdMap) _tagIdMap[name] = id;
+                    return id;
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Warning(nameof(DaminionApiClient), $"Tag id lookup for '{tagName}' failed: {e.Message}");
+        }
+        return fallback;
+    }
+
+    /// <summary>Unwrap a JSON payload that may be an array or wrapped in one of several container keys.</summary>
+    private static JsonElement[] UnwrapCollection(JsonElement json, params string[] containerKeys)
+    {
+        if (json.ValueKind == JsonValueKind.Array)
+            return json.EnumerateArray().ToArray();
+        if (json.ValueKind != JsonValueKind.Object)
+            return Array.Empty<JsonElement>();
+        foreach (var key in containerKeys)
+        {
+            if (json.TryGetProperty(key, out var inner) && inner.ValueKind == JsonValueKind.Array)
+                return inner.EnumerateArray().ToArray();
+        }
+        return Array.Empty<JsonElement>();
+    }
+
+    private static int? GetInt(JsonElement e, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            if (e.ValueKind != JsonValueKind.Object) break;
+            if (e.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.Number && v.TryGetInt32(out var i))
+                return i;
+        }
+        return null;
+    }
+
+    private static string? GetString(JsonElement e, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            if (e.ValueKind != JsonValueKind.Object) break;
+            if (e.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.String)
+                return v.GetString();
+        }
+        return null;
     }
 
     private string? GetTagGuid(params string[] names)
@@ -202,8 +295,8 @@ public sealed class DaminionApiClient
                 case "saved_search" when savedSearchId is not null:
                 {
                     // Structured query: "tagId,valueId" + "tagId,any" operators,
-                    // mirroring the original saved-search lookup (tag id 39).
-                    var tagId = 39;
+                    // mirroring the original saved-search lookup ("Saved Searches" tag).
+                    var tagId = await GetTagIdAsync("saved searches", fallback: 39).ConfigureAwait(false);
                     var f = new[] { $"{tagId},any" };
                     items = (await GetApi().GetItems(startIndex, batch, f: f, queryLine: $"{tagId},{savedSearchId}", maxItemsCount: 100000).ConfigureAwait(false)).EffectiveItems;
                     if (statusFilter != "all" || (untaggedFields?.Length ?? 0) > 0)
@@ -238,11 +331,20 @@ public sealed class DaminionApiClient
         }
         foreach (var field in untaggedFields ?? Array.Empty<string>())
         {
-            var name = field.Equals("category", StringComparison.OrdinalIgnoreCase) ? "Categories" : field;
+            var name = NormalizeUntaggedField(field);
             parts.Add($"{name}:none");
         }
         return parts.ToArray();
     }
+
+    /// <summary>Daminion's search query uses the plural display names (daminion_client normalization port).</summary>
+    private static string NormalizeUntaggedField(string field) => field.Trim().ToLowerInvariant() switch
+    {
+        "category" or "categories" => "Categories",
+        "keyword" or "keywords" => "Keywords",
+        "description" => "Description",
+        _ => field,
+    };
 
     private static bool PassesFilters(DaminionItem item, string statusFilter, string[]? untaggedFields)
     {
@@ -255,13 +357,20 @@ public sealed class DaminionApiClient
             if (sf == "unassigned" && fv is not ("0" or "unassigned" or "unflagged")) return false;
         }
 
-        if (untaggedFields is not null && untaggedFields.Any(f => f.Trim().Equals("keywords", StringComparison.OrdinalIgnoreCase)))
+        if (untaggedFields is not null &&
+            untaggedFields.Any(f => f.Trim().ToLowerInvariant() is "keywords" or "keyword"))
         {
             if (item.Keywords is { Length: > 0 }) return false;
         }
-        if (untaggedFields is not null && untaggedFields.Any(f => f.Trim().Equals("categories", StringComparison.OrdinalIgnoreCase)))
+        if (untaggedFields is not null &&
+            untaggedFields.Any(f => f.Trim().ToLowerInvariant() is "categories" or "category"))
         {
             if (item.Categories is { Length: > 0 }) return false;
+        }
+        if (untaggedFields is not null &&
+            untaggedFields.Any(f => f.Trim().Equals("description", StringComparison.OrdinalIgnoreCase)))
+        {
+            if (!string.IsNullOrWhiteSpace(item.Description)) return false;
         }
         return true;
     }
@@ -323,6 +432,86 @@ public sealed class DaminionApiClient
         catch (Exception)
         {
             return null;
+        }
+    }
+
+    // ── Saved searches / collections / item counts (Step 1 pickers) ────────
+
+    /// <summary>
+    /// Saved searches via the "Saved Searches" indexed tag's values
+    /// (daminion_client.get_saved_searches port — no dedicated endpoint).
+    /// </summary>
+    public async Task<IReadOnlyList<DaminionSavedSearch>> GetSavedSearchesAsync(CancellationToken ct = default)
+    {
+        var tagId = await GetTagIdAsync("saved searches", fallback: 39).ConfigureAwait(false);
+        var json = await GetApi().GetIndexedTagValues(tagId).ConfigureAwait(false);
+        var result = new List<DaminionSavedSearch>();
+        foreach (var value in UnwrapCollection(json, "values", "items", "data"))
+        {
+            var id = GetInt(value, "id", "valueId") ?? 0;
+            var text = GetString(value, "text", "value", "name") ?? "";
+            if (id > 0 && text.Length > 0)
+                result.Add(new DaminionSavedSearch(id, text, GetInt(value, "count") ?? 0));
+        }
+        SynapicLog.Info(nameof(DaminionApiClient), $"Retrieved {result.Count} saved searches (tag id {tagId})");
+        return result;
+    }
+
+    /// <summary>Shared collections list (daminion_client.get_shared_collections port).</summary>
+    public async Task<IReadOnlyList<DaminionCollection>> GetSharedCollectionsAsync(CancellationToken ct = default)
+    {
+        var json = await GetApi().GetCollections().ConfigureAwait(false);
+        var result = new List<DaminionCollection>();
+        foreach (var coll in UnwrapCollection(json, "collections", "items", "data"))
+        {
+            var id = GetInt(coll, "id") ?? 0;
+            var name = GetString(coll, "name", "title") ?? "";
+            if (id > 0)
+                result.Add(new DaminionCollection(
+                    id, name, GetString(coll, "code") ?? "", GetInt(coll, "itemCount", "count") ?? 0));
+        }
+        SynapicLog.Info(nameof(DaminionApiClient), $"Retrieved {result.Count} shared collections");
+        return result;
+    }
+
+    /// <summary>
+    /// Count items matching the Step 1 filters (daminion_client.get_filtered_item_count port).
+    /// Collection scope counts the collection's TotalCount from a single page.
+    /// </summary>
+    public async Task<int> GetFilteredItemCountAsync(
+        string scope = "all",
+        int? savedSearchId = null,
+        int? collectionId = null,
+        string? searchTerm = null,
+        string[]? untaggedFields = null,
+        string statusFilter = "all",
+        CancellationToken ct = default)
+    {
+        var filters = BuildFilterClauses(statusFilter, untaggedFields);
+        switch (scope)
+        {
+            case "collection" when collectionId is not null:
+            {
+                var resp = await GetApi().GetCollectionItems(collectionId.Value, 0, 1).ConfigureAwait(false);
+                return resp.TotalCount ?? resp.EffectiveItems.Length;
+            }
+            case "search" when !string.IsNullOrWhiteSpace(searchTerm):
+            {
+                var query = $"\"{searchTerm}\"";
+                if (filters.Length > 0) query += " " + string.Join(" ", filters);
+                return (await GetApi().GetCount(search: query).ConfigureAwait(false)).EffectiveCount;
+            }
+            case "saved_search" when savedSearchId is not null:
+            {
+                var tagId = await GetTagIdAsync("saved searches", fallback: 39).ConfigureAwait(false);
+                var f = new[] { $"{tagId},any" };
+                return (await GetApi().GetCount(f: f, queryLine: $"{tagId},{savedSearchId}").ConfigureAwait(false)).EffectiveCount;
+            }
+            default:
+            {
+                var query = filters.Length > 0 ? string.Join(" ", filters) : "*";
+                return (await GetApi().GetCount(search: query).ConfigureAwait(false)).EffectiveCount;
+            }
         }
     }
 

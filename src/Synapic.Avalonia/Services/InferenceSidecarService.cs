@@ -43,13 +43,6 @@ public interface IInferenceSidecar : IAsyncDisposable
 
     Task StartAsync(CancellationToken ct = default);
     Task StopAsync(TimeSpan? gracefulTimeout = null);
-
-    /// <summary>
-    /// Detects an already-running sidecar (orphan from a previous session or
-    /// another app instance) via the temp port files + /health and reuses it
-    /// instead of launching a second server. Returns true when adopted.
-    /// </summary>
-    Task<bool> TryAdoptRunningAsync(CancellationToken ct = default);
     Task<TagResponse> TagAsync(TagRequest request, CancellationToken ct = default);
     Task<ModelInfo[]> ListModelsAsync(CancellationToken ct = default);
     Task DownloadModelAsync(string modelId, CancellationToken ct = default);
@@ -62,16 +55,14 @@ public sealed class InferenceSidecarService : IInferenceSidecar
     private static readonly TimeSpan HealthTimeout = TimeSpan.FromSeconds(120);
     private static readonly TimeSpan TagTimeout = TimeSpan.FromMinutes(5);
 
-    private readonly HttpClient _httpClient;
-    private readonly InferenceApiClient _api;
+    private HttpClient _httpClient;
+    private InferenceApiClient _api;
     private readonly object _gate = new();
 
     private Process? _process;
     private SidecarStatus _status = SidecarStatus.Stopped;
     private int _port;
     private CancellationTokenSource? _livenessCts;
-    private int? _adoptedPid;
-    private CancellationTokenSource? _adoptWatchCts;
 
     public event EventHandler<SidecarStatusChangedEventArgs>? StatusChanged;
     public event Action<string>? LogReceived;
@@ -167,11 +158,17 @@ public sealed class InferenceSidecarService : IInferenceSidecar
 
     public async Task StartAsync(CancellationToken ct = default)
     {
+        SynapicLog.Info(nameof(InferenceSidecarService), $"StartAsync requested (current status: {CurrentStatus})");
         lock (_gate)
         {
-            if (_status is SidecarStatus.Starting or SidecarStatus.Ready) return;
+            if (_status is SidecarStatus.Starting or SidecarStatus.Ready)
+            {
+                SynapicLog.Info(nameof(InferenceSidecarService), "StartAsync ignored - sidecar already starting/ready");
+                return;
+            }
             if (_process is { HasExited: false })
             {
+                SynapicLog.Info(nameof(InferenceSidecarService), "StartAsync ignored - sidecar process alive");
                 SetStatus(SidecarStatus.Ready);
                 return;
             }
@@ -180,10 +177,14 @@ public sealed class InferenceSidecarService : IInferenceSidecar
         var sidecarPath = FindExecutable();
         if (sidecarPath is null)
         {
+            var exeName = OperatingSystem.IsWindows() ? "synapic-inference.exe" : "synapic-inference";
+            SynapicLog.Error(nameof(InferenceSidecarService),
+                $"Sidecar executable not found. Searched bundled: {Path.Combine(AppContext.BaseDirectory, exeName)} and artifacts/ under repo root: {FindRepoRoot() ?? "<repo root not found>"}");
             SetStatus(SidecarStatus.Error, "Sidecar executable not found - build it first");
             throw new FileNotFoundException("Sidecar executable not found. Use Build Server first.");
         }
 
+        SweepStalePortFiles();
         SetStatus(SidecarStatus.Starting);
 
         var portFile = Path.Combine(Path.GetTempPath(), $"synapic_port_{Environment.ProcessId}.txt");
@@ -204,8 +205,22 @@ public sealed class InferenceSidecarService : IInferenceSidecar
         startInfo.EnvironmentVariables["HF_HOME"] = ModelsRoot();
 
         var process = new Process { StartInfo = startInfo };
-        process.OutputDataReceived += (_, e) => { if (e.Data is not null) LogReceived?.Invoke(e.Data); };
-        process.ErrorDataReceived += (_, e) => { if (e.Data is not null) LogReceived?.Invoke(e.Data); };
+        process.OutputDataReceived += (_, e) =>
+        {
+            if (e.Data is not null)
+            {
+                SynapicLog.Debug(nameof(InferenceSidecarService), $"[sidecar] {e.Data}");
+                LogReceived?.Invoke(e.Data);
+            }
+        };
+        process.ErrorDataReceived += (_, e) =>
+        {
+            if (e.Data is not null)
+            {
+                SynapicLog.Debug(nameof(InferenceSidecarService), $"[sidecar:err] {e.Data}");
+                LogReceived?.Invoke(e.Data);
+            }
+        };
 
         try
         {
@@ -230,20 +245,73 @@ public sealed class InferenceSidecarService : IInferenceSidecar
 
         _ = Task.Run(() => WatchProcessExit(process, _livenessCts!.Token));
 
-        SynapicLog.Info(nameof(InferenceSidecarService), $"Sidecar launched (pid {process.Id}), port file: {portFile}");
+        SynapicLog.Info(nameof(InferenceSidecarService),
+            $"Sidecar launched: pid {process.Id}, exe {sidecarPath}, args '{startInfo.Arguments}', port file {portFile}, HF_HOME {startInfo.EnvironmentVariables["HF_HOME"]}");
+
+        // Tie the sidecar's lifetime to this app's (spec §2 orphan-free
+        // shutdown): when the app exits - even by crash or kill - the OS
+        // terminates the sidecar. This is the root fix for the app finding a
+        // leftover server "already running" on the next launch.
+        ProcessJob.AssignChild(process);
 
         try
         {
             var port = await ReadPortFileAsync(portFile, ct).ConfigureAwait(false);
             ConfigurePort(port);
+            SynapicLog.Info(nameof(InferenceSidecarService), $"Port file read: port {port}");
             await WaitUntilReadyAsync(ct).ConfigureAwait(false);
             SetStatus(SidecarStatus.Ready);
         }
         catch (Exception e)
         {
+            SynapicLog.Error(nameof(InferenceSidecarService), "Sidecar startup failed", e);
             SetStatus(SidecarStatus.Error, e.Message);
             await StopAsync().ConfigureAwait(false);
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Deletes leftover port files whose sidecar pid is dead (from crashed
+    /// sessions). Pure hygiene: stale files can no longer be adopted, but
+    /// removing them keeps the temp directory and logs meaningful.
+    /// </summary>
+    private static void SweepStalePortFiles()
+    {
+        try
+        {
+            foreach (var file in Directory.GetFiles(Path.GetTempPath(), "synapic_port_*.txt"))
+            {
+                try
+                {
+                    var lines = File.ReadAllLines(file).Where(l => !string.IsNullOrWhiteSpace(l)).ToArray();
+                    if (lines.Length >= 2 && int.TryParse(lines[1].Trim(), out var pid) && IsPidAlive(pid))
+                        continue; // still-running sidecar - leave it alone
+                    File.Delete(file);
+                    SynapicLog.Debug(nameof(InferenceSidecarService), $"Removed stale port file: {file}");
+                }
+                catch (Exception)
+                {
+                    // Best effort.
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Debug(nameof(InferenceSidecarService), $"Port file sweep skipped: {e.Message}");
+        }
+    }
+
+    private static bool IsPidAlive(int pid)
+    {
+        try
+        {
+            using var process = Process.GetProcessById(pid);
+            return !process.HasExited;
+        }
+        catch
+        {
+            return false;
         }
     }
 
@@ -260,9 +328,14 @@ public sealed class InferenceSidecarService : IInferenceSidecar
 
     private static async Task<int> ReadPortFileAsync(string portFile, CancellationToken ct)
     {
+        SynapicLog.Debug(nameof(InferenceSidecarService), $"Waiting for port file: {portFile}");
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(30);
+        var waitedMs = 0;
         while (DateTime.UtcNow < deadline)
         {
+            if (waitedMs > 0 && waitedMs % 2000 == 0)
+                SynapicLog.Debug(nameof(InferenceSidecarService), $"Still waiting for port file ({waitedMs / 1000.0:F0}s)... (sidecar booting)");
+            waitedMs += 200;
             ct.ThrowIfCancellationRequested();
             try
             {
@@ -303,15 +376,25 @@ public sealed class InferenceSidecarService : IInferenceSidecar
 
     private async Task WaitUntilReadyAsync(CancellationToken ct)
     {
+        SynapicLog.Debug(nameof(InferenceSidecarService), $"Polling /health until ready (max {HealthTimeout.TotalSeconds:F0}s)");
         var deadline = DateTime.UtcNow + HealthTimeout;
+        var attempts = 0;
         while (DateTime.UtcNow < deadline)
         {
             ct.ThrowIfCancellationRequested();
             try
             {
                 var health = await _api.GetHealthAsync(ct).ConfigureAwait(false);
+                attempts++;
                 if (string.Equals(health.Status, "ready", StringComparison.OrdinalIgnoreCase))
+                {
+                    SynapicLog.Info(nameof(InferenceSidecarService), $"/health ready after {attempts} poll(s)");
                     return;
+                }
+                // Log progress periodically so slow boots are visible in the log.
+                if (attempts % 20 == 1)
+                    SynapicLog.Debug(nameof(InferenceSidecarService),
+                        $"/health attempt {attempts}: status={health.Status} model={health.Model}");
                 if (string.Equals(health.Status, "error", StringComparison.OrdinalIgnoreCase))
                     throw new InvalidOperationException(health.Error ?? "Sidecar reported error state");
             }
@@ -322,6 +405,8 @@ public sealed class InferenceSidecarService : IInferenceSidecar
             catch (Exception)
             {
                 // Connection refused while uvicorn boots — keep polling.
+                if (++attempts % 20 == 1)
+                    SynapicLog.Debug(nameof(InferenceSidecarService), $"/health attempt {attempts}: connection refused (server booting)");
             }
             await Task.Delay(500, ct).ConfigureAwait(false);
         }
@@ -349,6 +434,15 @@ public sealed class InferenceSidecarService : IInferenceSidecar
             _process = null;
         }
 
+        try
+        {
+            SynapicLog.Info(nameof(InferenceSidecarService), $"Sidecar process exited (pid {process.Id}, exit code {process.ExitCode})");
+        }
+        catch
+        {
+            SynapicLog.Info(nameof(InferenceSidecarService), "Sidecar process exited (exit code unavailable)");
+        }
+
         if (CurrentStatus is SidecarStatus.Ready or SidecarStatus.Starting)
         {
             SynapicLog.Warning(nameof(InferenceSidecarService), "Sidecar process exited unexpectedly");
@@ -373,9 +467,7 @@ public sealed class InferenceSidecarService : IInferenceSidecar
 
         if (process is null)
         {
-            // Not our child process (adopted running server) — shut it down
-            // via the API since we hold no Process handle.
-            await StopAdoptedAsync().ConfigureAwait(false);
+            SynapicLog.Info(nameof(InferenceSidecarService), "StopAsync: no sidecar process to stop");
             return;
         }
 
@@ -385,8 +477,15 @@ public sealed class InferenceSidecarService : IInferenceSidecar
         {
             if (!process.HasExited)
             {
-                using var shutdownCts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-                await _api.ShutdownAsync(shutdownCts.Token).ConfigureAwait(false);
+                if (SidecarPort > 0)
+                {
+                    using var shutdownCts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+                    await _api.ShutdownAsync(shutdownCts.Token).ConfigureAwait(false);
+                }
+                else
+                {
+                    SynapicLog.Debug(nameof(InferenceSidecarService), "Port never became known - skipping graceful shutdown POST, killing directly");
+                }
                 await process.WaitForExitAsync(new CancellationTokenSource(timeout).Token).ConfigureAwait(false);
             }
         }
@@ -408,7 +507,31 @@ public sealed class InferenceSidecarService : IInferenceSidecar
             process.Dispose();
         }
 
+        try
+        {
+            var ownPortFile = Path.Combine(Path.GetTempPath(), $"synapic_port_{Environment.ProcessId}.txt");
+            if (File.Exists(ownPortFile)) File.Delete(ownPortFile);
+        }
+        catch
+        {
+            // Best effort.
+        }
+
         SynapicLog.Info(nameof(InferenceSidecarService), "Sidecar stopped");
+    }
+
+    private void ConfigurePort(int port)
+    {
+        lock (_gate) _port = port;
+
+        // HttpClient forbids changing BaseAddress after its first request -
+        // and the UI health poll during "Starting" marks the original
+        // instance as started. Recreate the client (and API wrapper) bound
+        // to the port instead of mutating the existing one.
+        var newClient = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{port}/") };
+        _api = new InferenceApiClient(newClient);
+        _httpClient = newClient;
+        SynapicLog.Debug(nameof(InferenceSidecarService), $"API client bound to http://127.0.0.1:{port}/");
     }
 
     public async Task<HealthResponse> GetHealthAsync(CancellationToken ct = default) => await _api.GetHealthAsync(ct).ConfigureAwait(false);

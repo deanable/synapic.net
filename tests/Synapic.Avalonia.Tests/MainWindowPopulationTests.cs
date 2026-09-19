@@ -27,18 +27,20 @@ public class MainWindowPopulationTests
     }
 
     [AvaloniaFact]
-    public void MainWindow_datacontext_attaches_and_status_dot_binds()
+    public async Task MainWindow_datacontext_attaches_and_status_dot_binds()
     {
         var window = new MainWindow();
-        var vm = new MainWindowViewModel(new InferenceSidecarService(), new Session());
+        var vm = new MainWindowViewModel(new FakeSidecar(), new FakeBuildService(), new Session(), () => null);
         window.DataContext = vm;
 
         Assert.NotNull(vm.StartServerCommand);
-        Assert.Equal("Server stopped", vm.StatusText);
-        Assert.Equal(Colors.Gray, ((ISolidColorBrush)vm.ServerBrush).Color);
+        Assert.Equal(ServerUiState.Detecting, vm.ServerState);
 
-        vm.ServerStatus = SidecarStatus.Ready;
-        Assert.Equal(Colors.ForestGreen, ((ISolidColorBrush)vm.ServerBrush).Color);
+        await vm.DetectServerAsync();
+
+        Assert.Equal("Server not detected", vm.StatusText);
+        Assert.Equal(Colors.Black, ((ISolidColorBrush)vm.ServerBrush).Color);
+        Assert.True(vm.IsBuildButtonVisible);
     }
 
     [AvaloniaFact]

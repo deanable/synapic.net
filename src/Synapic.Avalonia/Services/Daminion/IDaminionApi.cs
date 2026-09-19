@@ -71,8 +71,21 @@ public interface IDaminionApi
     Task<JsonElement> GetLoggedUser();
 
     // ── Tags / collections for Step 1 pickers ───────────────────────────────
-    [Get("/api/Tags/GetAll")]
+    [Get("/api/Settings/GetTags")]
     Task<JsonElement> GetAllTags();
+
+    /// <summary>Values of an indexed tag (saved searches, keywords…) — daminion_api.get_tag_values port.</summary>
+    [Get("/api/IndexedTagValues/GetIndexedTagValues")]
+    Task<JsonElement> GetIndexedTagValues(
+        [Query] int indexedTagId,
+        [Query] int parentValueId = -2,
+        [Query] string? filter = null,
+        [Query] int pageIndex = 0,
+        [Query] int pageSize = 500);
+
+    /// <summary>Shared collections list — daminion_api.collections.get_all port.</summary>
+    [Get("/api/SharedCollection/GetCollections")]
+    Task<JsonElement> GetCollections([Query] int index = 0, [Query] int pageSize = 100);
 
     [Get("/api/Collections/GetItems/{id}")]
     Task<DaminionItemsResponse> GetCollectionItems(int id, [Query] int index, [Query] int size);

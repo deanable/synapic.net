@@ -35,6 +35,10 @@ if sys.stderr is None:
     sys.stderr = open(os.devnull, "w")
 
 os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
+# Keep hub progress bars enabled so our tqdm subclass always receives
+# byte-level updates (bars are disabled automatically at WARNING+ log level,
+# which would silence the /health download progress).
+os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "0")
 
 import uvicorn
 from fastapi import FastAPI, HTTPException
@@ -90,7 +94,7 @@ class ConfigModel(BaseModel):
 # ---------------------------------------------------------------------------
 
 _session_config = {
-    "model_id": "LiquidAI/LFM2.5-VL-1.6B",
+    "model_id": config.DEFAULT_MODEL_ID,
     "task": config.MODEL_TASK_IMAGE_TEXT_TO_TEXT,
     "device": "cpu",
     "confidence_threshold": 0.3,
@@ -113,8 +117,41 @@ _uvicorn_server: uvicorn.Server | None = None
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     logger.info("Synapic inference sidecar started")
+    # Ensure the default vision model (LiquidAI/LFM2.5-VL-450M) is present:
+    # check the HF cache and download it in the background when absent.
+    # Byte-level progress is surfaced via /health's "download" field.
+    threading.Thread(
+        target=_ensure_default_model, name="default-model-download", daemon=True
+    ).start()
     yield
     logger.info("Synapic inference sidecar shutting down")
+
+
+def _ensure_default_model() -> None:
+    """Make sure the default vision model is available locally.
+
+    The model is deliberately NOT baked into the application bundle (that
+    would inflate every installer by ~1 GB). The sidecar checks the HF cache
+    (HF_HOME, set by the Avalonia host) and downloads it in the background
+    when absent.
+    """
+    if os.environ.get(config.AUTO_DOWNLOAD_DISABLE_ENV, "").lower() in ("1", "true", "yes"):
+        logger.info(
+            f"Auto-download disabled via {config.AUTO_DOWNLOAD_DISABLE_ENV} — skipping default model check"
+        )
+        return
+    try:
+        if model_loader.is_model_downloaded(config.DEFAULT_MODEL_ID):
+            logger.info(
+                f"Default model {config.DEFAULT_MODEL_ID} already present — no download needed"
+            )
+            return
+        logger.info(
+            f"Default model {config.DEFAULT_MODEL_ID} not found — downloading in background"
+        )
+        model_loader.download_model(config.DEFAULT_MODEL_ID)
+    except Exception:
+        logger.exception("Default model auto-download failed")
 
 
 app = FastAPI(title="Synapic Inference API", version="1.0.0", lifespan=lifespan, docs_url=None, redoc_url=None)
@@ -151,13 +188,17 @@ def _effective_task(requested: str | None) -> str:
 @app.get("/health")
 def health() -> dict:
     snapshot = model_loader.get_state_snapshot()
-    return {
+    payload = {
         "status": snapshot.get("status", "loading"),
         "model": snapshot.get("model"),
         "device": snapshot.get("device"),
         "vram_used_mb": snapshot.get("vram_used_mb"),
         "error": snapshot.get("error"),
     }
+    download = model_loader.get_active_download()
+    if download is not None:
+        payload["download"] = download
+    return payload
 
 
 @app.get("/models/list")

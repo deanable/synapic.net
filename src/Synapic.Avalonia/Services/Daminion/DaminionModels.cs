@@ -80,7 +80,15 @@ public sealed class DaminionItem
     }
 }
 
-/// <summary>Body of POST /api/ItemData/BatchChange (daminion_api.py batch_update).</summary>
+/// <summary>A named saved search (id = the queryLine value used for scoping).</summary>
+public sealed record DaminionSavedSearch(int Id, string Name, int Count);
+
+/// <summary>A shared collection selectable as a Step 1 scope.</summary>
+public sealed record DaminionCollection(int Id, string Name, string Code, int ItemCount);
+
+/// <summary>
+/// Body of POST /api/ItemData/BatchChange (daminion_api.py batch_update).
+/// </summary>
 public sealed class DaminionBatchChangeRequest
 {
     [JsonPropertyName("ids")]

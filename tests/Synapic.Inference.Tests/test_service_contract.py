@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src" / "Synapic.In
 from fastapi.testclient import TestClient  # noqa: E402
 
 import service  # noqa: E402
+import model_loader  # noqa: E402
 
 
 @pytest.fixture()
@@ -29,6 +30,22 @@ class TestHealth:
         body = resp.json()
         assert set(body.keys()) == {"status", "model", "device", "vram_used_mb", "error"}
         assert body["status"] in {"loading", "ready", "error"}
+
+    def test_health_includes_download_when_active(self, client):
+        model_loader.mark_download_started("LiquidAI/LFM2.5-VL-450M", expected_total=1000)
+        try:
+            body = client.get("/health").json()
+            download = body["download"]
+            assert download["model_id"] == "LiquidAI/LFM2.5-VL-450M"
+            assert download["status"] == "downloading"
+            assert download["done_bytes"] == 0
+            assert download["total_bytes"] == 1000
+        finally:
+            model_loader.reset_download_state()
+
+    def test_default_session_model_is_lfm25_450m(self, client):
+        body = client.get("/config").json()
+        assert body["model_id"] == "LiquidAI/LFM2.5-VL-450M"
 
 
 class TestModels:

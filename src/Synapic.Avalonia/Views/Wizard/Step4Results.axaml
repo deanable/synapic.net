@@ -25,10 +25,5 @@
         <dg:DataGridTextColumn Header="Description" Binding="{Binding Description}" Width="*" />
       </dg:DataGrid.Columns>
     </dg:DataGrid>
-
-    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
-      <Button Content="← Back" />
-      <Button Content="Start Over" />
-    </StackPanel>
   </StackPanel>
 </UserControl>

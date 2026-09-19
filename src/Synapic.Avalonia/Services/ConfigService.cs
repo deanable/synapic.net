@@ -62,7 +62,7 @@ public sealed class DaminionSettings
 
 public sealed class EngineSettings
 {
-    public string ModelId { get; set; } = "LiquidAI/LFM2.5-VL-1.6B";
+    public string ModelId { get; set; } = "LiquidAI/LFM2.5-VL-450M";
     public string Task { get; set; } = "image-text-to-text";
     public string Device { get; set; } = "cpu";
     public double ConfidenceThreshold { get; set; } = 0.3;
@@ -85,7 +85,9 @@ public sealed class UiSettings
 {
     public string Theme { get; set; } = "system";
     public string LogLevel { get; set; } = "info";
-    public bool AutoLaunchSidecar { get; set; }
+    // Server lifecycle (user requirement): start with the app, stop with the
+    // app. Set to false only for manual Start/Stop usage.
+    public bool AutoLaunchSidecar { get; set; } = true;
     public bool TelemetryEnabled { get; set; }
 }
 
