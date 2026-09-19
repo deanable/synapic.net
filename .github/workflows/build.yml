@@ -94,11 +94,15 @@ jobs:
           cp artifacts/${{ matrix.rid }}/synapic-inference* artifacts/${{ matrix.rid }}/ 2>/dev/null || true
           ls -lh artifacts/${{ matrix.rid }}
 
+      - name: Install Inno Setup (Windows)
+        if: matrix.pkg == 'ps1'
+        shell: pwsh
+        run: choco install innosetup -y --no-progress
+
       - name: Package installer (Windows)
         if: matrix.pkg == 'ps1'
         shell: pwsh
         run: ./build/package-windows.ps1 -Rid ${{ matrix.rid }} -AppVersion 1.0.0
-        continue-on-error: true  # ISCC not preinstalled on runners; installer built in release workflow
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -108,3 +112,94 @@ jobs:
             artifacts/${{ matrix.rid }}/*
             !artifacts/${{ matrix.rid }}/**/*.pdb
           retention-days: 7
+
+  installer-smoke:
+    name: Installer smoke test (win-x64)
+    runs-on: windows-2022
+    needs: [build]
+    steps:
+      - name: Download installer
+        uses: actions/download-artifact@v4
+        with:
+          name: Synapic-win-x64
+          path: installer
+
+      - name: Baseline .NET state
+        shell: pwsh
+        run: |
+          dotnet --list-runtimes
+          $v = (Get-ItemProperty 'HKLM:\SOFTWARE\dotnet\Setup\InstalledVersions\x64\sharedhost' -ErrorAction SilentlyContinue).Version
+          Write-Host "sharedhost Version: $v"
+
+      # The dev-box equivalent is blocked by SDK/VS dependents on the burn
+      # engine; dotnet-core-uninstall bypasses that. Best effort: if it fails
+      # the run degrades to the runtime-present install path only.
+      - name: Strip .NET SDKs and runtimes (forces the prerequisite path)
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $tmp = Join-Path $env:RUNNER_TEMP 'dcu'
+          New-Item -ItemType Directory -Force $tmp | Out-Null
+          $release = Invoke-RestMethod 'https://api.github.com/repos/dotnet/cli-lab/releases/latest'
+          $asset = $release.assets | Where-Object { $_.name -like 'dotnet-core-uninstall*.zip' } | Select-Object -First 1
+          Invoke-WebRequest $asset.browser_download_url -OutFile "$tmp\dcu.zip"
+          Expand-Archive "$tmp\dcu.zip" -DestinationPath $tmp
+          $exe = Get-ChildItem $tmp -Recurse -Filter dotnet-core-uninstall.exe | Select-Object -First 1 -ExpandProperty FullName
+          & $exe list
+          & $exe remove --sdk --runtime --aspnet-runtime --windows-desktop --hosting-bundled --all --force
+          exit $LASTEXITCODE
+
+      - name: Detect whether the prerequisite path is exercised
+        shell: pwsh
+        run: |
+          $run = dotnet --list-runtimes 2>$null
+          $hasDesktop = @($run) -match 'Microsoft.WindowsDesktop.App 10\.'
+          if ($hasDesktop.Count -gt 0) {
+            Write-Host "Desktop runtime still present — prerequisite path will NOT be exercised"
+          } else {
+            Write-Host "Desktop runtime absent — setup must install it as a prerequisite"
+          }
+
+      - name: Run installer silently
+        shell: pwsh
+        run: |
+          $setup = 'installer\Synapic-Setup-win-x64.exe'
+          if (-not (Test-Path $setup)) { Write-Host "::error::Setup exe not found"; exit 1 }
+          $p = Start-Process $setup -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/LOG=setup.log' -Wait -PassThru
+          Write-Host "Setup exit code: $($p.ExitCode)"
+          Get-Content setup.log -ErrorAction SilentlyContinue | Write-Host
+          if ($p.ExitCode -notin 0, 3010) { exit 1 }
+          if (-not (Test-Path 'C:\Program Files\Synapic\Synapic.exe')) { Write-Host "::error::App not installed"; exit 1 }
+          if (-not (Select-String -Path setup.log -Pattern 'Installation process succeeded' -Quiet)) { Write-Host "::error::Setup log missing success marker"; exit 1 }
+
+      # When the strip succeeded this proves the prerequisite ran (the only
+      # way the runtime can be present again); otherwise it re-checks leg A.
+      - name: Verify .NET Desktop Runtime present after install
+        shell: pwsh
+        run: |
+          $run = dotnet --list-runtimes 2>$null
+          @($run) | ForEach-Object { Write-Host $_ }
+          if (-not (@($run) -match 'Microsoft.WindowsDesktop.App 10\.')) {
+            Write-Host "::error::.NET Desktop Runtime 10.x missing after install"
+            exit 1
+          }
+
+      - name: Launch installed app and verify runtime-check log
+        shell: pwsh
+        run: |
+          $cfg = Join-Path $env:APPDATA 'Synapic'
+          New-Item -ItemType Directory -Force $cfg | Out-Null
+          Set-Content (Join-Path $cfg 'config.json') '{"Ui":{"AutoLaunchSidecar":false}}'
+          $log = 'C:\Program Files\Synapic\logs\synapic.log'
+          $p = Start-Process 'C:\Program Files\Synapic\Synapic.exe' -PassThru
+          $deadline = (Get-Date).AddSeconds(120)
+          $found = $false
+          while ((Get-Date) -lt $deadline) {
+            if ($p.HasExited) { break }
+            if ((Test-Path $log) -and (Select-String -Path $log -Pattern '\[runtime\]' -Quiet)) { $found = $true; break }
+            Start-Sleep -Seconds 2
+          }
+          if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
+          Get-Content $log -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_ }
+          if (-not $found) { Write-Host "::error::'[runtime]' line not found in the app log"; exit 1 }
+          Write-Host "App launched; runtime check logged."
