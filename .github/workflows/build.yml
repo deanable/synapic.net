@@ -205,16 +205,25 @@ jobs:
           $cfg = Join-Path $env:APPDATA 'Synapic'
           New-Item -ItemType Directory -Force $cfg | Out-Null
           Set-Content (Join-Path $cfg 'config.json') '{"Ui":{"AutoLaunchSidecar":false}}'
-          $log = 'C:\Program Files\Synapic\logs\synapic.log'
+          # Log goes to <appdir>\logs when writable, else %LOCALAPPDATA% fallback.
+          $paths = @('C:\Program Files\Synapic\logs\synapic.log',
+                     (Join-Path $env:LOCALAPPDATA 'Synapic\logs\synapic.log'))
           $p = Start-Process 'C:\Program Files\Synapic\Synapic.exe' -PassThru
           $deadline = (Get-Date).AddSeconds(120)
-          $found = $false
+          $found = $false; $hit = $null
           while ((Get-Date) -lt $deadline) {
             if ($p.HasExited) { break }
-            if ((Test-Path $log) -and (Select-String -Path $log -Pattern '\[runtime\]' -Quiet)) { $found = $true; break }
+            foreach ($cand in $paths) {
+              if ((Test-Path $cand) -and (Select-String -Path $cand -Pattern '\[runtime\]' -Quiet)) { $found = $true; $hit = $cand; break }
+            }
+            if ($found) { break }
             Start-Sleep -Seconds 2
           }
           if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
-          Get-Content $log -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_ }
-          if (-not $found) { Write-Host "::error::'[runtime]' line not found in the app log"; exit 1 }
-          Write-Host "App launched; runtime check logged."
+          Write-Host "Process HasExited: $($p.HasExited)$(if ($p.HasExited) { '; ExitCode: ' + $p.ExitCode })"
+          foreach ($cand in $paths) {
+            if (Test-Path $cand) { Write-Host "=== $cand ==="; Get-Content $cand | Select-Object -First 40 | ForEach-Object { Write-Host $_ } }
+            else { Write-Host "(absent) $cand" }
+          }
+          if (-not $found) { Write-Host "::error::'[runtime]' line not found in any app log"; exit 1 }
+          Write-Host "App launched; runtime check logged ($hit)."
