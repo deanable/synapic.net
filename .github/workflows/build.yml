@@ -208,7 +208,8 @@ jobs:
           # Log goes to <appdir>\logs when writable, else %LOCALAPPDATA% fallback.
           $paths = @('C:\Program Files\Synapic\logs\synapic.log',
                      (Join-Path $env:LOCALAPPDATA 'Synapic\logs\synapic.log'))
-          $p = Start-Process 'C:\Program Files\Synapic\Synapic.exe' -PassThru
+          $p = Start-Process 'C:\Program Files\Synapic\Synapic.exe' -PassThru `
+            -RedirectStandardOutput app-stdout.txt -RedirectStandardError app-stderr.txt
           $deadline = (Get-Date).AddSeconds(120)
           $found = $false; $hit = $null
           while ((Get-Date) -lt $deadline) {
@@ -221,6 +222,15 @@ jobs:
           }
           if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
           Write-Host "Process HasExited: $($p.HasExited)$(if ($p.HasExited) { '; ExitCode: ' + $p.ExitCode })"
+          foreach ($stream in 'app-stdout.txt', 'app-stderr.txt') {
+            if ((Test-Path $stream) -and ((Get-Item $stream).Length -gt 0)) {
+              Write-Host "=== $stream ==="; Get-Content $stream | Select-Object -First 30 | ForEach-Object { Write-Host $_ }
+            }
+          }
+          # .NET unhandled exceptions land here with full stack traces.
+          Get-WinEvent -LogName Application -MaxEvents 40 -ErrorAction SilentlyContinue |
+            Where-Object { $_.TimeCreated -gt (Get-Date).AddMinutes(-6) -and $_.LevelDisplayName -eq 'Error' } |
+            Select-Object -First 6 | ForEach-Object { Write-Host "=== event $($_.Id) $($_.ProviderName) ==="; $_.Message.Substring(0, [Math]::Min(1500, $_.Message.Length)) }
           foreach ($cand in $paths) {
             if (Test-Path $cand) { Write-Host "=== $cand ==="; Get-Content $cand | Select-Object -First 40 | ForEach-Object { Write-Host $_ } }
             else { Write-Host "(absent) $cand" }
