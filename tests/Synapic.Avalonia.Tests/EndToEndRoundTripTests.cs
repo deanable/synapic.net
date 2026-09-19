@@ -17,7 +17,7 @@ public class EndToEndRoundTripTests
 {
     private static string? FindSampleImage()
     {
-        // Test bin dir → up 5 levels reaches the repo root (bin/Release/net8.0 → TestData).
+        // Test bin dir → up 5 levels reaches the repo root (bin/Release/net10.0 → TestData).
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         for (var i = 0; i < 6 && dir is not null; i++, dir = dir.Parent)
         {

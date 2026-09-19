@@ -4,8 +4,6 @@
     <Description>Shared JSON contracts between the Synapic Avalonia frontend and the Python inference sidecar (spec §Synapic.Shared).</Description>
   </PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="System.Text.Json" Version="8.0.5" />
-  </ItemGroup>
+  <!-- System.Text.Json ships in the shared framework (net10.0) — no PackageReference needed. -->
 
 </Project>

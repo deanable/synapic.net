@@ -18,7 +18,7 @@
 | Q4 | API key storage | *N/A — cloud engines removed from scope; no API keys to store* |
 | Q5 | Telemetry | Phase 6; opt-in `ui.telemetryEnabled`, default false |
 
-**Stack pins:** .NET 8.0 LTS / C# 12 · Avalonia 11.1+ · CommunityToolkit.Mvvm 8.2+ · Refit 7+ · System.Text.Json source-gen · MetadataExtractor 2.8+ · NetVips 2.2+ · Serilog 3.1+ · Python 3.11 via python-build-standalone · PyInstaller 6.18+ · torch 2.9 CPU default + CUDA 12.x variants, runtime device detect with CPU fallback.
+**Stack pins:** .NET 10.0 LTS / C# 12 · Avalonia 11.1+ · CommunityToolkit.Mvvm 8.2+ · Refit 7+ · System.Text.Json source-gen · MetadataExtractor 2.8+ · NetVips 2.2+ · Serilog 3.1+ · Python 3.11 via python-build-standalone · PyInstaller 6.18+ · torch 2.9 CPU default + CUDA 12.x variants, runtime device detect with CPU fallback.
 
 **Spec normalizations (documented, not silent):**
 - CI workflows at standard `.github/workflows/` (spec §3 tree vs §7.1 disagree; §7.1 wins)

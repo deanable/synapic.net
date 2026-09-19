@@ -25,6 +25,8 @@
     <PackageReference Include="Serilog" Version="$(SerilogVersion)" />
     <PackageReference Include="Serilog.Sinks.File" Version="$(SerilogSinksFileVersion)" />
     <PackageReference Include="Serilog.Sinks.Debug" Version="3.0.0" />
+    <!-- Overrides the vulnerable transitive 0.16.0 (via Avalonia) — GHSA-xrw6-gwf8-vvr9 -->
+    <PackageReference Include="Tmds.DBus.Protocol" Version="0.21.3" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
   </ItemGroup>
 

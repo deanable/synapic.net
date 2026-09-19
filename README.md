@@ -1160,7 +1160,7 @@ This is a port from https://github.com/deanable/Synapic Located at C:\\Users\\De
 
 # &#x20;       uses: actions/setup-dotnet@v4
 
-# &#x20;       with: { dotnet-version: '8.0.x' }
+# &#x20;       with: { dotnet-version: '10.0.x' }
 
 # &#x20;     - name: Fetch Python (standalone)
 
