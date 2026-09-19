@@ -40,14 +40,17 @@ jobs:
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
       - name: Fetch standalone Python
+        shell: bash  # default shell on Windows is pwsh, which silently no-ops .sh scripts
         run: |
           chmod +x build/*.sh
           ./build/fetch-python.sh ${{ matrix.rid }}
 
       - name: Install Python deps
+        shell: bash
         run: ./build/install-python-deps.sh ${{ matrix.rid }}
 
       - name: Build sidecar (PyInstaller)
+        shell: bash
         run: ./build/build-sidecar.sh ${{ matrix.rid }}
 
       - name: Publish Avalonia app
