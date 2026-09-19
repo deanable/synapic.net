@@ -12,7 +12,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src" / "Synapic.Inference"))
 
-from synapic_inference.keyword_scoring import (  # noqa: E402
+from keyword_scoring import (  # noqa: E402
     SCORING_TIER,
     ScoredKeyword,
     ScoreResult,

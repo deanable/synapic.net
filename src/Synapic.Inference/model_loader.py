@@ -20,7 +20,7 @@ import threading
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
-from . import config
+import config  # noqa: E402 (flat imports: PyInstaller entry compatibility)
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,8 @@ logger = logging.getLogger(__name__)
 
 _state_lock = threading.Lock()
 _state: Dict[str, Any] = {
-    "status": "loading",       # loading | ready | error
+    "status": "ready",        # ready | loading | error — server is up; the
+                               # model loads lazily on the first /tag
     "model": None,
     "device": None,
     "vram_used_mb": None,

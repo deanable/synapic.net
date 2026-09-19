@@ -40,7 +40,9 @@ import uvicorn
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
-from . import config, inference_engine, model_loader
+# Flat absolute imports: required because service.py is the PyInstaller entry
+# script (no parent package) and keeps pytest imports identical.
+import config, inference_engine, model_loader  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,
@@ -105,16 +107,11 @@ _download_threads: dict[str, threading.Thread] = {}
 _download_lock = threading.Lock()
 _shutdown_event = threading.Event()
 
-# Set by main() before uvicorn starts; used by the lifespan hook to read the
-# actual OS-assigned port from the bound socket.
 _uvicorn_server: uvicorn.Server | None = None
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    # uvicorn binds its sockets before running lifespan startup, so the
-    # OS-assigned port is available here when --port=0 was used.
-    _write_port_file()
     logger.info("Synapic inference sidecar started")
     yield
     logger.info("Synapic inference sidecar shutting down")
@@ -123,7 +120,7 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(title="Synapic Inference API", version="1.0.0", lifespan=lifespan, docs_url=None, redoc_url=None)
 
 
-def _write_port_file() -> None:
+def _write_port_file(port: int) -> None:
     """Write 'port\\npid\\n' to the port file (C# host reads this)."""
     port_file = os.environ.get(config.PORT_FILE_ENV_VAR)
     if not port_file:
@@ -132,13 +129,6 @@ def _write_port_file() -> None:
         )
         return
     try:
-        port = 0
-        if _uvicorn_server is not None and _uvicorn_server.servers:
-            sock = _uvicorn_server.servers[0].sockets[0]
-            port = int(sock.getsockname()[1])
-        if port <= 0:
-            logger.warning("Could not resolve bound port; cannot write port file")
-            return
         with open(port_file, "w", encoding="ascii") as f:
             f.write(f"{port}\n{os.getpid()}\n")
         logger.info(f"Port file written: {port_file} (port {port}, pid {os.getpid()})")
@@ -298,11 +288,22 @@ def main() -> None:
     global _uvicorn_server
 
     import argparse
+    import socket as _socket
 
     parser = argparse.ArgumentParser(description="Synapic inference sidecar")
     parser.add_argument("--port", type=int, default=0, help="0 = OS-assigned free port")
     parser.add_argument("--host", default="127.0.0.1")
     args = parser.parse_args()
+
+    # Pre-bind the socket so the actual OS-assigned port is known BEFORE the
+    # server starts. Uvicorn >=0.38 no longer exposes its bound sockets via the
+    # Server object, and the C# host needs the port immediately at launch.
+    sock = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
+    sock.bind((args.host, args.port))
+    sock.listen(1)
+    actual_port = sock.getsockname()[1]
+
+    _write_port_file(actual_port)
 
     uvicorn_config = uvicorn.Config(
         app,
@@ -311,7 +312,7 @@ def main() -> None:
         log_level="info",
     )
     _uvicorn_server = uvicorn.Server(uvicorn_config)
-    _uvicorn_server.run()
+    _uvicorn_server.run(sockets=[sock])
 
 
 if __name__ == "__main__":

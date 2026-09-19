@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src" / "Synapic.In
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from synapic_inference import service  # noqa: E402
+import service  # noqa: E402
 
 
 @pytest.fixture()

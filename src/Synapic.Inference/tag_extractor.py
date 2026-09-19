@@ -12,8 +12,8 @@ import logging
 from collections import Counter
 from typing import Any, Dict, List, Optional, Tuple
 
-from . import config
-from .json_utils import extract_dict_from_text
+import config  # noqa: E402 (flat imports: PyInstaller entry compatibility)
+from json_utils import extract_dict_from_text  # noqa: E402
 
 logger = logging.getLogger(__name__)
 

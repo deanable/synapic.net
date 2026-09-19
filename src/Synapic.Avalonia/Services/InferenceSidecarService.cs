@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
+using System.Runtime.InteropServices;
 using Synapic.Shared;
 using Synapic.Shared.Contracts;
 
@@ -42,6 +43,13 @@ public interface IInferenceSidecar : IAsyncDisposable
 
     Task StartAsync(CancellationToken ct = default);
     Task StopAsync(TimeSpan? gracefulTimeout = null);
+
+    /// <summary>
+    /// Detects an already-running sidecar (orphan from a previous session or
+    /// another app instance) via the temp port files + /health and reuses it
+    /// instead of launching a second server. Returns true when adopted.
+    /// </summary>
+    Task<bool> TryAdoptRunningAsync(CancellationToken ct = default);
     Task<TagResponse> TagAsync(TagRequest request, CancellationToken ct = default);
     Task<ModelInfo[]> ListModelsAsync(CancellationToken ct = default);
     Task DownloadModelAsync(string modelId, CancellationToken ct = default);
@@ -62,6 +70,8 @@ public sealed class InferenceSidecarService : IInferenceSidecar
     private SidecarStatus _status = SidecarStatus.Stopped;
     private int _port;
     private CancellationTokenSource? _livenessCts;
+    private int? _adoptedPid;
+    private CancellationTokenSource? _adoptWatchCts;
 
     public event EventHandler<SidecarStatusChangedEventArgs>? StatusChanged;
     public event Action<string>? LogReceived;
@@ -106,11 +116,53 @@ public sealed class InferenceSidecarService : IInferenceSidecar
         if (changed) StatusChanged?.Invoke(this, new SidecarStatusChangedEventArgs(status, message));
     }
 
-    /// <summary>Path of the bundled sidecar next to the app executable.</summary>
-    public static string ResolveSidecarPath()
+    /// <summary>
+    /// Locates the sidecar executable: bundled next to the app executable, or
+    /// in a dev checkout's artifacts output (found by walking up to the repo
+    /// root). Returns null when no executable exists yet.
+    /// </summary>
+    public static string? FindExecutable()
     {
         var exeName = OperatingSystem.IsWindows() ? "synapic-inference.exe" : "synapic-inference";
-        return Path.Combine(AppContext.BaseDirectory, exeName);
+
+        var bundled = Path.Combine(AppContext.BaseDirectory, exeName);
+        if (File.Exists(bundled)) return bundled;
+
+        var repoRoot = FindRepoRoot();
+        if (repoRoot is null) return null;
+
+        var artifactsDir = Path.Combine(repoRoot, "artifacts");
+        if (!Directory.Exists(artifactsDir)) return null;
+
+        // Prefer the output matching this machine's RID, then any other.
+        var arm64 = RuntimeInformation.ProcessArchitecture == Architecture.Arm64;
+        var preferredRid = OperatingSystem.IsWindows() ? "win-x64"
+            : OperatingSystem.IsMacOS() ? (arm64 ? "osx-arm64" : "osx-x64")
+            : (arm64 ? "linux-arm64" : "linux-x64");
+        var preferred = Path.Combine(artifactsDir, preferredRid, exeName);
+        if (File.Exists(preferred)) return preferred;
+
+        foreach (var dir in Directory.EnumerateDirectories(artifactsDir))
+        {
+            var candidate = Path.Combine(dir, exeName);
+            if (File.Exists(candidate)) return candidate;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Walks up from the app directory to the repository root (dev checkouts
+    /// only; installed apps carry no .sln).
+    /// </summary>
+    public static string? FindRepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        for (var i = 0; i < 12 && dir is not null; i++, dir = dir.Parent)
+        {
+            if (File.Exists(Path.Combine(dir.FullName, "Synapic.Net.sln")))
+                return dir.FullName;
+        }
+        return null;
     }
 
     public async Task StartAsync(CancellationToken ct = default)
@@ -125,11 +177,11 @@ public sealed class InferenceSidecarService : IInferenceSidecar
             }
         }
 
-        var sidecarPath = ResolveSidecarPath();
-        if (!File.Exists(sidecarPath))
+        var sidecarPath = FindExecutable();
+        if (sidecarPath is null)
         {
-            SetStatus(SidecarStatus.Error, $"Sidecar executable not found: {sidecarPath}");
-            throw new FileNotFoundException("Sidecar executable not found", sidecarPath);
+            SetStatus(SidecarStatus.Error, "Sidecar executable not found - build it first");
+            throw new FileNotFoundException("Sidecar executable not found. Use Build Server first.");
         }
 
         SetStatus(SidecarStatus.Starting);
@@ -182,8 +234,8 @@ public sealed class InferenceSidecarService : IInferenceSidecar
 
         try
         {
-            _port = await ReadPortFileAsync(portFile, ct).ConfigureAwait(false);
-            _httpClient.BaseAddress = new Uri($"http://127.0.0.1:{_port}/");
+            var port = await ReadPortFileAsync(portFile, ct).ConfigureAwait(false);
+            ConfigurePort(port);
             await WaitUntilReadyAsync(ct).ConfigureAwait(false);
             SetStatus(SidecarStatus.Ready);
         }
@@ -319,7 +371,13 @@ public sealed class InferenceSidecarService : IInferenceSidecar
 
         SetStatus(SidecarStatus.Stopped);
 
-        if (process is null) return;
+        if (process is null)
+        {
+            // Not our child process (adopted running server) — shut it down
+            // via the API since we hold no Process handle.
+            await StopAdoptedAsync().ConfigureAwait(false);
+            return;
+        }
 
         livenessCts?.Cancel();
 

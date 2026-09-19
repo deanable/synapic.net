@@ -8,10 +8,10 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$repoRoot = Split-Path -Parent $PSScriptRoot
 
 $pythonExe = Join-Path $PythonDir "python.exe"
-if (-not (Test-Path $pythonExe)) { throw "Python not found at $pythonExe — run fetch-python.ps1 first" }
+if (-not (Test-Path $pythonExe)) { throw "Python not found at $pythonExe - run fetch-python.ps1 first" }
 
 New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
 

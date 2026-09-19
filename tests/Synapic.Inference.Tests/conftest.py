@@ -1,18 +1,16 @@
-"""Pytest bootstrap: expose the sidecar source as an importable package.
+"""Pytest bootstrap: put the sidecar source directory on sys.path.
 
-The source directory is named ``Synapic.Inference`` (dot not importable), so
-we register a synthetic package ``synapic_inference`` pointing at it. The
-modules' own relative imports then resolve normally.
+The sidecar modules use flat absolute imports (``import config``,
+``import model_loader``, ...) because ``service.py`` is the PyInstaller entry
+script and cannot use relative imports. The tests therefore import the modules
+as top-level modules too, keeping one import identity between app and tests.
 """
 
 import sys
-import types
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SIDECAR_SRC = REPO_ROOT / "src" / "Synapic.Inference"
 
-if SIDECAR_SRC.is_dir() and "synapic_inference" not in sys.modules:
-    package = types.ModuleType("synapic_inference")
-    package.__path__ = [str(SIDECAR_SRC)]
-    sys.modules["synapic_inference"] = package
+if SIDECAR_SRC.is_dir() and str(SIDECAR_SRC) not in sys.path:
+    sys.path.insert(0, str(SIDECAR_SRC))

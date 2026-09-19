@@ -11,11 +11,11 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src" / "Synapic.Inference"))
 
-from synapic_inference.json_utils import (  # noqa: E402
+from json_utils import (  # noqa: E402
     extract_dict_from_text,
     safe_parse_python_literal,
 )
-from synapic_inference.tag_extractor import (  # noqa: E402
+from tag_extractor import (  # noqa: E402
     extract_tags_from_result,
     to_title_case,
 )

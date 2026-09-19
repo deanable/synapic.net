@@ -16,9 +16,9 @@ import logging
 import time
 from typing import Any, Dict, List, Optional
 
-from . import config
-from . import model_loader
-from .tag_extractor import extract_tags_from_result
+import config  # noqa: E402 (flat imports: PyInstaller entry compatibility)
+import model_loader  # noqa: E402
+from tag_extractor import extract_tags_from_result  # noqa: E402
 
 logger = logging.getLogger(__name__)
 

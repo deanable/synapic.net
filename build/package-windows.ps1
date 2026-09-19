@@ -20,7 +20,7 @@ if (-not $iscc) {
         if (Test-Path $c) { $iscc = $c; break }
     }
 }
-if (-not $iscc) { throw "Inno Setup 6 (ISCC.exe) not found — install from https://jrsoftware.org/isinfo.php" }
+if (-not $iscc) { throw "Inno Setup 6 (ISCC.exe) not found - install from https://jrsoftware.org/isinfo.php" }
 
 Write-Host "Compiling installer: $IssScript (version $AppVersion, RID $Rid)"
 & $iscc "/DAppVersion=$AppVersion" "/DRid=$Rid" "/DArtifactsDir=$ArtifactsDir" $IssScript

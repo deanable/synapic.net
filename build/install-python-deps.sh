@@ -17,7 +17,10 @@ fi
 echo "Upgrading pip tooling"
 "$PY" -m pip install --upgrade pip setuptools wheel
 
-echo "Installing sidecar requirements (CPU torch)"
+echo "Installing torch/torchvision (CPU wheels — CUDA variants substituted at packaging time)"
+"$PY" -m pip install --no-cache-dir torch==2.9.1 torchvision==0.24.1 --index-url https://download.pytorch.org/whl/cpu
+
+echo "Installing sidecar requirements (torch/torchvision already satisfied)"
 "$PY" -m pip install --no-cache-dir -r "$REPO_ROOT/src/Synapic.Inference/requirements.txt"
 
 echo "Python deps installed for $RID"

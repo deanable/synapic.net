@@ -8,8 +8,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$PbsTag = "20240409"
-$PythonVersion = "3.11.9"
+$PbsTag = "20260901"
+$PythonVersion = "3.11.16"
 
 switch ($Rid) {
     "win-x64" { $triple = "x86_64-pc-windows-msvc"; $flavor = "install_only" }

@@ -12,8 +12,9 @@ block_cipher = None
 
 # ── Entry point ──────────────────────────────────────────────────────────────
 # service.py is the packaged entry point. Path layout: the spec runs with the
-# sidecar dir on pathex so `import service` resolves; service.py itself uses
-# relative imports converted at build time by PyInstaller's module analysis.
+# sidecar dir on pathex so `import service` resolves. All sidecar modules use
+# FLAT ABSOLUTE imports (import config, import model_loader, ...) because the
+# entry script has no parent package — relative imports crash at exe startup.
 entry = os.path.join(SPECPATH, "service.py")
 
 hiddenimports = [

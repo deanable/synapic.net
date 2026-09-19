@@ -27,6 +27,7 @@ build_sidecar/
 sidecar_build/
 dist/
 *.spec.bak
+_python
 
 # Sidecar build output
 synapic-inference

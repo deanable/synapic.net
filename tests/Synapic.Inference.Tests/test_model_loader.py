@@ -7,8 +7,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src" / "Synapic.Inference"))
 
-from synapic_inference import model_loader  # noqa: E402
-from synapic_inference.config import (  # noqa: E402
+import model_loader  # noqa: E402
+from config import (  # noqa: E402
     MODEL_TASK_IMAGE_CLASSIFICATION,
     MODEL_TASK_IMAGE_TO_TEXT,
     MODEL_TASK_ZERO_SHOT,

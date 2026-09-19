@@ -7,8 +7,8 @@ RID="${1:?usage: fetch-python.sh <rid> [output-dir]}"
 OUT_DIR="${2:-build/_python}"
 
 # python-build-standalone release tag (pin for reproducibility)
-PBS_TAG="20240409"
-PYTHON_VERSION="3.11.9"
+PBS_TAG="20260901"
+PYTHON_VERSION="3.11.16"
 
 case "$RID" in
   linux-x64)  TRIPLE="x86_64-unknown-linux-gnu";  FLAVOR="install_only" ;;
