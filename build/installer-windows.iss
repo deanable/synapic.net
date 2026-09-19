@@ -43,10 +43,12 @@ WizardStyle=modern
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
 [Files]
-Source: "{#ArtifactsDir}\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#ArtifactsDir}\{#SidecarExe}"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#ArtifactsDir}\*.dll"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "{#ArtifactsDir}\*.pdb"; DestDir: "{app}"; Flags: skipifsourcedoesntexist
+; The entire framework-dependent publish output: exe, sidecar, managed and
+; native dlls, and the mandatory *.json (runtimeconfig, deps — without
+; runtimeconfig.json the apphost treats the app as self-contained and fails
+; to start). pdbs are dev artifacts; the staged runtime installer is excluded
+; from the app payload and bundled into {tmp} below when present.
+Source: "{#ArtifactsDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "*.pdb,{#RuntimeExe}"
 #ifexist ArtifactsDir + "\" + RuntimeExe
 #define BundleRuntime
 ; Bundled offline prerequisite — extracted to {tmp} and run silently when missing.
