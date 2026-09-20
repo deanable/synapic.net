@@ -49,6 +49,15 @@ jobs:
         shell: bash
         run: ./build/install-python-deps.sh ${{ matrix.rid }}
 
+      # Fails fast in its own step so a bad transformers pin is obvious in the
+      # job summary instead of surfacing as a PyInstaller failure later.
+      - name: Verify transformers ties LFM2.5-VL weights
+        shell: bash
+        run: |
+          PY="build/_python/${{ matrix.rid }}/python"
+          if [[ "${{ matrix.rid }}" == "win-x64" ]]; then PY="$PY/python.exe"; else PY="$PY/bin/python3"; fi
+          "$PY" build/check-lfm2vl-tie.py
+
       - name: Build sidecar (PyInstaller)
         shell: bash
         run: ./build/build-sidecar.sh ${{ matrix.rid }}

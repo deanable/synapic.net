@@ -18,6 +18,11 @@ fi
 mkdir -p "$OUT_DIR"
 
 cd "$REPO_ROOT"
+# Guard: refuse to build an exe whose transformers leaves the LFM2.5-VL output
+# head untied (see build/check-lfm2vl-tie.py for the full story).
+echo "Checking that transformers ties LFM2.5-VL word embeddings..."
+"$PY" build/check-lfm2vl-tie.py
+
 echo "Running PyInstaller for $RID"
 "$PY" -m PyInstaller --noconfirm --clean \
   --distpath "$OUT_DIR" \

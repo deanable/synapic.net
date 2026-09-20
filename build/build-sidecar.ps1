@@ -17,6 +17,14 @@ New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
 
 Push-Location $repoRoot
 try {
+    # Guard: refuse to build an exe whose transformers leaves the LFM2.5-VL
+    # output head untied (see build/check-lfm2vl-tie.py for the full story).
+    Write-Host "Checking that transformers ties LFM2.5-VL word embeddings..."
+    & $pythonExe "build/check-lfm2vl-tie.py"
+    if ($LASTEXITCODE -ne 0) {
+        throw "transformers cannot tie LFM2.5-VL weights - pin transformers>=5.1.0 in src/Synapic.Inference/requirements.txt"
+    }
+
     Write-Host "Running PyInstaller for $Rid"
     & $pythonExe -m PyInstaller --noconfirm --clean `
         --distpath $OutputDir `
