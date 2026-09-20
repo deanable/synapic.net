@@ -1,5 +1,6 @@
 using Synapic.Avalonia.Services.Daminion;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace Synapic.Avalonia.Tests;
 
@@ -17,6 +18,10 @@ namespace Synapic.Avalonia.Tests;
 /// </summary>
 public class DaminionLiveSessionTests
 {
+    private readonly ITestOutputHelper _output;
+
+    public DaminionLiveSessionTests(ITestOutputHelper output) => _output = output;
+
     [Fact]
     public async Task Login_establishes_replayed_cookie_session()
     {
@@ -41,14 +46,21 @@ public class DaminionLiveSessionTests
         var items = await client.GetItemsFilteredAsync(scope: "all", maxItems: 3);
         Assert.NotEmpty(items);
 
-        // 3. Saved searches walk the tag-schema path (GetDefaultLayout +
+        // 3. Tag schema: GetDefaultLayout must populate the GUID map on server
+        //    11.x (nested propertyName/propertyGuid layout) — an empty map
+        //    silently degrades every metadata write to "No metadata ops".
+        Assert.True(client.MappedTagGuidCount > 0,
+            $"tag GUID map should be populated after login, got {client.MappedTagGuidCount}");
+        _output.WriteLine($"Tag GUIDs mapped from GetDefaultLayout: {client.MappedTagGuidCount}");
+
+        // 4. Saved searches walk the tag-schema path (GetDefaultLayout +
         //    GetTags run inside AuthenticateAsync; this exercises cached maps).
         //    Optional: some server builds (11.0.0.3906) break the
         //    IndexedTagValues route — the client must degrade to empty.
         var searches = await client.GetSavedSearchesAsync();
         Assert.NotNull(searches);
 
-        // 4. Scope counting mirrors daminion_client.get_filtered_item_count.
+        // 5. Scope counting mirrors daminion_client.get_filtered_item_count.
         //    Read-only: all / search / status-filtered / failure contract.
         var allCount = await client.GetFilteredItemCountAsync(scope: "all");
         Assert.True(allCount > 0, $"all-scope count should be > 0, got {allCount}");
@@ -67,7 +79,7 @@ public class DaminionLiveSessionTests
         var badCount = await client.GetFilteredItemCountAsync(scope: "saved_search", savedSearchId: 999999999);
         Assert.True(badCount >= 0, $"invalid saved-search id must not throw or return the -1 sentinel, got {badCount}");
 
-        // 5. Logout ends the session server-side.
+        // 6. Logout ends the session server-side.
         await client.LogoutAsync();
         Assert.False(client.IsAuthenticated);
     }

@@ -50,8 +50,9 @@ public interface IDaminionApi
     [Post("/api/ItemData/BatchChange")]
     Task<JsonElement> BatchChange([Body] DaminionBatchChangeRequest request);
 
+    /// <summary>Wrapped layout payload (server 11.x nests entries under properties[].properties[]).</summary>
     [Get("/api/ItemData/GetDefaultLayout")]
-    Task<JsonElement[]> GetDefaultLayout();
+    Task<JsonElement> GetDefaultLayout();
 
     // ── Thumbnails & originals (kept in Avalonia per spec §11 Q2) ───────────
     [Get("/api/Thumbnail/Get/{id}")]

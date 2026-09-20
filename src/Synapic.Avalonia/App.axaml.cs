@@ -40,10 +40,13 @@ public partial class App : Application
             configService.FilePath, config.Ui.AutoLaunchSidecar, config.Ui.LogLevel);
         log.Information("Sidecar executable detected: {SidecarExe}", InferenceSidecarService.FindExecutable() ?? "<not found>");
         log.Information("Models root (HF_HOME for the sidecar): {ModelsRoot}", InferenceSidecarService.ModelsRoot());
+        if (OperatingSystem.IsWindows())
+            log.Information("Daminion connection params persist in registry: HKCU\\Software\\Synapic\\Daminion (password DPAPI-protected)");
 
         var services = new ServiceCollection();
         services.AddSingleton(config);
         services.AddSingleton<Session>();
+        services.AddSingleton(new DaminionConnectionStore());
         services.AddSingleton<IInferenceSidecar, InferenceSidecarService>();
         services.AddSingleton<ISidecarBuildService, SidecarBuildService>();
         services.AddSingleton<MainWindowViewModel>();

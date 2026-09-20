@@ -17,11 +17,40 @@ namespace Synapic.Avalonia.ViewModels.Steps;
 public partial class Step1DatasourceViewModel : ViewModelBase
 {
     private readonly Session _session;
+    private readonly DaminionConnectionStore? _connectionStore;
 
-    public Step1DatasourceViewModel(Session session)
+    public Step1DatasourceViewModel(Session session, DaminionConnectionStore? connectionStore = null)
     {
         _session = session;
+        _connectionStore = connectionStore;
         HydrateFromSession();
+        HydrateSavedConnection();
+    }
+
+    /// <summary>
+    /// Pre-fill the connection form from the registry (last successful
+    /// connect). Field values are never persisted anywhere else, and only a
+    /// successful authentication writes them back out.
+    /// </summary>
+    private void HydrateSavedConnection()
+    {
+        if (_connectionStore is null) return;
+        try
+        {
+            var saved = _connectionStore.Load();
+            if (saved is null) return;
+            DaminionUrl = saved.ServerUrl;
+            DaminionUser = saved.Username;
+            DaminionPass = saved.Password;
+            DaminionCatalogId = saved.CatalogId;
+            SynapicLog.Info(nameof(Step1DatasourceViewModel),
+                "Pre-filled Daminion connection from registry (user will still need to press Connect)");
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Warning(nameof(Step1DatasourceViewModel),
+                $"Failed to pre-fill connection from registry: {e.Message}");
+        }
     }
 
     private void HydrateFromSession()
@@ -350,6 +379,12 @@ public partial class Step1DatasourceViewModel : ViewModelBase
             IsDaminionConnected = true;
             ConnectionMessage = $"Connected to {DaminionUrl}";
             SynapicLog.Info(nameof(Step1DatasourceViewModel), $"Daminion connected: {DaminionUrl}");
+
+            // Persist only verified credentials: a failed connect must never
+            // overwrite a previously working set with a typo.
+            _connectionStore?.Save(new DaminionConnectionParams(
+                DaminionUrl, DaminionUser, DaminionPass, DaminionCatalogId));
+
             await LoadCatalogDataAsync(ct);
         }
         catch (Exception e)

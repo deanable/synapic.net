@@ -18,12 +18,12 @@ public partial class WizardViewModel : ViewModelBase
     private readonly Session _session;
     private readonly IInferenceSidecar _sidecar;
 
-    public WizardViewModel(Session session, IInferenceSidecar sidecar)
+    public WizardViewModel(Session session, IInferenceSidecar sidecar, DaminionConnectionStore? connectionStore = null)
     {
         _session = session;
         _sidecar = sidecar;
 
-        Step1 = new Step1DatasourceViewModel(session);
+        Step1 = new Step1DatasourceViewModel(session, connectionStore);
         Step2 = new Step2EngineViewModel(session, sidecar);
         Step3 = new Step3ProcessViewModel(session, sidecar, Step1);
         Step4 = new Step4ResultsViewModel(session, Step1, Step3);

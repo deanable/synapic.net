@@ -47,7 +47,8 @@ public partial class MainWindowViewModel : ViewModelBase
         IInferenceSidecar sidecar,
         ISidecarBuildService build,
         Session session,
-        Func<string?>? sidecarExecutableLocator = null)
+        Func<string?>? sidecarExecutableLocator = null,
+        DaminionConnectionStore? connectionStore = null)
     {
         _sidecar = sidecar;
         _build = build;
@@ -61,7 +62,7 @@ public partial class MainWindowViewModel : ViewModelBase
         SynapicLog.UiSink.Emitted -= OnUiLogEmitted;
         SynapicLog.UiSink.Emitted += OnUiLogEmitted;
 
-        Wizard = new WizardViewModel(_session, _sidecar);
+        Wizard = new WizardViewModel(_session, _sidecar, connectionStore);
     }
 
     public WizardViewModel Wizard { get; }

@@ -60,7 +60,25 @@ public sealed class DaminionApiClient
         _password = password;
         _catalogId = catalogId;
         _rateLimit = new SemaphoreSlim(1, 1);
-        _apiFactory = () => RestService.For<IDaminionApi>(_baseUrl, BuildSettings());
+        // Own handler with an explicit cookie container (session persistence)
+        // and a long timeout: original-file downloads over slow LAN links
+        // otherwise die at HttpClient's 100 s default ("A task was canceled").
+        _apiFactory = () => RestService.For<IDaminionApi>(CreateHttpClient(), BuildSettings());
+    }
+
+    private HttpClient CreateHttpClient()
+    {
+        var handler = new SocketsHttpHandler
+        {
+            UseCookies = true,
+            CookieContainer = new CookieContainer(),
+            PooledConnectionLifetime = TimeSpan.FromMinutes(10),
+        };
+        return new HttpClient(handler)
+        {
+            BaseAddress = new Uri(_baseUrl),
+            Timeout = TimeSpan.FromMinutes(15),
+        };
     }
 
     private static RefitSettings BuildSettings() => new()
@@ -74,6 +92,12 @@ public sealed class DaminionApiClient
     }
 
     public string BaseUrl => _baseUrl;
+
+    /// <summary>Diagnostics: number of tag GUIDs mapped from GetDefaultLayout.</summary>
+    public int MappedTagGuidCount
+    {
+        get { lock (_tagGuidMap) return _tagGuidMap.Count; }
+    }
 
     // ── Auth ────────────────────────────────────────────────────────────────
 
@@ -130,13 +154,8 @@ public sealed class DaminionApiClient
             lock (_tagGuidMap)
             {
                 _tagGuidMap.Clear();
-                foreach (var element in layout)
-                {
-                    var name = element.TryGetProperty("name", out var n) ? n.GetString() : null;
-                    var guid = element.TryGetProperty("guid", out var g) ? g.GetString() : null;
-                    if (!string.IsNullOrEmpty(name) && !string.IsNullOrEmpty(guid))
-                        _tagGuidMap[name] = guid;
-                }
+                foreach (var (name, guid) in ExtractLayoutTagPairs(layout))
+                    _tagGuidMap[name] = guid;
             }
             SynapicLog.Info(nameof(DaminionApiClient), $"Loaded tag schema: {_tagGuidMap.Count} tags mapped");
         }
@@ -166,9 +185,44 @@ public sealed class DaminionApiClient
         }
         catch (Exception e)
         {
-            SynapicLog.Warning(nameof(DaminionApiClient), $"Failed to load tag ids (saved searches fall back to id 39): {e.Message}");
+            SynapicLog.Warning(nameof(DaminionApiClient), $"Failed to load tag ids (saved searches fall back to id {SavedSearchesTagFallbackId}): {e.Message}");
         }
     }
+
+    /// <summary>
+    /// Extract (name, guid) pairs from a GetDefaultLayout payload. Server 11.x
+    /// wraps entries in nested "properties" arrays and keys them
+    /// propertyName/propertyGuid; older builds returned a flat list keyed
+    /// name/guid. Walk the structure recursively and accept both conventions.
+    /// </summary>
+    public static IEnumerable<(string Name, string Guid)> ExtractLayoutTagPairs(JsonElement element)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Array:
+                foreach (var child in element.EnumerateArray())
+                    foreach (var pair in ExtractLayoutTagPairs(child))
+                        yield return pair;
+                break;
+            case JsonValueKind.Object:
+            {
+                var name = GetStringProperty(element, "name") ?? GetStringProperty(element, "propertyName");
+                var guid = GetStringProperty(element, "guid") ?? GetStringProperty(element, "propertyGuid");
+                if (!string.IsNullOrEmpty(name) && !string.IsNullOrEmpty(guid))
+                    yield return (name, guid!);
+                foreach (var child in element.EnumerateObject())
+                    if (child.Value.ValueKind is JsonValueKind.Array or JsonValueKind.Object)
+                        foreach (var pair in ExtractLayoutTagPairs(child.Value))
+                            yield return pair;
+                break;
+            }
+        }
+    }
+
+    private static string? GetStringProperty(JsonElement element, string property)
+        => element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
 
     /// <summary>Resolve a tag's numeric id by name ("saved searches", "flag"…), with a fallback.</summary>
     /// <remarks>
