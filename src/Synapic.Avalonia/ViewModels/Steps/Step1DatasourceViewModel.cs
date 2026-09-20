@@ -85,6 +85,8 @@ public partial class Step1DatasourceViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isConnecting;
 
+    partial void OnIsConnectingChanged(bool value) => ConnectCommand.NotifyCanExecuteChanged();
+
     [ObservableProperty]
     private string _datasourceType = "local";
 
@@ -120,9 +122,27 @@ public partial class Step1DatasourceViewModel : ViewModelBase
 
     public DaminionApiClient? ConnectedClient { get; private set; }
 
-    partial void OnDaminionUrlChanged(string value) => _session.Datasource.DaminionUrl = value;
-    partial void OnDaminionUserChanged(string value) => _session.Datasource.DaminionUser = value;
-    partial void OnDaminionPassChanged(string value) => _session.Datasource.DaminionPass = value;
+    // The Connect button binds to ConnectCommand; CanExecute is only re-queried
+    // when we signal it. Without these calls the button stays disabled forever
+    // (it is evaluated once while all three fields are still empty), even
+    // though the credentials become valid as the user types.
+    partial void OnDaminionUrlChanged(string value)
+    {
+        _session.Datasource.DaminionUrl = value;
+        ConnectCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnDaminionUserChanged(string value)
+    {
+        _session.Datasource.DaminionUser = value;
+        ConnectCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnDaminionPassChanged(string value)
+    {
+        _session.Datasource.DaminionPass = value;
+        ConnectCommand.NotifyCanExecuteChanged();
+    }
     partial void OnDaminionCatalogIdChanged(string value) => _session.Datasource.DaminionCatalogId = value;
 
     // ── Scope (index-bound so the ComboBox actually selects) ────────────────
