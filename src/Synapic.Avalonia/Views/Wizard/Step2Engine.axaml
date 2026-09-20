@@ -34,7 +34,20 @@
         <TextBlock Text="Device:" VerticalAlignment="Center" />
         <ComboBox SelectedIndex="{Binding DeviceIndex}" ItemsSource="{Binding DeviceOptions}" MinWidth="100" />
         <TextBlock Text="Task:" VerticalAlignment="Center" />
-        <ComboBox SelectedIndex="{Binding TaskIndex}" ItemsSource="{Binding TaskOptions}" MinWidth="220" />
+        <TextBlock Text="Category + Keywords + Description (multimodal)"
+                   VerticalAlignment="Center" Opacity="0.7" />
+      </StackPanel>
+
+      <!-- Which returned fields to tag; the multimodal prompt always yields all
+           three, so this selects the permutation that gets written. -->
+      <StackPanel Orientation="Horizontal" Spacing="16">
+        <TextBlock Text="Tag fields:" VerticalAlignment="Center" />
+        <CheckBox Content="Keywords" IsChecked="{Binding TagKeywords}" />
+        <CheckBox Content="Categories" IsChecked="{Binding TagCategories}" />
+        <CheckBox Content="Description" IsChecked="{Binding TagDescription}" />
+        <TextBlock Text="Select at least one field to continue"
+                   IsVisible="{Binding HasNoTagFieldSelected}"
+                   Foreground="Red" VerticalAlignment="Center" />
       </StackPanel>
 
       <StackPanel Orientation="Horizontal" Spacing="16">

@@ -20,13 +20,18 @@ public partial class Step2EngineViewModel : ViewModelBase
     [ObservableProperty]
     private string _manualModelId = "LiquidAI/LFM2.5-VL-450M";
 
-    // Combo boxes bind indices (SelectedIndex ↔ string never selects on Avalonia).
-    public string[] TaskOptions { get; } = { "Description (image-text-to-text)", "Keywords (image-classification)", "Categories (zero-shot)" };
+    // The sidecar is LFM-only. One multimodal call returns category, keywords
+    // and description together, so there is no per-field task choice: the old
+    // TaskOptions entries (image-classification / zero-shot) were unrelated
+    // transformer pipeline tasks that a VLM cannot actually run.
     public string[] DeviceOptions { get; } = { "CPU", "CUDA", "MPS" };
     public string[] ProbabilityModeOptions { get; } = { "LLM only", "Probability only", "Both" };
 
-    [ObservableProperty]
-    private int _taskIndex;
+    /// <summary>
+    /// Fixed pipeline task. LFM2.5-VL is image-text-to-text and its prompt
+    /// always yields category, keywords and description in one JSON payload.
+    /// </summary>
+    public const string MultimodalTask = "image-text-to-text";
 
     [ObservableProperty]
     private int _deviceIndex;
@@ -34,23 +39,8 @@ public partial class Step2EngineViewModel : ViewModelBase
     [ObservableProperty]
     private int _probabilityModeIndex;
 
-    public string Task => TaskIndexToString(TaskIndex);
     public string Device => DeviceIndexToString(DeviceIndex);
     public string ProbabilityMode => ProbabilityModeIndexToString(ProbabilityModeIndex);
-
-    public static string TaskIndexToString(int i) => i switch
-    {
-        1 => "image-classification",
-        2 => "zero-shot",
-        _ => "image-text-to-text",
-    };
-
-    public static int TaskStringToIndex(string s) => s switch
-    {
-        "image-classification" => 1,
-        "zero-shot" => 2,
-        _ => 0,
-    };
 
     public static string DeviceIndexToString(int i) => i switch
     {
@@ -86,7 +76,8 @@ public partial class Step2EngineViewModel : ViewModelBase
         _sidecar = sidecar;
         var engine = session.Engine;
         ManualModelId = engine.ModelId;
-        TaskIndex = TaskStringToIndex(engine.Task);
+        // Correct any stale per-field task persisted by an older session.
+        engine.Task = MultimodalTask;
         DeviceIndex = DeviceStringToIndex(engine.Device);
         ConfidenceThreshold = engine.ConfidenceThreshold;
         ProbabilityModeIndex = ProbabilityModeStringToIndex(engine.ProbabilityMode);
@@ -94,6 +85,41 @@ public partial class Step2EngineViewModel : ViewModelBase
         ProbabilityCandidates = string.Join(", ", engine.ProbabilityCandidates);
         SystemPrompt = engine.SystemPrompt;
         EmbeddingRescueEnabled = engine.EmbeddingRescueEnabled;
+        TagKeywords = engine.TagKeywords;
+        TagCategories = engine.TagCategories;
+        TagDescription = engine.TagDescription;
+    }
+
+    // ── Tag field selection (original Step 2 checkboxes) ─────────────────────
+
+    [ObservableProperty]
+    private bool _tagKeywords = true;
+
+    [ObservableProperty]
+    private bool _tagCategories = true;
+
+    [ObservableProperty]
+    private bool _tagDescription = true;
+
+    /// <summary>Drives the "select at least one" hint; at least one must stay checked to proceed.</summary>
+    public bool HasNoTagFieldSelected => !(TagKeywords || TagCategories || TagDescription);
+
+    partial void OnTagKeywordsChanged(bool value)
+    {
+        PushToSession();
+        OnPropertyChanged(nameof(HasNoTagFieldSelected));
+    }
+
+    partial void OnTagCategoriesChanged(bool value)
+    {
+        PushToSession();
+        OnPropertyChanged(nameof(HasNoTagFieldSelected));
+    }
+
+    partial void OnTagDescriptionChanged(bool value)
+    {
+        PushToSession();
+        OnPropertyChanged(nameof(HasNoTagFieldSelected));
     }
 
     // ── Local engine (the only engine) ──────────────────────────────────────
@@ -129,17 +155,11 @@ public partial class Step2EngineViewModel : ViewModelBase
         if (value is not null)
         {
             ManualModelId = value.Id;
-            if (!string.IsNullOrEmpty(value.Task)) TaskIndex = TaskStringToIndex(value.Task);
         }
         PushToSession();
     }
 
     partial void OnManualModelIdChanged(string value) => PushToSession();
-    partial void OnTaskIndexChanged(int value)
-    {
-        OnPropertyChanged(nameof(Task));
-        PushToSession();
-    }
     partial void OnDeviceIndexChanged(int value)
     {
         OnPropertyChanged(nameof(Device));
@@ -164,7 +184,7 @@ public partial class Step2EngineViewModel : ViewModelBase
     {
         var engine = _session.Engine;
         engine.ModelId = ManualModelId;
-        engine.Task = Task;
+        engine.Task = MultimodalTask;
         engine.Device = Device;
         engine.ConfidenceThreshold = ConfidenceThreshold;
         engine.ProbabilityMode = ProbabilityMode;
@@ -173,6 +193,9 @@ public partial class Step2EngineViewModel : ViewModelBase
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         engine.SystemPrompt = SystemPrompt;
         engine.EmbeddingRescueEnabled = EmbeddingRescueEnabled;
+        engine.TagKeywords = TagKeywords;
+        engine.TagCategories = TagCategories;
+        engine.TagDescription = TagDescription;
     }
 
     [RelayCommand]

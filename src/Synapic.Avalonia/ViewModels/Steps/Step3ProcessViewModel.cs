@@ -106,7 +106,8 @@ public partial class Step3ProcessViewModel : ViewModelBase
                 async line => AppendLog(line),
                 _cts.Token,
                 _session.Results,
-                _pauseSource.Token));
+                _pauseSource.Token,
+                _session.Engine.ToTagFieldSelection()));
         }
         catch (OperationCanceledException)
         {
@@ -127,7 +128,8 @@ public partial class Step3ProcessViewModel : ViewModelBase
         }
     }
 
-    private bool CanStart() => !IsRunning;
+    // Start stays disabled until at least one tag field is selected (Step 2).
+    private bool CanStart() => !IsRunning && _session.Engine.HasSelectedTagField;
 
     [RelayCommand(CanExecute = nameof(CanAbort))]
     private void Abort()

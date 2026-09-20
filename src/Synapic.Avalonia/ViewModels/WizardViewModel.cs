@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Synapic.Avalonia.Models;
@@ -28,7 +29,23 @@ public partial class WizardViewModel : ViewModelBase
         Step4 = new Step4ResultsViewModel(session, Step1, Step3);
         Dedup = new StepDedupViewModel();
 
+        // Step 2's tag-field checkboxes gate navigation and the Step 3 Start
+        // button; re-evaluate those commands whenever the selection changes.
+        Step2.PropertyChanged += OnStep2PropertyChanged;
+
         CurrentStep = Step1;
+    }
+
+    private void OnStep2PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(Step2EngineViewModel.TagKeywords)
+            or nameof(Step2EngineViewModel.TagCategories)
+            or nameof(Step2EngineViewModel.TagDescription))
+        {
+            NextCommand.NotifyCanExecuteChanged();
+            GoToStep3Command.NotifyCanExecuteChanged();
+            Step3.StartCommand.NotifyCanExecuteChanged();
+        }
     }
 
     public Step1DatasourceViewModel Step1 { get; }
@@ -84,6 +101,8 @@ public partial class WizardViewModel : ViewModelBase
         OnPropertyChanged(nameof(CanStartOver));
         NextCommand.NotifyCanExecuteChanged();
         BackCommand.NotifyCanExecuteChanged();
+        GoToStep3Command.NotifyCanExecuteChanged();
+        Step3.StartCommand.NotifyCanExecuteChanged();
     }
 
     public string CurrentStepTitle => CurrentStepIndex switch
@@ -141,7 +160,10 @@ public partial class WizardViewModel : ViewModelBase
         }
     }
 
-    private bool CanGoNext() => !IsNavigationLocked;
+    // On Step 2, Next also requires at least one tag field to be selected.
+    private bool CanGoNext() =>
+        !IsNavigationLocked &&
+        (CurrentStepIndex != 1 || _session.Engine.HasSelectedTagField);
 
     [RelayCommand(CanExecute = nameof(CanGoBack))]
     private async Task BackAsync()
@@ -167,7 +189,7 @@ public partial class WizardViewModel : ViewModelBase
         _ = EnterStepAsync(Step2);
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanGoToStep3))]
     private void GoToStep3()
     {
         var (valid, error) = _session.ValidateForStep3(Step1.IsDaminionConnected);
@@ -175,6 +197,8 @@ public partial class WizardViewModel : ViewModelBase
         Step2.MakeSelectionValid();
         _ = EnterStepAsync(Step3);
     }
+
+    private bool CanGoToStep3() => _session.Engine.HasSelectedTagField;
 
     [RelayCommand]
     private void GoToStep4() => _ = EnterStepAsync(Step4);

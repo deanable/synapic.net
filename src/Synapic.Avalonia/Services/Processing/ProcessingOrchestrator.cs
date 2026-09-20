@@ -33,6 +33,17 @@ public sealed record ProcessProgress(
     TimeSpan? Eta,
     string CurrentFile);
 
+/// <summary>
+/// Which of the model's returned fields are written to the item. The LFM
+/// multimodal prompt always yields category, keywords and description together
+/// (port of the original Step 2 checkboxes); this selects the permutation that
+/// actually gets tagged. All three are on by default.
+/// </summary>
+public sealed record TagFieldSelection(bool Category = true, bool Keywords = true, bool Description = true)
+{
+    public static TagFieldSelection All { get; } = new();
+}
+
 /// <summary>How images are fetched for inference (spec §5.2 Step 1).</summary>
 public sealed class DatasourceSelection
 {
@@ -151,10 +162,11 @@ public sealed class ProcessingOrchestrator
         Func<string, Task> log,
         CancellationToken ct,
         List<ProcessItemResult>? results = null,
-        PauseToken? pause = null)
+        PauseToken? pause = null,
+        TagFieldSelection? tagFields = null)
     {
         var items = await FetchItemsAsync(ds, ct).ConfigureAwait(false);
-        await RunItemsAsync(ds, template, items, progress, log, ct, results, pause).ConfigureAwait(false);
+        await RunItemsAsync(ds, template, items, progress, log, ct, results, pause, tagFields).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -169,7 +181,8 @@ public sealed class ProcessingOrchestrator
         Func<string, Task> log,
         CancellationToken ct,
         List<ProcessItemResult>? results = null,
-        PauseToken? pause = null)
+        PauseToken? pause = null,
+        TagFieldSelection? tagFields = null)
     {
         var total = items.Count;
         var processed = 0;
@@ -189,7 +202,7 @@ public sealed class ProcessingOrchestrator
                 ct.ThrowIfCancellationRequested();
                 if (pause is { } pauseToken) await pauseToken.WaitWhilePausedAsync(ct).ConfigureAwait(false);
                 ct.ThrowIfCancellationRequested();
-                var result = await ProcessSingleItemAsync(ds, template, item, log, ct).ConfigureAwait(false);
+                var result = await ProcessSingleItemAsync(ds, template, item, log, ct, tagFields).ConfigureAwait(false);
                 lock (resultsLock)
                 {
                     processed++;
@@ -234,7 +247,8 @@ public sealed class ProcessingOrchestrator
         TagRequest template,
         ProcessWorkItem item,
         Func<string, Task> log,
-        CancellationToken ct)
+        CancellationToken ct,
+        TagFieldSelection? tagFields = null)
     {
         string? tempFile = null;
         try
@@ -275,16 +289,23 @@ public sealed class ProcessingOrchestrator
             var request = template with { ImagePath = imagePath };
             var response = await _sidecar.TagAsync(request, ct).ConfigureAwait(false);
 
-            var tags = new TagResult(response.Category, response.Keywords, response.Description);
+            // One multimodal call returns all three fields; keep only the ones
+            // the user asked to tag (original Step 2 checkbox behavior).
+            var selected = tagFields ?? TagFieldSelection.All;
+            var category = selected.Category ? response.Category : null;
+            var keywords = selected.Keywords ? response.Keywords : Array.Empty<string>();
+            var description = selected.Description ? response.Description : null;
+
+            var tags = new TagResult(category, keywords, description);
             var written = await WriteMetadataAsync(ds, item, tags, ct).ConfigureAwait(false);
 
             var status = written ? "Success" : "Write Failed";
-            var tagsSummary = $"Cat: {response.Category}, Kws: {response.Keywords.Length}, Desc: {Truncate(response.Description, 20)}";
+            var tagsSummary = $"Cat: {category}, Kws: {keywords.Length}, Desc: {Truncate(description, 20)}";
             await log($"Result: {tagsSummary}").ConfigureAwait(false);
 
             return new ProcessItemResult(
                 item.FileName, status, tagsSummary,
-                response.Category, response.Keywords, response.Description,
+                category, keywords, description,
                 response.Probabilities,
                 response.Scoring is null ? null : new ScoringResultDto(response.Scoring.Tier, response.Scoring.Calibrated),
                 item.DaminionId);

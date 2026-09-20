@@ -57,6 +57,9 @@ public sealed class Session
         if (string.IsNullOrWhiteSpace(Engine.ModelId))
             return (false, "Choose a model in Step 2 before processing.");
 
+        if (!Engine.HasSelectedTagField)
+            return (false, "Select at least one field to tag (Keywords, Categories or Description).");
+
         if (Datasource.Type == "daminion")
         {
             if (!daminionConnected)
@@ -141,4 +144,17 @@ public sealed class EngineState
     public string[] ProbabilityCandidates { get; set; } = [];
     public string SystemPrompt { get; set; } = "";
     public bool EmbeddingRescueEnabled { get; set; }
+
+    // Which returned fields to write (original Step 2 checkboxes). The LFM
+    // prompt always produces all three in one JSON payload; these decide the
+    // permutation that actually gets tagged.
+    public bool TagKeywords { get; set; } = true;
+    public bool TagCategories { get; set; } = true;
+    public bool TagDescription { get; set; } = true;
+
+    /// <summary>A batch is only meaningful when at least one field will be tagged.</summary>
+    public bool HasSelectedTagField => TagKeywords || TagCategories || TagDescription;
+
+    public TagFieldSelection ToTagFieldSelection() =>
+        new(TagCategories, TagKeywords, TagDescription);
 }

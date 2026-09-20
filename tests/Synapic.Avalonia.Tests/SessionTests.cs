@@ -38,6 +38,25 @@ public class SessionTests
     }
 
     [Fact]
+    public void ValidateForStep3_NoTagFieldSelected_Fails()
+    {
+        var session = new Session();
+        session.Datasource.Type = "local";
+        session.Datasource.LocalPath = System.IO.Path.GetTempPath();
+        session.Engine.ModelId = "LiquidAI/LFM2.5-VL-450M";
+        session.Engine.TagKeywords = false;
+        session.Engine.TagCategories = false;
+        session.Engine.TagDescription = false;
+
+        var (valid, error) = session.ValidateForStep3(daminionConnected: false);
+        Assert.False(valid);
+        Assert.Contains("at least one", error, StringComparison.OrdinalIgnoreCase);
+
+        session.Engine.TagDescription = true;
+        Assert.True(session.ValidateForStep3(daminionConnected: false).Valid);
+    }
+
+    [Fact]
     public void ResetStats_ClearsCountersAndResults()
     {
         var session = new Session();

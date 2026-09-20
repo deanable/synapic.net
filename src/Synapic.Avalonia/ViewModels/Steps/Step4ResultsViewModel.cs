@@ -110,7 +110,8 @@ public partial class Step4ResultsViewModel : ViewModelBase
             var dropped = _session.Results.RemoveAll(r => failedFiles.Contains(r.FileName));
 
             var progress = new Progress<ProcessProgress>(p => Summary = $"Retry {p.Processed}/{p.Total}…");
-            await orchestrator.RunItemsAsync(ds, template, subset, progress, _ => Task.CompletedTask, ct, _session.Results);
+            await orchestrator.RunItemsAsync(ds, template, subset, progress, _ => Task.CompletedTask, ct, _session.Results,
+                pause: null, tagFields: _session.Engine.ToTagFieldSelection());
 
             Refresh();
             UpdateSummary($"Retried {subset.Count} item(s) after {dropped} old entries", reset: false);
