@@ -85,11 +85,20 @@ public partial class Step3ProcessViewModel : ViewModelBase
         var ds = _step1.ToSelectionForProcessing(_step1.ConnectedClient);
         var request = BuildTagRequest();
 
+        // Fetch phase feedback: Daminion pagination can take seconds, and a
+        // cold model adds minutes before the first completion report.
+        ProgressPercent = 0;
+        EtaText = "";
+        CurrentFile = "";
+        ProgressText = "Fetching items…";
+
         var progress = new Progress<ProcessProgress>(p =>
         {
             ProgressPercent = p.Percent;
             CurrentFile = p.CurrentFile;
-            ProgressText = $"{p.Processed}/{p.Total} ({p.Failed} failed)";
+            ProgressText = p.Total == 0 && p.Processed == 0
+                ? "No items matched the current filters"
+                : $"{p.Processed}/{p.Total} ({p.Failed} failed)";
             EtaText = p.Eta is { } eta ? $"ETA {eta.Minutes}m {eta.Seconds}s" : "";
             // Session stats feed Step 4's summary.
             _session.TotalItems = p.Total;

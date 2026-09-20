@@ -166,6 +166,9 @@ public sealed class ProcessingOrchestrator
         TagFieldSelection? tagFields = null)
     {
         var items = await FetchItemsAsync(ds, ct).ConfigureAwait(false);
+        // Report the fetched total immediately: with a cold model the first
+        // item can take minutes, and the UI must not sit at an empty bar.
+        progress.Report(new ProcessProgress(0, 0, items.Count, 0, null, "Starting…"));
         await RunItemsAsync(ds, template, items, progress, log, ct, results, pause, tagFields).ConfigureAwait(false);
     }
 
@@ -202,6 +205,17 @@ public sealed class ProcessingOrchestrator
                 ct.ThrowIfCancellationRequested();
                 if (pause is { } pauseToken) await pauseToken.WaitWhilePausedAsync(ct).ConfigureAwait(false);
                 ct.ThrowIfCancellationRequested();
+
+                // Report at item START: with a cold sidecar the first items
+                // take minutes (model load + generation), and completion-only
+                // reporting left the progress UI frozen the whole time.
+                int doneSnapshot, failedSnapshot;
+                lock (resultsLock) { doneSnapshot = processed; failedSnapshot = failed; }
+                progress.Report(new ProcessProgress(
+                    doneSnapshot, failedSnapshot, total,
+                    total == 0 ? 0 : 100.0 * doneSnapshot / total,
+                    null, item.FileName));
+
                 var result = await ProcessSingleItemAsync(ds, template, item, log, ct, tagFields).ConfigureAwait(false);
                 lock (resultsLock)
                 {

@@ -35,6 +35,12 @@ public sealed class DaminionApiClient
 {
     public const int PageSize = 500;
 
+    /// <summary>
+    /// Tag id used when "Saved Searches" cannot be resolved by name (observed
+    /// id on Daminion Server 11.0.0.3906; the earlier 39 was stale).
+    /// </summary>
+    public const int SavedSearchesTagFallbackId = 40;
+
     private readonly Func<IDaminionApi> _apiFactory;
     private readonly string _baseUrl;
     private readonly string _username;
@@ -165,6 +171,10 @@ public sealed class DaminionApiClient
     }
 
     /// <summary>Resolve a tag's numeric id by name ("saved searches", "flag"…), with a fallback.</summary>
+    /// <remarks>
+    /// Fallback 40 observed on Daminion Server 11.0.0.3906 (damserver.local);
+    /// the previous 39 was stale for that build.
+    /// </remarks>
     private async Task<int> GetTagIdAsync(string tagName, int fallback)
     {
         lock (_tagIdMap)
@@ -192,7 +202,7 @@ public sealed class DaminionApiClient
         {
             SynapicLog.Warning(nameof(DaminionApiClient), $"Tag id lookup for '{tagName}' failed: {e.Message}");
         }
-        return fallback;
+        return tagName.Equals("saved searches", StringComparison.OrdinalIgnoreCase) ? SavedSearchesTagFallbackId : fallback;
     }
 
     /// <summary>Unwrap a JSON payload that may be an array or wrapped in one of several container keys.</summary>
@@ -287,7 +297,10 @@ public sealed class DaminionApiClient
                 }
                 case "collection" when collectionId is not null:
                 {
-                    items = (await GetApi().GetCollectionItems(collectionId.Value, startIndex, batch).ConfigureAwait(false)).EffectiveItems;
+                    // Python parity: /api/SharedCollection/GetItems?id=… —
+                    // the /api/Collections/GetItems/{id} variant 404s on
+                    // server 11.0.0.3906 (damserver.local).
+                    items = (await GetApi().GetSharedCollectionItems(collectionId.Value, startIndex, batch).ConfigureAwait(false)).EffectiveItems;
                     if (statusFilter != "all" || (untaggedFields?.Length ?? 0) > 0)
                         items = items.Where(i => PassesFilters(i, statusFilter, untaggedFields)).ToArray();
                     break;
@@ -440,10 +453,39 @@ public sealed class DaminionApiClient
     /// <summary>
     /// Saved searches via the "Saved Searches" indexed tag's values
     /// (daminion_client.get_saved_searches port — no dedicated endpoint).
+    /// Some server builds (observed on 11.0.0.3906) break the
+    /// IndexedTagValues enumeration route; there we fall back to discovering
+    /// existing searches with structured per-id queries, which the same
+    /// build honors. Names are unavailable in that path, so entries are
+    /// synthesized as "Saved Search #id".
     /// </summary>
     public async Task<IReadOnlyList<DaminionSavedSearch>> GetSavedSearchesAsync(CancellationToken ct = default)
     {
-        var tagId = await GetTagIdAsync("saved searches", fallback: 39).ConfigureAwait(false);
+        try
+        {
+            return await GetSavedSearchesCoreAsync(ct).ConfigureAwait(false);
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Warning(nameof(DaminionApiClient),
+                $"Saved-search enumeration unavailable on this server ({e.Message}) — trying structured-query discovery");
+        }
+
+        try
+        {
+            return await DiscoverSavedSearchesByQuerySweepAsync(ct).ConfigureAwait(false);
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Warning(nameof(DaminionApiClient),
+                $"Saved-search discovery failed ({e.Message}) — continuing without the saved-search scope");
+            return Array.Empty<DaminionSavedSearch>();
+        }
+    }
+
+    private async Task<IReadOnlyList<DaminionSavedSearch>> GetSavedSearchesCoreAsync(CancellationToken ct)
+    {
+        var tagId = await GetTagIdAsync("saved searches", fallback: SavedSearchesTagFallbackId).ConfigureAwait(false);
         var json = await GetApi().GetIndexedTagValues(tagId).ConfigureAwait(false);
         var result = new List<DaminionSavedSearch>();
         foreach (var value in UnwrapCollection(json, "values", "items", "data"))
@@ -455,6 +497,40 @@ public sealed class DaminionApiClient
         }
         SynapicLog.Info(nameof(DaminionApiClient), $"Retrieved {result.Count} saved searches (tag id {tagId})");
         return result;
+    }
+
+    /// <summary>
+    /// Fallback for servers whose IndexedTagValues enumeration is broken:
+    /// probe candidate value ids with structured queries (queryLine=tagId,N
+    /// + operators) — the same mechanism the saved-search FETCH scope uses —
+    /// and keep the ids that match at least one item. Capped at a fixed
+    /// probe range; names cannot be resolved on such builds.
+    /// </summary>
+    private const int SavedSearchDiscoveryMaxId = 50;
+
+    private async Task<IReadOnlyList<DaminionSavedSearch>> DiscoverSavedSearchesByQuerySweepAsync(CancellationToken ct)
+    {
+        var tagId = await GetTagIdAsync("saved searches", fallback: SavedSearchesTagFallbackId).ConfigureAwait(false);
+        var found = new List<DaminionSavedSearch>();
+
+        for (var candidateId = 1; candidateId <= SavedSearchDiscoveryMaxId; candidateId++)
+        {
+            ct.ThrowIfCancellationRequested();
+            var resp = await GetApi().GetItems(
+                index: 0,
+                size: 1,
+                f: new[] { $"{tagId},any" },
+                queryLine: $"{tagId},{candidateId}",
+                maxItemsCount: 100000).ConfigureAwait(false);
+
+            var count = resp.TotalCount ?? resp.EffectiveItems.Length;
+            if (count > 0)
+                found.Add(new DaminionSavedSearch(candidateId, $"Saved Search #{candidateId}", count));
+        }
+
+        SynapicLog.Info(nameof(DaminionApiClient),
+            $"Saved-search discovery: {found.Count} searches found via query sweep (tag id {tagId}, ids {string.Join(",", found.Select(s => s.Id))})");
+        return found;
     }
 
     /// <summary>Shared collections list (daminion_client.get_shared_collections port).</summary>
@@ -476,8 +552,17 @@ public sealed class DaminionApiClient
 
     /// <summary>
     /// Count items matching the Step 1 filters (daminion_client.get_filtered_item_count port).
-    /// Collection scope counts the collection's TotalCount from a single page.
+    /// Returns -1 on failure (Python parity — callers must not treat it as a real count).
     /// </summary>
+    /// <remarks>
+    /// Mirrors the original's structure: status filters become structured
+    /// flag-tag clauses (approved=2, rejected=3, unassigned=1 — NOT the
+    /// flag:flagged text queries the /tag fetch path uses); untagged fields
+    /// and the search term form a text query; collection scope resolves the
+    /// "shared collections" tag (fallback 46); a count that equals the whole
+    /// catalog despite active filters is re-derived from a 1-item search; a
+    /// zero text-search count falls back to the keyword value id.
+    /// </remarks>
     public async Task<int> GetFilteredItemCountAsync(
         string scope = "all",
         int? savedSearchId = null,
@@ -487,32 +572,151 @@ public sealed class DaminionApiClient
         string statusFilter = "all",
         CancellationToken ct = default)
     {
-        var filters = BuildFilterClauses(statusFilter, untaggedFields);
-        switch (scope)
+        try
         {
-            case "collection" when collectionId is not null:
+            var qParts = new List<string>();
+            var fParts = new List<string>();
+            var searchParts = new List<string>();
+
+            // Status filter via the flag tag (structured query; Python parity).
+            var sf = (statusFilter ?? "all").ToLowerInvariant();
+            if (sf != "all")
             {
-                var resp = await GetApi().GetCollectionItems(collectionId.Value, 0, 1).ConfigureAwait(false);
-                return resp.TotalCount ?? resp.EffectiveItems.Length;
+                var flagTagId = await GetTagIdAsync("flag", fallback: 41).ConfigureAwait(false);
+                var flagValue = sf switch
+                {
+                    "approved" => 2,
+                    "rejected" => 3,
+                    "unassigned" => 1,
+                    _ => (int?)null,
+                };
+                if (flagValue is { } fv)
+                {
+                    qParts.Add($"{flagTagId},{fv}");
+                    fParts.Add($"{flagTagId},any");
+                }
             }
-            case "search" when !string.IsNullOrWhiteSpace(searchTerm):
+
+            // Untagged fields: text-based 'Tag:none' clauses.
+            foreach (var field in untaggedFields ?? Array.Empty<string>())
+                searchParts.Add($"{NormalizeUntaggedField(field)}:none");
+
+            // Keyword search term (quoted phrase).
+            if (scope == "search" && !string.IsNullOrWhiteSpace(searchTerm))
+                searchParts.Add($"\"{searchTerm}\"");
+
+            var combinedSearch = searchParts.Count > 0 ? string.Join(" ", searchParts) : null;
+
+            // Scope-specific structured clauses.
+            if (scope == "saved_search" && savedSearchId is not null)
             {
-                var query = $"\"{searchTerm}\"";
-                if (filters.Length > 0) query += " " + string.Join(" ", filters);
-                return (await GetApi().GetCount(search: query).ConfigureAwait(false)).EffectiveCount;
+                var tagId = await GetTagIdAsync("saved searches", fallback: SavedSearchesTagFallbackId).ConfigureAwait(false);
+                qParts.Add($"{tagId},{savedSearchId}");
+                fParts.Add($"{tagId},any");
             }
-            case "saved_search" when savedSearchId is not null:
+            else if (scope == "collection" && collectionId is not null)
             {
-                var tagId = await GetTagIdAsync("saved searches", fallback: 39).ConfigureAwait(false);
-                var f = new[] { $"{tagId},any" };
-                return (await GetApi().GetCount(f: f, queryLine: $"{tagId},{savedSearchId}").ConfigureAwait(false)).EffectiveCount;
+                var tagId = await GetCollectionTagIdAsync().ConfigureAwait(false);
+                qParts.Add($"{tagId},{collectionId}");
+                fParts.Add($"{tagId},any");
             }
-            default:
+
+            var queryLine = qParts.Count > 0 ? string.Join(";", qParts) : null;
+            var operators = fParts.Count > 0 ? string.Join(";", fParts) : null;
+
+            var count = (await GetApi().GetCount(
+                search: combinedSearch,
+                queryLine: queryLine,
+                f: operators,
+                force: "false").ConfigureAwait(false)).EffectiveCount;
+
+            // Sanity check (Python parity): a count that matches the whole
+            // catalog size despite active filters/scope is suspect — re-derive
+            // the total from a 1-item search whose totalCount the API reports
+            // accurately (up to maxItemsCount).
+            if ((combinedSearch is not null || queryLine is not null) && count > 0)
             {
-                var query = filters.Length > 0 ? string.Join(" ", filters) : "*";
-                return (await GetApi().GetCount(search: query).ConfigureAwait(false)).EffectiveCount;
+                var totalCatalog = (await GetApi().GetCount().ConfigureAwait(false)).EffectiveCount;
+                if (count >= totalCatalog)
+                {
+                    SynapicLog.Warning(nameof(DaminionApiClient),
+                        $"Count {count} matches total catalog size despite filters — falling back to a 1-item search");
+                    count = (await GetApi().GetItems(
+                        index: 0,
+                        size: 1,
+                        f: ParseQueryOperators(operators),
+                        search: combinedSearch,
+                        queryLine: queryLine,
+                        maxItemsCount: 100000).ConfigureAwait(false)).TotalCount ?? 0;
+                }
             }
+
+            // Structured fallback when a text search returned zero (Python
+            // parity): match the keyword tag value id instead.
+            if (count <= 0 && scope == "search" && !string.IsNullOrWhiteSpace(searchTerm))
+            {
+                var kwId = await GetTagIdAsync("keywords", fallback: 0).ConfigureAwait(false);
+                if (kwId > 0)
+                {
+                    var valueId = await FindTagValueIdAsync(kwId, searchTerm).ConfigureAwait(false);
+                    if (valueId is { } vid)
+                    {
+                        count = (await GetApi().GetCount(
+                            queryLine: $"{kwId},{vid}",
+                            f: $"{kwId},any").ConfigureAwait(false)).EffectiveCount;
+                    }
+                }
+            }
+
+            SynapicLog.Info(nameof(DaminionApiClient),
+                $"Item count: {count} | scope: {scope} | query: '{combinedSearch}' | queryLine: '{queryLine}'");
+            return count;
         }
+        catch (Exception e)
+        {
+            SynapicLog.Error(nameof(DaminionApiClient), $"Failed to get filtered count: {e.Message}");
+            return -1; // Python parity: failure sentinel, not a real count.
+        }
+    }
+
+    /// <summary>Resolve the "shared collections" tag id (fallback 46, Python parity).</summary>
+    private async Task<int> GetCollectionTagIdAsync()
+    {
+        var id = await GetTagIdAsync("shared collections", fallback: 0).ConfigureAwait(false);
+        if (id > 0) return id;
+        id = await GetTagIdAsync("collections", fallback: 0).ConfigureAwait(false);
+        return id > 0 ? id : 46;
+    }
+
+    /// <summary>Split a ';'-joined operator string for the multi-value f= parameter.</summary>
+    private static string[]? ParseQueryOperators(string? operators) =>
+        string.IsNullOrEmpty(operators) ? null : operators.Split(';');
+
+    /// <summary>
+    /// Find a tag value's id by exact text (daminion_api.find_tag_values port,
+    /// including the /api/IndexedTagValues fallback route some builds serve).
+    /// </summary>
+    private async Task<int?> FindTagValueIdAsync(int tagId, string filterText)
+    {
+        JsonElement json;
+        try
+        {
+            json = await GetApi().GetIndexedTagValues(tagId, filter: filterText, pageSize: 100).ConfigureAwait(false);
+        }
+        catch (ApiException)
+        {
+            // Fallback route (daminion_api.py parity): some builds only expose
+            // the bare /api/IndexedTagValues endpoint.
+            json = await GetApi().GetIndexedTagValuesFallback(tagId, filter: filterText, pageSize: 100).ConfigureAwait(false);
+        }
+
+        foreach (var value in UnwrapCollection(json, "values", "items", "data"))
+        {
+            var text = GetString(value, "text", "value", "name", "title") ?? "";
+            if (text.Equals(filterText, StringComparison.OrdinalIgnoreCase))
+                return GetInt(value, "id", "valueId");
+        }
+        return null;
     }
 
     // ── Metadata write (daminion_client.update_item_metadata port) ──────────

@@ -37,7 +37,7 @@ public interface IDaminionApi
     Task<DaminionCountResponse> GetCount(
         [Query] string? search = null,
         [Query] string? queryLine = null,
-        [Query(CollectionFormat.Multi)] string[]? f = null,
+        [Query] string? f = null,
         [Query] string? force = null);
 
     [Get("/api/MediaItems/GetAbsolutePath/{id}")]
@@ -83,10 +83,24 @@ public interface IDaminionApi
         [Query] int pageIndex = 0,
         [Query] int pageSize = 500);
 
+    /// <summary>Bare /api/IndexedTagValues route (daminion_api.py fallback for builds lacking the GetIndexedTagValues action).</summary>
+    [Get("/api/IndexedTagValues")]
+    Task<JsonElement> GetIndexedTagValuesFallback(
+        [Query] int indexedTagId,
+        [Query] int parentValueId = -2,
+        [Query] string? filter = null,
+        [Query] int pageIndex = 0,
+        [Query] int pageSize = 500);
+
     /// <summary>Shared collections list — daminion_api.collections.get_all port.</summary>
     [Get("/api/SharedCollection/GetCollections")]
     Task<JsonElement> GetCollections([Query] int index = 0, [Query] int pageSize = 100);
 
-    [Get("/api/Collections/GetItems/{id}")]
-    Task<DaminionItemsResponse> GetCollectionItems(int id, [Query] int index, [Query] int size);
+    /// <summary>
+    /// Items of a shared collection — daminion_api.collections.get_items port.
+    /// The original routes through /api/SharedCollection/GetItems?id=… (the
+    /// /api/Collections/GetItems/{id} variant 404s on server 11.0.0.3906).
+    /// </summary>
+    [Get("/api/SharedCollection/GetItems")]
+    Task<DaminionItemsResponse> GetSharedCollectionItems([Query] int id, [Query] int index, [Query] int pageSize);
 }

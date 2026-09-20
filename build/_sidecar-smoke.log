@@ -1,0 +1,47 @@
+2026-09-20 15:01:09,476 [INFO] synapic.inference: Port file written: C:\Users\Dean\AppData\Local\Temp\synapic_smoke_port.txt (port 58507, pid 3716)
+INFO:     Started server process [3716]
+INFO:     Waiting for application startup.
+2026-09-20 15:01:09,486 [INFO] synapic.inference: Synapic inference sidecar started
+INFO:     Application startup complete.
+2026-09-20 15:01:09,488 [INFO] synapic.inference: Default model LiquidAI/LFM2.5-VL-450M not found — downloading in background
+2026-09-20 15:01:09,488 [INFO] model_loader: [Download] Starting download for: LiquidAI/LFM2.5-VL-450M (revision main)
+2026-09-20 15:01:10,057 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/models/LiquidAI/LFM2.5-VL-450M/revision/main?blobs=true "HTTP/1.1 200 OK"
+2026-09-20 15:01:10,063 [INFO] model_loader: [Download] LiquidAI/LFM2.5-VL-450M: ~860 MB expected
+2026-09-20 15:01:10,064 [INFO] model_loader: [Download] Calling snapshot_download for LiquidAI/LFM2.5-VL-450M
+2026-09-20 15:01:10,359 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/models/LiquidAI/LFM2.5-VL-450M/revision/main "HTTP/1.1 200 OK"
+Fetching 10 files:   0%|          | 0/10 [00:00<?, ?it/s]2026-09-20 15:01:10,666 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/LiquidAI/LFM2.5-VL-450M/resolve/fc6221ca597f3315e4f82fc2df606783267b34ba/.gitattributes "HTTP/1.1 307 Temporary Redirect"
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-09-20 15:01:10,667 [WARNING] huggingface_hub.utils._http: Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-09-20 15:01:10,725 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/LiquidAI/LFM2.5-VL-450M/resolve/fc6221ca597f3315e4f82fc2df606783267b34ba/README.md "HTTP/1.1 307 Temporary Redirect"
+2026-09-20 15:01:10,751 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/LiquidAI/LFM2.5-VL-450M/resolve/fc6221ca597f3315e4f82fc2df606783267b34ba/LICENSE "HTTP/1.1 307 Temporary Redirect"
+2026-09-20 15:01:10,762 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/LiquidAI/LFM2.5-VL-450M/resolve/fc6221ca597f3315e4f82fc2df606783267b34ba/chat_template.jinja "HTTP/1.1 307 Temporary Redirect"
+2026-09-20 15:01:10,881 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/LiquidAI/LFM2.5-VL-450M/fc6221ca597f3315e4f82fc2df606783267b34ba/.gitattributes "HTTP/1.1 200 OK"
+2026-09-20 15:01:10,965 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/LiquidAI/LFM2.5-VL-450M/fc6221ca597f3315e4f82fc2df606783267b34ba/LICENSE "HTTP/1.1 200 OK"
+2026-09-20 15:01:11,056 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/LiquidAI/LFM2.5-VL-450M/fc6221ca597f3315e4f82fc2df606783267b34ba/chat_template.jinja "HTTP/1.1 200 OK"
+2026-09-20 15:01:11,095 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/resolve-cache/models/LiquidAI/LFM2.5-VL-450M/fc6221ca597f3315e4f82fc2df606783267b34ba/.gitattributes "HTTP/1.1 200 OK"
+Fetching 10 files:  10%|#         | 1/10 [00:00<00:06,  1.38it/s]2026-09-20 15:01:11,175 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/resolve-cache/models/LiquidAI/LFM2.5-VL-450M/fc6221ca597f3315e4f82fc2df606783267b34ba/LICENSE "HTTP/1.1 200 OK"
+2026-09-20 15:01:11,275 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/resolve-cache/models/LiquidAI/LFM2.5-VL-450M/fc6221ca597f3315e4f82fc2df606783267b34ba/chat_template.jinja "HTTP/1.1 200 OK"
+2026-09-20 15:01:11,285 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/LiquidAI/LFM2.5-VL-450M/fc6221ca597f3315e4f82fc2df606783267b34ba/README.md "HTTP/1.1 200 OK"
+2026-09-20 15:01:11,387 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/LiquidAI/LFM2.5-VL-450M/resolve/fc6221ca597f3315e4f82fc2df606783267b34ba/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-09-20 15:01:11,488 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/LiquidAI/LFM2.5-VL-450M/resolve/fc6221ca597f3315e4f82fc2df606783267b34ba/generation_config.json "HTTP/1.1 307 Temporary Redirect"
+2026-09-20 15:01:11,506 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/resolve-cache/models/LiquidAI/LFM2.5-VL-450M/fc6221ca597f3315e4f82fc2df606783267b34ba/README.md "HTTP/1.1 200 OK"
+Fetching 10 files:  30%|###       | 3/10 [00:01<00:02,  2.94it/s]2026-09-20 15:01:11,576 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/LiquidAI/LFM2.5-VL-450M/resolve/fc6221ca597f3315e4f82fc2df606783267b34ba/model.safetensors "HTTP/1.1 302 Found"
+Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+2026-09-20 15:01:11,581 [WARNING] huggingface_hub.file_download: Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+2026-09-20 15:01:11,602 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/LiquidAI/LFM2.5-VL-450M/fc6221ca597f3315e4f82fc2df606783267b34ba/config.json "HTTP/1.1 200 OK"
+2026-09-20 15:01:11,698 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/LiquidAI/LFM2.5-VL-450M/fc6221ca597f3315e4f82fc2df606783267b34ba/generation_config.json "HTTP/1.1 200 OK"
+2026-09-20 15:01:11,801 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/LiquidAI/LFM2.5-VL-450M/resolve/fc6221ca597f3315e4f82fc2df606783267b34ba/processor_config.json "HTTP/1.1 307 Temporary Redirect"
+2026-09-20 15:01:11,817 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/resolve-cache/models/LiquidAI/LFM2.5-VL-450M/fc6221ca597f3315e4f82fc2df606783267b34ba/config.json "HTTP/1.1 200 OK"
+Fetching 10 files:  50%|#####     | 5/10 [00:01<00:01,  4.05it/s]2026-09-20 15:01:11,877 [INFO] httpx: HTTP Request: GET https://huggingface.co/LiquidAI/LFM2.5-VL-450M/resolve/fc6221ca597f3315e4f82fc2df606783267b34ba/model.safetensors "HTTP/1.1 302 Found"
+2026-09-20 15:01:11,919 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/resolve-cache/models/LiquidAI/LFM2.5-VL-450M/fc6221ca597f3315e4f82fc2df606783267b34ba/generation_config.json "HTTP/1.1 200 OK"
+2026-09-20 15:01:12,017 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/LiquidAI/LFM2.5-VL-450M/fc6221ca597f3315e4f82fc2df606783267b34ba/processor_config.json "HTTP/1.1 200 OK"
+2026-09-20 15:01:12,118 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/LiquidAI/LFM2.5-VL-450M/resolve/fc6221ca597f3315e4f82fc2df606783267b34ba/tokenizer.json "HTTP/1.1 307 Temporary Redirect"
+2026-09-20 15:01:12,208 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/LiquidAI/LFM2.5-VL-450M/resolve/fc6221ca597f3315e4f82fc2df606783267b34ba/tokenizer_config.json "HTTP/1.1 307 Temporary Redirect"
+2026-09-20 15:01:12,243 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/resolve-cache/models/LiquidAI/LFM2.5-VL-450M/fc6221ca597f3315e4f82fc2df606783267b34ba/processor_config.json "HTTP/1.1 200 OK"
+2026-09-20 15:01:12,326 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/LiquidAI/LFM2.5-VL-450M/fc6221ca597f3315e4f82fc2df606783267b34ba/tokenizer.json "HTTP/1.1 200 OK"
+2026-09-20 15:01:12,418 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/LiquidAI/LFM2.5-VL-450M/fc6221ca597f3315e4f82fc2df606783267b34ba/tokenizer_config.json "HTTP/1.1 200 OK"
+2026-09-20 15:01:12,542 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/resolve-cache/models/LiquidAI/LFM2.5-VL-450M/fc6221ca597f3315e4f82fc2df606783267b34ba/tokenizer.json "HTTP/1.1 200 OK"
+2026-09-20 15:01:12,647 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/resolve-cache/models/LiquidAI/LFM2.5-VL-450M/fc6221ca597f3315e4f82fc2df606783267b34ba/tokenizer_config.json "HTTP/1.1 200 OK"
+2026-09-20 15:01:13,201 [INFO] httpx: HTTP Request: GET https://us.aws.cdn.hf.co/xet-bridge-us/69d66cdfc643c52bfae1fb1a/cafce3f7e936600d41f29d132be1ff45dc8370696ceb4aa81d3065afb5e987e4?X-Xet-Cas-Uid=public&response-content-disposition=inline%3B+filename*%3DUTF-8%27%27model.safetensors%3B+filename%3D%22model.safetensors%22%3B&user_id=public&Expires=1789912873&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly91cy5hd3MuY2RuLmhmLmNvL3hldC1icmlkZ2UtdXMvNjlkNjZjZGZjNjQzYzUyYmZhZTFmYjFhL2NhZmNlM2Y3ZTkzNjYwMGQ0MWYyOWQxMzJiZTFmZjQ1ZGM4MzcwNjk2Y2ViNGFhODFkMzA2NWFmYjVlOTg3ZTRcXD9YLVhldC1DYXMtVWlkPXB1YmxpYyZyZXNwb25zZS1jb250ZW50LWRpc3Bvc2l0aW9uPWlubGluZSUzQitmaWxlbmFtZSUyQSUzRFVURi04JTI3JTI3bW9kZWwuc2FmZXRlbnNvcnMlM0IrZmlsZW5hbWUlM0QlMjJtb2RlbC5zYWZldGVuc29ycyUyMiUzQiZ1c2VyX2lkPXB1YmxpYyIsIkNvbmRpdGlvbiI6eyJEYXRlTGVzc1RoYW4iOnsiRXBvY2hUaW1lIjoxNzg5OTEyODczfX19XX0_&Signature=MEUCIQCObLzWnVJS53daro-xyEQCuMVEmLRNdnDsg36RgSO1gAIgdpUcWyxAk2l88NmpIzFpYVfqKYmPBAh70VvMaz9iH84_&Key-Pair-Id=01KXEF4KZ1B6FV465MAWR4M21F&Hash-Algorithm=SHA256 "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:58516 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58517 - "POST /shutdown HTTP/1.1" 200 OK

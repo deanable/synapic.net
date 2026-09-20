@@ -1,0 +1,9 @@
+2026-09-20 23:34:45,903 [INFO] synapic.inference: Port file written: C:\Users\Dean\AppData\Local\Temp\synapic_smoke_port.txt (port 59500, pid 30588)
+INFO:     Started server process [30588]
+INFO:     Waiting for application startup.
+2026-09-20 23:34:45,913 [INFO] synapic.inference: Synapic inference sidecar started
+2026-09-20 23:34:45,913 [INFO] synapic.inference: Auto-download disabled via SYNAPIC_DISABLE_AUTO_DOWNLOAD — skipping default model check
+INFO:     Application startup complete.
+INFO:     127.0.0.1:59503 - "PUT /config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59504 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59505 - "POST /shutdown HTTP/1.1" 200 OK

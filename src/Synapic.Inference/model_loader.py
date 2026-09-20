@@ -559,6 +559,27 @@ def download_model(model_id: str, revision: str = "main", token: Optional[str] =
 # ============================================================================
 
 
+_hf_pipeline: Optional[Any] = None
+_hf_pipeline_import_lock = threading.Lock()
+
+
+def _get_hf_pipeline() -> Any:
+    """Import and cache ``transformers.pipeline`` once, under a lock.
+
+    Concurrent first calls race the frozen PyInstaller import otherwise:
+    several threads saw a partially-initialized transformers module and
+    ``ImportError: cannot import name 'pipeline'`` 503'd the first batch
+    (observed with a 4-way parallel run against a cold sidecar).
+    """
+    global _hf_pipeline
+    if _hf_pipeline is None:
+        with _hf_pipeline_import_lock:
+            if _hf_pipeline is None:
+                from transformers import pipeline as hf_pipeline
+                _hf_pipeline = hf_pipeline
+    return _hf_pipeline
+
+
 def load_model(
     model_id: str,
     task: str,
@@ -583,7 +604,7 @@ def load_model(
     set_status("loading")
 
     try:
-        from transformers import pipeline as hf_pipeline
+        hf_pipeline = _get_hf_pipeline()
 
         local_model_path: Optional[str] = None
         if is_model_downloaded(model_id, token=token):
@@ -746,9 +767,7 @@ def run_local_label_confidence_inference(
                 "image-classification models expose per-label probabilities."
             )
     else:
-        from transformers import pipeline as hf_pipeline
-
-        pipe = hf_pipeline(config.MODEL_TASK_IMAGE_CLASSIFICATION, model=model)
+        pipe = _get_hf_pipeline()(config.MODEL_TASK_IMAGE_CLASSIFICATION, model=model)
 
     # Request every label so candidates are never silently dropped by the
     # pipeline's default top_k=5 truncation.

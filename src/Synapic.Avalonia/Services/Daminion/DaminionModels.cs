@@ -31,8 +31,12 @@ public sealed class DaminionCountResponse
     [JsonPropertyName("totalCount")]
     public int? TotalCount { get; init; }
 
+    /// <summary>Envelope payload (server 11.x wraps the count in "data": 47851).</summary>
+    [JsonPropertyName("data")]
+    public int? Data { get; init; }
+
     [JsonIgnore]
-    public int EffectiveCount => Count ?? TotalCount ?? 0;
+    public int EffectiveCount => Count ?? TotalCount ?? Data ?? 0;
 }
 
 /// <summary>Media item record (subset of fields Synapic consumes).</summary>

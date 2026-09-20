@@ -1,0 +1,22 @@
+2026-09-20 16:00:19,972 [INFO] synapic.inference: Port file written: C:\Users\Dean\AppData\Local\Temp\synapic_cuda_port.txt (port 53648, pid 41396)
+INFO:     Started server process [41396]
+INFO:     Waiting for application startup.
+2026-09-20 16:00:19,982 [INFO] synapic.inference: Synapic inference sidecar started
+INFO:     Application startup complete.
+2026-09-20 16:00:19,985 [INFO] synapic.inference: Default model LiquidAI/LFM2.5-VL-450M not found — downloading in background
+2026-09-20 16:00:19,985 [INFO] model_loader: [Download] Starting download for: LiquidAI/LFM2.5-VL-450M (revision main)
+2026-09-20 16:00:20,749 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/models/LiquidAI/LFM2.5-VL-450M/revision/main?blobs=true "HTTP/1.1 200 OK"
+2026-09-20 16:00:20,751 [INFO] model_loader: [Download] LiquidAI/LFM2.5-VL-450M: ~860 MB expected
+2026-09-20 16:00:20,751 [INFO] model_loader: [Download] Calling snapshot_download for LiquidAI/LFM2.5-VL-450M
+2026-09-20 16:00:21,105 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/models/LiquidAI/LFM2.5-VL-450M/revision/main "HTTP/1.1 200 OK"
+Fetching 10 files:   0%|          | 0/10 [00:00<?, ?it/s]2026-09-20 16:00:21,472 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/LiquidAI/LFM2.5-VL-450M/resolve/fc6221ca597f3315e4f82fc2df606783267b34ba/model.safetensors "HTTP/1.1 302 Found"
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-09-20 16:00:21,473 [WARNING] huggingface_hub.utils._http: Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+2026-09-20 16:00:21,476 [WARNING] huggingface_hub.file_download: Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+2026-09-20 16:00:21,834 [INFO] httpx: HTTP Request: GET https://huggingface.co/LiquidAI/LFM2.5-VL-450M/resolve/fc6221ca597f3315e4f82fc2df606783267b34ba/model.safetensors "HTTP/1.1 302 Found"
+2026-09-20 16:00:22,842 [INFO] httpx: HTTP Request: GET https://us.aws.cdn.hf.co/xet-bridge-us/69d66cdfc643c52bfae1fb1a/cafce3f7e936600d41f29d132be1ff45dc8370696ceb4aa81d3065afb5e987e4?response-content-disposition=inline%3B+filename*%3DUTF-8%27%27model.safetensors%3B+filename%3D%22model.safetensors%22%3B&X-Xet-Cas-Uid=public&user_id=public&Expires=1789916423&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly91cy5hd3MuY2RuLmhmLmNvL3hldC1icmlkZ2UtdXMvNjlkNjZjZGZjNjQzYzUyYmZhZTFmYjFhL2NhZmNlM2Y3ZTkzNjYwMGQ0MWYyOWQxMzJiZTFmZjQ1ZGM4MzcwNjk2Y2ViNGFhODFkMzA2NWFmYjVlOTg3ZTRcXD9yZXNwb25zZS1jb250ZW50LWRpc3Bvc2l0aW9uPWlubGluZSUzQitmaWxlbmFtZSUyQSUzRFVURi04JTI3JTI3bW9kZWwuc2FmZXRlbnNvcnMlM0IrZmlsZW5hbWUlM0QlMjJtb2RlbC5zYWZldGVuc29ycyUyMiUzQiZYLVhldC1DYXMtVWlkPXB1YmxpYyZ1c2VyX2lkPXB1YmxpYyIsIkNvbmRpdGlvbiI6eyJEYXRlTGVzc1RoYW4iOnsiRXBvY2hUaW1lIjoxNzg5OTE2NDIzfX19XX0_&Signature=MEQCIGDQLQk-BUmOouXaXBk9b9D02EobMdKkypgRw90Yuj8aAiBWVVtk8r42Rs%7EXl%7EaLeEz8deIGyeut429B6VWaFSkQ4Q__&Key-Pair-Id=01KXEF4KZ1B6FV465MAWR4M21F&Hash-Algorithm=SHA256 "HTTP/1.1 206 Partial Content"
+INFO:     127.0.0.1:55330 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55331 - "PUT /config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55332 - "GET /config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55333 - "POST /shutdown HTTP/1.1" 200 OK

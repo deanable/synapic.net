@@ -436,7 +436,9 @@ public partial class Step1DatasourceViewModel : ViewModelBase
                 searchTerm: string.IsNullOrWhiteSpace(SearchTerm) ? null : SearchTerm,
                 untaggedFields: _session.Datasource.UntaggedFields(),
                 statusFilter: StatusFilter);
-            CountText = $"{count:N0} items match the current filters";
+            CountText = count < 0
+                ? "Count failed — see log"
+                : $"{count:N0} items match the current filters";
             SynapicLog.Info(nameof(Step1DatasourceViewModel), $"Item count: {count}");
         }
         catch (Exception e)
