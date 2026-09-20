@@ -42,6 +42,29 @@ public sealed class MetadataWriterService : IMetadataWriter
 
             foreach (var dir in directories)
             {
+                // The writer emits an XMP packet (APP1 segment); MetadataExtractor
+                // exposes its properties via XmpMeta, not via dir.Tags. Read
+                // dc:description / dc:subject / photoshop:Headline from it.
+                if (dir is XmpDirectory xmpDir && xmpDir.XmpMeta is { } xmp)
+                {
+                    const string dc = "http://purl.org/dc/elements/1.1/";
+                    const string photoshop = "http://ns.adobe.com/photoshop/1.0/";
+
+                    if (string.IsNullOrEmpty(category))
+                        category = xmp.GetProperty(photoshop, "Headline")?.Value;
+
+                    if (string.IsNullOrEmpty(description))
+                        description = xmp.GetArrayItem(dc, "description", 1)?.Value;
+
+                    var subjectCount = xmp.CountArrayItems(dc, "subject");
+                    for (var i = 1; i <= subjectCount; i++)
+                    {
+                        var kw = xmp.GetArrayItem(dc, "subject", i)?.Value;
+                        if (!string.IsNullOrWhiteSpace(kw) && !keywords.Contains(kw))
+                            keywords.Add(kw.Trim());
+                    }
+                }
+
                 foreach (var tag in dir.Tags)
                 {
                     switch (tag.Name)

@@ -96,6 +96,26 @@ public partial class Step1DatasourceViewModel : ViewModelBase
         _session.Datasource.Type = value;
         OnPropertyChanged(nameof(IsLocal));
         OnPropertyChanged(nameof(IsDaminion));
+        OnPropertyChanged(nameof(IsLocalSelected));
+        OnPropertyChanged(nameof(IsDaminionSelected));
+    }
+
+    /// <summary>
+    /// Settable radio-button bindings. The radios must bind to these — IsLocal/
+    /// IsDaminion are getter-only, and a TwoWay IsChecked binding to them fails
+    /// silently: clicking "Daminion Server" checks the radio but never switches
+    /// the datasource type, so the connection panel never appears.
+    /// </summary>
+    public bool IsLocalSelected
+    {
+        get => IsLocal;
+        set { if (value) DatasourceType = "local"; }
+    }
+
+    public bool IsDaminionSelected
+    {
+        get => IsDaminion;
+        set { if (value) DatasourceType = "daminion"; }
     }
 
     public DaminionApiClient? ConnectedClient { get; private set; }

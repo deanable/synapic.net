@@ -8,8 +8,8 @@
     <TextBlock Text="Step 1 — Datasource" FontSize="22" FontWeight="Bold" />
 
     <StackPanel Orientation="Horizontal" Spacing="12">
-      <RadioButton Content="Local Folder" GroupName="ds" IsChecked="{Binding IsLocal}" />
-      <RadioButton Content="Daminion Server" GroupName="ds" IsChecked="{Binding IsDaminion}" />
+      <RadioButton Content="Local Folder" GroupName="ds" IsChecked="{Binding IsLocalSelected}" />
+      <RadioButton Content="Daminion Server" GroupName="ds" IsChecked="{Binding IsDaminionSelected}" />
     </StackPanel>
 
     <!-- Local panel -->

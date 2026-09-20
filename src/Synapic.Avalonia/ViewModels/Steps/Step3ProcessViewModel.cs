@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Synapic.Avalonia.Models;
@@ -182,6 +183,15 @@ public partial class Step3ProcessViewModel : ViewModelBase
 
     private void AppendLog(string line)
     {
+        // The orchestrator invokes this callback from thread-pool threads
+        // (ConfigureAwait(false)); LogLines is bound to the UI, so marshal.
+        // Without this, the first log line of a batch deadlocks or throws
+        // cross-thread on the bound ListBox and kills the batch silently.
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Post(() => AppendLog(line));
+            return;
+        }
         LogLines.Add($"[{DateTime.Now:HH:mm:ss}] {line}");
         while (LogLines.Count > 2000) LogLines.RemoveAt(0);
     }

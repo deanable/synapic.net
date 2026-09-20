@@ -48,7 +48,12 @@ a = Analysis(
     excludes=[
         "tkinter", "matplotlib", "jupyter", "notebook",
         "pytest", "sphinx", "docutils",
-        "torch.testing", "torch.distributed",
+        # NOTE: do NOT exclude torch.testing or torch.distributed — both are
+        # imported at runtime by torch itself (torch/autograd/gradcheck.py and
+        # torch/nn/parallel/distributed.py respectively, reached during
+        # torch.nn init). Excluding them breaks every /tag in the packaged exe
+        # (masked as "cannot import name 'nn' from partially initialized
+        # module 'torch'").
         # Not used by the sidecar (dedup → C#, metadata writes → C#)
         "cv2", "imagehash", "piexif", "iptcinfo3",
         "faiss", "sentence_transformers", "customtkinter",

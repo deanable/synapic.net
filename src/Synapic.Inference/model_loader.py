@@ -917,7 +917,7 @@ def pick_scoring_tier(
         return None
 
     if task == config.MODEL_TASK_IMAGE_CLASSIFICATION:
-        from .keyword_scoring import SCORING_TIER
+        from keyword_scoring import SCORING_TIER
 
         return SCORING_TIER.LABEL_CONFIDENCE
 
@@ -940,7 +940,7 @@ def score_keywords(
     """
     import time as _time
 
-    from .keyword_scoring import (
+    from keyword_scoring import (
         SCORING_TIER,
         ScoreResult,
         build_score_result,
@@ -987,7 +987,7 @@ def score_keywords(
 def _score_local_label_confidence(
     model, image_path: str, candidate_list: List[str]
 ) -> "ScoreResultLike":
-    from .keyword_scoring import SCORING_TIER, build_score_result
+    from keyword_scoring import SCORING_TIER, build_score_result
 
     score_map = run_local_label_confidence_inference(model, image_path, candidate_list)
 
@@ -1043,7 +1043,7 @@ def score_keywords_embedding(
     temperature: float = EMBEDDING_TEMPERATURE,
 ):
     """Tier 2.5: softmaxed cosine similarities between image and prompts."""
-    from .keyword_scoring import SCORING_TIER, build_score_result, softmax_from_similarities, unavailable_result
+    from keyword_scoring import SCORING_TIER, build_score_result, softmax_from_similarities, unavailable_result
 
     if not candidates:
         return unavailable_result("No candidate keywords supplied.", candidates)

@@ -58,7 +58,7 @@ def run_inference(
     # ------------------------------------------------------------------
     score_result = None
     prob_dict: Dict[str, float] = {}
-    if mode != "llm" and candidates:
+    if probability_mode != "llm" and candidates:
         try:
             score_result = model_loader.score_keywords(
                 model,
@@ -88,7 +88,7 @@ def run_inference(
                     prob_dict = {
                         k: v for k, v in prob_dict.items() if v >= probability_threshold
                     }
-                    from .keyword_scoring import build_thresholded_view
+                    from keyword_scoring import build_thresholded_view
 
                     score_result = build_thresholded_view(score_result, probability_threshold)
         except Exception as exc:
@@ -101,7 +101,7 @@ def run_inference(
     # ------------------------------------------------------------------
     # Probability-only tagging (no LLM inference)
     # ------------------------------------------------------------------
-    probability_only = mode == "probability"
+    probability_only = probability_mode == "probability"
 
     if probability_only and prob_dict:
         category = max(prob_dict, key=prob_dict.get)
