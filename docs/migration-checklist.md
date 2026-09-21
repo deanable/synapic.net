@@ -1,7 +1,7 @@
 # Migration Checklist
 
 File-by-file porting map from the Python app
-(`C:\Users\Dean\source\repos\Synapic`) to Synapic.NET, per spec §12.
+(`C:\Users\deank\repos\Synapic`) to Synapic.NET, per spec §12.
 
 ## Python sidecar (minimal changes; I/O boundaries only)
 

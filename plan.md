@@ -1,7 +1,7 @@
 # Synapic.NET — Systematic Implementation Plan
 
 **Implements:** `README.md` — *Synapic .NET Migration Specification v1.0* (Avalonia UI + Python/PyInstaller sidecar)
-**Porting source:** `C:\Users\Dean\source\repos\Synapic` (Python/CustomTkinter)
+**Porting source:** `C:\Users\deank\repos\Synapic` (Python/CustomTkinter)
 **Target:** this repository → full `Synapic.Net` solution
 **Execution rule:** each phase ends at a verification gate. Python inference logic is ported with **minimal changes** — only I/O boundaries (file/queue → HTTP) are adapted, per spec §4.3.
 **Scope update (user direction):** cloud engines (OpenRouter/Groq) are **removed from scope** — the local LFM-based Python sidecar is the only engine; `CloudInferenceClient` and `ISecretStore` were deleted.

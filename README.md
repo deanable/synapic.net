@@ -6,7 +6,7 @@
 
 
 
-This is a port from https://github.com/deanable/Synapic Located at C:\\Users\\Dean\\source\\repos\\Synapic
+This is a port from https://github.com/deanable/Synapic Located at C:\\Users\\deank\\repos\\Synapic
 
 # 
 
