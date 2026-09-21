@@ -76,20 +76,29 @@ public interface IDaminionApi
     Task<JsonElement> GetAllTags();
 
     /// <summary>Values of an indexed tag (saved searches, keywords…) — daminion_api.get_tag_values port.</summary>
+    /// <remarks>
+    /// Daminion routes this action on its full parameter set: every one of
+    /// indexedTagId / parentValueId / filter / pageIndex / pageSize must be
+    /// present or the server answers 404. ``filter`` therefore defaults to an
+    /// empty string instead of null — Refit drops null query parameters, and
+    /// the omission is what made saved-search enumeration 404 and degrade to
+    /// synthesized "Saved Search #id" entries.
+    /// </remarks>
     [Get("/api/IndexedTagValues/GetIndexedTagValues")]
     Task<JsonElement> GetIndexedTagValues(
         [Query] int indexedTagId,
         [Query] int parentValueId = -2,
-        [Query] string? filter = null,
+        [Query] string filter = "",
         [Query] int pageIndex = 0,
         [Query] int pageSize = 500);
 
     /// <summary>Bare /api/IndexedTagValues route (daminion_api.py fallback for builds lacking the GetIndexedTagValues action).</summary>
+    /// <remarks>Same full-parameter-set routing rule as <see cref="GetIndexedTagValues"/>.</remarks>
     [Get("/api/IndexedTagValues")]
     Task<JsonElement> GetIndexedTagValuesFallback(
         [Query] int indexedTagId,
         [Query] int parentValueId = -2,
-        [Query] string? filter = null,
+        [Query] string filter = "",
         [Query] int pageIndex = 0,
         [Query] int pageSize = 500);
 

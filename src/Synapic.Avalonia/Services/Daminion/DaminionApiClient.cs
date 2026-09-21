@@ -55,7 +55,7 @@ public sealed class DaminionApiClient
 
     public DaminionApiClient(string baseUrl, string username, string password, string? catalogId = null, double rateLimitSeconds = 0.1)
     {
-        _baseUrl = baseUrl.TrimEnd('/');
+        _baseUrl = NormalizeBaseUrl(baseUrl);
         _username = username;
         _password = password;
         _catalogId = catalogId;
@@ -64,6 +64,29 @@ public sealed class DaminionApiClient
         // and a long timeout: original-file downloads over slow LAN links
         // otherwise die at HttpClient's 100 s default ("A task was canceled").
         _apiFactory = () => RestService.For<IDaminionApi>(CreateHttpClient(), BuildSettings());
+    }
+
+    /// <summary>
+    /// Accept scheme-less host input ("damserver.local", "192.168.1.10:8080")
+    /// by defaulting to http://, trimming whitespace/trailing slashes, and
+    /// validating the result. Without this, <see cref="Uri"/> throws
+    /// "Invalid URI: The format of the URI could not be determined." at
+    /// connect time for the most natural user input.
+    /// </summary>
+    public static string NormalizeBaseUrl(string baseUrl)
+    {
+        var trimmed = (baseUrl ?? "").Trim().TrimEnd('/');
+        if (trimmed.Length == 0)
+            throw new ArgumentException("Daminion server URL is empty", nameof(baseUrl));
+        if (!trimmed.Contains("://"))
+            trimmed = "http://" + trimmed;
+        if (!Uri.TryCreate(trimmed, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps) ||
+            uri.HostNameType is not (UriHostNameType.Dns or UriHostNameType.IPv4 or UriHostNameType.IPv6))
+            throw new ArgumentException(
+                $"'{baseUrl}' is not a valid Daminion server URL (use e.g. http://damserver.local or damserver.local:8080)",
+                nameof(baseUrl));
+        return trimmed.TrimEnd('/');
     }
 
     private HttpClient CreateHttpClient()
@@ -507,11 +530,10 @@ public sealed class DaminionApiClient
     /// <summary>
     /// Saved searches via the "Saved Searches" indexed tag's values
     /// (daminion_client.get_saved_searches port — no dedicated endpoint).
-    /// Some server builds (observed on 11.0.0.3906) break the
-    /// IndexedTagValues enumeration route; there we fall back to discovering
-    /// existing searches with structured per-id queries, which the same
-    /// build honors. Names are unavailable in that path, so entries are
-    /// synthesized as "Saved Search #id".
+    /// Names come straight from those tag values, so they match the Daminion
+    /// client. The structured-query sweep below is only a last resort for
+    /// builds that cannot enumerate the tag at all: it recovers value ids but
+    /// not names, so entries there are synthesized as "Saved Search #id".
     /// </summary>
     public async Task<IReadOnlyList<DaminionSavedSearch>> GetSavedSearchesAsync(CancellationToken ct = default)
     {
@@ -554,11 +576,12 @@ public sealed class DaminionApiClient
     }
 
     /// <summary>
-    /// Fallback for servers whose IndexedTagValues enumeration is broken:
+    /// Last-resort discovery for builds whose indexed-tag enumeration fails:
     /// probe candidate value ids with structured queries (queryLine=tagId,N
     /// + operators) — the same mechanism the saved-search FETCH scope uses —
-    /// and keep the ids that match at least one item. Capped at a fixed
-    /// probe range; names cannot be resolved on such builds.
+    /// and keep the ids that match at least one item. Enumeration cannot yield
+    /// names here, so entries fall back to "Saved Search #id". Capped at a
+    /// fixed probe range.
     /// </summary>
     private const int SavedSearchDiscoveryMaxId = 50;
 
@@ -595,7 +618,10 @@ public sealed class DaminionApiClient
         foreach (var coll in UnwrapCollection(json, "collections", "items", "data"))
         {
             var id = GetInt(coll, "id") ?? 0;
-            var name = GetString(coll, "name", "title") ?? "";
+            // Python parity: the shared-collection list has been seen keyed by
+            // name, title, or the public access code — use whichever is present
+            // rather than dropping the picker entry's label.
+            var name = GetString(coll, "name", "title", "accessCode", "caption") ?? "";
             if (id > 0)
                 result.Add(new DaminionCollection(
                     id, name, GetString(coll, "code") ?? "", GetInt(coll, "itemCount", "count") ?? 0));
