@@ -78,6 +78,7 @@ public partial class StepDedupViewModel : ViewModelBase
             var dupCount = Groups.Sum(g => g.Items.Length - 1);
             ScanSummary = $"{files.Length} files scanned — {Groups.Count} groups, {dupCount} duplicates";
             SynapicLog.Info(nameof(StepDedupViewModel), ScanSummary);
+            TelemetryService.Shared.RecordDedup(dupCount);
         }
         catch (Exception e)
         {

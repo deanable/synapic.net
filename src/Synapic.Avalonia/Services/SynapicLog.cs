@@ -25,6 +25,9 @@ public static class SynapicLog
 
     public static string LogFilePath { get; private set; } = "";
 
+    /// <summary>Directory holding the log file; empty before Initialize.</summary>
+    public static string LogDirectory { get; private set; } = "";
+
     public static void Initialize(string? logDirectory = null, string minimumLevel = "info")
     {
         lock (InitLock)
@@ -33,6 +36,7 @@ public static class SynapicLog
 
             var dir = logDirectory ?? ResolveLogDirectory();
             Directory.CreateDirectory(dir);
+            LogDirectory = dir;
             LogFilePath = Path.Combine(dir, "synapic.log");
 
             // Overwrite per run: delete the previous session's file first.

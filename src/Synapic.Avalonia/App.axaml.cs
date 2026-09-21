@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using Synapic.Avalonia.Models;
 using Synapic.Avalonia.Services;
@@ -25,6 +26,17 @@ public partial class App : Application
         SynapicLog.Initialize(minimumLevel: config.Ui.LogLevel);
         var log = SynapicLog.For(nameof(App));
 
+        // Crash reporting (P6.1, local-only): install before anything else so
+        // even early-startup failures are captured. Reports land in the log
+        // directory's crashes/ folder; nothing is ever sent over the network.
+        var crashReporter = new CrashReporterService();
+        crashReporter.Install();
+        crashReporter.CrashCaptured += report =>
+        {
+            if (!report.IsTerminal)
+                Dispatcher.UIThread.Post(() => Views.CrashDialogWindow.Show(report));
+        };
+
         // .NET 10 Desktop Runtime self-heal: when the targeted runtime is
         // missing, silently download and install it, then continue startup.
         // Fire-and-forget: it must never block or crash the app launch, and
@@ -42,6 +54,16 @@ public partial class App : Application
         log.Information("Models root (HF_HOME for the sidecar): {ModelsRoot}", InferenceSidecarService.ModelsRoot());
         if (OperatingSystem.IsWindows())
             log.Information("Daminion connection params persist in registry: HKCU\\Software\\Synapic\\Daminion (password DPAPI-protected)");
+
+        // Usage telemetry (P6.1, spec §11 Q5): strictly opt-in via
+        // ui.telemetryEnabled, local counters only — no network, ever.
+        TelemetryService.Shared = new TelemetryService(
+            enabled: config.Ui.TelemetryEnabled,
+            filePath: Path.Combine(SynapicLog.LogDirectory, "synapic-usage.json"),
+            appVersion: typeof(App).Assembly.GetName().Version?.ToString(3),
+            osFamily: OperatingSystem.IsWindows() ? "Windows"
+                : OperatingSystem.IsMacOS() ? "macOS" : "Linux");
+        TelemetryService.Shared.RecordAppLaunch();
 
         var services = new ServiceCollection();
         services.AddSingleton(config);

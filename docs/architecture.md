@@ -30,6 +30,8 @@ Two-process design per the migration spec (README §2):
   - `MetadataWriterService` — EXIF/IPTC/XMP writes (JPEG APP1 XMP, PNG iTXt, TIFF sidecar)
   - `DedupService` — pHash/dHash/aHash via NetVips, Union-Find grouping
   - `ConfigService` / `SynapicLog` (Serilog) / `UpdateCheckService`
+  - `CrashReporterService` — local-only crash capture: global exception handlers write per-crash reports (exception + session-log snapshot) to `logs/crashes/`; non-terminal crashes also show a dialog with a copy-diagnostics button. Nothing is sent over the network.
+  - `TelemetryService` — opt-in (`ui.telemetryEnabled`, default false) local usage counters in `logs/synapic-usage.json`: launches, batches, items, model usage, dedup runs. No network, no paths, no identifiers.
 
 ### Python sidecar (`src/Synapic.Inference`)
 | Module | Responsibility |

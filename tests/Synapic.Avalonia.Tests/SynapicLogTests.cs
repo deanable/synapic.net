@@ -8,6 +8,7 @@ namespace Synapic.Avalonia.Tests;
 /// each debugging session starts from a clean transcript that contains
 /// everything from process launch to exit.
 /// </summary>
+[Collection("SynapicLogSerial")]
 public class SynapicLogTests : IDisposable
 {
     private readonly string _dir = Path.Combine(

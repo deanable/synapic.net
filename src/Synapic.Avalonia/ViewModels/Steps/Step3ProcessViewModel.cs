@@ -106,6 +106,7 @@ public partial class Step3ProcessViewModel : ViewModelBase
             _session.FailedItems = p.Failed;
         });
 
+        var batchStopwatch = System.Diagnostics.Stopwatch.StartNew();
         try
         {
             await Task.Run(() => _orchestrator.RunAsync(
@@ -117,6 +118,13 @@ public partial class Step3ProcessViewModel : ViewModelBase
                 _session.Results,
                 _pauseSource.Token,
                 _session.Engine.ToTagFieldSelection()));
+
+            // Local usage counters (opt-in): one line per finished batch.
+            TelemetryService.Shared.RecordBatch(
+                itemsProcessed: _session.ProcessedItems - _session.FailedItems,
+                itemsFailed: _session.FailedItems,
+                modelId: request.ModelId,
+                durationSeconds: batchStopwatch.Elapsed.TotalSeconds);
         }
         catch (OperationCanceledException)
         {
