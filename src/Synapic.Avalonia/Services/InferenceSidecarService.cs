@@ -30,7 +30,8 @@ public sealed class SidecarStatusChangedEventArgs : EventArgs
 
 /// <summary>
 /// Launches and manages the PyInstaller sidecar process (spec §5.3):
-/// manual launch by default, opt-in auto-launch, orphan-free shutdown.
+/// auto-launched with the app by default (`ui.autoLaunchSidecar=false` opts
+/// out to manual Start/Stop), orphan-free shutdown either way.
 /// </summary>
 public interface IInferenceSidecar : IAsyncDisposable
 {

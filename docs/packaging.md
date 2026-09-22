@@ -18,14 +18,44 @@ artifacts/<rid>/
 ## Build steps (any RID)
 
 ```
-build/fetch-python.ps1|.sh <rid>     # python-build-standalone 3.11.9 (pinned)
+build/fetch-python.ps1|.sh <rid>     # python-build-standalone 3.11.16 (pinned)
 build/install-python-deps.ps1|.sh <rid>   # pip install -r requirements.txt (CPU torch)
-build/build-sidecar.ps1|.sh <rid>    # PyInstaller → synapic-inference(.exe)
+build/build-sidecar.ps1|.sh <rid>    # PyInstaller → synapic-inference(.exe) + variant guard
 dotnet publish src/Synapic.Avalonia -c Release -r <rid> --self-contained
 build/package-windows.ps1            # Inno Setup 6 → Synapic-Setup-x64.exe
 build/package-linux.sh               # linuxdeploy → Synapic-x86_64.AppImage
 build/package-macos.sh <rid>         # codesign + notarytool + create-dmg
 ```
+
+`build-server.ps1|.sh` chains the first three steps; the app's **Build Server**
+button and CI both call it.
+
+## Sidecar variants: CPU and CUDA
+
+CUDA is not a separate program. It is the same sidecar built against CUDA torch
+wheels, and it exists only on Windows (`InferenceSidecarService.BuildableRids`
+returns `win-x64` + `win-x64-cuda`, `PreferredRid()` otherwise). The RID selects
+the wheel index and nothing else:
+
+| RID | torch wheels | Reference bundle size |
+|-----|--------------|----------------------|
+| `win-x64` | `download.pytorch.org/whl/cpu` | ~225 MB |
+| `linux-x64`, `osx-arm64` | `download.pytorch.org/whl/cpu` | ~225–270 MB |
+| `win-x64-cuda` | `download.pytorch.org/whl/cu126` | ~2.7 GB |
+
+`install-python-deps.ps1` picks the index from the `-cuda` suffix;
+`install-python-deps.sh` **refuses** a `-cuda` RID (CUDA is Windows-only, and
+quietly installing CPU wheels into a directory that later gets packaged as
+"CUDA" is exactly the failure the guard below exists to prevent).
+
+Because the RID is an input rather than proof, `build-sidecar.ps1|.sh` runs
+`build/check-sidecar-variant.py` after PyInstaller. It opens the packaged
+archive with PyInstaller's `CArchiveReader` and asserts the payload matches the
+RID: `torch/lib/torch_cuda.dll` plus the CUDA runtime DLLs for `-cuda`, and no
+CUDA runtime binaries at all inside a CPU bundle. The variants are otherwise
+indistinguishable — a wrong-wheels build still produces a valid executable under
+the expected name — and the mistake would only surface on a user's GPU machine
+after a 2.7 GB download.
 
 ## Notes & mitigations (spec §9)
 
@@ -38,7 +68,9 @@ build/package-macos.sh <rid>         # codesign + notarytool + create-dmg
   (`DotNetRuntimeCheckService`) is the second line of defense.
 - **Bundle size:** the sidecar excludes `cv2`, `imagehash`, `faiss`,
   `sentence-transformers`, `customtkinter` (dedup and metadata writing moved to
-  C#). UPX is on; disable in `synapic-inference.spec` if AV heuristics flag it.
+  C#). UPX is **off** in `synapic-inference.spec` — compressing a 2.7 GB CUDA
+  bundle is slow, AV-triggering, and pointless for a sidecar that starts once —
+  so a future size push has to come from excluding packages, not packing.
 - **Lite vs full installers:** "full" bakes `LiquidAI/LFM2.5-VL-1.6B` weights
   into the sidecar's model cache at build time (offline-first). "lite" ships
   without weights; the app downloads on first run via `POST /models/download`.
@@ -52,11 +84,25 @@ build/package-macos.sh <rid>         # codesign + notarytool + create-dmg
 
 - `.github/workflows/build.yml` — pushes to `main` and manual dispatch run
   everything: unit tests (pytest + xUnit), a 3-RID matrix (win-x64,
-  linux-x64, osx-arm64) building and uploading bundles, and the installer
-  smoke test. osx-x64 (Intel Mac) is not built: torch dropped x86_64 macOS
-  wheels after 2.2.2, so the sidecar cannot build there. PRs run the same but with a path filter (code/build
+  linux-x64, osx-arm64) building and uploading bundles, the CUDA sidecar job,
+  and the installer smoke test. osx-x64 (Intel Mac) is not built: torch dropped
+  x86_64 macOS wheels after 2.2.2, so the sidecar cannot build there. PRs run the same but with a path filter (code/build
   changes only — doc-only PRs skip CI) and **without** the installer smoke
   job, which costs extra Windows runner minutes.
+- **The CUDA job** (`sidecar-cuda`, windows-2022) builds `win-x64-cuda`: it
+  asserts the *installed* torch is a CUDA 12.x build (a cheap 30-second check
+  that runs before the ~20-minute PyInstaller pass), lets `build-sidecar.ps1`
+  run the payload guard, boots the finished bundle through the real port-file
+  handshake and polls `/health` with `SYNAPIC_DISABLE_AUTO_DOWNLOAD=1` (so CI
+  never downloads the 860 MB default model), then uploads the executable with a
+  SHA-256 for 7 days. GitHub-hosted runners have **no GPU**, so this proves the
+  bundle boots with CUDA wheels installed — torch falls back to CPU — and can
+  never prove GPU inference. It is skipped on PRs (add the `build-cuda` label to
+  force it) because ~3 GB of wheels plus a ~2.7 GB artifact is real cost per run.
+- **Size ceilings when publishing:** `actions/upload-artifact` accepts a 10 GB
+  artifact, but GitHub Release assets are capped at **2 GiB per file**, so the
+  CUDA executable cannot be attached to a release as a single asset — split it
+  first and document how to recombine.
 - `.github/workflows/release.yml` — `v*` tags: same matrix, plus packaging,
   signing (when secrets are present), and a GitHub Release with all assets.
 

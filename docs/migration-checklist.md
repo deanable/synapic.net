@@ -52,8 +52,11 @@ File-by-file porting map from the Python app
 
 - ✅ `dotnet build` clean (TreatWarningsAsErrors)
 - ✅ 6 contract tests (Synapic.Shared.Tests)
-- ✅ 89 C# service/model tests (Synapic.Avalonia.Tests)
-- ✅ 80 pytest sidecar tests incl. live FastAPI contract checks
+- ✅ 119 C# service/model/view-model tests (Synapic.Avalonia.Tests)
+- ✅ 94 pytest sidecar tests incl. live FastAPI contract checks
+
+See [`testing.md`](testing.md) for what each suite covers and which tests are
+environment-gated.
 - ✅ P6.1 crash reporting + opt-in telemetry (local-only; no network)
 - ⏳ End-to-end run against a real Daminion server (needs environment)
 - ⏳ 4-RID PyInstaller bundle builds (CI)

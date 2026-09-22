@@ -33,7 +33,7 @@
 ## 2. Architecture Summary (per spec §2)
 
 - Avalonia app ⇄ HTTP/JSON `127.0.0.1:<OS-assigned port>` ⇄ FastAPI sidecar `synapic-inference(.exe)`
-- **Sidecar lifecycle (manual default):** Start Server button (or opt-in `ui.autoLaunchSidecar`) → `--port=0` → port file `%TEMP%/synapic_port_{pid}.txt` (`port\npid\n`) → poll `/health` to `ready` (max 120 s) → `/tag` 5-min timeout, one retry on 503 → exit: `POST /shutdown` → 5 s grace → `Process.Kill(entireProcessTree: true)` — never an orphan
+- **Sidecar lifecycle (auto-launch default):** the sidecar starts with the app; set `ui.autoLaunchSidecar=false` to opt out and use the Start Server button → `--port=0` → port file `%TEMP%/synapic_port_{pid}.txt` (`port\npid\n`) → poll `/health` to `ready` (max 120 s) → `/tag` 5-min timeout, one retry on 503 → exit: `POST /shutdown` → 5 s grace → `Process.Kill(entireProcessTree: true)` — never an orphan
 - **Status machine:** Stopped → Starting → Ready | Error + `StatusChanged`; PID liveness + failed /health polls → "Server stopped unexpectedly — restart?" prompt
 - **Engine routing:** local HF → sidecar only (OpenRouter/Groq removed from scope)
 - **Processing loop lives in C#** (`ProcessingOrchestrator`): per-item `/tag` via SemaphoreSlim; pause/abort/retry per item
@@ -48,7 +48,7 @@
 | P0.2 | Projects: Synapic.Avalonia, Synapic.Shared, tests (xUnit+Headless, pytest, integration) |
 | P0.3 | Sidecar source: service.py, model_loader.py ← huggingface_utils.py, inference_engine.py, tag_extractor.py ← extract_tags_from_result + keyword scoring; trimmed pinned requirements; synapic-inference.spec |
 | P0.4 | Build scripts: fetch-python, install-python-deps, build-sidecar (ps1 + sh) |
-| P0.5 | Avalonia shell: Start/Stop Server + status indicator, log pane; InferenceSidecarService full lifecycle; Options autoLaunchSidecar (default false) |
+| P0.5 | Avalonia shell: Start/Stop Server + status indicator, log pane; InferenceSidecarService full lifecycle; config `ui.autoLaunchSidecar` (default **true**; opt out for manual Start/Stop) |
 | P0.6 | CI build.yml: 4-RID matrix |
 | P0.7 | ConfigService v1; LoggingService (Serilog file + UI sink) |
 
@@ -136,7 +136,7 @@ Bundle size → trimmed deps + UPX + lite installer (P0/P5) · Cold start → la
 
 ## 12. Definition of Done
 
-- **MVP (end P2):** Start Server (manual default / auto opt-in) → Step 1 local+Daminion → Step 2 local+cloud → Step 3 progress/abort → Step 4 results → metadata written to files and Daminion
+- **MVP (end P2):** Sidecar auto-launch (manual opt-out) → Step 1 local+Daminion → Step 2 local+cloud → Step 3 progress/abort → Step 4 results → metadata written to files and Daminion
 - **Feature parity (end P5):** + dedup wizard, themes, signed installers ×4, auto-update, baked models
 - **Hardened (end P6):** opt-in telemetry + crash reporting, soak-tested, docs complete
 

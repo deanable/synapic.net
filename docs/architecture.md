@@ -1,5 +1,9 @@
 # Synapic.NET Architecture
 
+High-level overview. For the full picture see
+[`codebase-guide.md`](codebase-guide.md), plus [`csharp-reference.md`](csharp-reference.md)
+and [`sidecar-reference.md`](sidecar-reference.md).
+
 Two-process design per the migration spec (README §2):
 
 ```
@@ -48,12 +52,12 @@ boundaries changed (UI queues → HTTP).
 
 ## Sidecar lifecycle (README §2)
 
-1. **Manual launch (default):** user clicks **Start Server**.
+1. **Auto-launch (default):** the sidecar starts with the app (unless `ui.autoLaunchSidecar` is `false` in config.json, in which case the user presses **Start Server** to trigger this same sequence).
 2. Avalonia launches `synapic-inference --port=0` with `SYNAPIC_PORT_FILE=%TEMP%/synapic_port_{pid}.txt` and `HF_HOME=%LOCALAPPDATA%/Synapic/models` (or `~/.cache/synapic/models`).
 3. The sidecar binds an OS-assigned port and writes `port\npid\n` to the port file.
 4. Avalonia reads the port, polls `/health` until `status == "ready"` (max 120 s).
 5. **Inference:** `POST /tag` with a 5-minute timeout; one automatic retry on 503 (model loading).
-6. **Auto-launch (opt-in):** `ui.autoLaunchSidecar: true` in config.json starts the sidecar on app startup.
+6. **Manual launch (opt-out):** with `ui.autoLaunchSidecar: false` in config.json the server stays stopped until the user presses **Start Server**; the setting is config-file-only (there is no Options panel in the shipped UI).
 7. **Shutdown (always):** app exit → `POST /shutdown` → 5 s grace → `Process.Kill(entireProcessTree: true)`. The sidecar never outlives the app.
 8. **Crash detection:** a liveness watcher detects unexpected process exit and surfaces "Server stopped unexpectedly" in the UI; the user can restart from the toolbar.
 
@@ -67,6 +71,15 @@ the toolbar indicator + Start/Stop button enablement.
 - **local** → sidecar `/tag` — the only engine (cloud providers OpenRouter/Groq
   were removed from scope; there are no API keys and no `ISecretStore`)
 
+## Concurrency (short version)
+
+The batch loop runs up to **4 items in parallel** (`SemaphoreSlim` in
+`ProcessingOrchestrator`, hard-coded in Step 3). The sidecar is a single uvicorn
+process whose `/tag` endpoint is a sync handler, so requests run on Starlette's
+worker threadpool against **one shared cached pipeline**; model construction is
+serialized by a lock. See [codebase-guide §6](codebase-guide.md#6-concurrency-model-important)
+for the GPU/VRAM caveats.
+
 ## Data flow for a batch (Step 3)
 
 ```
@@ -76,7 +89,7 @@ Step1 selection ─► DatasourceSelection
               ProcessingOrchestrator.RunAsync
                      │ per item (SemaphoreSlim ≤ 4):
                      │  1. obtain image (local path | Daminion temp download per resizeScale)
-                     │  2. POST /tag (sidecar | cloud)
+                     │  2. POST /tag (sidecar)
                      │  3. write metadata (file XMP/IPTC | Daminion BatchChange)
                      │  4. record ProcessItemResult (incl. probabilities + scoring tiers)
                      ▼

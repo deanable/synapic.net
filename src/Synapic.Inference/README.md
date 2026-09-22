@@ -26,8 +26,11 @@ python -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r src/Synapic.Inference/requirements.txt
 
+# Flat absolute imports (import config, import model_loader, ...) mean the
+# sidecar must be launched from its own directory.
+cd src/Synapic.Inference
 export SYNAPIC_PORT_FILE=/tmp/synapic_port.txt   # Windows: set SYNAPIC_PORT_FILE=%TEMP%\synapic_port.txt
-python -m src.Synapic.Inference.service --port=0
+python service.py --port=0
 ```
 
 The sidecar writes `port\npid\n` to `$SYNAPIC_PORT_FILE` once uvicorn has
