@@ -1,9 +1,10 @@
 # Fetch a standalone Python 3.11 build (python-build-standalone) for a RID.
-# Usage: fetch-python.ps1 <rid> [output-dir]
+# Usage: fetch-python.ps1 <rid> [output-dir] [-Force]
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$Rid,
-    [string]$OutputDir = "build/_python"
+    [string]$OutputDir = "build/_python",
+    [switch]$Force
 )
 
 $ErrorActionPreference = "Stop"
@@ -24,6 +25,16 @@ $archive = "cpython-$PythonVersion+$PbsTag-$triple-$flavor.tar.gz"
 $url = "https://github.com/astral-sh/python-build-standalone/releases/download/$PbsTag/$archive"
 
 $dest = Join-Path $OutputDir "$Rid"
+
+# Re-extracting the tarball over an existing install removes the packages that
+# were pip-installed into it (verified the hard way: a rerun wiped a cu126 torch
+# install), so treat an existing interpreter as done. CI always starts clean.
+$installedPython = Join-Path $dest "python\python.exe"
+if (-not $Force -and (Test-Path $installedPython)) {
+    Write-Host "Standalone Python already present at $installedPython - skipping fetch (use -Force to refresh)."
+    return
+}
+
 New-Item -ItemType Directory -Force -Path $dest | Out-Null
 $tarball = Join-Path $dest $archive
 

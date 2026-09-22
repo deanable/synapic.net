@@ -3,7 +3,13 @@
 # Usage: fetch-python.sh <rid> [output-dir]
 set -euo pipefail
 
-RID="${1:?usage: fetch-python.sh <rid> [output-dir]}"
+FORCE=0
+if [[ "${1:-}" == "--force" ]]; then
+  FORCE=1
+  shift
+fi
+
+RID="${1:?usage: fetch-python.sh [--force] <rid> [output-dir]}"
 OUT_DIR="${2:-build/_python}"
 
 # python-build-standalone release tag (pin for reproducibility)
@@ -20,6 +26,16 @@ esac
 
 ARCHIVE="cpython-${PYTHON_VERSION}+${PBS_TAG}-${TRIPLE}-${FLAVOR}.tar.gz"
 URL="https://github.com/astral-sh/python-build-standalone/releases/download/${PBS_TAG}/${ARCHIVE}"
+
+# Re-extracting the tarball over an existing install removes the packages that
+# were pip-installed into it (verified the hard way: a rerun wiped a cu126 torch
+# install), so treat an existing interpreter as done. CI always starts clean.
+INSTALLED_PY="$OUT_DIR/$RID/python/bin/python3"
+[[ -f "$INSTALLED_PY" ]] || INSTALLED_PY="$OUT_DIR/$RID/python/python.exe"
+if [[ "$FORCE" != "1" && -f "$INSTALLED_PY" ]]; then
+  echo "Standalone Python already present at $OUT_DIR/$RID/python - skipping fetch (use --force to refresh)."
+  exit 0
+fi
 
 mkdir -p "$OUT_DIR/$RID"
 echo "Fetching $URL"

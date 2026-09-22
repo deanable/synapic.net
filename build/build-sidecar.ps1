@@ -31,6 +31,15 @@ try {
         --workpath "build/_work/$Rid" `
         "src/Synapic.Inference/synapic-inference.spec"
     if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed with exit code $LASTEXITCODE" }
+
+    # Guard: the CUDA variant is the same program over different torch wheels, so
+    # a wrong-wheels build still produces a valid exe under the expected name.
+    # Assert the payload matches the RID before anyone ships a 2.7 GB lie.
+    Write-Host "Verifying the packaged sidecar matches $Rid..."
+    & $pythonExe "build/check-sidecar-variant.py" (Join-Path $OutputDir "synapic-inference.exe") $Rid
+    if ($LASTEXITCODE -ne 0) {
+        throw "The packaged sidecar does not match RID '$Rid' - see build/check-sidecar-variant.py"
+    }
 }
 finally {
     Pop-Location

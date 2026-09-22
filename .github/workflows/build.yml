@@ -39,6 +39,12 @@ jobs:
       - name: Run sidecar tests (no torch required)
         run: python -m pytest tests/Synapic.Inference.Tests -v
 
+      # The protocol doc is generated from the FastAPI OpenAPI schema + the C#
+      # contract DTOs; this fails when the committed file is stale or when the
+      # two sides disagree on a request field set.
+      - name: Verify sidecar protocol doc is up to date
+        run: python build/generate-protocol-doc.py --check
+
   dotnet-tests:
     name: .NET tests
     runs-on: ubuntu-22.04
@@ -132,6 +138,119 @@ jobs:
           path: |
             artifacts/${{ matrix.rid }}/*
             !artifacts/${{ matrix.rid }}/**/*.pdb
+          retention-days: 7
+
+  # CUDA is a packaging variant, not a different program: the same sidecar built
+  # against CUDA torch wheels, and CUDA only exists for Windows
+  # (InferenceSidecarService.BuildableRids). Bundling CUDA wheels needs no GPU, so
+  # a GitHub-hosted runner can build it; what it cannot do is prove GPU inference
+  # works (the smoke test below asserts the bundle boots and serves /health on a
+  # machine with no NVIDIA driver, i.e. that the CUDA wheels still degrade to CPU).
+  sidecar-cuda:
+    name: Build sidecar win-x64-cuda (CUDA 12.6)
+    runs-on: windows-2022
+    needs: [python-tests, dotnet-tests]
+    # ~3 GB of cu126 wheels in, a ~2.7 GB single-file bundle out: too expensive
+    # for every PR. Runs on main pushes + manual dispatch, or a PR labelled
+    # `build-cuda` when the packaging path itself changes.
+    if: >-
+      github.event_name != 'pull_request'
+      || contains(github.event.pull_request.labels.*.name, 'build-cuda')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch standalone Python
+        run: ./build/fetch-python.ps1 -Rid win-x64-cuda
+
+      - name: Install Python deps (cu126 wheels)
+        run: ./build/install-python-deps.ps1 -Rid win-x64-cuda
+
+      # Fail before the 20-minute PyInstaller run when the wrong wheels landed.
+      - name: Verify torch is a CUDA build
+        run: |
+          $py = "build/_python/win-x64-cuda/python/python.exe"
+          $version = & $py -c "import torch; print(torch.__version__)"
+          $cuda = & $py -c "import torch; print(torch.version.cuda or 'none')"
+          Write-Host "torch $version (cuda $cuda)"
+          if ($cuda -notmatch '^12\.') {
+            Write-Host "::error::CPU torch wheels were installed - expected a CUDA 12.x build (got '$cuda')"
+            exit 1
+          }
+
+      # build-sidecar.ps1 also asserts the packaged payload really is the CUDA
+      # variant (build/check-sidecar-variant.py), so a wrong-wheels bundle cannot
+      # reach the upload below.
+      - name: Build sidecar (PyInstaller)
+        run: ./build/build-sidecar.ps1 -Rid win-x64-cuda
+
+      # SYNAPIC_DISABLE_AUTO_DOWNLOAD keeps the 860 MB default-model fetch out of
+      # CI; the port-file handshake mirrors what the Avalonia host does.
+      - name: Smoke test the bundle (boots and serves /health with no GPU)
+        run: |
+          $exe = "artifacts/win-x64-cuda/synapic-inference.exe"
+          $portFile = Join-Path $env:RUNNER_TEMP 'synapic_cuda_port.txt'
+          Remove-Item $portFile -ErrorAction SilentlyContinue
+          $env:SYNAPIC_PORT_FILE = $portFile
+          $env:SYNAPIC_DISABLE_AUTO_DOWNLOAD = '1'
+
+          $p = Start-Process $exe -ArgumentList '--port=0' -PassThru `
+            -RedirectStandardOutput cuda-stdout.txt -RedirectStandardError cuda-stderr.txt
+
+          # A 2.7 GB onefile unpacks itself on first launch; that dominates startup.
+          $deadline = (Get-Date).AddSeconds(300)
+          $ready = $false
+          $port = 0
+          $health = $null
+          while ((Get-Date) -lt $deadline) {
+            if ($p.HasExited) { break }
+            if (Test-Path $portFile) {
+              $line = (Get-Content $portFile -First 1).Trim()
+              if ($line -match '^\d+$') {
+                $port = [int]$line
+                try {
+                  $health = Invoke-RestMethod "http://127.0.0.1:$port/health" -TimeoutSec 5
+                  if ($health.status -eq 'ready') { $ready = $true; break }
+                } catch { }
+              }
+            }
+            Start-Sleep -Seconds 3
+          }
+
+          if (-not $ready) {
+            Write-Host "=== stdout (last 40) ==="
+            Get-Content cuda-stdout.txt -ErrorAction SilentlyContinue | Select-Object -Last 40 | Write-Host
+            Write-Host "=== stderr (last 40) ==="
+            Get-Content cuda-stderr.txt -ErrorAction SilentlyContinue | Select-Object -Last 40 | Write-Host
+            if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
+            Write-Host "::error::the CUDA bundle never reported ready (port file '$portFile', port '$port')"
+            exit 1
+          }
+
+          # NB: ${port} - "$port:" parses as a scoped variable reference in PowerShell.
+          Write-Host "Ready on port ${port}: $($health | ConvertTo-Json -Compress)"
+          Write-Host "device reported: $($health.device)"
+          try { Invoke-RestMethod "http://127.0.0.1:$port/shutdown" -Method Post -TimeoutSec 15 | Out-Null } catch { }
+          $p.WaitForExit(30000) | Out-Null
+          if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
+          Write-Host "Smoke test passed - the CUDA bundle boots with no GPU present."
+
+      - name: Checksum the bundle
+        run: |
+          $exe = "artifacts/win-x64-cuda/synapic-inference.exe"
+          $hash = (Get-FileHash $exe -Algorithm SHA256).Hash
+          $sizeGb = [math]::Round((Get-Item $exe).Length / 1GB, 2)
+          "SHA256 (synapic-inference.exe) = $hash" | Set-Content artifacts/win-x64-cuda/SHA256SUMS.txt
+          Write-Host "CUDA sidecar: $sizeGb GB, sha256 $hash"
+
+      # Note: GitHub Release assets are capped at 2 GiB per file, so this bundle
+      # cannot be published as a single release asset - split it first.
+      - name: Upload the CUDA sidecar
+        uses: actions/upload-artifact@v4
+        with:
+          name: Synapic-sidecar-win-x64-cuda
+          path: |
+            artifacts/win-x64-cuda/synapic-inference.exe
+            artifacts/win-x64-cuda/SHA256SUMS.txt
           retention-days: 7
 
   installer-smoke:

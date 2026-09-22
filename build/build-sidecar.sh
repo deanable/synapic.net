@@ -29,6 +29,13 @@ echo "Running PyInstaller for $RID"
   --workpath "build/_work/$RID" \
   "src/Synapic.Inference/synapic-inference.spec"
 
+# Guard: the CPU/CUDA variants are the same program over different torch wheels,
+# so a wrong-wheels build still produces a valid exe under the expected name.
+# Assert the payload matches the RID before anyone ships a mislabelled bundle.
+echo "Verifying the packaged sidecar matches $RID..."
+if [[ "$RID" == win-x64* ]]; then EXE="$OUT_DIR/synapic-inference.exe"; else EXE="$OUT_DIR/synapic-inference"; fi
+"$PY" build/check-sidecar-variant.py "$EXE" "$RID"
+
 # Convenience copy without RID suffix (CI stages it next to the dotnet app).
 cp -v "$OUT_DIR/synapic-inference" "$OUT_DIR/synapic-inference" 2>/dev/null || true
 ls -lh "$OUT_DIR"

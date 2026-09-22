@@ -14,6 +14,14 @@ else
   PY="$PYTHON_DIR/bin/python3"
 fi
 
+# CUDA is a Windows-only packaging variant (see install-python-deps.ps1) and this
+# script has no cu12x wheel path. Refuse loudly rather than quietly installing CPU
+# wheels into a directory that build-sidecar.sh would then package as "CUDA".
+if [[ "$RID" == *-cuda ]]; then
+  echo "Unsupported RID: $RID - CUDA variants are Windows-only; use build/install-python-deps.ps1" >&2
+  exit 1
+fi
+
 echo "Upgrading pip tooling"
 "$PY" -m pip install --upgrade pip setuptools wheel
 
