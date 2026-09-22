@@ -185,7 +185,17 @@ def _effective_task(requested: str | None) -> str:
 # ---------------------------------------------------------------------------
 
 
-@app.get("/health")
+@app.get(
+    "/health",
+    responses={
+        200: {
+            "description": (
+                "Readiness, loaded model/device and any active model download "
+                "(HealthResponse)."
+            )
+        }
+    },
+)
 def health() -> dict:
     snapshot = model_loader.get_state_snapshot()
     payload = {
@@ -201,7 +211,13 @@ def health() -> dict:
     return payload
 
 
-@app.get("/models/list")
+@app.get(
+    "/models/list",
+    responses={
+        200: {"description": "Models cached in HF_HOME (ModelInfo[])."},
+        500: {"description": "Cache scan failed."},
+    },
+)
 def models_list() -> list[dict]:
     try:
         return model_loader.find_local_models()
@@ -210,7 +226,18 @@ def models_list() -> list[dict]:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@app.post("/models/download")
+@app.post(
+    "/models/download",
+    responses={
+        200: {
+            "description": (
+                "Download outcome: status is download_started | "
+                "already_downloading | downloaded, plus model_id."
+            )
+        },
+        422: {"description": "Model is an unsupported (quantized) format."},
+    },
+)
 def models_download(body: DownloadRequestModel):
     if not model_loader.is_model_compatible(body.model_id):
         reason = model_loader.get_incompatibility_reason(body.model_id) or "incompatible model"
@@ -237,7 +264,25 @@ def models_download(body: DownloadRequestModel):
     return {"status": "download_started", "model_id": body.model_id}
 
 
-@app.post("/tag")
+@app.post(
+    "/tag",
+    responses={
+        200: {
+            "description": (
+                "Inference result (TagResponse): category, keywords, "
+                "description, probabilities, optional scoring, inference_ms, "
+                "model_used."
+            )
+        },
+        404: {"description": "Image not found."},
+        422: {"description": "Validation error (blank image_path, bad task)."},
+        503: {
+            "description": (
+                "Model still loading or failed to load; the host retries once."
+            )
+        },
+    },
+)
 def tag(body: TagRequestModel) -> dict:
     if not body.image_path:
         raise HTTPException(status_code=422, detail="image_path is required")
@@ -288,13 +333,24 @@ def tag(body: TagRequestModel) -> dict:
     return response
 
 
-@app.get("/config")
+@app.get(
+    "/config",
+    responses={
+        200: {"description": "Current session inference config (ConfigDto)."}
+    },
+)
 def get_config() -> dict:
     with _config_lock:
         return dict(_session_config)
 
 
-@app.put("/config")
+@app.put(
+    "/config",
+    responses={
+        200: {"description": "Updated session inference config (ConfigDto)."},
+        422: {"description": "Validation error (unsupported task)."},
+    },
+)
 def put_config(body: ConfigModel) -> dict:
     with _config_lock:
         updates = body.model_dump(exclude_none=True)
@@ -306,7 +362,12 @@ def put_config(body: ConfigModel) -> dict:
         return dict(_session_config)
 
 
-@app.post("/shutdown")
+@app.post(
+    "/shutdown",
+    responses={
+        200: {"description": "`{status: shutting_down}` - the process exits."}
+    },
+)
 def shutdown() -> dict:
     _shutdown_event.set()
     threading.Thread(target=_delayed_exit, name="shutdown", daemon=True).start()
