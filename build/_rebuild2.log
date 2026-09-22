@@ -1,0 +1,252 @@
+[1/3] Standalone Python already present - skipping fetch.
+[2/3] Installing sidecar Python dependencies (fast when already installed)...
+Upgrading pip tooling
+Requirement already satisfied: pip in .\build\_python\win-x64\python\Lib\site-packages (26.2.1)
+Requirement already satisfied: setuptools in .\build\_python\win-x64\python\Lib\site-packages (84.0.0)
+Requirement already satisfied: wheel in .\build\_python\win-x64\python\Lib\site-packages (0.48.0)
+Requirement already satisfied: packaging>=24.0 in .\build\_python\win-x64\python\Lib\site-packages (from wheel) (26.3)
+Installing torch/torchvision (CPU wheels)
+Looking in indexes: https://download.pytorch.org/whl/cpu
+Requirement already satisfied: torch==2.9.1 in .\build\_python\win-x64\python\Lib\site-packages (2.9.1+cpu)
+Requirement already satisfied: torchvision==0.24.1 in .\build\_python\win-x64\python\Lib\site-packages (0.24.1+cpu)
+Requirement already satisfied: filelock in .\build\_python\win-x64\python\Lib\site-packages (from torch==2.9.1) (3.32.3)
+Requirement already satisfied: typing-extensions>=4.10.0 in .\build\_python\win-x64\python\Lib\site-packages (from torch==2.9.1) (4.16.0)
+Requirement already satisfied: sympy>=1.13.3 in .\build\_python\win-x64\python\Lib\site-packages (from torch==2.9.1) (1.14.0)
+Requirement already satisfied: networkx>=2.5.1 in .\build\_python\win-x64\python\Lib\site-packages (from torch==2.9.1) (3.6.1)
+Requirement already satisfied: jinja2 in .\build\_python\win-x64\python\Lib\site-packages (from torch==2.9.1) (3.1.6)
+Requirement already satisfied: fsspec>=0.8.5 in .\build\_python\win-x64\python\Lib\site-packages (from torch==2.9.1) (2026.7.0)
+Requirement already satisfied: numpy in .\build\_python\win-x64\python\Lib\site-packages (from torchvision==0.24.1) (2.4.6)
+Requirement already satisfied: pillow!=8.3.*,>=5.3.0 in .\build\_python\win-x64\python\Lib\site-packages (from torchvision==0.24.1) (12.0.0)
+Requirement already satisfied: mpmath<1.4,>=1.1.0 in .\build\_python\win-x64\python\Lib\site-packages (from sympy>=1.13.3->torch==2.9.1) (1.3.0)
+Requirement already satisfied: MarkupSafe>=2.0 in .\build\_python\win-x64\python\Lib\site-packages (from jinja2->torch==2.9.1) (3.0.3)
+Installing sidecar requirements (torch/torchvision already satisfied)
+Requirement already satisfied: torch==2.9.1 in .\build\_python\win-x64\python\Lib\site-packages (from -r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 7)) (2.9.1+cpu)
+Requirement already satisfied: torchvision==0.24.1 in .\build\_python\win-x64\python\Lib\site-packages (from -r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 8)) (0.24.1+cpu)
+Requirement already satisfied: timm==1.0.24 in .\build\_python\win-x64\python\Lib\site-packages (from -r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 9)) (1.0.24)
+Requirement already satisfied: transformers==5.1.0 in .\build\_python\win-x64\python\Lib\site-packages (from -r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 17)) (5.1.0)
+Requirement already satisfied: huggingface_hub==1.3.3 in .\build\_python\win-x64\python\Lib\site-packages (from -r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 18)) (1.3.3)
+Requirement already satisfied: hf_xet==1.2.0 in .\build\_python\win-x64\python\Lib\site-packages (from -r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 19)) (1.2.0)
+Requirement already satisfied: accelerate==1.12.0 in .\build\_python\win-x64\python\Lib\site-packages (from -r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 20)) (1.12.0)
+Requirement already satisfied: sentencepiece==0.2.1 in .\build\_python\win-x64\python\Lib\site-packages (from -r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 21)) (0.2.1)
+Requirement already satisfied: protobuf==6.33.3 in .\build\_python\win-x64\python\Lib\site-packages (from -r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 22)) (6.33.3)
+Requirement already satisfied: qwen-vl-utils==0.0.14 in .\build\_python\win-x64\python\Lib\site-packages (from -r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 25)) (0.0.14)
+Requirement already satisfied: pillow==12.0.0 in .\build\_python\win-x64\python\Lib\site-packages (from -r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 28)) (12.0.0)
+Requirement already satisfied: tqdm==4.67.1 in .\build\_python\win-x64\python\Lib\site-packages (from -r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 31)) (4.67.1)
+Requirement already satisfied: psutil==7.1.0 in .\build\_python\win-x64\python\Lib\site-packages (from -r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 32)) (7.1.0)
+Requirement already satisfied: fastapi==0.119.0 in .\build\_python\win-x64\python\Lib\site-packages (from -r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 35)) (0.119.0)
+Requirement already satisfied: uvicorn==0.38.0 in .\build\_python\win-x64\python\Lib\site-packages (from -r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 36)) (0.38.0)
+Requirement already satisfied: pydantic==2.12.0 in .\build\_python\win-x64\python\Lib\site-packages (from -r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 37)) (2.12.0)
+Requirement already satisfied: pyinstaller==6.18.0 in .\build\_python\win-x64\python\Lib\site-packages (from -r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 40)) (6.18.0)
+Requirement already satisfied: filelock in .\build\_python\win-x64\python\Lib\site-packages (from torch==2.9.1->-r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 7)) (3.32.3)
+Requirement already satisfied: typing-extensions>=4.10.0 in .\build\_python\win-x64\python\Lib\site-packages (from torch==2.9.1->-r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 7)) (4.16.0)
+Requirement already satisfied: sympy>=1.13.3 in .\build\_python\win-x64\python\Lib\site-packages (from torch==2.9.1->-r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 7)) (1.14.0)
+Requirement already satisfied: networkx>=2.5.1 in .\build\_python\win-x64\python\Lib\site-packages (from torch==2.9.1->-r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 7)) (3.6.1)
+Requirement already satisfied: jinja2 in .\build\_python\win-x64\python\Lib\site-packages (from torch==2.9.1->-r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 7)) (3.1.6)
+Requirement already satisfied: fsspec>=0.8.5 in .\build\_python\win-x64\python\Lib\site-packages (from torch==2.9.1->-r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 7)) (2026.7.0)
+Requirement already satisfied: numpy in .\build\_python\win-x64\python\Lib\site-packages (from torchvision==0.24.1->-r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 8)) (2.4.6)
+Requirement already satisfied: pyyaml in .\build\_python\win-x64\python\Lib\site-packages (from timm==1.0.24->-r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 9)) (6.0.3)
+Requirement already satisfied: safetensors in .\build\_python\win-x64\python\Lib\site-packages (from timm==1.0.24->-r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 9)) (0.8.0)
+Requirement already satisfied: packaging>=20.0 in .\build\_python\win-x64\python\Lib\site-packages (from transformers==5.1.0->-r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 17)) (26.3)
+Requirement already satisfied: regex!=2019.12.17 in .\build\_python\win-x64\python\Lib\site-packages (from transformers==5.1.0->-r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 17)) (2026.9.10)
+Requirement already satisfied: tokenizers<=0.23.0,>=0.22.0 in .\build\_python\win-x64\python\Lib\site-packages (from transformers==5.1.0->-r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 17)) (0.22.2)
+Requirement already satisfied: typer-slim in .\build\_python\win-x64\python\Lib\site-packages (from transformers==5.1.0->-r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 17)) (0.24.0)
+Requirement already satisfied: httpx<1,>=0.23.0 in .\build\_python\win-x64\python\Lib\site-packages (from huggingface_hub==1.3.3->-r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 18)) (0.28.1)
+Requirement already satisfied: shellingham in .\build\_python\win-x64\python\Lib\site-packages (from huggingface_hub==1.3.3->-r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 18)) (1.5.4)
+Requirement already satisfied: av in .\build\_python\win-x64\python\Lib\site-packages (from qwen-vl-utils==0.0.14->-r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 25)) (18.1.0)
+Requirement already satisfied: requests in .\build\_python\win-x64\python\Lib\site-packages (from qwen-vl-utils==0.0.14->-r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 25)) (2.34.2)
+Requirement already satisfied: colorama in .\build\_python\win-x64\python\Lib\site-packages (from tqdm==4.67.1->-r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 31)) (0.4.6)
+Requirement already satisfied: starlette<0.49.0,>=0.40.0 in .\build\_python\win-x64\python\Lib\site-packages (from fastapi==0.119.0->-r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 35)) (0.48.0)
+Requirement already satisfied: annotated-types>=0.6.0 in .\build\_python\win-x64\python\Lib\site-packages (from pydantic==2.12.0->-r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 37)) (0.8.0)
+Requirement already satisfied: pydantic-core==2.41.1 in .\build\_python\win-x64\python\Lib\site-packages (from pydantic==2.12.0->-r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 37)) (2.41.1)
+Requirement already satisfied: typing-inspection>=0.4.2 in .\build\_python\win-x64\python\Lib\site-packages (from pydantic==2.12.0->-r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 37)) (0.4.4)
+Requirement already satisfied: click>=7.0 in .\build\_python\win-x64\python\Lib\site-packages (from uvicorn==0.38.0->-r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 36)) (8.5.0)
+Requirement already satisfied: h11>=0.8 in .\build\_python\win-x64\python\Lib\site-packages (from uvicorn==0.38.0->-r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 36)) (0.16.0)
+Requirement already satisfied: altgraph in .\build\_python\win-x64\python\Lib\site-packages (from pyinstaller==6.18.0->-r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 40)) (0.17.5)
+Requirement already satisfied: pefile>=2022.5.30 in .\build\_python\win-x64\python\Lib\site-packages (from pyinstaller==6.18.0->-r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 40)) (2024.8.26)
+Requirement already satisfied: pyinstaller-hooks-contrib>=2025.9 in .\build\_python\win-x64\python\Lib\site-packages (from pyinstaller==6.18.0->-r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 40)) (2026.7)
+Requirement already satisfied: pywin32-ctypes>=0.2.1 in .\build\_python\win-x64\python\Lib\site-packages (from pyinstaller==6.18.0->-r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 40)) (0.2.3)
+Requirement already satisfied: setuptools>=42.0.0 in .\build\_python\win-x64\python\Lib\site-packages (from pyinstaller==6.18.0->-r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 40)) (84.0.0)
+Requirement already satisfied: anyio in .\build\_python\win-x64\python\Lib\site-packages (from httpx<1,>=0.23.0->huggingface_hub==1.3.3->-r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 18)) (4.15.1)
+Requirement already satisfied: certifi in .\build\_python\win-x64\python\Lib\site-packages (from httpx<1,>=0.23.0->huggingface_hub==1.3.3->-r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 18)) (2026.7.22)
+Requirement already satisfied: httpcore==1.* in .\build\_python\win-x64\python\Lib\site-packages (from httpx<1,>=0.23.0->huggingface_hub==1.3.3->-r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 18)) (1.0.9)
+Requirement already satisfied: idna in .\build\_python\win-x64\python\Lib\site-packages (from httpx<1,>=0.23.0->huggingface_hub==1.3.3->-r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 18)) (3.20)
+Requirement already satisfied: mpmath<1.4,>=1.1.0 in .\build\_python\win-x64\python\Lib\site-packages (from sympy>=1.13.3->torch==2.9.1->-r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 7)) (1.3.0)
+Requirement already satisfied: MarkupSafe>=2.0 in .\build\_python\win-x64\python\Lib\site-packages (from jinja2->torch==2.9.1->-r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 7)) (3.0.3)
+Requirement already satisfied: charset_normalizer<4,>=2 in .\build\_python\win-x64\python\Lib\site-packages (from requests->qwen-vl-utils==0.0.14->-r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 25)) (3.5.1)
+Requirement already satisfied: urllib3<3,>=1.26 in .\build\_python\win-x64\python\Lib\site-packages (from requests->qwen-vl-utils==0.0.14->-r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 25)) (2.8.0)
+Requirement already satisfied: typer>=0.24.0 in .\build\_python\win-x64\python\Lib\site-packages (from typer-slim->transformers==5.1.0->-r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 17)) (0.27.2)
+Requirement already satisfied: rich>=13.8.0 in .\build\_python\win-x64\python\Lib\site-packages (from typer>=0.24.0->typer-slim->transformers==5.1.0->-r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 17)) (15.0.0)
+Requirement already satisfied: annotated-doc>=0.0.2 in .\build\_python\win-x64\python\Lib\site-packages (from typer>=0.24.0->typer-slim->transformers==5.1.0->-r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 17)) (0.0.5)
+Requirement already satisfied: markdown-it-py>=2.2.0 in .\build\_python\win-x64\python\Lib\site-packages (from rich>=13.8.0->typer>=0.24.0->typer-slim->transformers==5.1.0->-r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 17)) (4.2.0)
+Requirement already satisfied: pygments<3.0.0,>=2.13.0 in .\build\_python\win-x64\python\Lib\site-packages (from rich>=13.8.0->typer>=0.24.0->typer-slim->transformers==5.1.0->-r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 17)) (2.21.0)
+Requirement already satisfied: mdurl~=0.1 in .\build\_python\win-x64\python\Lib\site-packages (from markdown-it-py>=2.2.0->rich>=13.8.0->typer>=0.24.0->typer-slim->transformers==5.1.0->-r C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\requirements.txt (line 17)) (0.1.2)
+Python deps installed for win-x64
+[3/3] Running PyInstaller (this takes a few minutes)...
+Checking that transformers ties LFM2.5-VL word embeddings...
+OK: transformers 5.1.0 ties LFM2.5-VL word embeddings.
+Running PyInstaller for win-x64
+115 INFO: PyInstaller: 6.18.0, contrib hooks: 2026.7
+115 INFO: Python: 3.11.16
+143 INFO: Platform: Windows-10-10.0.26200-SP0
+143 INFO: Python environment: C:\Users\Dean\source\repos\Synapic.NET\build\_python\win-x64\python
+145 INFO: Removing temporary files and cleaning cache in C:\Users\Dean\AppData\Local\pyinstaller
+1924 INFO: Module search paths (PYTHONPATH):
+['C:\\Users\\Dean\\source\\repos\\Synapic.NET',
+ 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\python311.zip',
+ 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\DLLs',
+ 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib',
+ 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python',
+ 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages',
+ 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\src',
+ 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\src\\Synapic.Inference']
+2211 INFO: Appending 'datas' from .spec
+2212 INFO: checking Analysis
+2212 INFO: Building Analysis because Analysis-00.toc is non existent
+2212 INFO: Looking for Python shared library...
+2212 INFO: Using Python shared library: C:\Users\Dean\source\repos\Synapic.NET\build\_python\win-x64\python\python311.dll
+2212 INFO: Running Analysis Analysis-00.toc
+2212 INFO: Target bytecode optimization level: 0
+2212 INFO: Initializing module dependency graph...
+2213 INFO: Initializing module graph hook caches...
+2224 INFO: Analyzing modules for base_library.zip ...
+2914 INFO: Processing standard module hook 'hook-encodings.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+3353 INFO: Processing standard module hook 'hook-heapq.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+3737 INFO: Processing standard module hook 'hook-pickle.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+6104 INFO: Caching module dependency graph...
+6148 INFO: Analyzing C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\service.py
+6161 INFO: Processing standard module hook 'hook-uvicorn.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+6610 INFO: Processing standard module hook 'hook-multiprocessing.util.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+6768 INFO: Processing standard module hook 'hook-xml.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+6992 INFO: Processing standard module hook 'hook-_ctypes.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+7595 INFO: Processing standard module hook 'hook-platform.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+7652 INFO: Processing pre-safe-import-module hook 'hook-typing_extensions.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+7653 INFO: SetuptoolsInfo: initializing cached setuptools info...
+8203 INFO: Processing standard module hook 'hook-difflib.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+8922 INFO: Processing standard module hook 'hook-pydantic.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+9559 INFO: Processing standard module hook 'hook-rich.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+10155 INFO: Processing standard module hook 'hook-pygments.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+11758 INFO: Processing standard module hook 'hook-sysconfig.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+12035 INFO: Processing standard module hook 'hook-zoneinfo.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+12934 INFO: Processing standard module hook 'hook-anyio.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+14212 INFO: Processing standard module hook 'hook-certifi.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+14991 INFO: Processing pre-safe-import-module hook 'hook-importlib_resources.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+15024 INFO: Processing standard module hook 'hook-numpy.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+16185 INFO: Processing standard module hook 'hook-psutil.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+17248 INFO: Processing standard module hook 'hook-charset_normalizer.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+17819 INFO: Processing standard module hook 'hook-sqlite3.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+18483 INFO: Processing standard module hook 'hook-PIL.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+18832 INFO: Processing standard module hook 'hook-PIL.Image.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+19163 INFO: Processing standard module hook 'hook-xml.etree.cElementTree.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+19337 INFO: Processing standard module hook 'hook-PIL.ImageFilter.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+20192 INFO: Processing standard module hook 'hook-jinja2.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+20637 INFO: Processing standard module hook 'hook-torch.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+1415 WARNING: Failed to collect submodules for 'torch.utils.tensorboard' because importing 'torch.utils.tensorboard' raised: ModuleNotFoundError: No module named 'tensorboard'
+W0922 19:34:47.130000 44676 build\_python\win-x64\python\Lib\site-packages\torch\distributed\elastic\multiprocessing\redirects.py:29] NOTE: Redirects are currently not supported in Windows or MacOs.
+C:\Users\Dean\source\repos\Synapic.NET\build\_python\win-x64\python\Lib\site-packages\PyInstaller\utils\hooks\__init__.py:665: DeprecationWarning: `torch.distributed._sharding_spec` will be deprecated, use `torch.distributed._shard.sharding_spec` instead
+  __import__(name)
+C:\Users\Dean\source\repos\Synapic.NET\build\_python\win-x64\python\Lib\site-packages\PyInstaller\utils\hooks\__init__.py:665: DeprecationWarning: `torch.distributed._sharded_tensor` will be deprecated, use `torch.distributed._shard.sharded_tensor` instead
+  __import__(name)
+C:\Users\Dean\source\repos\Synapic.NET\build\_python\win-x64\python\Lib\site-packages\PyInstaller\utils\hooks\__init__.py:665: DeprecationWarning: `torch.distributed._shard.checkpoint` will be deprecated, use `torch.distributed.checkpoint` instead
+  __import__(name)
+36566 INFO: hook-torch: this torch build does not depend on MKL...
+49574 INFO: Processing standard module hook 'hook-xml.dom.domreg.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+56258 INFO: Processing standard module hook 'hook-setuptools.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+56271 INFO: Processing pre-safe-import-module hook 'hook-distutils.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+56272 INFO: Processing pre-find-module-path hook 'hook-distutils.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks\\pre_find_module_path'
+56572 INFO: Processing standard module hook 'hook-distutils.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+56594 INFO: Processing standard module hook 'hook-distutils.util.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+56631 INFO: Processing standard module hook 'hook-_osx_support.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+56656 INFO: Processing pre-safe-import-module hook 'hook-packaging.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+56872 INFO: Processing pre-safe-import-module hook 'hook-jaraco.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+56872 INFO: Setuptools: 'jaraco' appears to be a full setuptools-vendored copy - creating alias to 'setuptools._vendor.jaraco'!
+56882 INFO: Processing standard module hook 'hook-setuptools._vendor.jaraco.text.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+56890 INFO: Processing pre-safe-import-module hook 'hook-backports.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+56892 INFO: Setuptools: 'backports' appears to be a full setuptools-vendored copy - creating alias to 'setuptools._vendor.backports'!
+56983 INFO: Processing pre-safe-import-module hook 'hook-more_itertools.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+56983 INFO: Setuptools: 'more_itertools' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendor.more_itertools'!
+57328 INFO: Processing pre-safe-import-module hook 'hook-tomli.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+57328 INFO: Setuptools: 'tomli' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendor.tomli'!
+58075 INFO: Processing pre-safe-import-module hook 'hook-wheel.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+58118 INFO: Processing pre-safe-import-module hook 'hook-win32com.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\pre_safe_import_module'
+75277 INFO: Processing standard module hook 'hook-fsspec.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+75862 INFO: Processing pre-safe-import-module hook 'hook-importlib_metadata.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+75863 INFO: Setuptools: 'importlib_metadata' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendor.importlib_metadata'!
+75882 INFO: Processing standard module hook 'hook-setuptools._vendor.importlib_metadata.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+75909 INFO: Processing pre-safe-import-module hook 'hook-zipp.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+75910 INFO: Setuptools: 'zipp' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendor.zipp'!
+75973 INFO: Processing standard module hook 'hook-urllib3.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+77596 INFO: Processing standard module hook 'hook-torchvision.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+77685 INFO: Processing standard module hook 'hook-torchvision.io.image.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+79524 INFO: Processing standard module hook 'hook-av.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+84357 INFO: Processing standard module hook 'hook-transformers.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+86976 INFO: Processing standard module hook 'hook-regex.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+88217 INFO: Processing standard module hook 'hook-timm.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+88953 INFO: Processing pre-safe-import-module hook 'hook-tensorflow.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\pre_safe_import_module'
+120170 INFO: Analyzing hidden import 'qwen_vl_utils'
+120356 INFO: Processing module hooks (post-graph stage)...
+129810 WARNING: Hidden import "tzdata" not found!
+130062 INFO: Processing standard module hook 'hook-PIL.SpiderImagePlugin.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+132902 INFO: Performing binary vs. data reclassification (256 entries)
+132994 INFO: Looking for ctypes DLLs
+133317 WARNING: Ignoring /usr/lib64/libgomp.so.1 imported from C:\Users\Dean\source\repos\Synapic.NET\build\_python\win-x64\python\Lib\site-packages\torch\_inductor\codecache.py - only basenames are supported with ctypes imports!
+133774 INFO: Analyzing run-time hooks ...
+133813 INFO: Including run-time hook 'pyi_rth_inspect.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+133817 INFO: Including run-time hook 'pyi_rth_pkgutil.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+133820 INFO: Including run-time hook 'pyi_rth_multiprocessing.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+133822 INFO: Including run-time hook 'pyi_rth_setuptools.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+133962 INFO: Creating base_library.zip...
+133990 INFO: Looking for dynamic libraries
+W0922 19:36:32.732000 41120 build\_python\win-x64\python\Lib\site-packages\torch\distributed\elastic\multiprocessing\redirects.py:29] NOTE: Redirects are currently not supported in Windows or MacOs.
+C:\Users\Dean\source\repos\Synapic.NET\build\_python\win-x64\python\Lib\site-packages\PyInstaller\building\build_main.py:227: DeprecationWarning: `torch.distributed._sharding_spec` will be deprecated, use `torch.distributed._shard.sharding_spec` instead
+  __import__(package)
+C:\Users\Dean\source\repos\Synapic.NET\build\_python\win-x64\python\Lib\site-packages\PyInstaller\building\build_main.py:227: DeprecationWarning: `torch.distributed._sharded_tensor` will be deprecated, use `torch.distributed._shard.sharded_tensor` instead
+  __import__(package)
+C:\Users\Dean\source\repos\Synapic.NET\build\_python\win-x64\python\Lib\site-packages\PyInstaller\building\build_main.py:227: DeprecationWarning: `torch.distributed._shard.checkpoint` will be deprecated, use `torch.distributed.checkpoint` instead
+  __import__(package)
+sys:1: DeprecationWarning: builtin type swigvarlink has no __module__ attribute
+148132 INFO: Extra DLL search directories (AddDllDirectory): ['C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\torch\\lib', 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\numpy.libs', 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\torchvision', 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\torchvision', 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\torchvision', 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\torchvision', 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\av.libs']
+148132 INFO: Extra DLL search directories (PATH): []
+150618 INFO: Warnings written to C:\Users\Dean\source\repos\Synapic.NET\build\_work\win-x64\synapic-inference\warn-synapic-inference.txt
+151662 INFO: Graph cross-reference written to C:\Users\Dean\source\repos\Synapic.NET\build\_work\win-x64\synapic-inference\xref-synapic-inference.html
+151950 INFO: checking PYZ
+151950 INFO: Building PYZ because PYZ-00.toc is non existent
+151950 INFO: Building PYZ (ZlibArchive) C:\Users\Dean\source\repos\Synapic.NET\build\_work\win-x64\synapic-inference\PYZ-00.pyz
+157991 INFO: Building PYZ (ZlibArchive) C:\Users\Dean\source\repos\Synapic.NET\build\_work\win-x64\synapic-inference\PYZ-00.pyz completed successfully.
+158229 INFO: checking PKG
+158230 INFO: Building PKG because PKG-00.toc is non existent
+158230 INFO: Building PKG (CArchive) synapic-inference.pkg
+229965 INFO: Building PKG (CArchive) synapic-inference.pkg completed successfully.
+230100 INFO: Bootloader C:\Users\Dean\source\repos\Synapic.NET\build\_python\win-x64\python\Lib\site-packages\PyInstaller\bootloader\Windows-64bit-intel\run.exe
+230100 INFO: checking EXE
+230100 INFO: Building EXE because EXE-00.toc is non existent
+230100 INFO: Building EXE from EXE-00.toc
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "C:\Users\Dean\source\repos\Synapic.NET\build\_python\win-x64\python\Lib\site-packages\PyInstaller\__main__.py", line 321, in <module>
+    run()
+  File "C:\Users\Dean\source\repos\Synapic.NET\build\_python\win-x64\python\Lib\site-packages\PyInstaller\__main__.py", line 215, in run
+    run_build(pyi_config, spec_file, **vars(args))
+  File "C:\Users\Dean\source\repos\Synapic.NET\build\_python\win-x64\python\Lib\site-packages\PyInstaller\__main__.py", line 70, in run_build
+    PyInstaller.building.build_main.main(pyi_config, spec_file, **kwargs)
+  File "C:\Users\Dean\source\repos\Synapic.NET\build\_python\win-x64\python\Lib\site-packages\PyInstaller\building\build_main.py", line 1275, in main
+    build(specfile, distpath, workpath, clean_build)
+  File "C:\Users\Dean\source\repos\Synapic.NET\build\_python\win-x64\python\Lib\site-packages\PyInstaller\building\build_main.py", line 1213, in build
+    exec(code, spec_namespace)
+  File "src/Synapic.Inference/synapic-inference.spec", line 67, in <module>
+    exe = EXE(
+          ^^^^
+  File "C:\Users\Dean\source\repos\Synapic.NET\build\_python\win-x64\python\Lib\site-packages\PyInstaller\building\api.py", line 675, in __init__
+    self.__postinit__()
+  File "C:\Users\Dean\source\repos\Synapic.NET\build\_python\win-x64\python\Lib\site-packages\PyInstaller\building\datastruct.py", line 184, in __postinit__
+    self.assemble()
+  File "C:\Users\Dean\source\repos\Synapic.NET\build\_python\win-x64\python\Lib\site-packages\PyInstaller\building\api.py", line 769, in assemble
+    os.remove(self.name)
+PermissionError: [WinError 5] Access is denied: 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\artifacts\\win-x64\\synapic-inference.exe'
+PyInstaller failed with exit code 1
+At C:\Users\Dean\source\repos\Synapic.NET\build\build-sidecar.ps1:33 char:32
++ ... DE -ne 0) { throw "PyInstaller failed with exit code $LASTEXITCODE" } ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (PyInstaller failed with exit code 1:String) [], RuntimeException
+    + FullyQualifiedErrorId : PyInstaller failed with exit code 1
+ 

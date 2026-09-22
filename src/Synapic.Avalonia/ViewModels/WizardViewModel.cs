@@ -17,14 +17,18 @@ public partial class WizardViewModel : ViewModelBase
 {
     private readonly Session _session;
     private readonly IInferenceSidecar _sidecar;
+    private readonly EngineSettingsStore? _engineStore;
 
-    public WizardViewModel(Session session, IInferenceSidecar sidecar, DaminionConnectionStore? connectionStore = null)
+    public WizardViewModel(Session session, IInferenceSidecar sidecar,
+        DaminionConnectionStore? connectionStore = null,
+        EngineSettingsStore? engineStore = null)
     {
         _session = session;
         _sidecar = sidecar;
+        _engineStore = engineStore;
 
         Step1 = new Step1DatasourceViewModel(session, connectionStore);
-        Step2 = new Step2EngineViewModel(session, sidecar);
+        Step2 = new Step2EngineViewModel(session, sidecar, engineStore);
         Step3 = new Step3ProcessViewModel(session, sidecar, Step1);
         Step4 = new Step4ResultsViewModel(session, Step1, Step3);
         Dedup = new StepDedupViewModel();
@@ -46,6 +50,13 @@ public partial class WizardViewModel : ViewModelBase
             GoToStep3Command.NotifyCanExecuteChanged();
             Step3.StartCommand.NotifyCanExecuteChanged();
         }
+    }
+
+    /// <summary>Persist Step 2 settings when the user leaves the engine step.</summary>
+    private void PersistStep2IfLoaded()
+    {
+        try { Step2.SaveToStore(); }
+        catch { /* never let persistence failures break navigation */ }
     }
 
     public Step1DatasourceViewModel Step1 { get; }
@@ -133,6 +144,23 @@ public partial class WizardViewModel : ViewModelBase
                 vm4.Refresh();
                 break;
         }
+
+        // When the user reaches the Results step (after a run completes), snapshot
+        // the current wizard + engine state to config.json so both the registry store
+        // (Step 1/2 form) and the JSON config file carry the same working set.
+        if (step is Step4ResultsViewModel)
+            MainWindowPersistConfig();
+    }
+
+    /// <summary>Persist config via the main window's helper (no-op when running headless in tests).</summary>
+    private void MainWindowPersistConfig()
+    {
+        try
+        {
+            var mw = App.Services.GetService(typeof(MainWindowViewModel)) as MainWindowViewModel;
+            mw?.PersistConfig();
+        }
+        catch { /* never let config persistence break navigation */ }
     }
 
     [RelayCommand(CanExecute = nameof(CanGoNext))]
@@ -143,12 +171,14 @@ public partial class WizardViewModel : ViewModelBase
             case 0:
                 var (valid2, error2) = _session.ValidateForStep2();
                 if (!valid2) { ValidationError = error2; return; }
+                PersistStep2IfLoaded();
                 await EnterStepAsync(Step2);
                 break;
             case 1:
                 var (valid3, error3) = _session.ValidateForStep3(Step1.IsDaminionConnected);
                 if (!valid3) { ValidationError = error3; return; }
                 Step2.MakeSelectionValid();
+                PersistStep2IfLoaded();
                 await EnterStepAsync(Step3);
                 break;
             case 2:
@@ -168,6 +198,9 @@ public partial class WizardViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanGoBack))]
     private async Task BackAsync()
     {
+        // Persist Step 2 before leaving it in either direction.
+        if (CurrentStepIndex == 1) PersistStep2IfLoaded();
+
         var target = CurrentStepIndex switch
         {
             1 => (ObservableObject)Step1,
@@ -195,6 +228,7 @@ public partial class WizardViewModel : ViewModelBase
         var (valid, error) = _session.ValidateForStep3(Step1.IsDaminionConnected);
         if (!valid) { ValidationError = error; return; }
         Step2.MakeSelectionValid();
+        PersistStep2IfLoaded();
         _ = EnterStepAsync(Step3);
     }
 
@@ -212,7 +246,10 @@ public partial class WizardViewModel : ViewModelBase
     private void StartOver()
     {
         ValidationError = null;
+        PersistStep2IfLoaded();
+        MainWindowPersistConfig();
         CurrentStep = Step1;
+        _session.ResetStats();
     }
 
     /// <summary>Re-evaluate nav locks when processing starts/stops.</summary>

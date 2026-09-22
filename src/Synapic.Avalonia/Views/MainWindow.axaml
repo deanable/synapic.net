@@ -9,7 +9,7 @@
         Width="1280" Height="800"
         WindowStartupLocation="CenterScreen">
 
-  <Grid RowDefinitions="Auto,Auto,*,Auto">
+  <Grid RowDefinitions="Auto,Auto,Auto,*,Auto">
 
     <!-- Toolbar: server controls + status indicator -->
     <Border Grid.Row="0" Classes="card" Padding="10,8" Margin="8">
@@ -36,8 +36,54 @@
       </StackPanel>
     </Border>
 
+    <!-- Sidecar setup: the sidecar is pivotal (nothing can be tagged without
+         it), so this panel lists every buildable variant and the workspace
+         below stays disabled until at least one exists. -->
+    <Border Grid.Row="1" Classes="card" Padding="12,10" Margin="8,0,8,8"
+            IsVisible="{Binding IsSidecarPanelVisible}">
+      <StackPanel Orientation="Vertical" Spacing="4">
+        <TextBlock Text="Inference sidecar required" FontWeight="SemiBold" FontSize="14"
+                   TextWrapping="Wrap" IsVisible="{Binding IsSidecarRequired}" />
+        <TextBlock Text="Synapic cannot tag images until a sidecar is built. Build the CPU version (runs anywhere) or the CUDA version (fastest on an NVIDIA GPU). The rest of the application stays disabled until one is ready."
+                   Opacity="0.75" TextWrapping="Wrap" Margin="0,0,0,4"
+                   IsVisible="{Binding IsSidecarRequired}" />
+        <TextBlock Text="Additional sidecar builds" FontWeight="SemiBold"
+                   IsVisible="{Binding !IsSidecarRequired}" />
+        <ItemsControl ItemsSource="{Binding SidecarVariants}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:SidecarVariantViewModel">
+              <StackPanel Orientation="Vertical" Margin="0,3">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Ellipse Width="10" Height="10" VerticalAlignment="Center"
+                           Fill="{Binding StatusBrush}" />
+                  <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"
+                             VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
+                             Opacity="0.8" />
+                  <TextBlock Text="{Binding Rid}" VerticalAlignment="Center"
+                             Opacity="0.45" FontSize="11" />
+                  <ProgressBar IsVisible="{Binding IsBuilding}"
+                               IsIndeterminate="{Binding IsBuildIndeterminate}"
+                               Value="{Binding BuildPercent}" Maximum="100"
+                               Width="170" Height="6" VerticalAlignment="Center" />
+                  <Button Content="Build sidecar" Command="{Binding BuildCommand}"
+                          IsVisible="{Binding IsBuildButtonVisible}" />
+                  <TextBlock Text="{Binding BuildStage}" IsVisible="{Binding IsBuilding}"
+                             VerticalAlignment="Center" Opacity="0.8" FontSize="11"
+                             TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+                <TextBlock Text="{Binding Detail}" Opacity="0.6" FontSize="11"
+                           TextWrapping="Wrap" Margin="18,2,0,0" />
+              </StackPanel>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+    </Border>
+
     <!-- Wizard nav bar -->
-    <Border Grid.Row="1" Classes="card" Padding="10,8" Margin="8,0,8,8">
+    <Border Grid.Row="2" Classes="card" Padding="10,8" Margin="8,0,8,8"
+            IsEnabled="{Binding IsWorkspaceEnabled}">
       <StackPanel Orientation="Vertical" Spacing="6">
         <StackPanel Orientation="Horizontal" Spacing="6">
           <Button Content="1 · Datasource" Command="{Binding Wizard.BackCommand}"
@@ -67,7 +113,7 @@
     </Border>
 
     <!-- Wizard body -->
-    <ScrollViewer Grid.Row="2" Margin="8,0">
+    <ScrollViewer Grid.Row="3" Margin="8,0" IsEnabled="{Binding IsWorkspaceEnabled}">
       <ContentControl Content="{Binding Wizard.CurrentStep}">
         <ContentControl.DataTemplates>
           <DataTemplate DataType="vms:Step1DatasourceViewModel">
@@ -90,7 +136,7 @@
     </ScrollViewer>
 
     <!-- Live log -->
-    <Border Grid.Row="3" Classes="card" Height="160" Margin="8">
+    <Border Grid.Row="4" Classes="card" Height="160" Margin="8">
       <Grid RowDefinitions="Auto,*" Margin="8">
         <TextBlock Grid.Row="0" Text="Log" FontWeight="SemiBold" />
         <ListBox Grid.Row="1" ItemsSource="{Binding LogEntries}" x:Name="LogList"

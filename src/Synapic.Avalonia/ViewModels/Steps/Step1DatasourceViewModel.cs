@@ -39,18 +39,62 @@ public partial class Step1DatasourceViewModel : ViewModelBase
         {
             var saved = _connectionStore.Load();
             if (saved is null) return;
+
+            // Connection fields (pre-fill so the user only presses Connect).
             DaminionUrl = saved.ServerUrl;
             DaminionUser = saved.Username;
             DaminionPass = saved.Password;
             DaminionCatalogId = saved.CatalogId;
+
+            // Scope + search.
+            ScopeIndex = ScopeStringToIndex(saved.DaminionScope);
+            SearchTerm = saved.SearchTerm;
+
+            // Saved search / shared collection.
+            SavedSearchId = saved.SavedSearchId;
+            CollectionId = saved.CollectionId;
+
+            // Filters.
+            StatusFilterIndex = StatusStringToIndex(saved.StatusFilter);
+            UntaggedKeywords = saved.UntaggedKeywords;
+            UntaggedCategories = saved.UntaggedCategories;
+            UntaggedDescription = saved.UntaggedDescription;
+
+            // Processing limits.
+            MaxItems = saved.MaxItems;
+            ResizeScaleIndex = saved.ResizeScale switch { 75 => 1, 50 => 2, 25 => 3, _ => 0 };
+            UseThumbnailOverride = saved.UseThumbnailOverride;
+
             SynapicLog.Info(nameof(Step1DatasourceViewModel),
-                "Pre-filled Daminion connection from registry (user will still need to press Connect)");
+                $"Pre-filled Step 1 from registry ({CountSavedFields(saved)} saved fields; user will still need to press Connect)");
         }
         catch (Exception e)
         {
             SynapicLog.Warning(nameof(Step1DatasourceViewModel),
-                $"Failed to pre-fill connection from registry: {e.Message}");
+                $"Failed to pre-fill Step 1 from registry: {e.Message}");
         }
+    }
+
+    /// <summary>How many Step 1 fields were restored from the registry (informational log).</summary>
+    private static int CountSavedFields(DaminionConnectionParams saved)
+    {
+        var n = 0;
+        if (!string.IsNullOrEmpty(saved.ServerUrl)) n++;
+        if (!string.IsNullOrEmpty(saved.Username)) n++;
+        if (!string.IsNullOrEmpty(saved.Password)) n++;
+        if (!string.IsNullOrEmpty(saved.CatalogId)) n++;
+        if (saved.DaminionScope is not "all") n++;
+        if (!string.IsNullOrEmpty(saved.SearchTerm)) n++;
+        if (!string.IsNullOrEmpty(saved.SavedSearchId)) n++;
+        if (!string.IsNullOrEmpty(saved.CollectionId)) n++;
+        if (saved.StatusFilter is not "all") n++;
+        if (saved.UntaggedKeywords) n++;
+        if (saved.UntaggedCategories) n++;
+        if (saved.UntaggedDescription) n++;
+        if (saved.MaxItems != 100) n++;
+        if (saved.ResizeScale != 100) n++;
+        if (saved.UseThumbnailOverride) n++;
+        return n;
     }
 
     private void HydrateFromSession()
@@ -238,6 +282,24 @@ public partial class Step1DatasourceViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isLoadingCatalog;
 
+    /// <summary>
+    /// Catalog GUID the login actually landed on (null when the server reports
+    /// none). Daminion exposes no endpoint that enumerates catalogs, so the UI
+    /// reports the catalog in use instead of offering a picklist.
+    /// </summary>
+    [ObservableProperty]
+    private string? _activeCatalog;
+
+    public bool HasActiveCatalog => !string.IsNullOrEmpty(ActiveCatalog);
+
+    public string ActiveCatalogText => HasActiveCatalog ? $"Active catalog: {ActiveCatalog}" : "";
+
+    partial void OnActiveCatalogChanged(string? value)
+    {
+        OnPropertyChanged(nameof(HasActiveCatalog));
+        OnPropertyChanged(nameof(ActiveCatalogText));
+    }
+
     partial void OnSelectedSavedSearchChanged(DaminionSavedSearch? value)
     {
         if (value is null || _hydrating) return;
@@ -380,12 +442,27 @@ public partial class Step1DatasourceViewModel : ViewModelBase
             ConnectionMessage = $"Connected to {DaminionUrl}";
             SynapicLog.Info(nameof(Step1DatasourceViewModel), $"Daminion connected: {DaminionUrl}");
 
-            // Persist only verified credentials: a failed connect must never
-            // overwrite a previously working set with a typo.
+            // Persist every Step 1 field (only on a verified connect — a failed
+            // login with a typo must never clobber a previously working set).
+            // Scope/filter values are saved as strings/ids exactly as the user saw
+            // them so re-hydration round-trips cleanly (the index helpers convert
+            // on both paths).
             _connectionStore?.Save(new DaminionConnectionParams(
-                DaminionUrl, DaminionUser, DaminionPass, DaminionCatalogId));
+                DaminionUrl, DaminionUser, DaminionPass, DaminionCatalogId,
+                DaminionScope: Scope,
+                SearchTerm: SearchTerm,
+                SavedSearchId: SavedSearchId,
+                CollectionId: CollectionId,
+                StatusFilter: StatusFilter,
+                UntaggedKeywords: UntaggedKeywords,
+                UntaggedCategories: UntaggedCategories,
+                UntaggedDescription: UntaggedDescription,
+                MaxItems: MaxItems,
+                ResizeScale: ResizeScale,
+                UseThumbnailOverride: UseThumbnailOverride));
 
             await LoadCatalogDataAsync(ct);
+            await LoadActiveCatalogAsync(ct);
         }
         catch (Exception e)
         {
@@ -415,6 +492,7 @@ public partial class Step1DatasourceViewModel : ViewModelBase
         IsDaminionConnected = false;
         SavedSearches.Clear();
         Collections.Clear();
+        ActiveCatalog = null;
         ConnectionMessage = "Disconnected";
         CountCommand.NotifyCanExecuteChanged();
         SynapicLog.Info(nameof(Step1DatasourceViewModel), "Daminion disconnected");
@@ -448,6 +526,26 @@ public partial class Step1DatasourceViewModel : ViewModelBase
         finally
         {
             IsLoadingCatalog = false;
+        }
+    }
+
+    /// <summary>
+    /// Reports which catalog the session actually landed on. The server cannot
+    /// enumerate catalogs, so this is a receipt for the catalog box: it shows
+    /// whether the entered id was honoured or the login defaulted to the
+    /// server's own catalog. Best effort - it never fails the connection.
+    /// </summary>
+    private async Task LoadActiveCatalogAsync(CancellationToken ct)
+    {
+        if (ConnectedClient is null) return;
+        try
+        {
+            ActiveCatalog = await ConnectedClient.GetCatalogGuidAsync(ct);
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Warning(nameof(Step1DatasourceViewModel), $"Active catalog lookup failed: {e.Message}");
+            ActiveCatalog = null;
         }
     }
 

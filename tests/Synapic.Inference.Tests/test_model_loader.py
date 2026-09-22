@@ -221,3 +221,88 @@ class TestDownloadProgress:
         assert snap is not None
         assert snap["model_id"] == "b/model"
         assert snap["status"] == "downloading"
+
+
+class TestConcurrentModelLoads:
+    """A cold sidecar used to build one pipeline per parallel /tag request.
+
+    The host fans out its first batch, so four threads could all miss the
+    cache and each construct the same model. Besides loading several
+    redundant copies of the weights, transformers materializes checkpoint
+    tensors into the instance while loading, so a concurrently-built
+    instance could keep a float32 parameter that no checkpoint tensor ever
+    overwrote. A float32 RMSNorm weight promotes the normalized activations
+    to float32 and the next bfloat16 linear dies with
+    "expected m1 and m2 to have the same dtype, but got: float != BFloat16"
+    - an HTTP 500 on the first batch of an otherwise healthy run.
+    """
+
+    MODEL = "org/model"
+    TASK = MODEL_TASK_IMAGE_TO_TEXT
+
+    @staticmethod
+    def _patch_pipeline(monkeypatch, construct):
+        monkeypatch.setattr(model_loader, "_get_hf_pipeline", lambda: construct)
+        monkeypatch.setattr(model_loader, "is_model_downloaded", lambda *a, **k: False)
+        monkeypatch.setattr(model_loader, "download_model", lambda *a, **k: None)
+        monkeypatch.setattr(
+            model_loader, "_get_latest_snapshot_path", lambda *a, **k: None
+        )
+        model_loader._model_cache.clear()
+
+    def test_parallel_cold_loads_construct_one_pipeline(self, monkeypatch):
+        import threading
+        import time
+
+        calls = []
+        calls_lock = threading.Lock()
+
+        def construct(task, **kwargs):
+            with calls_lock:
+                calls.append(task)
+            time.sleep(0.05)  # widen the window the old race needed
+            return object()
+
+        self._patch_pipeline(monkeypatch, construct)
+
+        results = []
+        barrier = threading.Barrier(4)
+
+        def worker():
+            barrier.wait()
+            results.append(
+                model_loader.load_model(self.MODEL, self.TASK, device="cpu")[0]
+            )
+
+        threads = [threading.Thread(target=worker) for _ in range(4)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+        assert len(calls) == 1
+        assert len(results) == 4
+        assert len({id(model) for model in results}) == 1
+        assert len(model_loader._model_cache) == 1
+
+    def test_second_call_reuses_the_cached_pipeline(self, monkeypatch):
+        calls = []
+
+        def construct(task, **kwargs):
+            calls.append(task)
+            return object()
+
+        self._patch_pipeline(monkeypatch, construct)
+
+        first, _ = model_loader.load_model(self.MODEL, self.TASK, device="cpu")
+        second, _ = model_loader.load_model(self.MODEL, self.TASK, device="cpu")
+
+        assert first is second
+        assert len(calls) == 1
+
+    def test_state_reports_ready_after_a_load(self, monkeypatch):
+        self._patch_pipeline(monkeypatch, lambda task, **kwargs: object())
+
+        model_loader.load_model(self.MODEL, self.TASK, device="cpu")
+
+        assert model_loader.get_state_snapshot()["status"] == "ready"

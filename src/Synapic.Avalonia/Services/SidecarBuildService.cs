@@ -15,8 +15,13 @@ public interface ISidecarBuildService
 
     bool IsBuilding { get; }
 
-    /// <summary>Runs the pipeline: fetch Python, install deps, PyInstaller. Streams lines to <paramref name="log"/>.</summary>
-    Task BuildAsync(Action<string> log, CancellationToken ct);
+    /// <summary>
+    /// Runs the pipeline for one RID (fetch Python, install deps, PyInstaller).
+    /// Streams lines to <paramref name="log"/> and stage/percentage updates to
+    /// <paramref name="progress"/>. The RID suffix <c>-cuda</c> selects the
+    /// CUDA torch wheel index (see install-python-deps).
+    /// </summary>
+    Task BuildAsync(string rid, Action<string> log, IProgress<SidecarBuildProgress> progress, CancellationToken ct);
 
     /// <summary>Cancels an active build (used on app shutdown).</summary>
     void Cancel();
@@ -24,6 +29,8 @@ public interface ISidecarBuildService
 
 public sealed class SidecarBuildService : ISidecarBuildService
 {
+    private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(1);
+
     private readonly object _gate = new();
     private CancellationTokenSource? _activeCts;
 
@@ -50,8 +57,17 @@ public sealed class SidecarBuildService : ISidecarBuildService
         cts?.Cancel();
     }
 
-    public async Task BuildAsync(Action<string> log, CancellationToken ct)
+    /// <summary>Rejects RIDs that could be interpreted by the shell we launch.</summary>
+    private static void ValidateRid(string rid)
     {
+        if (string.IsNullOrWhiteSpace(rid) || rid.Length > 64 ||
+            rid.Any(c => !char.IsLetterOrDigit(c) && c != '-' && c != '_'))
+            throw new ArgumentException($"Invalid RID: '{rid}'", nameof(rid));
+    }
+
+    public async Task BuildAsync(string rid, Action<string> log, IProgress<SidecarBuildProgress> progress, CancellationToken ct)
+    {
+        ValidateRid(rid);
         var root = InferenceSidecarService.FindRepoRoot()
             ?? throw new InvalidOperationException(
                 "Source checkout not found; the server cannot be built from an installed app.");
@@ -67,20 +83,23 @@ public sealed class SidecarBuildService : ISidecarBuildService
             _activeCts = cts;
         }
 
+        var tracker = new SidecarBuildProgressTracker(root, rid);
+        progress.Report(SidecarBuildProgress.Starting);
+
         try
         {
-            log("[build] Building the inference server (first build downloads Python + packages)...");
+            log($"[build] Building the inference server for {rid} ({InferenceSidecarService.VariantDisplayName(rid)}); the first build downloads Python + packages...");
 
             var psi = OperatingSystem.IsWindows()
                 ? new ProcessStartInfo
                 {
                     FileName = "powershell.exe",
-                    Arguments = $"-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"{script}\"",
+                    Arguments = $"-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"{script}\" -Rid \"{rid}\"",
                 }
                 : new ProcessStartInfo
                 {
                     FileName = "bash",
-                    Arguments = $"\"{script}\"",
+                    Arguments = $"\"{script}\" \"{rid}\"",
                 };
             psi.WorkingDirectory = root;
             psi.UseShellExecute = false;
@@ -89,8 +108,35 @@ public sealed class SidecarBuildService : ISidecarBuildService
             psi.RedirectStandardError = true;
 
             using var process = new Process { StartInfo = psi };
-            process.OutputDataReceived += (_, e) => { if (e.Data is not null) log(e.Data); };
-            process.ErrorDataReceived += (_, e) => { if (e.Data is not null) log(e.Data); };
+
+            // Both streams feed the log and the stage tracker. Reports are
+            // de-duplicated and serialized because the output callbacks arrive
+            // on thread-pool threads while the packaging poll reports its own.
+            var reportGate = new object();
+            var lastPercent = -1.0;
+            var lastStage = string.Empty;
+
+            void Report()
+            {
+                lock (reportGate)
+                {
+                    if (Math.Abs(tracker.Percent - lastPercent) < 0.01 && tracker.Stage == lastStage) return;
+                    lastPercent = tracker.Percent;
+                    lastStage = tracker.Stage;
+                    progress.Report(new SidecarBuildProgress(tracker.Percent, tracker.Stage));
+                }
+            }
+
+            void Handle(string? line)
+            {
+                if (line is null) return;
+                log(line);
+                tracker.Observe(line);
+                Report();
+            }
+
+            process.OutputDataReceived += (_, e) => Handle(e.Data);
+            process.ErrorDataReceived += (_, e) => Handle(e.Data);
 
             if (!process.Start())
                 throw new InvalidOperationException("Failed to launch the build script");
@@ -111,17 +157,50 @@ public sealed class SidecarBuildService : ISidecarBuildService
 
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
-            await process.WaitForExitAsync(cts.Token).ConfigureAwait(false);
+
+            using var pollCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token);
+            var poll = PollPackagingAsync(tracker, Report, pollCts.Token);
+            try
+            {
+                await process.WaitForExitAsync(cts.Token).ConfigureAwait(false);
+            }
+            finally
+            {
+                pollCts.Cancel();
+                try { await poll.ConfigureAwait(false); } catch (OperationCanceledException) { }
+            }
 
             if (process.ExitCode != 0)
                 throw new InvalidOperationException(
                     $"Server build failed with exit code {process.ExitCode} - see the log for details.");
 
+            progress.Report(new SidecarBuildProgress(100, "Sidecar built"));
             log("[build] Server build complete.");
         }
         finally
         {
             lock (_gate) _activeCts = null;
+        }
+    }
+
+    /// <summary>
+    /// Drives the packaging band from the bytes landing on disk while
+    /// PyInstaller runs, which is otherwise silent for many minutes at a time.
+    /// </summary>
+    private static async Task PollPackagingAsync(SidecarBuildProgressTracker tracker, Action report, CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            tracker.PollBytes();
+            report();
+            try
+            {
+                await Task.Delay(PollInterval, ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
         }
     }
 }

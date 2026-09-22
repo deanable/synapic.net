@@ -11,9 +11,13 @@ $ErrorActionPreference = "Stop"
 $PbsTag = "20260901"
 $PythonVersion = "3.11.16"
 
+# CUDA is a packaging variant of the same Windows x64 interpreter: it shares
+# the base Python and differs only in which torch wheels get installed
+# (see install-python-deps.ps1), so it maps to the same triple.
 switch ($Rid) {
-    "win-x64" { $triple = "x86_64-pc-windows-msvc"; $flavor = "install_only" }
-    default   { throw "Use build/fetch-python.sh for non-Windows RIDs (got: $Rid)" }
+    "win-x64"      { $triple = "x86_64-pc-windows-msvc"; $flavor = "install_only" }
+    "win-x64-cuda" { $triple = "x86_64-pc-windows-msvc"; $flavor = "install_only" }
+    default        { throw "Use build/fetch-python.sh for non-Windows RIDs (got: $Rid)" }
 }
 
 $archive = "cpython-$PythonVersion+$PbsTag-$triple-$flavor.tar.gz"

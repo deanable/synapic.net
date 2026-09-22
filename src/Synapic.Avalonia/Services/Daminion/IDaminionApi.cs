@@ -71,6 +71,16 @@ public interface IDaminionApi
     [Get("/api/Settings/GetLoggedUser")]
     Task<JsonElement> GetLoggedUser();
 
+    /// <summary>
+    /// GUID of the catalog this session is bound to (port of
+    /// daminion_api.settings.get_catalog_guid). This is the only catalog fact
+    /// the server exposes: Daminion has no endpoint that enumerates the
+    /// catalogs available on a server, so the UI reports the catalog it
+    /// actually landed on instead of offering a picklist.
+    /// </summary>
+    [Get("/api/Settings/GetCatalogGuid")]
+    Task<JsonElement> GetCatalogGuid();
+
     // ── Tags / collections for Step 1 pickers ───────────────────────────────
     [Get("/api/Settings/GetTags")]
     Task<JsonElement> GetAllTags();

@@ -16,6 +16,7 @@ public partial class Step2EngineViewModel : ViewModelBase
 {
     private readonly Session _session;
     private readonly IInferenceSidecar _sidecar;
+    private readonly EngineSettingsStore? _engineStore;
 
     [ObservableProperty]
     private string _manualModelId = "LiquidAI/LFM2.5-VL-450M";
@@ -70,10 +71,12 @@ public partial class Step2EngineViewModel : ViewModelBase
         _ => 2,
     };
 
-    public Step2EngineViewModel(Session session, IInferenceSidecar sidecar)
+    public Step2EngineViewModel(Session session, IInferenceSidecar sidecar, EngineSettingsStore? engineStore = null)
     {
         _session = session;
         _sidecar = sidecar;
+        _engineStore = engineStore;
+        HydrateFromStore();
         var engine = session.Engine;
         ManualModelId = engine.ModelId;
         // Correct any stale per-field task persisted by an older session.
@@ -90,6 +93,46 @@ public partial class Step2EngineViewModel : ViewModelBase
         TagDescription = engine.TagDescription;
     }
 
+    /// <summary>Pre-fill the Step 2 form from the registry (last run's engine settings).</summary>
+    private void HydrateFromStore()
+    {
+        if (_engineStore is null) return;
+        try
+        {
+            var saved = _engineStore.Load();
+            if (saved is null) return;
+
+            // Model + task.
+            ManualModelId = saved.ModelId;
+            _session.Engine.ModelId = saved.ModelId;
+            _session.Engine.Task = MultimodalTask;
+
+            // Device + threshold sliders.
+            DeviceIndex = DeviceStringToIndex(saved.Device);
+            ConfidenceThreshold = (float)saved.ConfidenceThreshold;
+            ProbabilityModeIndex = ProbabilityModeStringToIndex(saved.ProbabilityMode);
+            ProbabilityThreshold = (float)saved.ProbabilityThreshold;
+
+            // Probability candidates + system prompt.
+            ProbabilityCandidates = string.Join(", ", saved.ProbabilityCandidates);
+            SystemPrompt = saved.SystemPrompt;
+            EmbeddingRescueEnabled = saved.EmbeddingRescueEnabled;
+
+            // Tag-field checkboxes.
+            TagKeywords = saved.TagKeywords;
+            TagCategories = saved.TagCategories;
+            TagDescription = saved.TagDescription;
+
+            SynapicLog.Info(nameof(Step2EngineViewModel),
+                $"Pre-filled Step 2 engine settings from registry: model={saved.ModelId}, device={saved.Device}");
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Warning(nameof(Step2EngineViewModel),
+                $"Failed to pre-fill engine settings from registry: {e.Message}");
+        }
+    }
+
     // ── Tag field selection (original Step 2 checkboxes) ─────────────────────
 
     [ObservableProperty]
@@ -103,6 +146,34 @@ public partial class Step2EngineViewModel : ViewModelBase
 
     /// <summary>Drives the "select at least one" hint; at least one must stay checked to proceed.</summary>
     public bool HasNoTagFieldSelected => !(TagKeywords || TagCategories || TagDescription);
+
+    /// <summary>Persist the current Step 2 settings to the registry (called on step exit).</summary>
+    public void SaveToStore()
+    {
+        if (_engineStore is null) return;
+        try
+        {
+            var engine = _session.Engine;
+            _engineStore.Save(new EngineSettingsParams(
+                engine.ModelId,
+                engine.Task,
+                engine.Device,
+                engine.ConfidenceThreshold,
+                engine.ProbabilityMode,
+                engine.ProbabilityThreshold,
+                engine.ProbabilityCandidates,
+                engine.SystemPrompt,
+                engine.EmbeddingRescueEnabled,
+                engine.TagKeywords,
+                engine.TagCategories,
+                engine.TagDescription));
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Warning(nameof(Step2EngineViewModel),
+                $"Failed to persist engine settings: {e.Message}");
+        }
+    }
 
     partial void OnTagKeywordsChanged(bool value)
     {

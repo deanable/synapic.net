@@ -57,13 +57,19 @@ internal sealed class FakeBuildService : ISidecarBuildService
 {
     public bool CanBuild { get; set; } = true;
     public bool IsBuilding { get; set; }
-    public Func<Action<string>, CancellationToken, Task>? OnBuild { get; set; }
-    public int BuildCalls { get; private set; }
 
-    public Task BuildAsync(Action<string> log, CancellationToken ct)
+    /// <summary>(rid, log, progress, ct) — returns the task the fake build awaits.</summary>
+    public Func<string, Action<string>, IProgress<SidecarBuildProgress>, CancellationToken, Task>? OnBuild { get; set; }
+
+    /// <summary>Every RID a build was requested for, in order.</summary>
+    public List<string> BuiltRids { get; } = new();
+
+    public int BuildCalls => BuiltRids.Count;
+
+    public Task BuildAsync(string rid, Action<string> log, IProgress<SidecarBuildProgress> progress, CancellationToken ct)
     {
-        BuildCalls++;
-        return OnBuild is { } callback ? callback(log, ct) : Task.CompletedTask;
+        BuiltRids.Add(rid);
+        return OnBuild is { } callback ? callback(rid, log, progress, ct) : Task.CompletedTask;
     }
 
     public void Cancel() { }

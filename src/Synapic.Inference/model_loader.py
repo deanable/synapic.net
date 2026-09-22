@@ -41,6 +41,8 @@ _state: Dict[str, Any] = {
 # Session model cache: (model_id, task, device) -> pipeline
 _model_cache: Dict[Tuple[str, str, str], Any] = {}
 _model_cache_lock = threading.Lock()
+# Serializes pipeline construction (see load_model).
+_model_build_lock = threading.Lock()
 
 # Background download state for /health: model_id ->
 # {"status": "downloading"|"complete"|"failed", "done": int, "total": int,
@@ -603,6 +605,34 @@ def load_model(
 
     set_status("loading")
 
+    # Construct at most one pipeline at a time. The host fans out parallel
+    # /tag requests, so a cold sidecar used to build one pipeline per thread:
+    # N redundant copies of the same weights, and - because transformers
+    # materializes checkpoint tensors into the instance while loading - some
+    # of those concurrent instances kept float32 parameters that no checkpoint
+    # tensor ever overwrote. A float32 RMSNorm weight promotes the normalized
+    # activations to float32, and the next bfloat16 linear then dies with
+    # "expected m1 and m2 to have the same dtype, but got: float != BFloat16",
+    # failing that first batch with HTTP 500.
+    with _model_build_lock:
+        # Another thread may have finished loading while we waited.
+        with _model_cache_lock:
+            cached = _model_cache.get(cache_key)
+        if cached is not None:
+            set_loaded_model(model_id, device_str)
+            return cached, task
+
+        return _construct_model(model_id, task, device_str, token, cache_key)
+
+
+def _construct_model(
+    model_id: str,
+    task: str,
+    device_str: str,
+    token: Optional[str],
+    cache_key: Tuple[str, str, str],
+) -> Tuple[Any, str]:
+    """Build a single pipeline instance. Caller must hold _model_build_lock."""
     try:
         hf_pipeline = _get_hf_pipeline()
 

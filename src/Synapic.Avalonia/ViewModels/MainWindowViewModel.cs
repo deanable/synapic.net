@@ -40,6 +40,8 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly ISidecarBuildService _build;
     private readonly Session _session;
     private readonly Func<string?> _findSidecarExecutable;
+    private readonly Func<string, string?> _findSidecarVariant;
+    private string? _detectedExe;
     private CancellationTokenSource? _healthPollCts;
     private string _lastDownloadStatus = "";
 
@@ -48,12 +50,15 @@ public partial class MainWindowViewModel : ViewModelBase
         ISidecarBuildService build,
         Session session,
         Func<string?>? sidecarExecutableLocator = null,
-        DaminionConnectionStore? connectionStore = null)
+        DaminionConnectionStore? connectionStore = null,
+        EngineSettingsStore? engineStore = null,
+        Func<string, string?>? sidecarVariantLocator = null)
     {
         _sidecar = sidecar;
         _build = build;
         _session = session;
         _findSidecarExecutable = sidecarExecutableLocator ?? InferenceSidecarService.FindExecutable;
+        _findSidecarVariant = sidecarVariantLocator ?? InferenceSidecarService.FindExecutableForRid;
 
         _sidecar.StatusChanged += OnSidecarStatusChanged;
 
@@ -62,10 +67,78 @@ public partial class MainWindowViewModel : ViewModelBase
         SynapicLog.UiSink.Emitted -= OnUiLogEmitted;
         SynapicLog.UiSink.Emitted += OnUiLogEmitted;
 
-        Wizard = new WizardViewModel(_session, _sidecar, connectionStore);
+        Wizard = new WizardViewModel(_session, _sidecar, connectionStore, engineStore);
     }
 
     public WizardViewModel Wizard { get; }
+
+    /// <summary>Snapshot the current wizard+engine state to config.json (Session is the source of truth).</summary>
+    public void PersistConfig()
+    {
+        try
+        {
+            var config = App.Services.GetService(typeof(Synapic.Avalonia.Services.ConfigService)) as Synapic.Avalonia.Services.ConfigService;
+            if (config is null) return;
+
+            var s = _session;
+            config.Save(new AppConfig
+            {
+                Version = 2,
+                Datasource = new DatasourceSettings
+                {
+                    Type = s.Datasource.Type,
+                    LocalPath = s.Datasource.LocalPath,
+                    LocalRecursive = s.Datasource.LocalRecursive,
+                    Daminion = new DaminionSettings
+                    {
+                        ServerUrl = s.Datasource.DaminionUrl,
+                        Username = s.Datasource.DaminionUser,
+                        CatalogId = s.Datasource.DaminionCatalogId,
+                        Scope = s.Datasource.DaminionScope,
+                        SearchTerm = s.Datasource.SearchTerm,
+                        SavedSearchId = s.Datasource.SavedSearchId,
+                        CollectionId = s.Datasource.CollectionId,
+                        UntaggedKeywords = s.Datasource.UntaggedKeywords,
+                        UntaggedCategories = s.Datasource.UntaggedCategories,
+                        UntaggedDescription = s.Datasource.UntaggedDescription,
+                        StatusFilter = s.Datasource.StatusFilter,
+                        MaxItems = s.Datasource.MaxItems,
+                    },
+                },
+                Engine = new EngineSettings
+                {
+                    ModelId = s.Engine.ModelId,
+                    Task = s.Engine.Task,
+                    Device = s.Engine.Device,
+                    ConfidenceThreshold = s.Engine.ConfidenceThreshold,
+                    ProbabilityMode = s.Engine.ProbabilityMode,
+                    ProbabilityThreshold = s.Engine.ProbabilityThreshold,
+                    ProbabilityCandidates = s.Engine.ProbabilityCandidates,
+                    SystemPrompt = s.Engine.SystemPrompt,
+                    EmbeddingRescueEnabled = s.Engine.EmbeddingRescueEnabled,
+                },
+                Processing = new ProcessingSettings
+                {
+                    MaxItems = s.Datasource.MaxItems,
+                    AutoPaginate = true,
+                    ResizeScale = s.Datasource.ResizeScale,
+                    UseThumbnailOverride = s.Datasource.UseThumbnailOverride,
+                },
+                Ui = new UiSettings
+                {
+                    Theme = config.Load().Ui.Theme,
+                    LogLevel = config.Load().Ui.LogLevel,
+                    AutoLaunchSidecar = config.Load().Ui.AutoLaunchSidecar,
+                    TelemetryEnabled = config.Load().Ui.TelemetryEnabled,
+                },
+            });
+            SynapicLog.Info(nameof(MainWindowViewModel), "Persisted wizard+engine config to config.json");
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Warning(nameof(MainWindowViewModel), $"Failed to persist config: {e.Message}");
+        }
+    }
 
     public ObservableCollection<UiLogEvent> LogEntries { get; } = new();
 
@@ -93,6 +166,27 @@ public partial class MainWindowViewModel : ViewModelBase
 
     /// <summary>True when no sidecar executable exists and building is possible.</summary>
     public bool IsBuildButtonVisible => ServerState is ServerUiState.NotDetected && _build.CanBuild;
+
+    // ── Per-platform sidecar setup (the sidecar gates the whole workspace) ──
+
+    /// <summary>One row per buildable variant (CPU / CUDA) for the setup panel.</summary>
+    public ObservableCollection<SidecarVariantViewModel> SidecarVariants { get; } = new();
+
+    /// <summary>True once a sidecar executable exists, so the server can be started.</summary>
+    public bool IsSidecarReady => _detectedExe is not null;
+
+    /// <summary>True when nothing has been built yet - the blocking setup state.</summary>
+    public bool IsSidecarRequired => !IsSidecarReady;
+
+    /// <summary>Shows the setup panel while any buildable variant is still missing.</summary>
+    public bool IsSidecarPanelVisible => _build.CanBuild && SidecarVariants.Any(v => !v.IsBuilt);
+
+    /// <summary>
+    /// The wizard (datasource, engine, processing, results) is inert without a
+    /// sidecar: nothing can be tagged, so the rest of the UI stays disabled
+    /// until at least one variant is built.
+    /// </summary>
+    public bool IsWorkspaceEnabled => IsSidecarReady;
 
     /// <summary>Status dot color for the always-visible server indicator.</summary>
     public IBrush ServerBrush => ServerState switch
@@ -126,13 +220,91 @@ public partial class MainWindowViewModel : ViewModelBase
         NotifyCommands();
     }
 
-    partial void OnIsBusyChanged(bool value) => NotifyCommands();
+    partial void OnIsBusyChanged(bool value)
+    {
+        NotifyCommands();
+        foreach (var variant in SidecarVariants) variant.NotifyCommands();
+    }
 
     private void NotifyCommands()
     {
         StartServerCommand.NotifyCanExecuteChanged();
         StopServerCommand.NotifyCanExecuteChanged();
         BuildServerCommand.NotifyCanExecuteChanged();
+    }
+
+    private void NotifySidecarSetupChanged()
+    {
+        OnPropertyChanged(nameof(IsSidecarReady));
+        OnPropertyChanged(nameof(IsSidecarRequired));
+        OnPropertyChanged(nameof(IsSidecarPanelVisible));
+        OnPropertyChanged(nameof(IsWorkspaceEnabled));
+    }
+
+    private static string DescribeVariant(string rid) =>
+        rid.EndsWith("-cuda", StringComparison.OrdinalIgnoreCase)
+            ? "Fastest on an NVIDIA GPU; bundles the CUDA 12.6 torch build (~2.5 GB download on first build)."
+            : "Runs anywhere (CPU only); the safe default.";
+
+    /// <summary>
+    /// Rebuilds the variant list from the buildable RIDs for this machine and
+    /// refreshes each row's on-disk state. Cheap enough to call on every
+    /// detection (metadata only).
+    /// </summary>
+    private void RefreshSidecarVariants()
+    {
+        if (SidecarVariants.Count == 0)
+        {
+            foreach (var rid in InferenceSidecarService.BuildableRids())
+                SidecarVariants.Add(new SidecarVariantViewModel(rid, DescribeVariant(rid), _build.CanBuild, BuildVariantAsync));
+        }
+
+        foreach (var variant in SidecarVariants)
+        {
+            variant.CanBuild = _build.CanBuild;
+            variant.ApplyBuildState(_findSidecarVariant(variant.Rid));
+        }
+
+        NotifySidecarSetupChanged();
+    }
+
+    /// <summary>
+    /// Builds one variant, then re-detects so the workspace unlocks as soon as
+    /// the first build lands. Only one build runs at a time: the pipeline
+    /// shares a work directory and the build service rejects concurrent runs.
+    /// </summary>
+    private async Task BuildVariantAsync(SidecarVariantViewModel variant, CancellationToken ct)
+    {
+        if (!variant.CanBuild || variant.IsBuilding) return;
+
+        foreach (var other in SidecarVariants) other.CanBuild = false;
+        variant.IsBuilding = true;
+        variant.ResetBuildProgress();
+        IsBusy = true;
+        SetState(ServerUiState.Building);
+        try
+        {
+            // Progress<T> marshals back to this (UI) thread as it is raised.
+            var progress = new Progress<SidecarBuildProgress>(variant.ApplyProgress);
+            await _build.BuildAsync(variant.Rid, AppendLog, progress, ct);
+            AppendLog($"[build] {variant.DisplayName} sidecar built.");
+        }
+        catch (OperationCanceledException)
+        {
+            AppendLog($"[build] {variant.DisplayName} build cancelled.");
+        }
+        catch (Exception e)
+        {
+            AppendLog($"[build] {variant.DisplayName} build failed: {e.Message}");
+        }
+        finally
+        {
+            variant.IsBuilding = false;
+            IsBusy = false;
+            // Re-detect: restores per-variant availability and, on success,
+            // flips the server state out of Building and unlocks the wizard.
+            await DetectServerAsync();
+        }
     }
 
     private void OnSidecarStatusChanged(object? sender, SidecarStatusChangedEventArgs e)
@@ -175,15 +347,23 @@ public partial class MainWindowViewModel : ViewModelBase
         catch (Exception e)
         {
             AppendLog($"[server] Server detection failed: {e.Message}");
+            _detectedExe = null;
+            RefreshSidecarVariants();
             SetState(ServerUiState.NotDetected);
             return;
         }
 
+        _detectedExe = exe;
+        RefreshSidecarVariants();
+
         if (exe is null)
         {
             SetState(ServerUiState.NotDetected);
+            var missing = string.Join(", ", SidecarVariants.Where(v => !v.IsBuilt).Select(v => v.DisplayName));
             if (_build.CanBuild)
-                AppendLog("[server] Inference server not found. Use \"Build Server\" to build it from source (one-time).");
+                AppendLog(missing.Length > 0
+                    ? $"[server] No inference server built. Build one of: {missing}."
+                    : "[server] Inference server not found. Use \"Build Server\" to build it from source (one-time).");
             else
                 AppendLog("[server] Inference server not found in this installation.");
             return;
@@ -233,33 +413,27 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private bool CanStopServer() => IsServerRunning && !IsBusy;
 
+    /// <summary>
+    /// Toolbar shortcut: builds the recommended variant (the preferred RID for
+    /// this machine). The setup panel offers the explicit per-platform choice.
+    /// </summary>
     [RelayCommand(CanExecute = nameof(CanBuildServer))]
     private async Task BuildServerAsync(CancellationToken ct)
     {
-        SetState(ServerUiState.Building);
-        IsBusy = true;
-        try
+        if (SidecarVariants.Count == 0) RefreshSidecarVariants();
+
+        var target = SidecarVariants.FirstOrDefault(v => !v.IsBuilt) ?? SidecarVariants.FirstOrDefault();
+        if (target is null)
         {
-            await _build.BuildAsync(AppendLog, ct);
-            await DetectServerAsync(ct);
-        }
-        catch (OperationCanceledException)
-        {
-            AppendLog("[build] Build cancelled.");
+            AppendLog("[build] No buildable sidecar variant on this platform.");
             SetState(ServerUiState.NotDetected);
+            return;
         }
-        catch (Exception e)
-        {
-            AppendLog($"[build] Build failed: {e.Message}");
-            SetState(ServerUiState.NotDetected);
-        }
-        finally
-        {
-            IsBusy = false;
-        }
+
+        await BuildVariantAsync(target, ct);
     }
 
-    private bool CanBuildServer() => ServerState is ServerUiState.NotDetected && !IsBusy;
+    private bool CanBuildServer() => ServerState is ServerUiState.NotDetected && !IsBusy && _build.CanBuild;
 
     // ── Background model download progress (polled from /health) ───────────
 

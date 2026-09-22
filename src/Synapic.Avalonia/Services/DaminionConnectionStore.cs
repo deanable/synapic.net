@@ -6,11 +6,31 @@ using Synapic.Shared;
 namespace Synapic.Avalonia.Services;
 
 /// <summary>Per-user Daminion connection parameters (Step 1 convenience).</summary>
+/// <summary>Daminion connection + Step 1 scope/filter/limit settings.</summary>
 public sealed record DaminionConnectionParams(
     string ServerUrl,
     string Username,
     string Password,
-    string CatalogId);
+    string CatalogId,
+
+    // Scope + search
+    string DaminionScope,
+    string SearchTerm,
+
+    // Saved search / shared collection (ids as strings, mirrored from the form)
+    string SavedSearchId,
+    string CollectionId,
+
+    // Filters: status + untagged fields
+    string StatusFilter,
+    bool UntaggedKeywords,
+    bool UntaggedCategories,
+    bool UntaggedDescription,
+
+    // Processing limits
+    int MaxItems,
+    int ResizeScale,
+    bool UseThumbnailOverride);
 
 /// <summary>
 /// Persists the Daminion connection parameters to the Windows registry so the
@@ -33,6 +53,19 @@ public sealed class DaminionConnectionStore
     private const string UserValue = "Username";
     private const string PassValue = "PasswordEncrypted";
     private const string CatalogValue = "CatalogId";
+
+    private const string ScopeValue = "DaminionScope";
+    private const string SearchTermValue = "SearchTerm";
+    private const string SavedSearchIdValue = "SavedSearchId";
+    private const string CollectionIdValue = "CollectionId";
+    private const string StatusFilterValue = "StatusFilter";
+    private const string UntaggedKeywordsValue = "UntaggedKeywords";
+    private const string UntaggedCategoriesValue = "UntaggedCategories";
+    private const string UntaggedDescriptionValue = "UntaggedDescription";
+    private const string MaxItemsValue = "MaxItems";
+    private const string ResizeScaleValue = "ResizeScale";
+    private const string UseThumbnailOverrideValue = "UseThumbnailOverride";
+
     private static readonly byte[] Entropy = "Synapic.Daminion.v1"u8.ToArray();
 
     private readonly string? _keyPathOverride;
@@ -76,7 +109,32 @@ public sealed class DaminionConnectionStore
                 }
             }
 
-            return new DaminionConnectionParams(url, user, password, catalog);
+            // Step 1 scope / filter / limit fields (all optional — unknown values
+            // fall back to the form defaults, same as a brand-new first launch).
+            var scope = key.GetValue(ScopeValue) as string ?? "all";
+            var searchTerm = key.GetValue(SearchTermValue) as string ?? "";
+            var savedSearchId = key.GetValue(SavedSearchIdValue) as string ?? "";
+            var collectionId = key.GetValue(CollectionIdValue) as string ?? "";
+            var statusFilter = key.GetValue(StatusFilterValue) as string ?? "all";
+
+            var untaggedKeywords = key.GetValue(UntaggedKeywordsValue) is int ukw && ukw != 0;
+            var untaggedCategories = key.GetValue(UntaggedCategoriesValue) is int ukc && ukc != 0;
+            var untaggedDescription = key.GetValue(UntaggedDescriptionValue) is int uds && uds != 0;
+
+            var maxItems = 100;
+            var resizeScale = 100;
+            var useThumbnailOverride = false;
+
+            if (key.GetValue(MaxItemsValue) is int mi) maxItems = mi;
+            if (key.GetValue(ResizeScaleValue) is int rs) resizeScale = rs;
+            if (key.GetValue(UseThumbnailOverrideValue) is int uto && uto != 0)
+                useThumbnailOverride = true;
+
+            return new DaminionConnectionParams(
+                url, user, password, catalog,
+                scope, searchTerm, savedSearchId, collectionId,
+                statusFilter, untaggedKeywords, untaggedCategories, untaggedDescription,
+                maxItems, resizeScale, useThumbnailOverride);
         }
         catch (Exception e)
         {
@@ -111,8 +169,22 @@ public sealed class DaminionConnectionStore
                 var blob = ProtectedData.Protect(plain, Entropy, DataProtectionScope.CurrentUser);
                 key.SetValue(PassValue, blob, RegistryValueKind.Binary);
             }
+
+            // Step 1 scope / filter / limit fields.
+            key.SetValue(ScopeValue, params_.DaminionScope, RegistryValueKind.String);
+            key.SetValue(SearchTermValue, params_.SearchTerm, RegistryValueKind.String);
+            key.SetValue(SavedSearchIdValue, params_.SavedSearchId, RegistryValueKind.String);
+            key.SetValue(CollectionIdValue, params_.CollectionId, RegistryValueKind.String);
+            key.SetValue(StatusFilterValue, params_.StatusFilter, RegistryValueKind.String);
+            key.SetValue(UntaggedKeywordsValue, params_.UntaggedKeywords ? 1 : 0, RegistryValueKind.DWord);
+            key.SetValue(UntaggedCategoriesValue, params_.UntaggedCategories ? 1 : 0, RegistryValueKind.DWord);
+            key.SetValue(UntaggedDescriptionValue, params_.UntaggedDescription ? 1 : 0, RegistryValueKind.DWord);
+            key.SetValue(MaxItemsValue, params_.MaxItems, RegistryValueKind.DWord);
+            key.SetValue(ResizeScaleValue, params_.ResizeScale, RegistryValueKind.DWord);
+            key.SetValue(UseThumbnailOverrideValue, params_.UseThumbnailOverride ? 1 : 0, RegistryValueKind.DWord);
+
             SynapicLog.Info(nameof(DaminionConnectionStore),
-                $"Saved Daminion connection params to registry ({KeyPathForLog}, password DPAPI-protected)");
+                $"Saved Daminion connection + Step 1 params to registry ({KeyPathForLog}, {10} fields, password DPAPI-protected)");
         }
         catch (Exception e)
         {

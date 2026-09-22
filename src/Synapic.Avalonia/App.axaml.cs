@@ -69,6 +69,7 @@ public partial class App : Application
         services.AddSingleton(config);
         services.AddSingleton<Session>();
         services.AddSingleton(new DaminionConnectionStore());
+        services.AddSingleton(new EngineSettingsStore());
         services.AddSingleton<IInferenceSidecar, InferenceSidecarService>();
         services.AddSingleton<ISidecarBuildService, SidecarBuildService>();
         services.AddSingleton<MainWindowViewModel>();
@@ -92,7 +93,17 @@ public partial class App : Application
             // Server lifecycle (user requirement): the inference server starts
             // when the application launches. ui.autoLaunchSidecar (default
             // true) opts out only for manual-only use.
-            if (config.Ui.AutoLaunchSidecar)
+            if (!config.Ui.AutoLaunchSidecar)
+            {
+                log.Information("Auto-launch disabled by config - waiting for the user to press Start Server");
+            }
+            else if (InferenceSidecarService.FindExecutable() is null)
+            {
+                // Nothing to launch yet: the setup panel offers the CPU/CUDA
+                // builds and the workspace stays disabled until one exists.
+                log.Information("Not auto-launching: no sidecar is built yet - build one from the setup panel");
+            }
+            else
             {
                 log.Information("Auto-launching the inference server (ui.autoLaunchSidecar=true)");
                 _ = Task.Run(async () =>
@@ -107,10 +118,6 @@ public partial class App : Application
                         SynapicLog.Error(nameof(App), "Auto-launch of sidecar failed", e);
                     }
                 });
-            }
-            else
-            {
-                log.Information("Auto-launch disabled by config - waiting for the user to press Start Server");
             }
 
             // Orphan-free shutdown (spec §2): always stop the sidecar on exit.

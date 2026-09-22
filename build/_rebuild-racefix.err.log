@@ -1,0 +1,143 @@
+100 INFO: PyInstaller: 6.18.0, contrib hooks: 2026.7
+102 INFO: Python: 3.11.16
+127 INFO: Platform: Windows-10-10.0.26200-SP0
+128 INFO: Python environment: C:\Users\Dean\source\repos\Synapic.NET\build\_python\win-x64\python
+130 INFO: Removing temporary files and cleaning cache in C:\Users\Dean\AppData\Local\pyinstaller
+1687 INFO: Module search paths (PYTHONPATH):
+['C:\\Users\\Dean\\source\\repos\\Synapic.NET',
+ 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\python311.zip',
+ 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\DLLs',
+ 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib',
+ 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python',
+ 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages',
+ 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\src',
+ 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\src\\Synapic.Inference']
+1952 INFO: Appending 'datas' from .spec
+1953 INFO: checking Analysis
+1953 INFO: Building Analysis because Analysis-00.toc is non existent
+1954 INFO: Looking for Python shared library...
+1954 INFO: Using Python shared library: C:\Users\Dean\source\repos\Synapic.NET\build\_python\win-x64\python\python311.dll
+1954 INFO: Running Analysis Analysis-00.toc
+1954 INFO: Target bytecode optimization level: 0
+1954 INFO: Initializing module dependency graph...
+1955 INFO: Initializing module graph hook caches...
+1967 INFO: Analyzing modules for base_library.zip ...
+2662 INFO: Processing standard module hook 'hook-heapq.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+2714 INFO: Processing standard module hook 'hook-encodings.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+4147 INFO: Processing standard module hook 'hook-pickle.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+5514 INFO: Caching module dependency graph...
+5546 INFO: Analyzing C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Inference\service.py
+5563 INFO: Processing standard module hook 'hook-uvicorn.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+6027 INFO: Processing standard module hook 'hook-multiprocessing.util.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+6201 INFO: Processing standard module hook 'hook-xml.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+6456 INFO: Processing standard module hook 'hook-_ctypes.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+7139 INFO: Processing standard module hook 'hook-platform.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+7177 INFO: Processing pre-safe-import-module hook 'hook-typing_extensions.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+7178 INFO: SetuptoolsInfo: initializing cached setuptools info...
+7698 INFO: Processing standard module hook 'hook-difflib.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+8469 INFO: Processing standard module hook 'hook-pydantic.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+9097 INFO: Processing standard module hook 'hook-rich.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+9613 INFO: Processing standard module hook 'hook-pygments.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+11237 INFO: Processing standard module hook 'hook-sysconfig.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+11609 INFO: Processing standard module hook 'hook-zoneinfo.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+12564 INFO: Processing standard module hook 'hook-anyio.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+13797 INFO: Processing standard module hook 'hook-certifi.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+14520 INFO: Processing pre-safe-import-module hook 'hook-importlib_resources.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+14565 INFO: Processing standard module hook 'hook-numpy.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+15732 INFO: Processing standard module hook 'hook-psutil.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+16793 INFO: Processing standard module hook 'hook-charset_normalizer.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+17454 INFO: Processing standard module hook 'hook-sqlite3.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+18095 INFO: Processing standard module hook 'hook-PIL.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+18453 INFO: Processing standard module hook 'hook-PIL.Image.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+18769 INFO: Processing standard module hook 'hook-xml.etree.cElementTree.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+18961 INFO: Processing standard module hook 'hook-PIL.ImageFilter.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+19806 INFO: Processing standard module hook 'hook-jinja2.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+20272 INFO: Processing standard module hook 'hook-torch.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+1258 WARNING: Failed to collect submodules for 'torch.utils.tensorboard' because importing 'torch.utils.tensorboard' raised: ModuleNotFoundError: No module named 'tensorboard'
+W0922 20:01:13.187000 48796 build\_python\win-x64\python\Lib\site-packages\torch\distributed\elastic\multiprocessing\redirects.py:29] NOTE: Redirects are currently not supported in Windows or MacOs.
+C:\Users\Dean\source\repos\Synapic.NET\build\_python\win-x64\python\Lib\site-packages\PyInstaller\utils\hooks\__init__.py:665: DeprecationWarning: `torch.distributed._sharding_spec` will be deprecated, use `torch.distributed._shard.sharding_spec` instead
+  __import__(name)
+C:\Users\Dean\source\repos\Synapic.NET\build\_python\win-x64\python\Lib\site-packages\PyInstaller\utils\hooks\__init__.py:665: DeprecationWarning: `torch.distributed._sharded_tensor` will be deprecated, use `torch.distributed._shard.sharded_tensor` instead
+  __import__(name)
+C:\Users\Dean\source\repos\Synapic.NET\build\_python\win-x64\python\Lib\site-packages\PyInstaller\utils\hooks\__init__.py:665: DeprecationWarning: `torch.distributed._shard.checkpoint` will be deprecated, use `torch.distributed.checkpoint` instead
+  __import__(name)
+36151 INFO: hook-torch: this torch build does not depend on MKL...
+48417 INFO: Processing standard module hook 'hook-xml.dom.domreg.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+54898 INFO: Processing standard module hook 'hook-setuptools.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+54912 INFO: Processing pre-safe-import-module hook 'hook-distutils.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+54913 INFO: Processing pre-find-module-path hook 'hook-distutils.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks\\pre_find_module_path'
+55190 INFO: Processing standard module hook 'hook-distutils.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+55209 INFO: Processing standard module hook 'hook-distutils.util.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+55242 INFO: Processing standard module hook 'hook-_osx_support.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+55262 INFO: Processing pre-safe-import-module hook 'hook-packaging.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+55477 INFO: Processing pre-safe-import-module hook 'hook-jaraco.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+55479 INFO: Setuptools: 'jaraco' appears to be a full setuptools-vendored copy - creating alias to 'setuptools._vendor.jaraco'!
+55489 INFO: Processing standard module hook 'hook-setuptools._vendor.jaraco.text.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+55497 INFO: Processing pre-safe-import-module hook 'hook-backports.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+55498 INFO: Setuptools: 'backports' appears to be a full setuptools-vendored copy - creating alias to 'setuptools._vendor.backports'!
+55577 INFO: Processing pre-safe-import-module hook 'hook-more_itertools.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+55577 INFO: Setuptools: 'more_itertools' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendor.more_itertools'!
+56163 INFO: Processing pre-safe-import-module hook 'hook-tomli.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+56164 INFO: Setuptools: 'tomli' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendor.tomli'!
+56608 INFO: Processing pre-safe-import-module hook 'hook-wheel.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+56642 INFO: Processing pre-safe-import-module hook 'hook-win32com.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\pre_safe_import_module'
+73190 INFO: Processing standard module hook 'hook-fsspec.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+73798 INFO: Processing pre-safe-import-module hook 'hook-importlib_metadata.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+73799 INFO: Setuptools: 'importlib_metadata' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendor.importlib_metadata'!
+73821 INFO: Processing standard module hook 'hook-setuptools._vendor.importlib_metadata.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+73851 INFO: Processing pre-safe-import-module hook 'hook-zipp.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+73853 INFO: Setuptools: 'zipp' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendor.zipp'!
+73905 INFO: Processing standard module hook 'hook-urllib3.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+75399 INFO: Processing standard module hook 'hook-torchvision.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+75468 INFO: Processing standard module hook 'hook-torchvision.io.image.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+77116 INFO: Processing standard module hook 'hook-av.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+81656 INFO: Processing standard module hook 'hook-transformers.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+84340 INFO: Processing standard module hook 'hook-regex.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+85564 INFO: Processing standard module hook 'hook-timm.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+86313 INFO: Processing pre-safe-import-module hook 'hook-tensorflow.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\pre_safe_import_module'
+115724 INFO: Analyzing hidden import 'qwen_vl_utils'
+115922 INFO: Processing module hooks (post-graph stage)...
+124594 WARNING: Hidden import "tzdata" not found!
+124949 INFO: Processing standard module hook 'hook-PIL.SpiderImagePlugin.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks'
+127577 INFO: Performing binary vs. data reclassification (256 entries)
+127653 INFO: Looking for ctypes DLLs
+127972 WARNING: Ignoring /usr/lib64/libgomp.so.1 imported from C:\Users\Dean\source\repos\Synapic.NET\build\_python\win-x64\python\Lib\site-packages\torch\_inductor\codecache.py - only basenames are supported with ctypes imports!
+128422 INFO: Analyzing run-time hooks ...
+128452 INFO: Including run-time hook 'pyi_rth_inspect.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+128455 INFO: Including run-time hook 'pyi_rth_pkgutil.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+128457 INFO: Including run-time hook 'pyi_rth_multiprocessing.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+128460 INFO: Including run-time hook 'pyi_rth_setuptools.py' from 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+128595 INFO: Creating base_library.zip...
+128621 INFO: Looking for dynamic libraries
+W0922 20:02:53.594000 40168 build\_python\win-x64\python\Lib\site-packages\torch\distributed\elastic\multiprocessing\redirects.py:29] NOTE: Redirects are currently not supported in Windows or MacOs.
+C:\Users\Dean\source\repos\Synapic.NET\build\_python\win-x64\python\Lib\site-packages\PyInstaller\building\build_main.py:227: DeprecationWarning: `torch.distributed._sharding_spec` will be deprecated, use `torch.distributed._shard.sharding_spec` instead
+  __import__(package)
+C:\Users\Dean\source\repos\Synapic.NET\build\_python\win-x64\python\Lib\site-packages\PyInstaller\building\build_main.py:227: DeprecationWarning: `torch.distributed._sharded_tensor` will be deprecated, use `torch.distributed._shard.sharded_tensor` instead
+  __import__(package)
+C:\Users\Dean\source\repos\Synapic.NET\build\_python\win-x64\python\Lib\site-packages\PyInstaller\building\build_main.py:227: DeprecationWarning: `torch.distributed._shard.checkpoint` will be deprecated, use `torch.distributed.checkpoint` instead
+  __import__(package)
+sys:1: DeprecationWarning: builtin type swigvarlink has no __module__ attribute
+142053 INFO: Extra DLL search directories (AddDllDirectory): ['C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\torch\\lib', 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\numpy.libs', 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\torchvision', 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\torchvision', 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\torchvision', 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\torchvision', 'C:\\Users\\Dean\\source\\repos\\Synapic.NET\\build\\_python\\win-x64\\python\\Lib\\site-packages\\av.libs']
+142054 INFO: Extra DLL search directories (PATH): []
+144571 INFO: Warnings written to C:\Users\Dean\source\repos\Synapic.NET\build\_work\win-x64\synapic-inference\warn-synapic-inference.txt
+145421 INFO: Graph cross-reference written to C:\Users\Dean\source\repos\Synapic.NET\build\_work\win-x64\synapic-inference\xref-synapic-inference.html
+145719 INFO: checking PYZ
+145719 INFO: Building PYZ because PYZ-00.toc is non existent
+145720 INFO: Building PYZ (ZlibArchive) C:\Users\Dean\source\repos\Synapic.NET\build\_work\win-x64\synapic-inference\PYZ-00.pyz
+151608 INFO: Building PYZ (ZlibArchive) C:\Users\Dean\source\repos\Synapic.NET\build\_work\win-x64\synapic-inference\PYZ-00.pyz completed successfully.
+151892 INFO: checking PKG
+151892 INFO: Building PKG because PKG-00.toc is non existent
+151893 INFO: Building PKG (CArchive) synapic-inference.pkg
+193561 INFO: Building PKG (CArchive) synapic-inference.pkg completed successfully.
+193625 INFO: Bootloader C:\Users\Dean\source\repos\Synapic.NET\build\_python\win-x64\python\Lib\site-packages\PyInstaller\bootloader\Windows-64bit-intel\run.exe
+193680 INFO: checking EXE
+193680 INFO: Building EXE because EXE-00.toc is non existent
+193680 INFO: Building EXE from EXE-00.toc
+193697 INFO: Copying bootloader EXE to C:\Users\Dean\source\repos\Synapic.NET\artifacts\win-x64\synapic-inference.exe
+193718 INFO: Copying icon to EXE
+193739 INFO: Copying 0 resources to EXE
+193740 INFO: Embedding manifest in EXE
+193759 INFO: Appending PKG archive to EXE
+193879 INFO: Fixing EXE headers
+199959 INFO: Building EXE from EXE-00.toc completed successfully.
+200020 INFO: Build complete! The results are available in: C:\Users\Dean\source\repos\Synapic.NET\artifacts\win-x64

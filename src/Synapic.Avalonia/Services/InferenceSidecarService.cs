@@ -112,11 +112,58 @@ public sealed class InferenceSidecarService : IInferenceSidecar
     /// in a dev checkout's artifacts output (found by walking up to the repo
     /// root). Returns null when no executable exists yet.
     /// </summary>
+    /// <summary>Sidecar executable file name for this platform.</summary>
+    public static string ExeName => OperatingSystem.IsWindows() ? "synapic-inference.exe" : "synapic-inference";
+
+    /// <summary>The RID whose output this machine runs by default.</summary>
+    public static string PreferredRid()
+    {
+        var arm64 = RuntimeInformation.ProcessArchitecture == Architecture.Arm64;
+        return OperatingSystem.IsWindows() ? "win-x64"
+            : OperatingSystem.IsMacOS() ? (arm64 ? "osx-arm64" : "osx-x64")
+            : (arm64 ? "linux-arm64" : "linux-x64");
+    }
+
+    /// <summary>
+    /// RIDs this machine can build a sidecar for, most recommended first.
+    /// CUDA is a Windows-only packaging variant - it shares the win-x64
+    /// interpreter and differs only in which torch wheels are installed and
+    /// bundled (see build/install-python-deps.ps1).
+    /// </summary>
+    public static IReadOnlyList<string> BuildableRids()
+    {
+        if (OperatingSystem.IsWindows())
+            return new[] { "win-x64", "win-x64-cuda" };
+        return new[] { PreferredRid() };
+    }
+
+    /// <summary>Friendly platform name for a RID, e.g. "CPU" or "CUDA".</summary>
+    public static string VariantDisplayName(string rid) =>
+        rid.EndsWith("-cuda", StringComparison.OrdinalIgnoreCase) ? "CUDA (NVIDIA GPU)" : "CPU";
+
+    /// <summary>
+    /// Locates the built sidecar for one specific RID. A packaged install
+    /// bundles a single executable next to the app, which satisfies whichever
+    /// RID matches this machine; dev checkouts look in artifacts/&lt;rid&gt;.
+    /// </summary>
+    public static string? FindExecutableForRid(string rid)
+    {
+        if (string.Equals(rid, PreferredRid(), StringComparison.OrdinalIgnoreCase))
+        {
+            var bundled = Path.Combine(AppContext.BaseDirectory, ExeName);
+            if (File.Exists(bundled)) return bundled;
+        }
+
+        var repoRoot = FindRepoRoot();
+        if (repoRoot is null) return null;
+
+        var path = Path.Combine(repoRoot, "artifacts", rid, ExeName);
+        return File.Exists(path) ? path : null;
+    }
+
     public static string? FindExecutable()
     {
-        var exeName = OperatingSystem.IsWindows() ? "synapic-inference.exe" : "synapic-inference";
-
-        var bundled = Path.Combine(AppContext.BaseDirectory, exeName);
+        var bundled = Path.Combine(AppContext.BaseDirectory, ExeName);
         if (File.Exists(bundled)) return bundled;
 
         var repoRoot = FindRepoRoot();
@@ -126,16 +173,12 @@ public sealed class InferenceSidecarService : IInferenceSidecar
         if (!Directory.Exists(artifactsDir)) return null;
 
         // Prefer the output matching this machine's RID, then any other.
-        var arm64 = RuntimeInformation.ProcessArchitecture == Architecture.Arm64;
-        var preferredRid = OperatingSystem.IsWindows() ? "win-x64"
-            : OperatingSystem.IsMacOS() ? (arm64 ? "osx-arm64" : "osx-x64")
-            : (arm64 ? "linux-arm64" : "linux-x64");
-        var preferred = Path.Combine(artifactsDir, preferredRid, exeName);
+        var preferred = Path.Combine(artifactsDir, PreferredRid(), ExeName);
         if (File.Exists(preferred)) return preferred;
 
         foreach (var dir in Directory.EnumerateDirectories(artifactsDir))
         {
-            var candidate = Path.Combine(dir, exeName);
+            var candidate = Path.Combine(dir, ExeName);
             if (File.Exists(candidate)) return candidate;
         }
         return null;

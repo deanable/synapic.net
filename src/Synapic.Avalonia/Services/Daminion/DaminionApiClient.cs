@@ -984,4 +984,43 @@ public sealed class DaminionApiClient
             _api = null;
         }
     }
+
+    /// <summary>
+    /// The GUID of the catalog this session is bound to, or null when the
+    /// server cannot report one. This acts as a receipt: it confirms whether
+    /// the catalogId supplied at login was honoured. The response shape is not
+    /// documented, so it is read defensively (a bare string, or an object
+    /// wrapping the GUID) and the raw payload is logged when unreadable.
+    /// </summary>
+    public async Task<string?> GetCatalogGuidAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            var json = await GetApi().GetCatalogGuid().ConfigureAwait(false);
+            var guid = json.ValueKind switch
+            {
+                JsonValueKind.String => json.GetString(),
+                JsonValueKind.Object => GetString(
+                    json, "guid", "Guid", "catalogGuid", "CatalogGuid",
+                    "catalogGUID", "value", "Value", "result", "Result"),
+                _ => null,
+            };
+
+            if (guid is null)
+                SynapicLog.Warning(nameof(DaminionApiClient),
+                    $"Catalog guid: no usable value in response (raw: {Truncate(json.ToString(), 200)})");
+            else
+                SynapicLog.Info(nameof(DaminionApiClient), $"Catalog guid: {guid}");
+
+            return guid;
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Warning(nameof(DaminionApiClient), $"Catalog guid lookup failed: {e.Message}");
+            return null;
+        }
+    }
+
+    private static string Truncate(string value, int max) =>
+        value.Length <= max ? value : value[..max] + "...";
 }
