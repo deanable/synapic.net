@@ -99,7 +99,14 @@ public partial class Step3ProcessViewModel : ViewModelBase
             ProgressText = p.Total == 0 && p.Processed == 0
                 ? "No items matched the current filters"
                 : $"{p.Processed}/{p.Total} ({p.Failed} failed)";
-            EtaText = p.Eta is { } eta ? $"ETA {eta.Minutes}m {eta.Seconds}s" : "";
+            // Python parity (step3_process.py): show "ETA … remaining - … per
+            // image" as soon as the first item completes; clear it only when the
+            // batch is done. A null ETA (nothing finished yet) leaves the last
+            // value in place instead of flickering to empty on every start report.
+            if (p.Eta is { } eta && eta > TimeSpan.Zero)
+                EtaText = $"ETA {FormatDuration(eta)} remaining — {FormatDuration(p.PerItem)} per image";
+            else if (p.Total > 0 && p.Processed >= p.Total)
+                EtaText = "";
             // Session stats feed Step 4's summary.
             _session.TotalItems = p.Total;
             _session.ProcessedItems = p.Processed;
@@ -198,6 +205,19 @@ public partial class Step3ProcessViewModel : ViewModelBase
                 MaxNewTokens = 512,
             },
         };
+    }
+
+    /// <summary>Human-readable duration (port of step3_process.py._format_duration).</summary>
+    private static string FormatDuration(TimeSpan? value)
+    {
+        var seconds = value is { } v ? Math.Max((long)v.TotalSeconds, 0) : 0;
+        var days = seconds / 86400;
+        var hours = seconds % 86400 / 3600;
+        var minutes = seconds % 3600 / 60;
+        var secs = seconds % 60;
+        if (days > 0) return $"~{days}d {hours}h";
+        if (hours > 0) return $"~{hours}h {minutes}m";
+        return $"~{minutes}m {secs}s";
     }
 
     private void AppendLog(string line)

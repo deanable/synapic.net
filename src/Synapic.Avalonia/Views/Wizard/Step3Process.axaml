@@ -24,7 +24,7 @@
     </StackPanel>
 
     <Border Classes="card" Height="320" Padding="8">
-      <ListBox ItemsSource="{Binding LogLines}">
+      <ListBox ItemsSource="{Binding LogLines}" x:Name="LogList">
         <ListBox.ItemTemplate>
           <DataTemplate>
             <TextBlock Text="{Binding}" FontFamily="Consolas,monospace" FontSize="12" TextWrapping="Wrap" />

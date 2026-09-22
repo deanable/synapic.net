@@ -62,6 +62,7 @@ public partial class Step1DatasourceViewModel : ViewModelBase
 
             // Processing limits.
             MaxItems = saved.MaxItems;
+            ProcessAll = saved.ProcessAll;
             ResizeScaleIndex = saved.ResizeScale switch { 75 => 1, 50 => 2, 25 => 3, _ => 0 };
             UseThumbnailOverride = saved.UseThumbnailOverride;
 
@@ -92,6 +93,7 @@ public partial class Step1DatasourceViewModel : ViewModelBase
         if (saved.UntaggedCategories) n++;
         if (saved.UntaggedDescription) n++;
         if (saved.MaxItems != 100) n++;
+        if (saved.ProcessAll) n++;
         if (saved.ResizeScale != 100) n++;
         if (saved.UseThumbnailOverride) n++;
         return n;
@@ -117,6 +119,7 @@ public partial class Step1DatasourceViewModel : ViewModelBase
         UntaggedCategories = ds.UntaggedCategories;
         UntaggedDescription = ds.UntaggedDescription;
         MaxItems = ds.MaxItems;
+        ProcessAll = ds.ProcessAll;
         UseThumbnailOverride = ds.UseThumbnailOverride;
     }
 
@@ -418,10 +421,19 @@ public partial class Step1DatasourceViewModel : ViewModelBase
     [ObservableProperty]
     private int _maxItems = 100;
 
+    /// <summary>
+    /// When set, the max-items ceiling is ignored and the Daminion fetch keeps
+    /// paging until the server returns an empty batch (some endpoints cap a
+    /// single response for infinite-scroll clients).
+    /// </summary>
+    [ObservableProperty]
+    private bool _processAll;
+
     [ObservableProperty]
     private bool _useThumbnailOverride;
 
     partial void OnMaxItemsChanged(int value) => _session.Datasource.MaxItems = value;
+    partial void OnProcessAllChanged(bool value) => _session.Datasource.ProcessAll = value;
     partial void OnUseThumbnailOverrideChanged(bool value) => _session.Datasource.UseThumbnailOverride = value;
 
     // ── Commands ────────────────────────────────────────────────────────────
@@ -459,7 +471,8 @@ public partial class Step1DatasourceViewModel : ViewModelBase
                 UntaggedDescription: UntaggedDescription,
                 MaxItems: MaxItems,
                 ResizeScale: ResizeScale,
-                UseThumbnailOverride: UseThumbnailOverride));
+                UseThumbnailOverride: UseThumbnailOverride,
+                ProcessAll: ProcessAll));
 
             await LoadCatalogDataAsync(ct);
             await LoadActiveCatalogAsync(ct);

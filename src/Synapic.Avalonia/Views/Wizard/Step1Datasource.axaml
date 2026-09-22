@@ -111,7 +111,10 @@
         <StackPanel Orientation="Horizontal" Spacing="16">
           <TextBlock Text="Max items:" VerticalAlignment="Center" />
           <NumericUpDown Value="{Binding MaxItems}" Minimum="0" Maximum="1000000"
-                         Increment="50" Width="120" />
+                         Increment="50" Width="120" IsEnabled="{Binding !ProcessAll}" />
+          <CheckBox Content="Process all (page until empty)"
+                    IsChecked="{Binding ProcessAll}" VerticalAlignment="Center"
+                    ToolTip.Tip="Ignore the max-items limit and keep requesting pages until the server returns no more results (use for catalogs larger than one API response)." />
           <TextBlock Text="AI image scale:" VerticalAlignment="Center" />
           <ComboBox SelectedIndex="{Binding ResizeScaleIndex}"
                     ItemsSource="{Binding ResizeScaleOptions}" MinWidth="90" />

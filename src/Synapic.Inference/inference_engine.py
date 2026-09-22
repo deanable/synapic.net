@@ -12,6 +12,7 @@ already-opened PIL image, since inference now happens in a separate process).
 
 from __future__ import annotations
 
+import copy
 import logging
 import time
 from typing import Any, Dict, List, Optional
@@ -27,6 +28,36 @@ DEFAULT_VLM_USER_PROMPT = (
     "'description' (detailed caption), 'category' (single broad category), "
     "and 'keywords' (list of 5-10 tags). Return ONLY the raw JSON string."
 )
+
+
+def _generation_kwargs(model: Any, max_new_tokens: int) -> Dict[str, Any]:
+    """Build ``generate_kwargs`` without transformers' deprecation warnings.
+
+    Passing ``max_new_tokens`` next to the pipeline's own ``generation_config``
+    (which many VLM repos ship with a ``max_length`` set — LFM2.5-VL declares
+    ``max_length=20``) makes every call log two warnings::
+
+        Passing `generation_config` together with generation-related
+        arguments=({'max_new_tokens'}) is deprecated ...
+        Both `max_new_tokens` (=512) and `max_length`(=20) seem to have been
+        set. `max_new_tokens` will take precedence.
+
+    The pipeline forwards any user-supplied ``generation_config`` as-is, so we
+    clone the pipeline's own config, pin ``max_new_tokens`` on it and clear
+    ``max_length``. Generation then has a single source of truth and both
+    warnings disappear (``max_new_tokens`` still wins, as before).
+    """
+    base = getattr(model, "generation_config", None)
+    if base is None:
+        base = getattr(getattr(model, "model", None), "generation_config", None)
+    if base is None:
+        # Unknown pipeline shape: keep the explicit kwarg (pre-fix behavior).
+        return {"max_new_tokens": int(max_new_tokens)}
+
+    generation_config = copy.deepcopy(base)
+    generation_config.max_new_tokens = int(max_new_tokens)
+    generation_config.max_length = None
+    return {"generation_config": generation_config}
 
 
 def run_inference(
@@ -157,7 +188,7 @@ def run_inference(
                 try:
                     result = model(
                         text=messages,
-                        generate_kwargs={"max_new_tokens": max_new_tokens},
+                        generate_kwargs=_generation_kwargs(model, max_new_tokens),
                     )
                 except Exception as e:
                     logger.error(f"VLM inference failed: {e}")
@@ -168,7 +199,7 @@ def run_inference(
                     result = model(
                         img,
                         prompt="Describe the image.",
-                        generate_kwargs={"max_new_tokens": max_new_tokens},
+                        generate_kwargs=_generation_kwargs(model, max_new_tokens),
                     )
                 except Exception as e:
                     logger.debug(

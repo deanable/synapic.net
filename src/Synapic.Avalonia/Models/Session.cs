@@ -96,6 +96,9 @@ public sealed class DatasourceState
 
     public string StatusFilter { get; set; } = "all";
     public int MaxItems { get; set; } = 100;
+
+    /// <summary>Ignore <see cref="MaxItems"/> and page until the server returns nothing.</summary>
+    public bool ProcessAll { get; set; }
     public int ResizeScale { get; set; } = 100;
     public bool UseThumbnailOverride { get; set; }
 
@@ -127,6 +130,7 @@ public sealed class DatasourceState
         UntaggedFields = UntaggedFields(),
         StatusFilter = StatusFilter,
         MaxItems = MaxItems,
+        ProcessAll = ProcessAll,
         ResizeScale = ResizeScale,
         UseThumbnailOverride = UseThumbnailOverride,
     };

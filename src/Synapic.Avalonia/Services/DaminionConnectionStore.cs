@@ -30,7 +30,8 @@ public sealed record DaminionConnectionParams(
     // Processing limits
     int MaxItems,
     int ResizeScale,
-    bool UseThumbnailOverride);
+    bool UseThumbnailOverride,
+    bool ProcessAll = false);
 
 /// <summary>
 /// Persists the Daminion connection parameters to the Windows registry so the
@@ -63,6 +64,7 @@ public sealed class DaminionConnectionStore
     private const string UntaggedCategoriesValue = "UntaggedCategories";
     private const string UntaggedDescriptionValue = "UntaggedDescription";
     private const string MaxItemsValue = "MaxItems";
+    private const string ProcessAllValue = "ProcessAll";
     private const string ResizeScaleValue = "ResizeScale";
     private const string UseThumbnailOverrideValue = "UseThumbnailOverride";
 
@@ -124,8 +126,10 @@ public sealed class DaminionConnectionStore
             var maxItems = 100;
             var resizeScale = 100;
             var useThumbnailOverride = false;
+            var processAll = false;
 
             if (key.GetValue(MaxItemsValue) is int mi) maxItems = mi;
+            if (key.GetValue(ProcessAllValue) is int pa && pa != 0) processAll = true;
             if (key.GetValue(ResizeScaleValue) is int rs) resizeScale = rs;
             if (key.GetValue(UseThumbnailOverrideValue) is int uto && uto != 0)
                 useThumbnailOverride = true;
@@ -134,7 +138,7 @@ public sealed class DaminionConnectionStore
                 url, user, password, catalog,
                 scope, searchTerm, savedSearchId, collectionId,
                 statusFilter, untaggedKeywords, untaggedCategories, untaggedDescription,
-                maxItems, resizeScale, useThumbnailOverride);
+                maxItems, resizeScale, useThumbnailOverride, processAll);
         }
         catch (Exception e)
         {
@@ -180,6 +184,7 @@ public sealed class DaminionConnectionStore
             key.SetValue(UntaggedCategoriesValue, params_.UntaggedCategories ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue(UntaggedDescriptionValue, params_.UntaggedDescription ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue(MaxItemsValue, params_.MaxItems, RegistryValueKind.DWord);
+            key.SetValue(ProcessAllValue, params_.ProcessAll ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue(ResizeScaleValue, params_.ResizeScale, RegistryValueKind.DWord);
             key.SetValue(UseThumbnailOverrideValue, params_.UseThumbnailOverride ? 1 : 0, RegistryValueKind.DWord);
 

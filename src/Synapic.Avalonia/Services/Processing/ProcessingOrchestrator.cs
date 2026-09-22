@@ -31,7 +31,8 @@ public sealed record ProcessProgress(
     int Total,
     double Percent,
     TimeSpan? Eta,
-    string CurrentFile);
+    string CurrentFile,
+    TimeSpan? PerItem = null);
 
 /// <summary>
 /// Which of the model's returned fields are written to the item. The LFM
@@ -58,6 +59,14 @@ public sealed class DatasourceSelection
     public string[]? UntaggedFields { get; init; }
     public string StatusFilter { get; init; } = "all";
     public int MaxItems { get; init; }
+
+    /// <summary>
+    /// Ignore <see cref="MaxItems"/> and keep paging until the server returns
+    /// an empty batch. Some Daminion endpoints cap a single response (the
+    /// web client uses them for infinite scrolling), so a short page is not
+    /// treated as the end of the result set.
+    /// </summary>
+    public bool ProcessAll { get; init; }
     public bool AutoPaginate { get; init; } = true;
     public int ResizeScale { get; init; } = 100;
     public bool UseThumbnailOverride { get; init; }
@@ -114,7 +123,11 @@ public sealed class ProcessingOrchestrator
 
         var client = ds.DaminionClient ?? throw new InvalidOperationException("Daminion client not connected");
         var startIndex = 0;
-        var limit = ds.MaxItems <= 0 ? int.MaxValue : ds.MaxItems;
+        // "Process all" (or a zero/negative max) lifts the ceiling entirely: the
+        // only stopping condition is an empty batch from the server.
+        var processAll = ds.ProcessAll || ds.MaxItems <= 0;
+        var limit = processAll ? int.MaxValue : ds.MaxItems;
+        var lastPageIds = new HashSet<int>();
 
         while (items.Count < limit)
         {
@@ -132,6 +145,18 @@ public sealed class ProcessingOrchestrator
 
             if (batch.Length == 0) break;
 
+            // Infinite-loop guard (processing.py parity): if the server returns
+            // the same ids for every offset (e.g. the untagged filter is not
+            // applied server-side), stop instead of looping forever.
+            var pageIds = batch.Select(i => i.Id).ToHashSet();
+            if (pageIds.Count > 0 && pageIds.SetEquals(lastPageIds))
+            {
+                SynapicLog.Warning(nameof(ProcessingOrchestrator),
+                    "Daminion returned the same ids as the previous page — stopping pagination to avoid an infinite loop");
+                break;
+            }
+            lastPageIds = pageIds;
+
             foreach (var item in batch)
             {
                 items.Add(new ProcessWorkItem
@@ -142,6 +167,10 @@ public sealed class ProcessingOrchestrator
             }
 
             startIndex += batch.Length;
+
+            // Process-all never treats a partial page as the end: some endpoints
+            // cap a single response, so keep requesting until a page is empty.
+            if (processAll) continue;
             if (!ds.AutoPaginate || batch.Length < 500) break;
         }
 
@@ -211,10 +240,11 @@ public sealed class ProcessingOrchestrator
                 // reporting left the progress UI frozen the whole time.
                 int doneSnapshot, failedSnapshot;
                 lock (resultsLock) { doneSnapshot = processed; failedSnapshot = failed; }
+                var startEstimate = Estimate(startedAt, doneSnapshot, total);
                 progress.Report(new ProcessProgress(
                     doneSnapshot, failedSnapshot, total,
                     total == 0 ? 0 : 100.0 * doneSnapshot / total,
-                    null, item.FileName));
+                    startEstimate.Eta, item.FileName, startEstimate.PerItem));
 
                 var result = await ProcessSingleItemAsync(ds, template, item, log, ct, tagFields).ConfigureAwait(false);
                 lock (resultsLock)
@@ -244,16 +274,34 @@ public sealed class ProcessingOrchestrator
                 lock (resultsLock)
                 {
                     var done = processed;
-                    var eta = done > 2 && total > 0
-                        ? TimeSpan.FromMilliseconds(startedAt.ElapsedMilliseconds / done * (total - done))
-                        : (TimeSpan?)null;
-                    progress.Report(new ProcessProgress(done, failed, total, total == 0 ? 0 : 100.0 * done / total, eta, item.FileName));
+                    var estimate = Estimate(startedAt, done, total);
+                    progress.Report(new ProcessProgress(
+                        done, failed, total,
+                        total == 0 ? 0 : 100.0 * done / total,
+                        estimate.Eta, item.FileName, estimate.PerItem));
                 }
             }
         }, ct)).ToArray();
 
         await Task.WhenAll(tasks).ConfigureAwait(false);
         await log($"Batch finished: {processed - failed} ok, {failed} failed, {total} total").ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Progress estimate (port of processing.py progress_callback): average
+    /// elapsed time per completed item × remaining items. The ETA only becomes
+    /// available once the first item finishes (processed &gt; 0), mirroring the
+    /// Python app rather than waiting for a few warm-up samples.
+    /// </summary>
+    private static (TimeSpan? Eta, TimeSpan? PerItem) Estimate(Stopwatch stopwatch, int processed, int total)
+        => EstimateProgress(stopwatch.Elapsed, processed, total);
+
+    /// <summary>Time-based ETA math, separated out so it is directly testable.</summary>
+    public static (TimeSpan? Eta, TimeSpan? PerItem) EstimateProgress(TimeSpan elapsed, int processed, int total)
+    {
+        if (processed <= 0 || total <= 0) return (null, null);
+        var perItem = TimeSpan.FromMilliseconds(elapsed.TotalMilliseconds / processed);
+        return (perItem * Math.Max(total - processed, 0), perItem);
     }
 
     private async Task<ProcessItemResult> ProcessSingleItemAsync(

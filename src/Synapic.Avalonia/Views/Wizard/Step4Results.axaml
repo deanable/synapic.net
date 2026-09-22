@@ -16,7 +16,7 @@
       <TextBlock Text="{Binding Summary}" VerticalAlignment="Center" Opacity="0.8" />
     </StackPanel>
 
-    <dg:DataGrid ItemsSource="{Binding Results}" SelectedItem="{Binding SelectedResult}"
+    <dg:DataGrid ItemsSource="{Binding Results}" SelectedItem="{Binding SelectedResult}" x:Name="ResultsGrid"
                  AutoGenerateColumns="False" CanUserSortColumns="True" Height="420"
                  GridLinesVisibility="Horizontal" IsReadOnly="True">
       <dg:DataGrid.Columns>
