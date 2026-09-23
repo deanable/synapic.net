@@ -167,7 +167,10 @@ def test_windows_asset_gets_a_batch_helper_that_lists_every_part(splitter, overs
     capsys.readouterr()
 
     helper = out / f"reassemble-{oversized.name}.bat"
-    text = helper.read_text(encoding="utf-8", newline="")
+    # Bytes, not text: Path.read_text only grew a `newline` argument in 3.13 and
+    # the CI interpreter is older, and reading as text would translate the CRLF
+    # line endings this test exists to pin down.
+    text = helper.read_bytes().decode("utf-8")
 
     assert helper.exists()
     assert not (out / f"reassemble-{oversized.name}.sh").exists()
