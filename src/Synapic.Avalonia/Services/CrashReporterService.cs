@@ -25,7 +25,8 @@ public sealed record CrashReport(
 /// .NET runtime. Every crash is written as its own file under
 /// <c>logs/crashes/</c> next to the app log, together with a copy of the
 /// current session log, so a crash can be diagnosed even though the main log
-/// is overwritten on the next run. Nothing ever leaves the machine.
+/// is rotated into <c>logs/archives</c> on the next run. Nothing ever leaves
+/// the machine.
 /// </summary>
 public sealed class CrashReporterService
 {

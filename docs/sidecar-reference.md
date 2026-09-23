@@ -20,6 +20,13 @@ between the app and the tests.
 - `DEFAULT_MODEL_ID = "LiquidAI/LFM2.5-VL-450M"`.
 - `AUTO_DOWNLOAD_DISABLE_ENV = "SYNAPIC_DISABLE_AUTO_DOWNLOAD"` — tests/offline
   CI set `=1` to skip the startup download.
+- `WARMUP_DISABLE_ENV = "SYNAPIC_DISABLE_WARMUP"` — tests set `=1` so the
+  lifespan never loads real weights into the process.
+- `MODEL_LOAD_WAIT_SECONDS = 240` — how long `/tag` waits for a load that is
+  already in flight before giving up with 503 (kept under the host's 5-minute
+  `/tag` timeout so its single retry still has room).
+- `WARMUP_GRACE_SECONDS = 2` — head start for the host's readiness poll before
+  warm-up marks the server `loading`.
 - Task names (`MODEL_TASK_*`, `VALID_TASKS`), display/capability maps.
 - `DEFAULT_CANDIDATE_LABELS`, `MAX_IMAGE_SIZE_MB`, `MAX_KEYWORDS_PER_IMAGE`.
 - `PORT_FILE_ENV_VAR = "SYNAPIC_PORT_FILE"`.
@@ -55,16 +62,32 @@ optional `model_id`/`task`/`options`), `DownloadRequestModel`, `ConfigModel`.
 | `GET /health` | State snapshot (`status` loading/ready/error, `model`, `device`, `vram_used_mb`, `error`) plus a `download` object while a download is running/recently finished. |
 | `GET /models/list` | Local HF-cache scan (`find_local_models`): id, task, size_mb, path, downloaded. |
 | `POST /models/download` | 422 for incompatible models; `downloaded` if already present; `already_downloading` if a thread is alive; else spawns a daemon thread and returns `download_started`. |
-| `POST /tag` | Validates path (422/404), 503 while status is `loading`, loads/uses the model, runs `inference_engine.run_inference`, returns the TagResponse dict. Updates the session model when the request overrides it. |
+| `POST /tag` | Validates path (422/404), **waits up to 240 s for a model load that is already in flight** (`_wait_for_model_ready`) and only then answers 503, loads/uses the model, runs `inference_engine.run_inference`, returns the TagResponse dict. Updates the session model when the request overrides it. |
 | `GET /config` | Current session config. |
 | `PUT /config` | Merges non-null fields; a changed `model_id` calls `model_loader.unload_model()`; validates `task`. |
 | `POST /shutdown` | Sets the shutdown event and a daemon thread exits the process via `os._exit(0)` after a 0.5 s flush delay. |
 
 ### Lifespan / startup
 
-A daemon thread `_ensure_default_model` checks whether `DEFAULT_MODEL_ID` is in
-the cache and downloads it in the background if not (skipped when
-`SYNAPIC_DISABLE_AUTO_DOWNLOAD=1`). The model is **not** baked into installers.
+Two daemon threads start with the app, neither on the startup path (uvicorn
+serves before either finishes):
+
+1. `_ensure_default_model` — checks whether `DEFAULT_MODEL_ID` is in the cache
+   and downloads it in the background if not (skipped when
+   `SYNAPIC_DISABLE_AUTO_DOWNLOAD=1`).
+2. `_warm_up_model` — after a short `WARMUP_GRACE_SECONDS` head start (so the
+   host's readiness poll sees idle `ready`, not a load in progress), loads the
+   default model, so the first batch never pays for it. That batch fans out four
+   parallel `/tag` calls, and against a cold sidecar they
+   used to race transformers' lazy import inside the frozen bundle
+   (`ImportError: cannot import name 'pipeline'` → 503 for three of four) and
+   then queue behind a ~15 s load the host's single 3 s-delayed retry could not
+   outlast. Skipped when the weights are not cached (thread 1's job) or when
+   `SYNAPIC_DISABLE_WARMUP=1`; **a failure restores the previous status** so a
+   warm-up problem can never surface as `/health` `error`, which the host treats
+   as a fatal startup failure — the first real `/tag` retries and reports it.
+
+The model is **not** baked into installers.
 
 ### Entry point (`main`)
 

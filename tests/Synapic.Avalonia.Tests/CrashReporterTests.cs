@@ -7,7 +7,7 @@ namespace Synapic.Avalonia.Tests;
 /// <summary>
 /// Local-only crash reporting (P6.1): every captured exception must produce a
 /// report file containing the exception details and a snapshot of the session
-/// log (the main log is overwritten on the next run), old reports are pruned,
+/// log (the main log is rotated into <c>logs/archives</c> on the next run), old reports are pruned,
 /// and terminal crashes skip the UI dialog (the process is going down).
 /// </summary>
 [Collection("SynapicLogSerial")]
@@ -23,8 +23,7 @@ public class CrashReporterTests : IDisposable
 
     public CrashReporterTests()
     {
-        SynapicLog.ResetForTests();
-        SynapicLog.Initialize(_dir, "info");
+        SynapicLog.RestartForTests(_dir, "info");
     }
 
     public void Dispose()

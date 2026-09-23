@@ -47,7 +47,8 @@ public partial class App : Application
         log.Information("=== Synapic startup ===");
         log.Information("App version {Version}, app dir {AppDir}",
             typeof(App).Assembly.GetName().Version?.ToString() ?? "?", AppContext.BaseDirectory);
-        log.Information("Log file (overwritten per run): {LogFilePath}", SynapicLog.LogFilePath);
+        log.Information("Log file: {LogFilePath} (previous runs kept in {ArchivesDirectory})",
+            SynapicLog.LogFilePath, SynapicLog.ArchivesDirectory);
         log.Information("Config file: {ConfigPath} (autoLaunchSidecar={AutoLaunch}, logLevel={LogLevel})",
             configService.FilePath, config.Ui.AutoLaunchSidecar, config.Ui.LogLevel);
         log.Information("Sidecar executable detected: {SidecarExe}", InferenceSidecarService.FindExecutable() ?? "<not found>");

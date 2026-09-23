@@ -35,12 +35,14 @@ python -m pytest tests/Synapic.Inference.Tests -q
 | `MetadataWriterTests` | XMP write/read round-trips for JPEG and PNG. |
 | `EndToEndRoundTripTests` | Full path where the environment allows: real sidecar executable and/or a live Daminion (see below). |
 | `DaminionBaseUrlTests` | `DaminionApiClient.NormalizeBaseUrl` behaviour. |
+| `DaminionCatalogGuidTests` | `ExtractCatalogGuid` across every observed `GetCatalogGuid` shape (bare string, object key, Daminion 11 envelope, unusable payloads). |
+| `SidecarStalenessTests` | `InferenceSidecarService.DescribeStaleness` — flags an exe older than `src/Synapic.Inference`, ignores non-bundle files, reports "unknown" without a repo. |
 | `DaminionLayoutParsingTests` | Layout payload parsing / tag-GUID extraction. |
 | `DaminionIndexedTagValuesRequestTests` | The all-parameters-required routing rule for `GetIndexedTagValues`. |
 | `DaminionConnectionStoreTests` | Step 1 registry persistence incl. `ProcessAll` (Windows-only). |
 | `EngineSettingsStoreTests` | Step 2 registry persistence (Windows-only). |
 | `DaminionLiveSessionTests` | Opt-in live Daminion: login, filtered fetch, count, logout. |
-| `SynapicLogTests` | Logger initialisation, file sink, UI sink ring buffer. |
+| `SynapicLogTests` | Logger initialisation, file sink, UI sink ring buffer, per-run rotation into `logs/archives` and pruning to `MaxArchivedLogs`. |
 | `CrashReporterTests` | Crash capture → report file + session-log snapshot. |
 | `TelemetryServiceTests` | Opt-in counters and the disabled no-op path. |
 | `RuntimeCheckTests` | .NET runtime detection helpers. |
@@ -72,8 +74,8 @@ Any contract change must update these and
 ## `tests/Synapic.Inference.Tests` (pytest)
 
 `conftest.py` puts `src/Synapic.Inference` on `sys.path` (flat imports),
-forces `SYNAPIC_DISABLE_AUTO_DOWNLOAD=1`, and resets the download registry
-between tests.
+forces `SYNAPIC_DISABLE_AUTO_DOWNLOAD=1` and `SYNAPIC_DISABLE_WARMUP=1`, and
+resets the download registry between tests.
 
 | File | What it pins down |
 |------|-------------------|
@@ -83,6 +85,8 @@ between tests.
 | `test_tag_extractor.py` | `json_utils` extraction/repair, Title Case, and extraction for classification / zero-shot / image-to-text, including limits and de-duplication. |
 | `test_inference_engine.py` | `_generation_kwargs`: clears the conflicting `max_length`, does not mutate the pipeline's config, and falls back for unknown pipeline shapes (the transformers-warning fix). |
 | `test_check_sidecar_variant.py` | The CPU/CUDA payload rules in `build/check-sidecar-variant.py`: a CPU bundle must contain no CUDA runtime binaries (but torch's CUDA *python* modules are not leaks), a CUDA bundle must contain `torch_cuda.dll` plus cudart/cublas/cudnn, and optional extras may be absent. Runs without torch or PyInstaller installed. |
+| `test_warmup.py` | Cold start: `_wait_for_model_ready` returns at once when idle, blocks until an in-flight load finishes, times out into a 503; `_warm_up_model` skips itself when disabled or when the weights are absent, never leaks an `error` status on failure (the host treats that as fatal), and reports the model when it succeeds. |
+| `test_protocol_doc.py` | `build/generate-protocol-doc.py --check`: the committed `sidecar-protocol.md` matches the live OpenAPI schema + the C# DTOs, so the contract doc cannot drift. |
 | `test_split_release_asset.py` | `build/split-release-asset.py`, which makes the >2 GiB CUDA sidecar publishable: parts rejoin byte-for-byte, parts are exact ranges, the oversized original is not left in the upload directory (one invalid file fails the whole release), stale parts from an earlier run are cleared, a cap at/above GitHub's limit is refused, and the emitted helper (`.bat`/`.sh`) names every part and reproduces the file. |
 
 ---

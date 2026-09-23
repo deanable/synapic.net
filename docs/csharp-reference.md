@@ -206,15 +206,20 @@ Single source of truth for wizard state:
 - Static helpers: `ExeName`, `PreferredRid()`, `BuildableRids()`
   (`win-x64`, `win-x64-cuda` on Windows), `VariantDisplayName`,
   `FindExecutable()` / `FindExecutableForRid()`, `FindRepoRoot()`,
-  `ModelsRoot()`.
+  `ModelsRoot()`, and `DescribeStaleness(exe, repoRoot)` — compares the exe's
+  timestamp with the newest file under `src/Synapic.Inference` (dev checkouts
+  only) and returns a description when the binary predates the source. The
+  launch path stores it in `StaleBuildNotice` (interface default `null`), which
+  the status bar appends as "stale build, rebuild recommended".
 - `ConfigurePort` **recreates** the `HttpClient`/`InferenceApiClient` because
   `BaseAddress` cannot change after the first request.
 
 **`InferenceApiClient`** — typed HTTP calls (`health`, `models/list`,
 `models/download`, `tag`, `config` GET/PUT, `shutdown`), serializing with the
 source-generated `SynapicJsonContext`. `/tag` has a 5-minute timeout and
-retries once after 3 s on HTTP 503 (model loading). Errors surface as
-`InferenceApiException` (status + `detail`).
+retries once after 3 s on HTTP 503 — which the server now reserves for a load
+that outlasted its 240 s wait (an in-flight load is waited out server-side).
+Errors surface as `InferenceApiException` (status + `detail`).
 
 ### Daminion (`Services/Daminion/`)
 
@@ -231,7 +236,9 @@ parameter set (documented on the interface).
   `DaminionAuthenticationException`, `DaminionNetworkException`,
   `DaminionRateLimitException`.
 - `NormalizeBaseUrl`, tag-GUID map (`MappedTagGuidCount`,
-  `ExtractLayoutTagPairs`, layout parsing).
+  `ExtractLayoutTagPairs`, layout parsing), and `ExtractCatalogGuid` — accepts
+  a bare GUID string, a well-known object key, or the Daminion 11 envelope
+  `{"data":"<guid>",…}` that used to warn "no usable value" on every connect.
 - `GetItemsFilteredAsync(scope, savedSearchId, collectionId, searchTerm,
   untaggedFields, statusFilter, maxItems, startIndex)` — returns **at most one
   batch** (≤ `PageSize` = 500) per call; callers paginate. Collection and
@@ -313,10 +320,13 @@ plus IPTC/EXIF fallbacks. `TagResult(Category, Keywords, Description)`. See
   `EngineSettings`, `ProcessingSettings`, `UiSettings`. Unknown fields survive
   round-trips via `JsonNode` preservation. `AppConfig.DefaultDirectory` /
   `DefaultFilePath` resolve the platform config location.
-- **`SynapicLog`** — static Serilog bootstrap. One file sink (Debug+, **file
-  deleted at startup**) at `logs/synapic.log` and an in-memory `UiLogSink`
-  filtered to the configured UI level. `LogDirectory` falls back to
-  `%LOCALAPPDATA%\Synapic\logs` when the app dir is read-only. `For(context)`
+- **`SynapicLog`** — static Serilog bootstrap. One file sink (Debug+) at
+  `logs/synapic.log` that **starts empty each run while the previous run is
+  rotated into `logs/archives/synapic-<stamp>.log`** and pruned to
+  `MaxArchivedLogs` (10), plus an in-memory `UiLogSink`
+  filtered to the configured UI level. `LogDirectory` / `ArchivesDirectory`
+  fall back to `%LOCALAPPDATA%\Synapic\logs` when the app dir is read-only.
+  `For(context)`
   and `Debug/Info/Warning/Error` helpers. `UiLogSink` keeps a capped ring
   buffer and raises `Emitted`.
 - **`TelemetryService`** — opt-in local counters (`synapic-usage.json`):

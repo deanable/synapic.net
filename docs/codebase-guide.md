@@ -113,7 +113,8 @@ huggingface_hub, pillow, tqdm, psutil, qwen-vl-utils, PyInstaller 6.18.0).
 
 1. Load `config.json` (see §7) — enough of it to configure logging.
 2. `SynapicLog.Initialize` — one Serilog logger to `logs/synapic.log`
-   (**overwritten each run**) plus an in-memory `UiLogSink` the UI binds to.
+   (**starts empty each run; the previous run is rotated to
+   `logs/archives/`, kept for 10 runs**) plus an in-memory `UiLogSink` the UI binds to.
 3. Install `CrashReporterService` (global handlers → `logs/crashes/`), with a
    dialog for non-terminal crashes.
 4. Fire-and-forget `DotNetRuntimeCheckService.EnsureRuntimeAsync` (Windows:
@@ -208,7 +209,7 @@ duration, and the log auto-scrolls to the newest line.
 | App config (wizard + engine defaults, UI prefs) | Windows `%APPDATA%\Synapic\config.json`; otherwise `$XDG_CONFIG_HOME/Synapic/config.json` or `~/.config/Synapic/config.json` |
 | Step 1 connection + scope/filter/limit settings | Windows registry `HKCU\Software\Synapic\Daminion` (password DPAPI-protected); no-op elsewhere |
 | Step 2 engine settings | Windows registry `HKCU\Software\Synapic\Engine`; no-op elsewhere |
-| Log file (overwritten each run) | `logs/synapic.log` next to the executable, falling back to `%LOCALAPPDATA%\Synapic\logs` |
+| Log file (live file starts empty each run; previous runs in `logs/archives/`, last 10) | `logs/synapic.log` next to the executable, falling back to `%LOCALAPPDATA%\Synapic\logs` |
 | Crash reports | `logs/crashes/` (exception + session-log snapshot) |
 | Opt-in usage counters | `logs/synapic-usage.json` |
 | Model cache (sidecar `HF_HOME`) | Windows `%LOCALAPPDATA%\Synapic\models`; elsewhere `~/.cache/synapic/models` |
@@ -302,7 +303,8 @@ executables as their own release assets — see `packaging.md`.
 | `Timed out waiting for the sidecar port file` | Sidecar failed to boot; check sidecar stdout in the log. |
 | `Sidecar did not become ready within 120s` | Model load/first import is slow; check `/health` status lines. |
 | `Sidecar process exited unexpectedly` | Liveness watcher; crash before `/shutdown`. |
-| `Model loading — retry shortly` (503) | Expected on a cold start; `InferenceApiClient` retries once after 3 s. |
+| `Model loading — retry shortly` (503) | Only after a load that outlasted the server's 240 s wait; a load already in flight is waited out instead, and the model is warmed up at boot (`service._warm_up_model`). The host still retries once after 3 s. |
+| `Stale server build: exe built … but the sidecar source changed …` | `InferenceSidecarService.DescribeStaleness` — the running exe predates `src/Synapic.Inference`; rebuild from the setup panel. The status bar shows "stale build, rebuild recommended" too. |
 | `Both max_new_tokens (...) and max_length (...) seem to have been set` | Fixed in `inference_engine._generation_kwargs` (clones the pipeline generation config, pins `max_new_tokens`, clears `max_length`). |
 | `Progress scoring unavailable: ...` | Expected when probability/candidate labels are used with a VLM (see §8). |
 | `Daminion returned the same ids as the previous page` | Infinite-loop guard in `FetchItemsAsync` (offset ignored server-side). |

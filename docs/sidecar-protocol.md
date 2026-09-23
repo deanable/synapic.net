@@ -171,7 +171,7 @@ Run inference on one image and return its tags.
 - `200` — Inference result (TagResponse): category, keywords, description, probabilities, optional scoring, inference_ms, model_used.
 - `404` — Image not found.
 - `422` — Validation error (blank image_path, bad task).
-- `503` — Model still loading or failed to load; the host retries once.
+- `503` — Timed out waiting for an in-flight model load; the host retries once.
 
 **`200` body** — `TagResponse` (C# `Synapic.Shared.Contracts.TagResponse`)
 

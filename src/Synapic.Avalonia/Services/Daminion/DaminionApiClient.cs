@@ -997,14 +997,7 @@ public sealed class DaminionApiClient
         try
         {
             var json = await GetApi().GetCatalogGuid().ConfigureAwait(false);
-            var guid = json.ValueKind switch
-            {
-                JsonValueKind.String => json.GetString(),
-                JsonValueKind.Object => GetString(
-                    json, "guid", "Guid", "catalogGuid", "CatalogGuid",
-                    "catalogGUID", "value", "Value", "result", "Result"),
-                _ => null,
-            };
+            var guid = ExtractCatalogGuid(json);
 
             if (guid is null)
                 SynapicLog.Warning(nameof(DaminionApiClient),
@@ -1020,6 +1013,48 @@ public sealed class DaminionApiClient
             return null;
         }
     }
+
+    /// <summary>
+    /// Pull the catalog GUID out of a <c>Settings/GetCatalogGuid</c> payload.
+    /// The shape is undocumented and differs between server builds, so three
+    /// forms are accepted: a bare string, an object carrying the GUID under a
+    /// well-known key, and the standard envelope
+    /// <c>{"data":"&lt;guid&gt;","error":null,"success":true,"errorCode":0}</c>
+    /// that Daminion 11 answers with - the last one used to be rejected and
+    /// logged as "no usable value" on every connect.
+    /// </summary>
+    public static string? ExtractCatalogGuid(JsonElement json)
+    {
+        switch (json.ValueKind)
+        {
+            case JsonValueKind.String:
+                return NonEmpty(json.GetString());
+
+            case JsonValueKind.Object:
+                var direct = GetString(
+                    json, "guid", "Guid", "catalogGuid", "CatalogGuid",
+                    "catalogGUID", "value", "Value", "result", "Result");
+                if (direct is not null) return direct;
+
+                foreach (var key in new[] { "data", "Data" })
+                {
+                    if (!json.TryGetProperty(key, out var data)) continue;
+                    if (data.ValueKind == JsonValueKind.String) return NonEmpty(data.GetString());
+                    if (data.ValueKind == JsonValueKind.Object)
+                    {
+                        var nested = ExtractCatalogGuid(data);
+                        if (nested is not null) return nested;
+                    }
+                }
+                return null;
+
+            default:
+                return null;
+        }
+    }
+
+    private static string? NonEmpty(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value;
 
     private static string Truncate(string value, int max) =>
         value.Length <= max ? value : value[..max] + "...";

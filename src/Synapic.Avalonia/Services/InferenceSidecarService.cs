@@ -48,6 +48,13 @@ public interface IInferenceSidecar : IAsyncDisposable
     Task<ModelInfo[]> ListModelsAsync(CancellationToken ct = default);
     Task DownloadModelAsync(string modelId, CancellationToken ct = default);
     Task<HealthResponse> GetHealthAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Non-null while the launched exe is older than the sidecar source (dev
+    /// checkouts only), so the status bar can say the build is stale instead of
+    /// that only showing up in the log. Defaulted so test fakes need no change.
+    /// </summary>
+    string? StaleBuildNotice => null;
 }
 
 public sealed class InferenceSidecarService : IInferenceSidecar
@@ -162,6 +169,56 @@ public sealed class InferenceSidecarService : IInferenceSidecar
         return File.Exists(path) ? path : null;
     }
 
+    /// <summary>
+    /// Set while the launched exe is older than the sidecar source (dev
+    /// checkouts only - installed apps have no source tree to compare against).
+    /// Surfaced in the status bar so a stale binary is visible, not just logged.
+    /// </summary>
+    public string? StaleBuildNotice { get; private set; }
+
+    /// <summary>
+    /// Compares the sidecar exe's timestamp with the newest file it is built
+    /// from (<c>src/Synapic.Inference</c>), returning a description when the
+    /// exe predates the source and null when it is current or unknowable
+    /// (no repo root, no source tree, unreadable timestamps).
+    /// </summary>
+    public static string? DescribeStaleness(string sidecarPath, string? repoRoot)
+    {
+        try
+        {
+            if (repoRoot is null || !File.Exists(sidecarPath)) return null;
+
+            var sourceDir = Path.Combine(repoRoot, "src", "Synapic.Inference");
+            if (!Directory.Exists(sourceDir)) return null;
+
+            var newest = Directory
+                .EnumerateFiles(sourceDir, "*", SearchOption.AllDirectories)
+                .Where(IsSidecarSourceFile)
+                .Select(File.GetLastWriteTimeUtc)
+                .DefaultIfEmpty(DateTime.MinValue)
+                .Max();
+            if (newest == DateTime.MinValue) return null;
+
+            var built = File.GetLastWriteTimeUtc(sidecarPath);
+            if (built >= newest) return null;
+
+            return $"exe built {built:yyyy-MM-dd HH:mm}Z but the sidecar source changed {newest:yyyy-MM-dd HH:mm}Z";
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    private static bool IsSidecarSourceFile(string path)
+    {
+        var name = Path.GetFileName(path);
+        return path.EndsWith(".py", StringComparison.OrdinalIgnoreCase)
+            || path.EndsWith(".spec", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("requirements.txt", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("pyproject.toml", StringComparison.OrdinalIgnoreCase);
+    }
+
     public static string? FindExecutable()
     {
         var bundled = Path.Combine(AppContext.BaseDirectory, ExeName);
@@ -227,6 +284,12 @@ public sealed class InferenceSidecarService : IInferenceSidecar
             SetStatus(SidecarStatus.Error, "Sidecar executable not found - build it first");
             throw new FileNotFoundException("Sidecar executable not found. Use Build Server first.");
         }
+
+        StaleBuildNotice = DescribeStaleness(sidecarPath, FindRepoRoot());
+        if (StaleBuildNotice is not null)
+            SynapicLog.Warning(nameof(InferenceSidecarService),
+                $"Stale server build: {StaleBuildNotice}. Rebuild it from the setup panel - " +
+                "an exe older than the sidecar source keeps regenerating exceptions that are already fixed.");
 
         SweepStalePortFiles();
         SetStatus(SidecarStatus.Starting);

@@ -200,6 +200,11 @@ public partial class MainWindowViewModel : ViewModelBase
         _ => Brushes.Black,
     };
 
+    /// <summary>Status-bar hint when the running exe predates the sidecar source.</summary>
+    private string StaleServerSuffix => _sidecar.StaleBuildNotice is null
+        ? ""
+        : " \u2014 stale build, rebuild recommended";
+
     partial void OnServerStateChanged(ServerUiState value)
     {
         OnPropertyChanged(nameof(IsServerRunning));
@@ -212,7 +217,7 @@ public partial class MainWindowViewModel : ViewModelBase
             ServerUiState.Building => "Building server\u2026 (first build downloads Python + packages)",
             ServerUiState.Stopped => "Server stopped",
             ServerUiState.Starting => "Server starting\u2026 (first launch can take up to 2 minutes)",
-            ServerUiState.Running => $"Server running (port {_sidecar.SidecarPort})",
+            ServerUiState.Running => $"Server running (port {_sidecar.SidecarPort}){StaleServerSuffix}",
             ServerUiState.Error => "Server error \u2014 see log",
             _ => value.ToString(),
         };

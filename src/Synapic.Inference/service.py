@@ -22,6 +22,7 @@ import logging
 import os
 import sys
 import threading
+import time
 from contextlib import asynccontextmanager
 
 # ---------------------------------------------------------------------------
@@ -123,6 +124,12 @@ async def lifespan(_app: FastAPI):
     threading.Thread(
         target=_ensure_default_model, name="default-model-download", daemon=True
     ).start()
+    # Load the default model now rather than on the first /tag (see
+    # _warm_up_model). Both stay off the startup path: uvicorn must begin
+    # serving before either finishes, and warm-up simply skips itself when the
+    # weights are not in the cache yet - downloading them is the other
+    # thread's job.
+    threading.Thread(target=_warm_up_model, name="model-warmup", daemon=True).start()
     yield
     logger.info("Synapic inference sidecar shutting down")
 
@@ -152,6 +159,75 @@ def _ensure_default_model() -> None:
         model_loader.download_model(config.DEFAULT_MODEL_ID)
     except Exception:
         logger.exception("Default model auto-download failed")
+
+
+def _warm_up_model() -> None:
+    """Load the default model at boot instead of on the first ``/tag``.
+
+    The first batch of a run fans out four parallel ``/tag`` requests, and
+    they used to hit a cold sidecar together: racing transformers' lazy import
+    inside the frozen PyInstaller bundle raised ``ImportError: cannot import
+    name 'pipeline'`` and 503'd three of the four, and the survivor paid the
+    whole ~15s load inline. Importing and loading once, here, means the host's
+    readiness poll only turns ``ready`` once the model can actually serve -
+    so the first item neither errors nor stalls.
+
+    Skipped when the weights are not in HF_HOME (downloading is
+    ``_ensure_default_model``'s job) or when ``SYNAPIC_DISABLE_WARMUP`` is set.
+    It waits ``WARMUP_GRACE_SECONDS`` first so the host's readiness poll sees
+    idle "ready" rather than a load in progress. A failure restores the
+    previous status: warm-up must never surface as
+    ``/health`` "error", which the host treats as a fatal startup failure -
+    the first real ``/tag`` retries the load and reports it properly.
+
+    Note the pipeline cache is keyed by device and the session device arrives
+    via ``PUT /config``, so a host configured for CUDA rebuilds it on the first
+    tag; warming on the boot default is still correct for the CPU path.
+    """
+    if os.environ.get(config.WARMUP_DISABLE_ENV, "").lower() in ("1", "true", "yes"):
+        logger.info(f"Warm-up disabled via {config.WARMUP_DISABLE_ENV}")
+        return
+
+    # Let the host see "ready" first: see config.WARMUP_GRACE_SECONDS.
+    if config.WARMUP_GRACE_SECONDS:
+        time.sleep(config.WARMUP_GRACE_SECONDS)
+
+    before = model_loader.get_state_snapshot()
+    try:
+        if not model_loader.is_model_downloaded(config.DEFAULT_MODEL_ID):
+            logger.info("Warm-up skipped - default model is not cached locally")
+            return
+        started = time.monotonic()
+        model_loader.load_model(
+            config.DEFAULT_MODEL_ID,
+            _session_config["task"],
+            device=_session_config["device"],
+        )
+        logger.info(
+            f"Warmed up {config.DEFAULT_MODEL_ID} in "
+            f"{time.monotonic() - started:.1f}s - the first tag pays no model load"
+        )
+    except Exception:
+        logger.exception("Model warm-up failed - the first /tag will retry the load")
+        try:
+            model_loader.set_status(before.get("status", "ready"), before.get("error"))
+        except Exception:
+            logger.exception("Could not restore status after warm-up failure")
+
+
+def _wait_for_model_ready(timeout: float) -> bool:
+    """Block while a model load is already in flight; True when free to proceed.
+
+    Polls the shared state without holding any lock the loader needs, so the
+    in-flight load can finish. Returns False only when a load is still running
+    after ``timeout`` seconds - that is the one case left that answers 503.
+    """
+    deadline = time.monotonic() + timeout
+    while model_loader.get_state_snapshot().get("status") == "loading":
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(0.2)
+    return True
 
 
 app = FastAPI(title="Synapic Inference API", version="1.0.0", lifespan=lifespan, docs_url=None, redoc_url=None)
@@ -278,7 +354,8 @@ def models_download(body: DownloadRequestModel):
         422: {"description": "Validation error (blank image_path, bad task)."},
         503: {
             "description": (
-                "Model still loading or failed to load; the host retries once."
+                "Timed out waiting for an in-flight model load; the host "
+                "retries once."
             )
         },
     },
@@ -289,12 +366,15 @@ def tag(body: TagRequestModel) -> dict:
     if not os.path.isfile(body.image_path):
         raise HTTPException(status_code=404, detail=f"Image not found: {body.image_path}")
 
-    snapshot = model_loader.get_state_snapshot()
     requested_model = body.model_id or _session_config["model_id"]
     session_model = _session_config["model_id"]
 
-    # 503 while the session model is still loading (host retries once).
-    if snapshot.get("status") == "loading":
+    # Wait out a load that is already in flight (boot warm-up, or another
+    # request of the same cold batch) instead of 503-ing: the host retries once
+    # after 3s, which cannot outlast a ~15s cold load, so a 503 here used to
+    # fail the first items of the first batch. 503 is now reserved for a load
+    # that never finishes (the host still retries it once).
+    if not _wait_for_model_ready(config.MODEL_LOAD_WAIT_SECONDS):
         raise HTTPException(status_code=503, detail="Model loading — retry shortly")
 
     task = _effective_task(body.task)

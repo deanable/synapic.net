@@ -6,7 +6,8 @@ script and cannot use relative imports. The tests therefore import the modules
 as top-level modules too, keeping one import identity between app and tests.
 
 Also disables the startup default-model auto-download so tests never touch
-the network for LiquidAI/LFM2.5-VL-450M.
+the network for LiquidAI/LFM2.5-VL-450M, and the boot-time model warm-up so
+the lifespan never loads real weights into a test process.
 """
 
 import os
@@ -16,6 +17,7 @@ from pathlib import Path
 import pytest
 
 os.environ.setdefault("SYNAPIC_DISABLE_AUTO_DOWNLOAD", "1")
+os.environ.setdefault("SYNAPIC_DISABLE_WARMUP", "1")
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SIDECAR_SRC = REPO_ROOT / "src" / "Synapic.Inference"

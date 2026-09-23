@@ -47,6 +47,24 @@ DEFAULT_MODEL_ID = "LiquidAI/LFM2.5-VL-450M"
 # set SYNAPIC_DISABLE_AUTO_DOWNLOAD=1 to skip the startup check/download.
 AUTO_DOWNLOAD_DISABLE_ENV = "SYNAPIC_DISABLE_AUTO_DOWNLOAD"
 
+# Boot-time model warm-up opt-out (used by tests): set SYNAPIC_DISABLE_WARMUP=1
+# so the lifespan never loads real weights into the process. Warm-up exists so
+# the first batch of /tag requests never races a cold import or waits on a load.
+WARMUP_DISABLE_ENV = "SYNAPIC_DISABLE_WARMUP"
+
+# How long a /tag call waits for a model load that is already in flight before
+# giving up with 503. Deliberately under the host's 5-minute /tag timeout so
+# the client still has room for its single retry, and far above the ~15s a cold
+# CPU load of the default model takes.
+MODEL_LOAD_WAIT_SECONDS = 240.0
+
+# Head start given to the host's readiness poll before warm-up flips /health to
+# "loading". The host declares the server running on the first "ready" it sees,
+# so warming straight away would stretch "Server starting..." by the whole model
+# load (and, on a slow box, risk its 120s startup timeout). If the host does
+# catch "loading" instead it just waits - warm-up never fails readiness.
+WARMUP_GRACE_SECONDS = 2.0
+
 # ============================================================================
 # ZERO-SHOT CLASSIFICATION DEFAULTS
 # ============================================================================
