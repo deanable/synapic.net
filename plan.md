@@ -104,10 +104,10 @@
 - P5.2 First-run model download UX; full (baked) + lite installers
 - P5.3 Auto-update check via GitHub Releases API
 - P5.4 Installers: Inno Setup 6 (EV signing) · AppImage (linuxdeploy) · create-dmg + notarytool (x64/arm64)
-- P5.5 release.yml: tag → build → sign → notarize → upload
+- P5.5 release.yml: tag → build → smoke → sign → notarize → upload, including the standalone CPU and CUDA inference-server executables (the CUDA bundle is split under GitHub's 2 GiB per-asset cap); a manual dispatch dry-run builds the same assets without publishing
 - P5.6 Cross-platform smoke matrix
 
-**Gate:** signed installers ×4 RIDs; clean-VM install → tag image → no orphan uninstall.
+**Gate:** signed installers ×4 RIDs; standalone CPU + CUDA server downloads on the release page that boot and serve `/health`; clean-VM install → tag image → no orphan uninstall.
 
 ## 9. Phase 6 — Beta & Hardening (Weeks 7–8+)
 

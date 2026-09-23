@@ -100,11 +100,54 @@ after a 2.7 GB download.
   never prove GPU inference. It is skipped on PRs (add the `build-cuda` label to
   force it) because ~3 GB of wheels plus a ~2.7 GB artifact is real cost per run.
 - **Size ceilings when publishing:** `actions/upload-artifact` accepts a 10 GB
-  artifact, but GitHub Release assets are capped at **2 GiB per file**, so the
-  CUDA executable cannot be attached to a release as a single asset — split it
-  first and document how to recombine.
-- `.github/workflows/release.yml` — `v*` tags: same matrix, plus packaging,
-  signing (when secrets are present), and a GitHub Release with all assets.
+  artifact, but a GitHub Release asset must be **under 2 GiB** (the *total* size
+  of a release is not capped). The CPU sidecar (~216 MB) uploads as one file;
+  the ~2.5 GB CUDA one cannot, so `build/split-release-asset.py` cuts it into
+  sub-2 GiB byte ranges (`<name>.part1 …`) and drops a `reassemble-<name>.bat`
+  next to them that rejoins the parts and prints the expected SHA-256. Parts are
+  raw ranges rather than a multi-volume archive so reassembly needs nothing
+  installed: `copy /b` on Windows, `cat` elsewhere. The script also deletes the
+  oversized copy from the staging directory, because one invalid file there
+  fails the entire release rather than just itself.
+- `.github/workflows/release.yml` — triggered by a `v*` tag **or** manual
+  dispatch. Both run the same 3-RID matrix (sidecar → app publish → installer)
+  plus the CUDA sidecar job, then `github-release` merges the artifacts and
+  publishes them. Every released sidecar is boot-smoke-tested first, so a bundle
+  that builds but does not serve `/health` never reaches the releases page.
+
+### What a release contains
+
+| Asset | Notes |
+|-------|-------|
+| `Synapic-Setup-win-x64.exe` | Windows installer, app + CPU sidecar |
+| `Synapic-osx-arm64.dmg` | macOS disk image, app + CPU sidecar |
+| `Synapic-*.AppImage` | Linux AppImage, app + CPU sidecar |
+| `synapic-inference-win-x64.exe` | standalone CPU server |
+| `synapic-inference-linux-x64`, `synapic-inference-osx-arm64` | standalone CPU server |
+| `synapic-inference-win-x64-cuda.exe.part1/.part2` | standalone CUDA server, split (2 GiB cap) |
+| `reassemble-synapic-inference-win-x64-cuda.exe.bat` | rejoins the CUDA parts, verifies the hash |
+| `SHA256SUMS.txt` | one manifest for every asset, generated in the publish job |
+
+Standalone sidecars matter because they let someone swap the CPU server for the
+CUDA one (or pick up a newer server) without reinstalling the app — and without
+needing a source checkout to run **Build Server**. The app finds its server by
+file name, so a downloaded executable has to be renamed to
+`synapic-inference.exe` (`synapic-inference` on Linux/macOS) and placed next to
+the app.
+
+### Validating the release path without a tag
+
+Tags cost a version number and cannot be re-run against a fixed commit easily,
+so dispatch the workflow directly:
+
+```bash
+gh workflow run release.yml -f version=0.0.0-dryrun          # build only
+gh workflow run release.yml -f version=1.2.3 -f publish=true  # cut the release
+```
+
+The dry run exercises every build, the smoke tests, the split and the checksum
+step, and leaves the assets on the run page for inspection — it only skips the
+`github-release` job.
 
 ## Manual test: upgrade path (same AppId)
 

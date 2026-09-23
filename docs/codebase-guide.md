@@ -56,7 +56,8 @@ tests/
   Synapic.Inference.Tests/   pytest (sidecar)
   Synapic.Integration.Tests/ placeholder for environment-dependent E2E
 build/                       fetch-python / install-deps / build-sidecar / variant + tie
-                             guards / protocol-doc generator / packaging
+                             guards / protocol-doc generator / release-asset splitter
+                             / packaging
 docs/                        this documentation set
 artifacts/<rid>/             built sidecar + published app (dev output)
 ```
@@ -66,7 +67,10 @@ The sidecar lives under `src/` for convenience but is built by
 and packaged by PyInstaller; it is never compiled by MSBuild. Two guards run
 inside the build: `check-lfm2vl-tie.py` (transformers must tie the LFM2.5-VL
 weights) and `check-sidecar-variant.py` (the packaged payload must match the
-RID's CPU/CUDA torch wheels).
+RID's CPU/CUDA torch wheels). `split-release-asset.py` is a packaging-time tool
+rather than a build guard: it cuts a release asset that is over GitHub's 2 GiB
+per-file cap (today only the ~2.5 GB CUDA sidecar) into parts and emits a
+reassembly helper alongside them.
 
 ### Tech stack (pinned centrally)
 
@@ -285,7 +289,9 @@ CI (`.github/workflows/build.yml`) runs pytest + xUnit first, then a 3-RID
 matrix (win-x64, linux-x64, osx-arm64) that builds the sidecar, publishes the
 app, stages them together, publishes the Windows installer, and (on `main`
 pushes) runs an installer smoke test that also exercises the .NET runtime
-prerequisite path. `release.yml` handles `v*` tags with signing/notarization.
+prerequisite path. `release.yml` handles `v*` tags (and manual dry runs) with
+signing/notarization, and publishes the standalone CPU **and** CUDA sidecar
+executables as their own release assets — see `packaging.md`.
 
 ## 11. Troubleshooting index (log messages you will actually see)
 

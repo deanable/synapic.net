@@ -1,8 +1,22 @@
 name: Release
 
+# Two ways in:
+#   * push a version tag (`v1.2.3`) - build, package, and publish the Release
+#   * manual dispatch - a build-only dry run unless `publish` is ticked, which
+#     is how this path gets validated without spending a version number
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version stamped on the installers (no leading "v")
+        required: true
+        default: '0.0.0-dryrun'
+      publish:
+        description: Create the GitHub Release (leave off to only build + upload run artifacts)
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -20,12 +34,15 @@ jobs:
         include:
           - os: windows-2022
             rid: win-x64
+            sidecar: synapic-inference.exe
             pkg: ps1
           - os: ubuntu-22.04
             rid: linux-x64
+            sidecar: synapic-inference
             pkg: sh
           - os: macos-14
             rid: osx-arm64
+            sidecar: synapic-inference
             pkg: sh
     steps:
       - uses: actions/checkout@v4
@@ -34,10 +51,15 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: Extract version from tag
+      - name: Resolve version
         id: ver
         shell: bash
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Fetch standalone Python
         shell: bash  # default shell on Windows is pwsh, which silently no-ops .sh scripts
@@ -63,11 +85,86 @@ jobs:
         run: ./build/build-sidecar.sh ${{ matrix.rid }}
 
       - name: Publish Avalonia app
-        run: >
+        run: >-
           dotnet publish src/Synapic.Avalonia -c Release -r ${{ matrix.rid }}
           --self-contained ${{ matrix.rid == 'win-x64' && 'false' || 'true' }}
           -p:PublishSingleFile=false
           -o artifacts/${{ matrix.rid }}
+
+      # The installers already carry this executable, but the standalone copy is
+      # what lets someone update the server (e.g. swap in the CUDA build) without
+      # reinstalling the app, and what keeps `Build Server` off a user's machine.
+      - name: Stage the standalone inference server
+        id: stage
+        shell: bash
+        run: |
+          RID="${{ matrix.rid }}"
+          NAME="synapic-inference-$RID"
+          if [[ "$RID" == "win-x64" ]]; then NAME="$NAME.exe"; fi
+          mkdir -p standalone
+          cp "artifacts/$RID/${{ matrix.sidecar }}" "standalone/$NAME"
+          echo "path=standalone/$NAME" >> "$GITHUB_OUTPUT"
+          ls -lh standalone
+
+      # Released assets get dropped into an existing install, so boot the exact
+      # executable that is about to be published - PyInstaller exiting 0 says
+      # nothing about whether the bundle serves /health.
+      - name: Smoke test the standalone sidecar
+        shell: bash
+        env:
+          EXE: ${{ steps.stage.outputs.path }}
+        run: |
+          set -euo pipefail
+          # The sidecar is a native process: on Windows it needs a Windows path
+          # for the port file even though this script runs under Git Bash.
+          if command -v cygpath >/dev/null 2>&1; then
+            PORT_FILE="$(cygpath -w "$RUNNER_TEMP")\\synapic_port_file.txt"
+          else
+            PORT_FILE="$RUNNER_TEMP/synapic_port_file.txt"
+          fi
+          rm -f "$PORT_FILE"
+          export SYNAPIC_PORT_FILE="$PORT_FILE"
+          # Keep CI from fetching the 860 MB default model; /health is reachable
+          # with no weights present.
+          export SYNAPIC_DISABLE_AUTO_DOWNLOAD=1
+
+          "$EXE" --port=0 > sidecar-stdout.txt 2> sidecar-stderr.txt &
+          SIDECAR_PID=$!
+
+          port=""
+          for _ in $(seq 1 100); do
+            if [[ -s "$PORT_FILE" ]]; then
+              line="$(head -n 1 "$PORT_FILE" | tr -d '[:space:]')"
+              if [[ "$line" =~ ^[0-9]+$ ]]; then port="$line"; break; fi
+            fi
+            sleep 3
+          done
+
+          status=""
+          if [[ -n "$port" ]]; then
+            for _ in $(seq 1 60); do
+              status="$(curl -fsS --max-time 5 "http://127.0.0.1:$port/health" 2>/dev/null || true)"
+              if [[ "$(printf '%s' "$status" | tr -d '[:space:]')" == *'"status":"ready"'* ]]; then break; fi
+              sleep 2
+            done
+          fi
+
+          if [[ "$(printf '%s' "$status" | tr -d '[:space:]')" != *'"status":"ready"'* ]]; then
+            echo "=== sidecar stdout (last 40) ==="; tail -n 40 sidecar-stdout.txt || true
+            echo "=== sidecar stderr (last 40) ==="; tail -n 40 sidecar-stderr.txt || true
+            kill "$SIDECAR_PID" 2>/dev/null || true
+            echo "::error::the sidecar to be released never reported ready (port file '$PORT_FILE', port '$port')"
+            exit 1
+          fi
+
+          echo "Ready on port $port: $status"
+          curl -fsS --max-time 15 -X POST "http://127.0.0.1:$port/shutdown" >/dev/null || true
+          for _ in $(seq 1 15); do
+            if ! kill -0 "$SIDECAR_PID" 2>/dev/null; then break; fi
+            sleep 2
+          done
+          if kill -0 "$SIDECAR_PID" 2>/dev/null; then kill -9 "$SIDECAR_PID" 2>/dev/null || true; fi
+          echo "Smoke test passed - the released sidecar boots and serves /health."
 
       - name: Install Inno Setup (Windows)
         if: matrix.pkg == 'ps1'
@@ -102,29 +199,192 @@ jobs:
           chmod +x build/package-macos.sh
           ./build/package-macos.sh ${{ matrix.rid }} artifacts/${{ matrix.rid }}
 
-      - name: Upload artifacts
+      - name: Upload installer
         uses: actions/upload-artifact@v4
         with:
           name: release-${{ matrix.rid }}
           path: |
             artifacts/${{ matrix.rid }}/Synapic-Setup-*.exe
             artifacts/${{ matrix.rid }}/*.AppImage
-            artifacts/${{ matrix.rid }}/*.dmg
             artifacts/${{ matrix.rid }}/Synapic-*.dmg
           if-no-files-found: warn
+
+      - name: Upload the standalone sidecar
+        uses: actions/upload-artifact@v4
+        with:
+          name: sidecar-${{ matrix.rid }}
+          path: standalone/*
+          retention-days: 7
+
+  # CUDA is a packaging variant, not a different program: the same sidecar built
+  # against CUDA torch wheels. Bundling cu126 wheels needs no GPU, so a
+  # GitHub-hosted runner can build it; what it cannot do is prove GPU inference
+  # (the smoke test asserts the weaker, verifiable property: the bundle boots
+  # and serves /health on a machine with no NVIDIA driver).
+  sidecar-cuda:
+    name: Release sidecar win-x64-cuda (CUDA 12.6)
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch standalone Python
+        run: ./build/fetch-python.ps1 -Rid win-x64-cuda
+
+      - name: Install Python deps (cu126 wheels)
+        run: ./build/install-python-deps.ps1 -Rid win-x64-cuda
+
+      # Fail before the 20-minute PyInstaller run when the wrong wheels landed.
+      - name: Verify torch is a CUDA build
+        run: |
+          $py = "build/_python/win-x64-cuda/python/python.exe"
+          $version = & $py -c "import torch; print(torch.__version__)"
+          $cuda = & $py -c "import torch; print(torch.version.cuda or 'none')"
+          Write-Host "torch $version (cuda $cuda)"
+          if ($cuda -notmatch '^12\.') {
+            Write-Host "::error::CPU torch wheels were installed - expected a CUDA 12.x build (got '$cuda')"
+            exit 1
+          }
+
+      # build-sidecar.ps1 also asserts the packaged payload really is the CUDA
+      # variant (build/check-sidecar-variant.py), so a wrong-wheels bundle cannot
+      # reach the release below.
+      - name: Build sidecar (PyInstaller)
+        run: ./build/build-sidecar.ps1 -Rid win-x64-cuda
+
+      - name: Smoke test the bundle (boots and serves /health with no GPU)
+        run: |
+          $exe = "artifacts/win-x64-cuda/synapic-inference.exe"
+          $portFile = Join-Path $env:RUNNER_TEMP 'synapic_cuda_port.txt'
+          Remove-Item $portFile -ErrorAction SilentlyContinue
+          $env:SYNAPIC_PORT_FILE = $portFile
+          $env:SYNAPIC_DISABLE_AUTO_DOWNLOAD = '1'
+
+          $p = Start-Process $exe -ArgumentList '--port=0' -PassThru `
+            -RedirectStandardOutput cuda-stdout.txt -RedirectStandardError cuda-stderr.txt
+
+          # A 2.5 GB onefile unpacks itself on first launch; that dominates startup.
+          $deadline = (Get-Date).AddSeconds(300)
+          $ready = $false
+          $port = 0
+          $health = $null
+          while ((Get-Date) -lt $deadline) {
+            if ($p.HasExited) { break }
+            if (Test-Path $portFile) {
+              $line = (Get-Content $portFile -First 1).Trim()
+              if ($line -match '^\d+$') {
+                $port = [int]$line
+                try {
+                  $health = Invoke-RestMethod "http://127.0.0.1:$port/health" -TimeoutSec 5
+                  if ($health.status -eq 'ready') { $ready = $true; break }
+                } catch { }
+              }
+            }
+            Start-Sleep -Seconds 3
+          }
+
+          if (-not $ready) {
+            Write-Host "=== stdout (last 40) ==="
+            Get-Content cuda-stdout.txt -ErrorAction SilentlyContinue | Select-Object -Last 40 | Write-Host
+            Write-Host "=== stderr (last 40) ==="
+            Get-Content cuda-stderr.txt -ErrorAction SilentlyContinue | Select-Object -Last 40 | Write-Host
+            if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
+            Write-Host "::error::the CUDA bundle never reported ready (port file '$portFile', port '$port')"
+            exit 1
+          }
+
+          # NB: ${port} - "$port:" parses as a scoped variable reference in PowerShell.
+          Write-Host "Ready on port ${port}: $($health | ConvertTo-Json -Compress)"
+          Write-Host "device reported: $($health.device)"
+          try { Invoke-RestMethod "http://127.0.0.1:$port/shutdown" -Method Post -TimeoutSec 15 | Out-Null } catch { }
+          $p.WaitForExit(30000) | Out-Null
+          if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
+          Write-Host "Smoke test passed - the CUDA bundle boots with no GPU present."
+
+      - name: Stage the CUDA sidecar
+        run: |
+          New-Item -ItemType Directory -Force standalone | Out-Null
+          Copy-Item artifacts/win-x64-cuda/synapic-inference.exe `
+            standalone/synapic-inference-win-x64-cuda.exe -Force
+
+      # GitHub rejects any release asset of 2 GiB or more and this bundle is
+      # ~2.5 GB, so it is published as parts plus a reassembly helper. The helper
+      # removes the oversized copy from the staging directory, because a single
+      # too-big file there would fail the *whole* release, not just itself.
+      - name: Split the CUDA sidecar into uploadable parts
+        run: |
+          $py = "build/_python/win-x64-cuda/python/python.exe"
+          & $py build/split-release-asset.py standalone/synapic-inference-win-x64-cuda.exe `
+            --out-dir standalone
+          if ($LASTEXITCODE -ne 0) { throw "split-release-asset.py failed with exit code $LASTEXITCODE" }
+          Get-ChildItem standalone | Format-Table Name, Length
+
+      - name: Upload the CUDA sidecar parts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sidecar-win-x64-cuda
+          path: standalone/*
+          retention-days: 7
 
   github-release:
     name: Publish GitHub Release
     runs-on: ubuntu-latest
-    needs: release
+    needs: [release, sidecar-cuda]
+    # A dispatch builds by default; tick `publish` to cut a real release.
+    if: github.event_name == 'push' || inputs.publish
     steps:
       - uses: actions/download-artifact@v4
         with:
           path: release-assets
           merge-multiple: true
 
+      # One manifest for every asset, generated where they finally meet. The
+      # CUDA parts are raw byte ranges, so their hashes only ever describe the
+      # parts - the reassembled SHA-256 is printed by the reassembly helper.
+      - name: Checksum the assets
+        working-directory: release-assets
+        run: |
+          find . -maxdepth 1 -type f -printf '%P\n' | sort > /tmp/assets.txt
+          xargs -r -d '\n' sha256sum < /tmp/assets.txt > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
+          body: |
+            ## What to download
+
+            Each installer bundles the app **and** the CPU inference server, so most
+            users only need the installer for their platform. The standalone
+            inference server is for replacing or updating the server without
+            reinstalling the app.
+
+            | | Windows | macOS (Apple silicon) | Linux |
+            |---|---|---|---|
+            | App + CPU server | `Synapic-Setup-win-x64.exe` | `Synapic-osx-arm64.dmg` | `Synapic-*.AppImage` |
+            | Standalone CPU server | `synapic-inference-win-x64.exe` | `synapic-inference-osx-arm64` | `synapic-inference-linux-x64` |
+            | Standalone NVIDIA/CUDA server | `synapic-inference-win-x64-cuda.exe.part1` + `.part2` | — | — |
+
+            `SHA256SUMS.txt` covers every asset. The server is a single self-contained
+            executable; put it next to the app and name it `synapic-inference.exe`
+            (`synapic-inference` on Linux/macOS), replacing the bundled one, then
+            restart Synapic.
+
+            ## CUDA (NVIDIA) server
+
+            GitHub rejects any release asset of 2 GiB or more and the CUDA bundle is
+            about 2.5 GB, so it ships as two parts that must be rejoined:
+
+            1. Download `synapic-inference-win-x64-cuda.exe.part1`,
+               `synapic-inference-win-x64-cuda.exe.part2`, and
+               `reassemble-synapic-inference-win-x64-cuda.exe.bat` into one folder.
+            2. Run the `.bat` (double-click, or `copy /b` the two parts together by
+               hand). It joins them and prints the expected SHA-256 next to the
+               actual one - they must match.
+            3. Rename the result to `synapic-inference.exe` and copy it over the one
+               in your Synapic install folder (default `C:\Program Files\Synapic`).
+
+            On a system without an NVIDIA driver the CUDA build still falls back to
+            CPU, so it is safe to install, but it is only worth the download if you
+            have a supported GPU.
           files: release-assets/**

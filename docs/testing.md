@@ -83,6 +83,7 @@ between tests.
 | `test_tag_extractor.py` | `json_utils` extraction/repair, Title Case, and extraction for classification / zero-shot / image-to-text, including limits and de-duplication. |
 | `test_inference_engine.py` | `_generation_kwargs`: clears the conflicting `max_length`, does not mutate the pipeline's config, and falls back for unknown pipeline shapes (the transformers-warning fix). |
 | `test_check_sidecar_variant.py` | The CPU/CUDA payload rules in `build/check-sidecar-variant.py`: a CPU bundle must contain no CUDA runtime binaries (but torch's CUDA *python* modules are not leaks), a CUDA bundle must contain `torch_cuda.dll` plus cudart/cublas/cudnn, and optional extras may be absent. Runs without torch or PyInstaller installed. |
+| `test_split_release_asset.py` | `build/split-release-asset.py`, which makes the >2 GiB CUDA sidecar publishable: parts rejoin byte-for-byte, parts are exact ranges, the oversized original is not left in the upload directory (one invalid file fails the whole release), stale parts from an earlier run are cleared, a cap at/above GitHub's limit is refused, and the emitted helper (`.bat`/`.sh`) names every part and reproduces the file. |
 
 ---
 
@@ -119,6 +120,12 @@ environment variables.
 
 PRs use a path filter (`src/**`, `tests/**`, `build/**`, workflows, solution,
 `global.json`, `Directory.Build.props`) so doc-only PRs skip the matrix.
+
+`.github/workflows/release.yml` is not triggered by pushes to `main`; it runs on
+`v*` tags and on manual dispatch (`gh workflow run release.yml -f
+version=0.0.0-dryrun`), which builds and smoke-tests everything while skipping
+the publish job. Nothing in this document's suites covers it — treat a release
+change as untested until a dry run is green.
 
 ## Conventions when adding tests
 
