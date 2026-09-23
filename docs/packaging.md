@@ -121,7 +121,7 @@ after a 2.7 GB download.
 |-------|-------|
 | `Synapic-Setup-win-x64.exe` | Windows installer, app + CPU sidecar |
 | `Synapic-osx-arm64.dmg` | macOS disk image, app + CPU sidecar |
-| `Synapic-*.AppImage` | Linux AppImage, app + CPU sidecar |
+| ~~`Synapic-*.AppImage`~~ | **not built** — see the known gap below |
 | `synapic-inference-win-x64.exe` | standalone CPU server |
 | `synapic-inference-linux-x64`, `synapic-inference-osx-arm64` | standalone CPU server |
 | `synapic-inference-win-x64-cuda.exe.part1/.part2` | standalone CUDA server, split (2 GiB cap) |
@@ -134,6 +134,17 @@ needing a source checkout to run **Build Server**. The app finds its server by
 file name, so a downloaded executable has to be renamed to
 `synapic-inference.exe` (`synapic-inference` on Linux/macOS) and placed next to
 the app.
+
+**Known gap — no Linux installer.** `package-linux.sh` fails at the last step:
+`ERROR: Could not find icon executable for Icon entry: synapic`. `linuxdeploy`
+requires an app icon and the repository ships no image assets at all, so the
+AppImage has never been produced (this was invisible until the first tag, since
+nothing had ever run `release.yml`). Linux packaging is intentionally out of
+scope for now, so the step is **guarded rather than fatal**: a failure emits a
+`::warning::` annotation naming the icon as the cause and the release continues,
+publishing `synapic-inference-linux-x64` without an installer. Fixing it means
+adding an icon (e.g. `build/synapic.png`) and passing it to `linuxdeploy`
+(`--icon-file`), then removing the guard.
 
 ### Validating the release path without a tag
 
