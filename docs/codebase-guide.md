@@ -253,6 +253,15 @@ Notes:
   three single-quoted — so `tag_extractor` rescued every one and any rescue
   failure wrote the raw payload into Description. The wording now shipped is
   13/13. Treat it as load-bearing; `test_tag_prompt.py` guards it.
+- **System-prompt presets are history, not settings.** Every system prompt the
+  user commits (leaving the box, or moving off Step 2) is added to
+  `%APPDATA%/Synapic/system-prompts.json` by `SystemPromptPresetStore`
+  (`{"version":1,"prompts":[…]}`, newest first, capped at
+  `MaxPresets`), and Step 2's combobox offers them back; Delete on the
+  highlighted entry removes it. The *current* prompt still lives in
+  `Session`/registry like every other Step 2 field, so pruning the list can never
+  lose the run's configuration. Deleting the prompt that is in the box also
+  clears the box, because otherwise the next commit would put it straight back.
 - A **system prompt must not restate the format.** It is prepended, so asking
   for a different shape (bare prose, a different key set, a markdown report)
   fights the instruction above and is the one way to make the parser's job hard

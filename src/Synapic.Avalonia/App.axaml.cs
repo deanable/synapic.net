@@ -71,6 +71,7 @@ public partial class App : Application
         services.AddSingleton<Session>();
         services.AddSingleton(new DaminionConnectionStore());
         services.AddSingleton(new EngineSettingsStore());
+        services.AddSingleton(new SystemPromptPresetStore());
         services.AddSingleton<IInferenceSidecar, InferenceSidecarService>();
         services.AddSingleton<ISidecarBuildService, SidecarBuildService>();
         services.AddSingleton<MainWindowViewModel>();

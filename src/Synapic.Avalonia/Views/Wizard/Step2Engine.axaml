@@ -61,9 +61,24 @@
 
       <TextBox Watermark="Candidate labels (comma-separated, for probability/zero-shot)"
                Text="{Binding ProbabilityCandidates}" />
-      <TextBox Watermark="Custom system prompt (VLM) - optional context, must not restate the output format"
+      <TextBlock Text="System prompt (optional VLM context)"
+                 FontWeight="SemiBold" Margin="0,4,0,0" />
+      <TextBlock TextWrapping="Wrap" Opacity="0.75"
+                 Text="Every system prompt you commit is remembered below, so previous wording stays one click away." />
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <ComboBox x:Name="SystemPromptPresetBox"
+                  ItemsSource="{Binding SystemPromptPresets}"
+                  SelectedItem="{Binding SelectedSystemPromptPreset}"
+                  MinWidth="260" MaxDropDownHeight="260"
+                  PlaceholderText="Saved system prompts" />
+        <TextBlock Text="Highlight an entry and press Delete to remove it from the saved list"
+                   VerticalAlignment="Center" Opacity="0.75" TextWrapping="Wrap" />
+      </StackPanel>
+      <TextBox x:Name="SystemPromptBox"
+               Watermark="Custom system prompt (VLM) - optional context, must not restate the output format"
                Text="{Binding SystemPrompt}"
                AcceptsReturn="True" Height="60" />
+      <TextBlock Text="{Binding SystemPromptMessage}" TextWrapping="Wrap" Opacity="0.75" />
 
       <TextBlock Text="Tag instruction (sent to the model for every image)"
                  FontWeight="SemiBold" Margin="0,4,0,0" />

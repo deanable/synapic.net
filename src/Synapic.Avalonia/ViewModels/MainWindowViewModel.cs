@@ -52,7 +52,8 @@ public partial class MainWindowViewModel : ViewModelBase
         Func<string?>? sidecarExecutableLocator = null,
         DaminionConnectionStore? connectionStore = null,
         EngineSettingsStore? engineStore = null,
-        Func<string, string?>? sidecarVariantLocator = null)
+        Func<string, string?>? sidecarVariantLocator = null,
+        SystemPromptPresetStore? presetStore = null)
     {
         _sidecar = sidecar;
         _build = build;
@@ -67,7 +68,7 @@ public partial class MainWindowViewModel : ViewModelBase
         SynapicLog.UiSink.Emitted -= OnUiLogEmitted;
         SynapicLog.UiSink.Emitted += OnUiLogEmitted;
 
-        Wizard = new WizardViewModel(_session, _sidecar, connectionStore, engineStore);
+        Wizard = new WizardViewModel(_session, _sidecar, connectionStore, engineStore, presetStore);
     }
 
     public WizardViewModel Wizard { get; }

@@ -21,14 +21,15 @@ public partial class WizardViewModel : ViewModelBase
 
     public WizardViewModel(Session session, IInferenceSidecar sidecar,
         DaminionConnectionStore? connectionStore = null,
-        EngineSettingsStore? engineStore = null)
+        EngineSettingsStore? engineStore = null,
+        SystemPromptPresetStore? presetStore = null)
     {
         _session = session;
         _sidecar = sidecar;
         _engineStore = engineStore;
 
         Step1 = new Step1DatasourceViewModel(session, connectionStore);
-        Step2 = new Step2EngineViewModel(session, sidecar, engineStore);
+        Step2 = new Step2EngineViewModel(session, sidecar, engineStore, presetStore);
         Step3 = new Step3ProcessViewModel(session, sidecar, Step1);
         Step4 = new Step4ResultsViewModel(session, Step1, Step3);
         Dedup = new StepDedupViewModel();

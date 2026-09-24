@@ -131,6 +131,11 @@ store (never auto-connected).
   `ProbabilityModeIndex` (llm/probability/both), `ProbabilityThreshold`.
 - `ProbabilityCandidates` (comma-separated → string[] in the session).
 - `SystemPrompt` (VLM system message) and `EmbeddingRescueEnabled`.
+- System-prompt presets: `SystemPromptPresets` (newest first),
+  `SelectedSystemPromptPreset` and `SystemPromptMessage`.
+  `RememberSystemPrompt()` is the commit point (leaving the box or Step 2) and
+  `DeleteSystemPromptPresetCommand` removes the highlighted entry, clearing the
+  box when that prompt was the one in use.
 - Tag-field checkboxes `TagKeywords` / `TagCategories` / `TagDescription` with
   `HasNoTagFieldSelected` for the validation hint.
 - Persists to `EngineSettingsStore` via `SaveToStore()`; `MakeSelectionValid()`
@@ -352,6 +357,10 @@ plus IPTC/EXIF fallbacks. `TagResult(Category, Keywords, Description)`. See
   throws.
 - **`EngineSettingsStore`** — registry persistence for Step 2
   (`HKCU\Software\Synapic\Engine`), no-op off Windows.
+- **`SystemPromptPresetStore`** — the system-prompt history as plain JSON
+  (`%APPDATA%/Synapic/system-prompts.json`, shape `SystemPromptPresetFile`,
+  newest first, capped at `MaxPresets`). History only: the live prompt stays in
+  `Session`/registry, so pruning the list can never lose a run's configuration.
 
 ### Build pipeline
 

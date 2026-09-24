@@ -17,6 +17,7 @@ public partial class Step2EngineViewModel : ViewModelBase
     private readonly Session _session;
     private readonly IInferenceSidecar _sidecar;
     private readonly EngineSettingsStore? _engineStore;
+    private readonly SystemPromptPresetStore? _presetStore;
 
     [ObservableProperty]
     private string _manualModelId = "LiquidAI/LFM2.5-VL-450M";
@@ -71,11 +72,13 @@ public partial class Step2EngineViewModel : ViewModelBase
         _ => 2,
     };
 
-    public Step2EngineViewModel(Session session, IInferenceSidecar sidecar, EngineSettingsStore? engineStore = null)
+    public Step2EngineViewModel(Session session, IInferenceSidecar sidecar,
+        EngineSettingsStore? engineStore = null, SystemPromptPresetStore? presetStore = null)
     {
         _session = session;
         _sidecar = sidecar;
         _engineStore = engineStore;
+        _presetStore = presetStore;
         HydrateFromStore();
         var engine = session.Engine;
         ManualModelId = engine.ModelId;
@@ -92,6 +95,7 @@ public partial class Step2EngineViewModel : ViewModelBase
         TagKeywords = engine.TagKeywords;
         TagCategories = engine.TagCategories;
         TagDescription = engine.TagDescription;
+        LoadSystemPromptPresets();
     }
 
     /// <summary>Pre-fill the Step 2 form from the registry (last run's engine settings).</summary>
@@ -152,6 +156,9 @@ public partial class Step2EngineViewModel : ViewModelBase
     /// <summary>Persist the current Step 2 settings to the registry (called on step exit).</summary>
     public void SaveToStore()
     {
+        // Leaving Step 2 commits the prompt history too, so a prompt that was
+        // typed and used is never only in memory.
+        RememberSystemPrompt();
         if (_engineStore is null) return;
         try
         {
@@ -265,7 +272,27 @@ public partial class Step2EngineViewModel : ViewModelBase
         PushToSession();
     }
     partial void OnProbabilityThresholdChanged(double value) => PushToSession();
-    partial void OnSystemPromptChanged(string value) => PushToSession();
+    partial void OnSystemPromptChanged(string value)
+    {
+        PushToSession();
+        // Keep the preset combobox honest: it highlights the saved prompt that
+        // matches the box, or nothing once the text has been edited away from
+        // one. Delete acts on the highlight, so it must never point at a preset
+        // the box is no longer showing.
+        var text = (value ?? "").Trim();
+        if (!string.Equals(SelectedSystemPromptPreset, text, StringComparison.Ordinal))
+            SelectedSystemPromptPreset =
+                SystemPromptPresets.Contains(text, StringComparer.Ordinal) ? text : null;
+    }
+
+    partial void OnSelectedSystemPromptPresetChanged(string? value)
+    {
+        // Picking a preset from the list fills the box. Setting the text here
+        // (rather than relying on the control) keeps the combobox selection and
+        // the model in step, which is what the Delete key acts on.
+        if (value is not null && !string.Equals(SystemPrompt, value, StringComparison.Ordinal))
+            SystemPrompt = value;
+    }
     partial void OnUserPromptChanged(string value)
     {
         PushToSession();
@@ -364,6 +391,128 @@ public partial class Step2EngineViewModel : ViewModelBase
         }
     }
 
+    // ── System-prompt presets (the combobox history) ─────────────────────────
+
+    /// <summary>
+    /// Every system prompt the user has committed, most recently used first.
+    /// Backed by <see cref="SystemPromptPresetStore"/> (system-prompts.json), so
+    /// the wording survives restarts without the user keeping notes.
+    /// </summary>
+    public ObservableCollection<string> SystemPromptPresets { get; } = new();
+
+    /// <summary>The preset highlighted in the combobox; Delete removes it.</summary>
+    [ObservableProperty]
+    private string? _selectedSystemPromptPreset;
+
+    /// <summary>Feedback under the combobox (saved, removed, nothing selected).</summary>
+    [ObservableProperty]
+    private string? _systemPromptMessage;
+
+    /// <summary>Load the saved history into the combobox (startup).</summary>
+    private void LoadSystemPromptPresets()
+    {
+        if (_presetStore is null) return;
+        try
+        {
+            ApplyPresets(_presetStore.Load());
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Warning(nameof(Step2EngineViewModel),
+                $"Failed to read system-prompt presets: {e.Message}");
+        }
+    }
+
+    private void ApplyPresets(IReadOnlyList<string> presets)
+    {
+        SystemPromptPresets.Clear();
+        foreach (var preset in presets) SystemPromptPresets.Add(preset);
+    }
+
+    /// <summary>
+    /// Remember the system prompt currently in the box. Called when the box is
+    /// committed (Enter or leaving the field) and when the user leaves Step 2, so
+    /// a prompt is always in the history by the time it has been used for a run.
+    /// Blank input is not a preset; a prompt that is already saved is only
+    /// re-selected, never duplicated.
+    /// </summary>
+    public void RememberSystemPrompt()
+    {
+        var value = (SystemPrompt ?? "").Trim();
+        if (value.Length == 0) return;
+
+        if (SystemPromptPresets.Contains(value, StringComparer.Ordinal))
+        {
+            SelectedSystemPromptPreset = value;
+            return;
+        }
+
+        try
+        {
+            if (_presetStore is not null)
+            {
+                ApplyPresets(_presetStore.Add(value));
+            }
+            else
+            {
+                // No store (headless tests): keep the list working in memory.
+                SystemPromptPresets.Insert(0, value);
+            }
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Warning(nameof(Step2EngineViewModel),
+                $"Failed to save the system-prompt preset: {e.Message}");
+            return;
+        }
+
+        SelectedSystemPromptPreset = value;
+        SystemPromptMessage = "Saved to the system-prompt presets.";
+    }
+
+    /// <summary>
+    /// Remove a preset from the history (the Delete key in the combobox).
+    ///
+    /// Removing the prompt that is currently in the box clears the box as well:
+    /// leaving it there would only see it re-saved on the next commit, which makes
+    /// Delete look broken. Removing something else never touches the box.
+    /// </summary>
+    [RelayCommand]
+    private void DeleteSystemPromptPreset(string? preset)
+    {
+        var value = (preset ?? SelectedSystemPromptPreset ?? SystemPrompt ?? "").Trim();
+        if (value.Length == 0)
+        {
+            SystemPromptMessage = "Select a saved system prompt first, then press Delete to remove it.";
+            return;
+        }
+
+        if (!SystemPromptPresets.Contains(value, StringComparer.Ordinal))
+        {
+            SystemPromptMessage = $"\"{value}\" is not one of the saved system prompts.";
+            return;
+        }
+
+        try
+        {
+            if (_presetStore is not null) ApplyPresets(_presetStore.Remove(value));
+            else SystemPromptPresets.Remove(value);
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Warning(nameof(Step2EngineViewModel),
+                $"Failed to remove the system-prompt preset: {e.Message}");
+            SystemPromptPresets.Remove(value);
+        }
+
+        if (string.Equals((SystemPrompt ?? "").Trim(), value, StringComparison.Ordinal))
+            SystemPrompt = "";
+        if (string.Equals(SelectedSystemPromptPreset, value, StringComparison.Ordinal))
+            SelectedSystemPromptPreset = null;
+
+        SystemPromptMessage = $"Removed the system-prompt preset \"{value}\".";
+    }
+
     [RelayCommand]
     private async Task DownloadSelectedAsync(CancellationToken ct)
     {
@@ -390,6 +539,7 @@ public partial class Step2EngineViewModel : ViewModelBase
     {
         // Called on step transition: ensure the session reflects the UI state.
         PushToSession();
+        RememberSystemPrompt();
     }
 
     /// <summary>Populate the model list from the running server (invoked when entering Step 2).</summary>

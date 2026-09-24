@@ -26,7 +26,9 @@ python -m pytest tests/Synapic.Inference.Tests -q
 | `Step1DatasourceTests` | `ConnectCommand` enablement and `CanExecuteChanged` notifications as credentials change. |
 | `Step2EngineTests` | Engine view-model state → session propagation. |
 | `TagInstructionTests` | The editable tag instruction: blank means "the sidecar's built-in prompt" and stays null on the wire, "Use built-in instruction" loads the sidecar's own text (once, cached) and never overwrites the box with an empty answer, reset clears back to the default, and the value round-trips through the registry. |
-| `Step2PromptBindingTests` | The Step 2 prompt editor through real compiled XAML: the box two-way binds to `UserPrompt` and both buttons carry their commands (a mistyped Avalonia binding is otherwise silent). |
+| `Step2PromptBindingTests` | The Step 2 prompt editor through real compiled XAML: the box two-way binds to `UserPrompt`, both buttons carry their commands (a mistyped Avalonia binding is otherwise silent), the preset combobox lists the history and fills the box when one is chosen, and a real Delete key press removes the highlighted preset. |
+| `SystemPromptPresetStoreTests` | The system-prompt history file: object and bare-array shapes, a missing or corrupt file degrading to an empty list, newest-first ordering, trim/dedupe, the `MaxPresets` cap, and removing an unknown entry as a no-op — all against a temp file, never `%APPDATA%`. |
+| `SystemPromptPresetTests` | Step 2's preset behaviour: committing a prompt (leaving the step) remembers it, blank input is never saved, the highlight follows the box, Delete removes the highlighted preset and clears the box when that prompt was the one in use, and deletions persist to the next session. |
 | `ProcessingEtaTests` | ETA math (`EstimateProgress`, `ProcessingOrchestrator.EstimateProgress`) and `ProcessAll` propagation from Step 1 into the selection. |
 | `TagFieldSelectionTests` | Which returned fields are written, per `TagFieldSelection` permutation, through a fake sidecar + capturing metadata writer. |
 | `PauseTests` | Pause/resume semantics (running items finish, queued items wait) and cancellation wins. |

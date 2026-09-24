@@ -1,5 +1,9 @@
 using Avalonia.Controls;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.Input;
+using Avalonia.Threading;
+using Synapic.Avalonia.Services;
 using Synapic.Avalonia.Models;
 using Synapic.Avalonia.ViewModels.Steps;
 using Synapic.Avalonia.Views.Wizard;
@@ -84,6 +88,90 @@ public class Step2PromptBindingTests
         finally
         {
             window.Close();
+        }
+    }
+
+    // ── System-prompt presets ───────────────────────────────────────────────
+
+    private static (Step2Engine View, Step2EngineViewModel Vm, Window Window) BuildWithPresets(
+        string presetPath)
+    {
+        var vm = new Step2EngineViewModel(
+            new Session(),
+            new FakeSidecar(),
+            engineStore: null,
+            presetStore: new SystemPromptPresetStore(presetPath));
+        var view = new Step2Engine { DataContext = vm };
+        var window = new Window { Content = view };
+        window.Show();
+        return (view, vm, window);
+    }
+
+    [AvaloniaFact]
+    public void PresetComboBox_ListsTheHistoryAndFillsThePromptBox()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"synapic-presets-view-{Guid.NewGuid():N}.json");
+        var store = new SystemPromptPresetStore(path);
+        store.Add("older wording");
+        store.Add("newer wording");
+        try
+        {
+            var (view, vm, window) = BuildWithPresets(path);
+            try
+            {
+                var combo = view.FindControl<ComboBox>("SystemPromptPresetBox");
+                Assert.NotNull(combo);
+                Assert.Equal(new[] { "newer wording", "older wording" }, combo!.ItemsSource);
+
+                // Choosing a preset has to reach the box the sidecar reads from.
+                combo.SelectedItem = "older wording";
+                Assert.Equal("older wording", vm.SystemPrompt);
+                Assert.Equal("older wording", view.FindControl<TextBox>("SystemPromptBox")!.Text);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [AvaloniaFact]
+    public void DeleteKey_OnThePresetComboBox_RemovesTheHighlightedPrompt()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"synapic-presets-view-{Guid.NewGuid():N}.json");
+        var store = new SystemPromptPresetStore(path);
+        store.Add("keep me");
+        store.Add("delete me");
+        try
+        {
+            var (view, vm, window) = BuildWithPresets(path);
+            try
+            {
+                var combo = view.FindControl<ComboBox>("SystemPromptPresetBox")!;
+                combo.SelectedItem = "delete me";
+                Assert.True(combo.Focus());
+                Dispatcher.UIThread.RunJobs();
+
+                window.KeyPressQwerty(PhysicalKey.Delete, RawInputModifiers.None);
+                Dispatcher.UIThread.RunJobs();
+
+                Assert.Equal(new[] { "keep me" }, vm.SystemPromptPresets);
+                Assert.Equal(new[] { "keep me" }, store.Load());
+                // The box cannot keep showing a prompt that was just forgotten.
+                Assert.Equal("", vm.SystemPrompt);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
         }
     }
 }
