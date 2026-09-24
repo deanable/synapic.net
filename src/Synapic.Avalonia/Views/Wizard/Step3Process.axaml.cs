@@ -22,11 +22,10 @@ public partial class Step3Process : UserControl
     /// <summary>
     /// Keep the newest log line visible (port of the Python console's
     /// ``self.console.see("end")``): the batch emits progress lines continuously,
-    /// so without this the viewer stays pinned to the top of the run.
+    /// so without this the viewer stays pinned to the top of the run. Revealing
+    /// is guarded so a line arriving while the window is closing cannot arrange
+    /// a detached list.
     /// </summary>
-    private void OnLogLinesChanged(object? sender, NotifyCollectionChangedEventArgs e)
-    {
-        if (LogList.ItemCount == 0) return;
-        LogList.ScrollIntoView(LogList.ItemCount - 1);
-    }
+    private void OnLogLinesChanged(object? sender, NotifyCollectionChangedEventArgs e) =>
+        ListAutoScroll.ToEnd(LogList);
 }

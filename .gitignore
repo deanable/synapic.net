@@ -33,6 +33,13 @@ _python
 synapic-inference
 synapic-inference.exe
 
+# Scratch build logs and working dirs: underscore-prefixed paths under build/
+# are per-machine output of the build scripts (build/*.ps1), never source.
+build/_*
+
+# Freebuff workspace metadata, written per-clone by the local client
+.freebuff/
+
 # IDE
 .vs/
 .vscode/

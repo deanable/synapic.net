@@ -39,16 +39,13 @@
                     IsVisible="{Binding IsDaminionConnected}" />
           </StackPanel>
         </Grid>
-        <StackPanel Orientation="Vertical" Spacing="2">
-          <TextBox Watermark="Catalog (optional)" Text="{Binding DaminionCatalogId}" MaxWidth="300"
-                   HorizontalAlignment="Left" />
-          <!-- Daminion exposes no endpoint that lists a server's catalogs, so
-               after connecting we report the one the login landed on. -->
-          <TextBlock Text="{Binding ActiveCatalogText}"
-                     IsVisible="{Binding HasActiveCatalog}"
-                     Opacity="0.7" FontSize="12" TextWrapping="Wrap"
-                     ToolTip.Tip="The catalog this login is bound to. Daminion has no API to list a server's catalogs, so this reports the one in use." />
-        </StackPanel>
+        <!-- The catalog is chosen by the server URL, so there is nothing to fill
+             in by hand. Daminion exposes no endpoint that lists a server's
+             catalogs, so after connecting we report the one the login landed on. -->
+        <TextBlock Text="{Binding ActiveCatalogText}"
+                   IsVisible="{Binding HasActiveCatalog}"
+                   Opacity="0.7" FontSize="12" TextWrapping="Wrap"
+                   ToolTip.Tip="The catalog this login is bound to, selected by the server URL. Daminion has no API to list a server's catalogs, so this reports the one in use." />
         <StackPanel Orientation="Horizontal" Spacing="10">
           <ProgressBar IsIndeterminate="True" Width="90" Height="6"
                        IsVisible="{Binding IsConnecting}" />

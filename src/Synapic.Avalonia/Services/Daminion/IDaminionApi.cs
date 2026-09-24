@@ -12,8 +12,9 @@ namespace Synapic.Avalonia.Services.Daminion;
 public interface IDaminionApi
 {
     // ── Auth (query params per Daminion convention) ─────────────────────────
+    // The catalog is selected by the server URL, so no catalog id is sent.
     [Post("/api/UserManager/Login")]
-    Task<HttpResponseMessage> Login([Query] string userName, [Query] string password, [Query] string? catalogId = null);
+    Task<HttpResponseMessage> Login([Query] string userName, [Query] string password);
 
     [Post("/api/UserManager/Logout")]
     Task<HttpResponseMessage> Logout();

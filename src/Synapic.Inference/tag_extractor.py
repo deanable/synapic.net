@@ -117,6 +117,36 @@ def _sanitize_category(category_raw: Any) -> str:
     return "[AI: No Result]"
 
 
+# The prompt asks for description/category/keywords, but a model answering
+# {"caption": ..., "tags": [...]} is still handing back a usable record. Reading
+# only the exact names meant such a payload was either rejected outright (and the
+# raw text written into Description) or accepted with its text silently dropped.
+VLM_FIELD_ALIASES = {
+    "description": ("description", "caption", "summary"),
+    "category": ("category", "categories"),
+    "keywords": ("keywords", "tags"),
+}
+# Every name a payload may use - also the vocabulary handed to the JSON hunt, so
+# it does not throw a dict away for using a synonym.
+VLM_PAYLOAD_KEYS = frozenset(
+    name for names in VLM_FIELD_ALIASES.values() for name in names
+)
+
+
+def _payload_field(payload: dict, field: str, default: Any = None) -> Any:
+    """Read ``field`` from a parsed payload, ignoring case and via known aliases."""
+    if not isinstance(payload, dict):
+        return default
+
+    lowered = {
+        key.lower(): value for key, value in payload.items() if isinstance(key, str)
+    }
+    for name in VLM_FIELD_ALIASES[field]:
+        if name in lowered:
+            return lowered[name]
+    return default
+
+
 def extract_tags_from_result(
     result: Any,
     model_task: str,
@@ -194,9 +224,9 @@ def extract_tags_from_result(
 
             # CASE 1: Structured Dictionary (from smart VLMs)
             if isinstance(raw_gen, dict):
-                description = raw_gen.get("description", "")
-                category = _sanitize_category(raw_gen.get("category", ""))
-                keywords = _normalize_keywords(raw_gen.get("keywords", []))
+                description = _payload_field(raw_gen, "description", "")
+                category = _sanitize_category(_payload_field(raw_gen, "category", ""))
+                keywords = _normalize_keywords(_payload_field(raw_gen, "keywords", []))
 
             # CASE 2: String (plain caption) or chat format
             else:
@@ -221,12 +251,12 @@ def extract_tags_from_result(
                     json_extracted = False
                     data = extract_dict_from_text(
                         text,
-                        expected_keys={"description", "category", "keywords"},
+                        expected_keys=VLM_PAYLOAD_KEYS,
                     )
                     if isinstance(data, dict):
-                        description = data.get("description", "")
-                        category = _sanitize_category(data.get("category", ""))
-                        keywords = _normalize_keywords(data.get("keywords", []))
+                        description = _payload_field(data, "description", "")
+                        category = _sanitize_category(_payload_field(data, "category", ""))
+                        keywords = _normalize_keywords(_payload_field(data, "keywords", []))
                         json_extracted = True
                         logger.info(
                             "Successfully extracted structured payload from generated text"

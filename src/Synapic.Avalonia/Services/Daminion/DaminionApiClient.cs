@@ -45,7 +45,6 @@ public sealed class DaminionApiClient
     private readonly string _baseUrl;
     private readonly string _username;
     private readonly string _password;
-    private readonly string? _catalogId;
     private readonly SemaphoreSlim _rateLimit;
     private readonly Dictionary<string, string> _tagGuidMap = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, int> _tagIdMap = new(StringComparer.OrdinalIgnoreCase);
@@ -53,12 +52,11 @@ public sealed class DaminionApiClient
     private IDaminionApi? _api;
     private bool _authenticated;
 
-    public DaminionApiClient(string baseUrl, string username, string password, string? catalogId = null, double rateLimitSeconds = 0.1)
+    public DaminionApiClient(string baseUrl, string username, string password, double rateLimitSeconds = 0.1)
     {
         _baseUrl = NormalizeBaseUrl(baseUrl);
         _username = username;
         _password = password;
-        _catalogId = catalogId;
         _rateLimit = new SemaphoreSlim(1, 1);
         // Own handler with an explicit cookie container (session persistence)
         // and a long timeout: original-file downloads over slow LAN links
@@ -129,7 +127,7 @@ public sealed class DaminionApiClient
         var api = GetApi();
         try
         {
-            using var resp = await api.Login(_username, _password, _catalogId).ConfigureAwait(false);
+            using var resp = await api.Login(_username, _password).ConfigureAwait(false);
             if (resp.StatusCode == HttpStatusCode.Unauthorized || resp.StatusCode == HttpStatusCode.Forbidden)
                 throw new DaminionAuthenticationException($"Authentication failed for '{_username}'");
             if (resp.StatusCode == HttpStatusCode.TooManyRequests)
@@ -987,10 +985,11 @@ public sealed class DaminionApiClient
 
     /// <summary>
     /// The GUID of the catalog this session is bound to, or null when the
-    /// server cannot report one. This acts as a receipt: it confirms whether
-    /// the catalogId supplied at login was honoured. The response shape is not
-    /// documented, so it is read defensively (a bare string, or an object
-    /// wrapping the GUID) and the raw payload is logged when unreadable.
+    /// server cannot report one. The catalog is selected by the server URL, so
+    /// this is how the UI names the one the login actually landed on. The
+    /// response shape is not documented, so it is read defensively (a bare
+    /// string, or an object wrapping the GUID) and the raw payload is logged
+    /// when unreadable.
     /// </summary>
     public async Task<string?> GetCatalogGuidAsync(CancellationToken ct = default)
     {

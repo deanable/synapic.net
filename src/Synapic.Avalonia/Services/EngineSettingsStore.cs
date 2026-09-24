@@ -14,6 +14,7 @@ public sealed record EngineSettingsParams(
     double ProbabilityThreshold,
     string[] ProbabilityCandidates,
     string SystemPrompt,
+    string UserPrompt,
     bool EmbeddingRescueEnabled,
     bool TagKeywords,
     bool TagCategories,
@@ -35,6 +36,7 @@ public sealed class EngineSettingsStore
     private const string ProbabilityThresholdValue = "ProbabilityThreshold";
     private const string ProbabilityCandidatesValue = "ProbabilityCandidates";
     private const string SystemPromptValue = "SystemPrompt";
+    private const string UserPromptValue = "UserPrompt";
     private const string EmbeddingRescueEnabledValue = "EmbeddingRescueEnabled";
     private const string TagKeywordsValue = "TagKeywords";
     private const string TagCategoriesValue = "TagCategories";
@@ -74,6 +76,9 @@ public sealed class EngineSettingsStore
             var device = AsDefault(key.GetValue(DeviceValue) as string, DefaultDevice);
             var probabilityMode = AsDefault(key.GetValue(ProbabilityModeValue) as string, DefaultProbabilityMode);
             var systemPrompt = key.GetValue(SystemPromptValue) as string ?? "";
+            // Absent for anyone upgrading from a build without the editable tag
+            // instruction: blank means "use the sidecar's built-in one".
+            var userPrompt = key.GetValue(UserPromptValue) as string ?? "";
 
             // Doubles: stored as REG_SZ strings (lossless, exact round-trip).
             double ParseDouble(string? v, double fallback) =>
@@ -96,7 +101,7 @@ public sealed class EngineSettingsStore
 
             return new EngineSettingsParams(
                 modelId, task, device, confidenceThreshold, probabilityMode, probabilityThreshold,
-                candidates, systemPrompt, embeddingRescueEnabled,
+                candidates, systemPrompt, userPrompt, embeddingRescueEnabled,
                 tagKeywords, tagCategories, tagDescription);
         }
         catch (Exception e)
@@ -123,6 +128,7 @@ public sealed class EngineSettingsStore
             key.SetValue(ProbabilityCandidatesValue,
                 string.Join(",", params_.ProbabilityCandidates), RegistryValueKind.String);
             key.SetValue(SystemPromptValue, params_.SystemPrompt, RegistryValueKind.String);
+            key.SetValue(UserPromptValue, params_.UserPrompt, RegistryValueKind.String);
             key.SetValue(EmbeddingRescueEnabledValue, params_.EmbeddingRescueEnabled ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue(TagKeywordsValue, params_.TagKeywords ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue(TagCategoriesValue, params_.TagCategories ? 1 : 0, RegistryValueKind.DWord);

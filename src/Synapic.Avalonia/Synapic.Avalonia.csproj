@@ -6,6 +6,8 @@
     <AssemblyName>Synapic</AssemblyName>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Stamp the shell/install/taskbar identity (used for the window icon too). -->
+    <ApplicationIcon>..\..\assets\icons\Icon.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
@@ -31,7 +33,19 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The same .ico as an embedded resource, so Window.Icon can bind it
+         (avares://Synapic/Assets/Icon.ico) instead of relying on the shell to
+         pair the running window with the executable's icon. -->
+    <AvaloniaResource Include="..\..\assets\icons\Icon.ico" Link="Assets\Icon.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Synapic.Shared\Synapic.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The teardown-safety tests drive the guarded tail-scroll helper directly. -->
+    <InternalsVisibleTo Include="Synapic.Avalonia.Tests" />
   </ItemGroup>
 
 </Project>

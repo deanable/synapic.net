@@ -94,6 +94,13 @@ public record TagOptions
     [JsonPropertyName("system_prompt")]
     public string? SystemPrompt { get; init; }
 
+    /// <summary>
+    /// The tag instruction (Step 2, editable). Null or blank means the sidecar's
+    /// built-in <c>DEFAULT_VLM_USER_PROMPT</c> - see <see cref="PromptDefaultsDto"/>.
+    /// </summary>
+    [JsonPropertyName("user_prompt")]
+    public string? UserPrompt { get; init; }
+
     [JsonPropertyName("max_new_tokens")]
     public int MaxNewTokens { get; init; } = 512;
 }
@@ -172,6 +179,18 @@ public record TagResponse
 
     [JsonPropertyName("model_used")]
     public string? ModelUsed { get; init; }
+}
+
+/// <summary>
+/// GET /prompt response (PromptDefaultsDto): the instruction built into the
+/// sidecar, which /tag sends whenever the request has no <c>user_prompt</c>.
+/// Step 2 loads it so the editable box can start from the shipped wording, and
+/// so the sidecar stays the only copy of it.
+/// </summary>
+public record PromptDefaultsDto
+{
+    [JsonPropertyName("default_user_prompt")]
+    public string DefaultUserPrompt { get; init; } = "";
 }
 
 /// <summary>GET /config response and PUT /config body (ConfigDto).</summary>

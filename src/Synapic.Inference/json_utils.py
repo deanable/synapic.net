@@ -3,6 +3,19 @@
 Port of the Python Synapic app's ``src/utils/json_utils.py``: extracts the
 first useful dict payload embedded in free-form LLM/VLM text. Handles fenced
 code blocks, balanced-brace scanning, and truncated-JSON repair.
+
+Beyond the verbatim port, the search tolerates the ways a small VLM actually
+gets a JSON answer wrong. Every one of these used to end in "Could not extract
+JSON from model response", which writes the raw payload into the Description
+field instead of tagging the image:
+
+* a payload wrapped in an envelope (``{"result": {...}}``, ``{"data": {...}}``)
+  - nested dicts are searched, outermost first;
+* keys spelled with different capitalisation (``{"Description": ...}``);
+* a literal newline inside a string value, which strict JSON rejects;
+* the answer cut off mid-string by ``max_new_tokens``;
+* the whole payload delivered JSON-encoded as a string
+  (``"{\\"description\\": ...}"``).
 """
 
 from __future__ import annotations
@@ -42,7 +55,10 @@ def safe_parse_python_literal(
         raise ValueError(f"Nesting depth exceeds limit of {max_depth}")
 
     try:
-        return json.loads(text)
+        # strict=False permits raw control characters inside strings: a model
+        # writing a multi-line caption emits literal newlines there, and strict
+        # JSON rejects the entire payload over it.
+        return json.loads(text, strict=False)
     except json.JSONDecodeError:
         pass
 
@@ -66,6 +82,26 @@ def extract_dict_from_text(
 
     key_set = {key for key in (expected_keys or []) if key}
 
+    # A payload that arrives JSON-encoded inside a string literal is decoded and
+    # searched again; two unwrap rounds cover the quoting a VLM actually emits.
+    search_text = text
+    for _ in range(3):
+        found = _search_dict_candidates(search_text, key_set, max_depth, max_length)
+        if found is not None:
+            return found
+
+        unwrapped = _unwrap_string_payload(search_text)
+        if unwrapped is None:
+            return None
+        search_text = unwrapped
+
+    return None
+
+
+def _search_dict_candidates(
+    text: str, key_set: set, max_depth: int, max_length: int
+) -> Optional[dict]:
+    """First candidate payload in ``text`` carrying an expected key."""
     for candidate in _iter_candidate_dict_strings(text):
         parsed = _parse_candidate_dict(
             candidate, expected_keys=key_set, max_depth=max_depth, max_length=max_length
@@ -83,6 +119,25 @@ def extract_dict_from_text(
         )
 
     return None
+
+
+def _unwrap_string_payload(text: str) -> Optional[str]:
+    """Decode text that is itself a quoted string holding the payload.
+
+    Some VLMs JSON-encode the answer, so the response arrives as
+    ``"{\\"a\\": 1}"`` rather than ``{"a": 1}``. Returns the inner text, or
+    None when this is not a string literal carrying braces.
+    """
+    stripped = text.strip()
+    if stripped[:1] not in {'"', "'"}:
+        return None
+
+    try:
+        inner = safe_parse_python_literal(stripped)
+    except ValueError:
+        return None
+
+    return inner if isinstance(inner, str) and "{" in inner else None
 
 
 def _parse_candidate_dict(
@@ -103,11 +158,21 @@ def _parse_candidate_dict(
     if not isinstance(parsed, dict):
         return None
 
-    if expected_keys and not any(key in parsed for key in expected_keys):
+    if expected_keys and not _has_expected_key(parsed, expected_keys):
         logger.debug("Rejected parsed dict because it did not contain any expected keys")
         return None
 
     return parsed
+
+
+def _has_expected_key(parsed: dict, expected_keys: set) -> bool:
+    """Whether the payload carries one of the expected keys, ignoring case.
+
+    Models capitalise freely (``{"Description": ...}``) and the strict match
+    this replaces threw the whole payload away over a capital letter.
+    """
+    present = {key.lower() for key in parsed if isinstance(key, str)}
+    return any(str(key).lower() in present for key in expected_keys)
 
 
 def _iter_candidate_dict_strings(text: str):
@@ -142,8 +207,15 @@ def _iter_fenced_code_blocks(text: str):
 
 
 def _iter_balanced_dict_strings(text: str):
-    start_idx = None
-    stack = []
+    """Every balanced ``{...}`` span, outermost first.
+
+    Nested spans are included because a VLM frequently wraps the payload
+    (``{"result": {...}}``, ``{"data": {...}, "success": true}``). They are
+    offered after their parent so an unrelated envelope cannot shadow a payload
+    that does carry the expected keys.
+    """
+    spans: list[tuple[int, int]] = []
+    stack: list[tuple[str, int]] = []
     in_string = False
     quote_char = None
     escaped = False
@@ -170,26 +242,24 @@ def _iter_balanced_dict_strings(text: str):
             continue
 
         if char in "{[":
-            if start_idx is None and char == "{":
-                start_idx = idx
-            if start_idx is not None:
-                stack.append(char)
+            stack.append((char, idx))
             continue
 
         if char in "}]":
-            if start_idx is None or not stack:
+            if not stack:
                 continue
 
-            opener = stack[-1]
+            opener, start = stack[-1]
             if (opener, char) not in {("{", "}"), ("[", "]")}:
-                start_idx = None
                 stack.clear()
                 continue
 
             stack.pop()
-            if start_idx is not None and not stack:
-                yield text[start_idx : idx + 1]
-                start_idx = None
+            if opener == "{":
+                spans.append((start, idx + 1))
+
+    for start, end in sorted(spans):
+        yield text[start:end]
 
 
 def _repair_truncated_dict_candidate(text: str) -> Optional[str]:
@@ -240,7 +310,9 @@ def _repair_truncated_dict_candidate(text: str) -> Optional[str]:
         return None
 
     logger.debug("Attempting to repair truncated dictionary candidate")
-    return candidate + "".join(reversed(closers))
+    # A cut-off inside a string value needs its quote closed before the brackets,
+    # otherwise the appended closers land inside the unterminated literal.
+    return candidate + (quote_char if in_string else "") + "".join(reversed(closers))
 
 
 def _check_nesting_depth(text: str, max_depth: int) -> bool:

@@ -189,12 +189,14 @@ jobs:
           SIGNING_CERT_THUMBPRINT: ${{ secrets.SIGNING_CERT_THUMBPRINT }}
         run: ./build/package-windows.ps1 -Rid ${{ matrix.rid }} -AppVersion ${{ steps.ver.outputs.version }}
 
-      # Guarded, not fatal: linuxdeploy refuses to build an AppImage while the
-      # desktop file names an icon the repo does not ship, and Linux packaging is
-      # deliberately out of scope right now. The standalone Linux inference
-      # server is published regardless; the warning keeps the gap visible in the
-      # job summary instead of silently losing an installer nobody notices until
-      # a user asks for it.
+      # Guarded, not fatal: the AppImage leg has never completed (linuxdeploy
+      # needs the app icon that assets/icons/Icon.png now provides), and the fix
+      # has not yet been through a real Linux run. The standalone Linux
+      # inference server is published regardless; the warning keeps the gap
+      # visible in the job summary instead of silently losing an installer
+      # nobody notices until a user asks for it. Drop the guard once a dry run of
+      # a pushed commit prints "AppImage built" (a dispatch builds origin/main,
+      # so local changes prove nothing).
       - name: Package (Linux)
         if: matrix.pkg == 'sh' && matrix.rid == 'linux-x64'
         shell: bash
@@ -205,7 +207,7 @@ jobs:
           if ./build/package-linux.sh ${{ matrix.rid }} artifacts/${{ matrix.rid }}; then
             echo "AppImage built"
           else
-            echo "::warning title=Linux AppImage not built::package-linux.sh failed (linuxdeploy needs an app icon, which the repo does not ship). Publishing the standalone Linux inference server without an installer."
+            echo "::warning title=Linux AppImage not built::package-linux.sh failed on a leg that has never completed before (see docs/packaging.md). Publishing the standalone Linux inference server without an installer."
           fi
 
       - name: Package (macOS)
@@ -379,10 +381,9 @@ jobs:
             | Standalone CPU server | `synapic-inference-win-x64.exe` | `synapic-inference-osx-arm64` | `synapic-inference-linux-x64` |
             | Standalone NVIDIA/CUDA server | `synapic-inference-win-x64-cuda.exe.part1` + `.part2` | — | — |
 
-            There is no Linux installer yet: `linuxdeploy` requires an app icon,
-            which this repository does not ship, so the Linux AppImage step is
-            skipped. Linux users get the standalone inference server instead -
-            drop it next to an existing install.
+            There is no Linux installer yet: the AppImage step has not completed
+            (see `docs/packaging.md`). Linux users get the standalone inference
+            server instead - drop it next to an existing install.
 
             `SHA256SUMS.txt` covers every asset. The server is a single self-contained
             executable; put it next to the app and name it `synapic-inference.exe`

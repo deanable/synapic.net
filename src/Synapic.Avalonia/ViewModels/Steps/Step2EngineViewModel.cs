@@ -87,6 +87,7 @@ public partial class Step2EngineViewModel : ViewModelBase
         ProbabilityThreshold = engine.ProbabilityThreshold;
         ProbabilityCandidates = string.Join(", ", engine.ProbabilityCandidates);
         SystemPrompt = engine.SystemPrompt;
+        UserPrompt = engine.UserPrompt;
         EmbeddingRescueEnabled = engine.EmbeddingRescueEnabled;
         TagKeywords = engine.TagKeywords;
         TagCategories = engine.TagCategories;
@@ -113,9 +114,10 @@ public partial class Step2EngineViewModel : ViewModelBase
             ProbabilityModeIndex = ProbabilityModeStringToIndex(saved.ProbabilityMode);
             ProbabilityThreshold = (float)saved.ProbabilityThreshold;
 
-            // Probability candidates + system prompt.
+            // Probability candidates + system prompt + tag instruction.
             ProbabilityCandidates = string.Join(", ", saved.ProbabilityCandidates);
             SystemPrompt = saved.SystemPrompt;
+            UserPrompt = saved.UserPrompt;
             EmbeddingRescueEnabled = saved.EmbeddingRescueEnabled;
 
             // Tag-field checkboxes.
@@ -163,6 +165,7 @@ public partial class Step2EngineViewModel : ViewModelBase
                 engine.ProbabilityThreshold,
                 engine.ProbabilityCandidates,
                 engine.SystemPrompt,
+                engine.UserPrompt,
                 engine.EmbeddingRescueEnabled,
                 engine.TagKeywords,
                 engine.TagCategories,
@@ -212,6 +215,25 @@ public partial class Step2EngineViewModel : ViewModelBase
     [ObservableProperty]
     private string _systemPrompt = "";
 
+    /// <summary>
+    /// The tag instruction sent as /tag's <c>user_prompt</c>. Blank means "use
+    /// the sidecar's built-in instruction", so clearing the box is the way back
+    /// to a known-good prompt - the built-in one is what reliably yields JSON.
+    /// </summary>
+    [ObservableProperty]
+    private string _userPrompt = "";
+
+    /// <summary>Cached copy of the sidecar's instruction, fetched on demand.</summary>
+    [ObservableProperty]
+    private string _builtInUserPrompt = "";
+
+    /// <summary>Feedback for the prompt buttons ("custom instruction in use", errors).</summary>
+    [ObservableProperty]
+    private string? _promptMessage;
+
+    /// <summary>Drives the "you have replaced the built-in instruction" hint.</summary>
+    public bool HasCustomUserPrompt => !string.IsNullOrWhiteSpace(UserPrompt);
+
     [ObservableProperty]
     private bool _embeddingRescueEnabled;
 
@@ -244,6 +266,13 @@ public partial class Step2EngineViewModel : ViewModelBase
     }
     partial void OnProbabilityThresholdChanged(double value) => PushToSession();
     partial void OnSystemPromptChanged(string value) => PushToSession();
+    partial void OnUserPromptChanged(string value)
+    {
+        PushToSession();
+        OnPropertyChanged(nameof(HasCustomUserPrompt));
+    }
+
+
     partial void OnEmbeddingRescueEnabledChanged(bool value) => PushToSession();
 
     partial void OnProbabilityCandidatesChanged(string value)
@@ -263,10 +292,53 @@ public partial class Step2EngineViewModel : ViewModelBase
         engine.ProbabilityCandidates = ProbabilityCandidates
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         engine.SystemPrompt = SystemPrompt;
+        engine.UserPrompt = UserPrompt;
         engine.EmbeddingRescueEnabled = EmbeddingRescueEnabled;
         engine.TagKeywords = TagKeywords;
         engine.TagCategories = TagCategories;
         engine.TagDescription = TagDescription;
+    }
+
+    /// <summary>
+    /// Put the sidecar's built-in instruction into the editable box, so it can be
+    /// tweaked from the shipped wording instead of retyped. Fetches it on first
+    /// use; the sidecar owns the text, so the host never keeps its own copy.
+    /// </summary>
+    [RelayCommand]
+    private async Task UseBuiltInPromptAsync(CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(BuiltInUserPrompt))
+        {
+            try
+            {
+                var defaults = await _sidecar.GetPromptDefaultsAsync(ct);
+                BuiltInUserPrompt = defaults.DefaultUserPrompt;
+            }
+            catch (Exception e)
+            {
+                PromptMessage = $"Could not read the built-in instruction: {e.Message} (is the server running?)";
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(BuiltInUserPrompt))
+            {
+                // An empty reply means the sidecar did not answer as expected;
+                // filling the box with nothing would look like a reset.
+                PromptMessage = "The server returned no built-in instruction (is the server running?).";
+                return;
+            }
+        }
+
+        UserPrompt = BuiltInUserPrompt;
+        PromptMessage = "Loaded the built-in instruction - edit it as needed.";
+    }
+
+    /// <summary>Clear the box, i.e. go back to the sidecar's built-in instruction.</summary>
+    [RelayCommand]
+    private void ResetUserPrompt()
+    {
+        UserPrompt = "";
+        PromptMessage = "Using the built-in instruction.";
     }
 
     [RelayCommand]
@@ -326,4 +398,6 @@ public partial class Step2EngineViewModel : ViewModelBase
         if (LocalModels.Count == 0 && !IsLoadingModels)
             await RefreshModelsAsync(CancellationToken.None);
     }
+
+
 }

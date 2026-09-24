@@ -202,6 +202,8 @@ public partial class Step3ProcessViewModel : ViewModelBase
                 ProbabilityThreshold = engine.ProbabilityThreshold,
                 CandidateLabels = engine.ProbabilityCandidates.Length > 0 ? engine.ProbabilityCandidates : null,
                 SystemPrompt = string.IsNullOrEmpty(engine.SystemPrompt) ? null : engine.SystemPrompt,
+                // Blank => the sidecar's built-in tag instruction.
+                UserPrompt = string.IsNullOrWhiteSpace(engine.UserPrompt) ? null : engine.UserPrompt,
                 MaxNewTokens = 512,
             },
         };

@@ -93,7 +93,6 @@ public partial class MainWindowViewModel : ViewModelBase
                     {
                         ServerUrl = s.Datasource.DaminionUrl,
                         Username = s.Datasource.DaminionUser,
-                        CatalogId = s.Datasource.DaminionCatalogId,
                         Scope = s.Datasource.DaminionScope,
                         SearchTerm = s.Datasource.SearchTerm,
                         SavedSearchId = s.Datasource.SavedSearchId,
@@ -115,6 +114,7 @@ public partial class MainWindowViewModel : ViewModelBase
                     ProbabilityThreshold = s.Engine.ProbabilityThreshold,
                     ProbabilityCandidates = s.Engine.ProbabilityCandidates,
                     SystemPrompt = s.Engine.SystemPrompt,
+                    UserPrompt = s.Engine.UserPrompt,
                     EmbeddingRescueEnabled = s.Engine.EmbeddingRescueEnabled,
                 },
                 Processing = new ProcessingSettings
@@ -565,6 +565,18 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         _sidecar.LogReceived -= OnSidecarLog;
         _sidecar.LogReceived += OnSidecarLog;
+    }
+
+    /// <summary>
+    /// Stop feeding the UI log; called by the shell once its window is gone.
+    /// The UI sink is process-wide and Serilog keeps writing during shutdown,
+    /// so leaving this attached appends log lines to a collection whose control
+    /// no longer exists (the teardown-time layout crash).
+    /// </summary>
+    public void DetachUiLog()
+    {
+        SynapicLog.UiSink.Emitted -= OnUiLogEmitted;
+        _sidecar.LogReceived -= OnSidecarLog;
     }
 
     private void OnSidecarLog(string line)

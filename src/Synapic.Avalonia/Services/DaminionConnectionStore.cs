@@ -11,7 +11,6 @@ public sealed record DaminionConnectionParams(
     string ServerUrl,
     string Username,
     string Password,
-    string CatalogId,
 
     // Scope + search
     string DaminionScope,
@@ -53,7 +52,6 @@ public sealed class DaminionConnectionStore
     private const string UrlValue = "ServerUrl";
     private const string UserValue = "Username";
     private const string PassValue = "PasswordEncrypted";
-    private const string CatalogValue = "CatalogId";
 
     private const string ScopeValue = "DaminionScope";
     private const string SearchTermValue = "SearchTerm";
@@ -93,7 +91,6 @@ public sealed class DaminionConnectionStore
             if (string.IsNullOrEmpty(url)) return null;
 
             var user = key.GetValue(UserValue) as string ?? "";
-            var catalog = key.GetValue(CatalogValue) as string ?? "";
 
             string password = "";
             if (key.GetValue(PassValue) is byte[] blob && blob.Length > 0)
@@ -135,7 +132,7 @@ public sealed class DaminionConnectionStore
                 useThumbnailOverride = true;
 
             return new DaminionConnectionParams(
-                url, user, password, catalog,
+                url, user, password,
                 scope, searchTerm, savedSearchId, collectionId,
                 statusFilter, untaggedKeywords, untaggedCategories, untaggedDescription,
                 maxItems, resizeScale, useThumbnailOverride, processAll);
@@ -161,7 +158,8 @@ public sealed class DaminionConnectionStore
             using var key = Registry.CurrentUser.CreateSubKey(EffectiveKeyPath, writable: true);
             key.SetValue(UrlValue, params_.ServerUrl, RegistryValueKind.String);
             key.SetValue(UserValue, params_.Username, RegistryValueKind.String);
-            key.SetValue(CatalogValue, params_.CatalogId, RegistryValueKind.String);
+            // No catalog value is written: the catalog comes from the server URL.
+            // A "CatalogId" left behind by an older build is read by nobody.
 
             if (string.IsNullOrEmpty(params_.Password))
             {

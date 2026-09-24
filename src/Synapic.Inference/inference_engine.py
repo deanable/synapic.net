@@ -23,11 +23,75 @@ from tag_extractor import extract_tags_from_result  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
+# The user turn is the only place the reply format is specified, so it has to
+# be explicit. Measured against LFM2.5-VL-450M (greedy, 512 max_new_tokens,
+# 13 images - see build/check-tag-prompt.py): the previous one-sentence wording
+# produced **zero** strictly valid JSON replies. All 13 arrived wrapped in a
+# ```json fence and 3 of them used single-quoted keys, so ``tag_extractor`` had
+# to rescue every reply and anything the rescue could not repair was written
+# into Description as raw text. The wording below adds the three things that
+# fixed it: an explicit ban on fences and on text outside the object, an
+# explicit demand for double quotes, and a one-line example of the shape. Same
+# model, same images: 13/13 strictly valid JSON, mean reply length down from 78
+# to 52 tokens (more headroom under ``max_new_tokens``, so fewer truncated
+# payloads to repair).
+#
+# Keep the key names in sync with ``tag_extractor.VLM_FIELD_ALIASES``, and keep
+# the example's values generic: a plausible example gets copied verbatim.
 DEFAULT_VLM_USER_PROMPT = (
-    "Analyze the image and return a JSON object with keys: "
-    "'description' (detailed caption), 'category' (single broad category), "
-    "and 'keywords' (list of 5-10 tags). Return ONLY the raw JSON string."
+    "Describe this image and reply with exactly one JSON object - nothing "
+    "else, no markdown, no code fences, no text before or after it.\n"
+    "Use exactly these three keys, spelled exactly like this, and use double "
+    "quotes for every key and string value:\n"
+    '  "description": one or two sentences describing the image, written on a '
+    "single line with no line breaks and no quotation marks inside it;\n"
+    '  "category": one broad category as a single short string;\n'
+    '  "keywords": an array of 5 to 10 short tags.\n'
+    "Keep the whole reply under 120 words.\n"
+    'Shape: {"description": "words here", "category": "word", '
+    '"keywords": ["tag", "tag"]}'
 )
+
+
+def build_vlm_messages(
+    system_prompt: str, image: Any, user_text: str
+) -> List[Dict[str, Any]]:
+    """Build the chat messages for one VLM call.
+
+    ``user_text`` is the tag instruction for this call - normally
+    ``DEFAULT_VLM_USER_PROMPT``, or whatever the user replaced it with.
+
+    Every turn carries *content parts*, never a bare string - including the
+    system turn. transformers 5.1's image-text-to-text ``preprocess`` collects
+    the visuals by walking every message's content and reading ``["type"]`` off
+    each item, so a string content raises ``TypeError: string indices must be
+    integers, not 'str'`` from ``apply_chat_template`` before the model is even
+    called. Since a custom system prompt is user-editable in Step 2, that used to
+    fail **every** image of the run with HTTP 500 (reproduced on the shipped
+    default model; see ``build/check-tag-prompt.py`` variant ``S_with_system``).
+
+    The model's own chat template wants either shape (its ``parse_content``
+    helper handles a string or a list), so the list form costs nothing and is
+    the only one this pipeline accepts.
+    """
+    messages: List[Dict[str, Any]] = []
+    if system_prompt:
+        messages.append(
+            {
+                "role": "system",
+                "content": [{"type": "text", "text": system_prompt}],
+            }
+        )
+    messages.append(
+        {
+            "role": "user",
+            "content": [
+                {"type": "image", "image": image},
+                {"type": "text", "text": user_text},
+            ],
+        }
+    )
+    return messages
 
 
 def _generation_kwargs(model: Any, max_new_tokens: int) -> Dict[str, Any]:
@@ -46,17 +110,24 @@ def _generation_kwargs(model: Any, max_new_tokens: int) -> Dict[str, Any]:
     clone the pipeline's own config, pin ``max_new_tokens`` on it and clear
     ``max_length``. Generation then has a single source of truth and both
     warnings disappear (``max_new_tokens`` still wins, as before).
+
+    ``do_sample`` is pinned off as well. The shipped default model ships no
+    sampling flags, so this is already how it runs; pinning it means a future
+    model whose ``generation_config`` turns sampling on cannot make tag output
+    non-deterministic (and JSON compliance a lottery) without that being a
+    deliberate edit here.
     """
     base = getattr(model, "generation_config", None)
     if base is None:
         base = getattr(getattr(model, "model", None), "generation_config", None)
     if base is None:
         # Unknown pipeline shape: keep the explicit kwarg (pre-fix behavior).
-        return {"max_new_tokens": int(max_new_tokens)}
+        return {"max_new_tokens": int(max_new_tokens), "do_sample": False}
 
     generation_config = copy.deepcopy(base)
     generation_config.max_new_tokens = int(max_new_tokens)
     generation_config.max_length = None
+    generation_config.do_sample = False
     return {"generation_config": generation_config}
 
 
@@ -71,6 +142,7 @@ def run_inference(
     system_prompt: str = "",
     max_new_tokens: int = 512,
     embedding_rescue_enabled: bool = False,
+    user_prompt: str = "",
 ) -> Dict[str, Any]:
     """Run inference on one image and return a TagResponse-shaped dict.
 
@@ -78,6 +150,10 @@ def run_inference(
     first when the mode requests it; probability-only tagging derives tags
     from the score map; otherwise the model generates a result that
     ``extract_tags_from_result`` parses into category/keywords/description.
+
+    ``user_prompt`` replaces the built-in tag instruction for this call. It is
+    user-editable in Step 2, so a blank or whitespace-only value means "use the
+    built-in instruction" rather than "send no instruction at all".
     """
     started = time.monotonic()
 
@@ -163,28 +239,12 @@ def run_inference(
 
             if getattr(model, "task", "") == config.MODEL_TASK_IMAGE_TEXT_TO_TEXT:
                 # Modern image-text-to-text (Qwen2-VL, LFM2.5-VL, ...): chat-style messages
-                user_text = DEFAULT_VLM_USER_PROMPT
-                if system_prompt:
-                    messages = [
-                        {"role": "system", "content": system_prompt},
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "image", "image": img},
-                                {"type": "text", "text": user_text},
-                            ],
-                        },
-                    ]
-                else:
-                    messages = [
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "image", "image": img},
-                                {"type": "text", "text": user_text},
-                            ],
-                        }
-                    ]
+                instruction = user_prompt.strip() or DEFAULT_VLM_USER_PROMPT
+                if user_prompt.strip():
+                    logger.info(
+                        f"Using the custom tag instruction from settings ({len(instruction)} chars)"
+                    )
+                messages = build_vlm_messages(system_prompt, img, instruction)
                 try:
                     result = model(
                         text=messages,
@@ -231,6 +291,29 @@ def run_inference(
     category, keywords, description, probabilities = extract_tags_from_result(
         result, task, threshold=confidence_threshold
     )
+
+    # A custom instruction is the user's own wording, and a vague one makes the
+    # model drop a field while still returning valid JSON - so the reply parses
+    # and the field is silently empty (measured: asking for the three keys but
+    # not for "keywords as an array of 5-10 tags" returned no keywords). Say so
+    # in the log rather than leaving the user to wonder where their tags went.
+    if task == config.MODEL_TASK_IMAGE_TEXT_TO_TEXT and user_prompt.strip():
+        missing = [
+            name
+            for name, value in (
+                ("category", category),
+                ("keywords", keywords),
+                ("description", description),
+            )
+            if not value
+        ]
+        if missing:
+            logger.warning(
+                "The custom tag instruction returned no "
+                + "/".join(missing)
+                + " - check that it asks for those keys, or clear it to use the "
+                "built-in instruction"
+            )
 
     # Merge scored probabilities into the extraction output (scored map wins).
     if prob_dict:

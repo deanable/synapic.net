@@ -18,6 +18,10 @@ import config
 import model_loader
 import service
 
+# Captured at import, before the autouse `_no_grace` fixture below patches the
+# live attribute: the contract test still has to see what the sidecar ships.
+SHIPPED_GRACE_SECONDS = config.WARMUP_GRACE_SECONDS
+
 
 def _ready():
     """Put the shared loader state back to its idle shape."""
@@ -26,7 +30,11 @@ def _ready():
 
 @pytest.fixture(autouse=True)
 def _no_grace(monkeypatch):
-    """The readiness head start only exists for the real host; tests skip it."""
+    """The readiness head start only exists for the real host; tests skip it.
+
+    Only the live attribute is patched, so `SHIPPED_GRACE_SECONDS` above keeps
+    recording the default the sidecar actually ships with.
+    """
     monkeypatch.setattr(config, "WARMUP_GRACE_SECONDS", 0.0)
 
 
@@ -130,6 +138,6 @@ def test_env_defaults_match_the_documented_contract():
     # Warm-up must stay clear of the host's readiness poll, and the wait must
     # stay inside its 5-minute /tag timeout so the single retry still has room
     # if a load really does hang.
-    assert config.WARMUP_GRACE_SECONDS >= 1.0
+    assert SHIPPED_GRACE_SECONDS >= 1.0
     assert config.MODEL_LOAD_WAIT_SECONDS < 300
     assert config.MODEL_LOAD_WAIT_SECONDS >= 60

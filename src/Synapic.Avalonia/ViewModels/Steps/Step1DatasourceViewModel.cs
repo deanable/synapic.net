@@ -44,7 +44,6 @@ public partial class Step1DatasourceViewModel : ViewModelBase
             DaminionUrl = saved.ServerUrl;
             DaminionUser = saved.Username;
             DaminionPass = saved.Password;
-            DaminionCatalogId = saved.CatalogId;
 
             // Scope + search.
             ScopeIndex = ScopeStringToIndex(saved.DaminionScope);
@@ -83,7 +82,6 @@ public partial class Step1DatasourceViewModel : ViewModelBase
         if (!string.IsNullOrEmpty(saved.ServerUrl)) n++;
         if (!string.IsNullOrEmpty(saved.Username)) n++;
         if (!string.IsNullOrEmpty(saved.Password)) n++;
-        if (!string.IsNullOrEmpty(saved.CatalogId)) n++;
         if (saved.DaminionScope is not "all") n++;
         if (!string.IsNullOrEmpty(saved.SearchTerm)) n++;
         if (!string.IsNullOrEmpty(saved.SavedSearchId)) n++;
@@ -107,7 +105,6 @@ public partial class Step1DatasourceViewModel : ViewModelBase
         DaminionUrl = ds.DaminionUrl;
         DaminionUser = ds.DaminionUser;
         DaminionPass = ds.DaminionPass;
-        DaminionCatalogId = ds.DaminionCatalogId;
         _hydrating = true;
         ScopeIndex = ScopeStringToIndex(ds.DaminionScope);
         StatusFilterIndex = StatusStringToIndex(ds.StatusFilter);
@@ -148,9 +145,6 @@ public partial class Step1DatasourceViewModel : ViewModelBase
 
     [ObservableProperty]
     private string _daminionPass = "";
-
-    [ObservableProperty]
-    private string _daminionCatalogId = "";
 
     [ObservableProperty]
     private bool _isDaminionConnected;
@@ -219,7 +213,6 @@ public partial class Step1DatasourceViewModel : ViewModelBase
         _session.Datasource.DaminionPass = value;
         ConnectCommand.NotifyCanExecuteChanged();
     }
-    partial void OnDaminionCatalogIdChanged(string value) => _session.Datasource.DaminionCatalogId = value;
 
     // ── Scope (index-bound so the ComboBox actually selects) ────────────────
 
@@ -445,9 +438,7 @@ public partial class Step1DatasourceViewModel : ViewModelBase
         ConnectionMessage = null;
         try
         {
-            var client = new DaminionApiClient(
-                DaminionUrl, DaminionUser, DaminionPass,
-                string.IsNullOrWhiteSpace(DaminionCatalogId) ? null : DaminionCatalogId);
+            var client = new DaminionApiClient(DaminionUrl, DaminionUser, DaminionPass);
             await client.AuthenticateAsync(ct);
             ConnectedClient = client;
             IsDaminionConnected = true;
@@ -460,7 +451,7 @@ public partial class Step1DatasourceViewModel : ViewModelBase
             // them so re-hydration round-trips cleanly (the index helpers convert
             // on both paths).
             _connectionStore?.Save(new DaminionConnectionParams(
-                DaminionUrl, DaminionUser, DaminionPass, DaminionCatalogId,
+                DaminionUrl, DaminionUser, DaminionPass,
                 DaminionScope: Scope,
                 SearchTerm: SearchTerm,
                 SavedSearchId: SavedSearchId,
@@ -543,10 +534,10 @@ public partial class Step1DatasourceViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Reports which catalog the session actually landed on. The server cannot
-    /// enumerate catalogs, so this is a receipt for the catalog box: it shows
-    /// whether the entered id was honoured or the login defaulted to the
-    /// server's own catalog. Best effort - it never fails the connection.
+    /// Reports which catalog the session actually landed on. The catalog is
+    /// chosen by the server URL and Daminion cannot enumerate a server's
+    /// catalogs, so this names the one in use rather than offering a picklist.
+    /// Best effort - it never fails the connection.
     /// </summary>
     private async Task LoadActiveCatalogAsync(CancellationToken ct)
     {

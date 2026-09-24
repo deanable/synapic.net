@@ -50,6 +50,14 @@ public interface IInferenceSidecar : IAsyncDisposable
     Task<HealthResponse> GetHealthAsync(CancellationToken ct = default);
 
     /// <summary>
+    /// GET /prompt: the built-in tag instruction, so Step 2 can offer the shipped
+    /// wording as a starting point instead of keeping its own copy of it.
+    /// Defaulted (empty result) so the sidecar-only test fakes need no change.
+    /// </summary>
+    Task<PromptDefaultsDto> GetPromptDefaultsAsync(CancellationToken ct = default)
+        => Task.FromResult(new PromptDefaultsDto());
+
+    /// <summary>
     /// Non-null while the launched exe is older than the sidecar source (dev
     /// checkouts only), so the status bar can say the build is stale instead of
     /// that only showing up in the log. Defaulted so test fakes need no change.
@@ -651,6 +659,11 @@ public sealed class InferenceSidecarService : IInferenceSidecar
     public async Task<ModelInfo[]> ListModelsAsync(CancellationToken ct = default)
     {
         return await _api.ListModelsAsync(ct).ConfigureAwait(false);
+    }
+
+    public async Task<PromptDefaultsDto> GetPromptDefaultsAsync(CancellationToken ct = default)
+    {
+        return await _api.GetPromptDefaultsAsync(ct).ConfigureAwait(false);
     }
 
     public async Task DownloadModelAsync(string modelId, CancellationToken ct = default)

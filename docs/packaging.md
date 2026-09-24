@@ -135,16 +135,18 @@ file name, so a downloaded executable has to be renamed to
 `synapic-inference.exe` (`synapic-inference` on Linux/macOS) and placed next to
 the app.
 
-**Known gap — no Linux installer.** `package-linux.sh` fails at the last step:
-`ERROR: Could not find icon executable for Icon entry: synapic`. `linuxdeploy`
-requires an app icon and the repository ships no image assets at all, so the
-AppImage has never been produced (this was invisible until the first tag, since
-nothing had ever run `release.yml`). Linux packaging is intentionally out of
-scope for now, so the step is **guarded rather than fatal**: a failure emits a
-`::warning::` annotation naming the icon as the cause and the release continues,
-publishing `synapic-inference-linux-x64` without an installer. Fixing it means
-adding an icon (e.g. `build/synapic.png`) and passing it to `linuxdeploy`
-(`--icon-file`), then removing the guard.
+**Linux installer unverified.** The AppImage has never been produced: the first
+run died at the last step with `ERROR: Could not find icon executable for Icon
+entry: synapic`, because `linuxdeploy` requires an app icon and the repository
+shipped no image assets. `assets/icons/Icon.png` — a 256x256 PNG taken from the
+app icon — is now handed to `linuxdeploy` with `--icon-file`, and
+`package-linux.sh` fails fast when it is missing. No Linux dry run has exercised
+that yet, so the step stays **guarded rather than fatal**: a failure emits a
+`::warning::` annotation and the release continues, publishing
+`synapic-inference-linux-x64` without an installer. Drop the guard once a dry run
+reports `AppImage built` — and note that a dispatch builds the workflow as it
+exists on `origin/main`, so the icon fix has to be pushed before that run can
+prove anything.
 
 ### Validating the release path without a tag
 
@@ -194,7 +196,15 @@ Checklist:
       `%APPDATA%\Synapic` user data
 
 Caveat: the AppId string `{8A7C2C31-5E0D-4B21-9C4F-SYNAPICNET01}` is not a
-hex-valid GUID. Inno treats AppId as an opaque identifier, so this works —
-but it must **never change after the first public release**, or machines get
-two parallel installs with separate uninstall entries. Normalizing it to a
-real GUID is only safe before the first release.
+hex-valid GUID. Inno treats AppId as an opaque identifier, so this works — but it
+must **never change again**: v0.1.0 shipped with it, and a different value makes
+Windows install the two side by side with separate uninstall entries and no
+upgrade path. Normalizing it to a real GUID was only safe before that release,
+so it is no longer an option.
+
+`build/check-installer-appid.py` enforces that. `package-windows.ps1` runs it
+before ISCC and refuses to compile when `installer-windows.iss` disagrees with
+`build/installer-appid.txt` — the record of the AppId that has actually shipped.
+Changing the AppId deliberately therefore means editing that record in the same
+commit, which is what puts the decision in front of a reviewer, and it means
+telling users they have to uninstall the previous version first.

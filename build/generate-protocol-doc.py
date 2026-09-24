@@ -60,6 +60,7 @@ RESPONSE_DTOS = {
     ("get", "/models/list"): "ModelInfo",
     ("get", "/config"): "ConfigDto",
     ("put", "/config"): "ConfigDto",
+    ("get", "/prompt"): "PromptDefaultsDto",
     ("post", "/tag"): "TagResponse",
 }
 
@@ -83,6 +84,7 @@ ROUTE_DESCRIPTIONS = {
     ("get", "/models/list"): "Models present in the HF cache (`HF_HOME`).",
     ("post", "/models/download"): "Start a background model download.",
     ("post", "/tag"): "Run inference on one image and return its tags.",
+    ("get", "/prompt"): "The tag instruction built into this sidecar, which `/tag` uses when the request has no `user_prompt`.",
     ("get", "/config"): "Read the session inference config.",
     ("put", "/config"): "Update the session inference config (a changed `model_id` unloads the model).",
     ("post", "/shutdown"): "Graceful exit; the host also kills the process tree after a grace period.",

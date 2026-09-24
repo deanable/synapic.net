@@ -83,7 +83,6 @@ public sealed class DatasourceState
     public string DaminionUrl { get; set; } = "";
     public string DaminionUser { get; set; } = "";
     public string DaminionPass { get; set; } = "";
-    public string DaminionCatalogId { get; set; } = "";
     public string DaminionScope { get; set; } = "all";
 
     public string SearchTerm { get; set; } = "";
@@ -147,6 +146,14 @@ public sealed class EngineState
     public double ProbabilityThreshold { get; set; } = 0.5;
     public string[] ProbabilityCandidates { get; set; } = [];
     public string SystemPrompt { get; set; } = "";
+
+    /// <summary>
+    /// Custom tag instruction sent as /tag's <c>user_prompt</c>. Empty = use the
+    /// sidecar's built-in instruction, which is the default and the safe state to
+    /// return to: the built-in one is what asks for parseable JSON.
+    /// </summary>
+    public string UserPrompt { get; set; } = "";
+
     public bool EmbeddingRescueEnabled { get; set; }
 
     // Which returned fields to write (original Step 2 checkboxes). The LFM

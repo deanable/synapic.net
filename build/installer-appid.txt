@@ -1,0 +1,22 @@
+# The AppId that has actually shipped to users.
+#
+# Inno stores AppId in the uninstall log and compares it byte-for-byte before
+# appending to an existing install, and it names the Uninstall registry key
+# after it ("<AppId>_is1"). A different value therefore strands every existing
+# install: a second entry in Add/Remove Programs, the old version's files left
+# on disk, and no upgrade path. The installer still compiles cleanly, so nothing
+# else in the toolchain will stop it.
+#
+# build/check-installer-appid.py refuses to compile build/installer-windows.iss
+# unless its AppId agrees with the value below. Changing the AppId on purpose
+# means editing this file in the same commit, which is what makes the decision
+# visible in review, along with telling users what they have to do about it.
+#
+# Note the escaping: Inno writes a literal "{" as "{{", so the .iss spells this
+# value "{{8A7C2C31-...}" while the effective AppId - the value here - is
+# "{8A7C2C31-...}". Plain string, not a GUID: Inno does not require one, and
+# turning it into a GUID now would break the installs below.
+#
+# Shipped in v0.1.0, the first release to carry a Windows installer, and
+# unchanged since.
+{8A7C2C31-5E0D-4B21-9C4F-SYNAPICNET01}

@@ -6,6 +6,7 @@
         x:Class="Synapic.Avalonia.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="Synapic — AI Image Tagging"
+        Icon="/Assets/Icon.ico"
         Width="1280" Height="800"
         WindowStartupLocation="CenterScreen">
 

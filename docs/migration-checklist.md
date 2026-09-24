@@ -12,7 +12,7 @@ File-by-file porting map from the Python app
 | `src/core/image_processing.py` (extraction) | `src/Synapic.Inference/tag_extractor.py` | ✅ ported |
 | `src/core/keyword_scoring.py` | `src/Synapic.Inference/keyword_scoring.py` | ✅ ported verbatim |
 | `src/core/keyword_scoring_adapters.py` | `src/Synapic.Inference/model_loader.py` (scoring section) | ✅ merged |
-| `src/utils/json_utils.py` | `src/Synapic.Inference/json_utils.py` | ✅ ported verbatim |
+| `src/utils/json_utils.py` | `src/Synapic.Inference/json_utils.py` | ✅ ported, then hardened (enveloped payloads, key case, literal newlines, mid-string truncation, JSON-in-a-string — see `testing.md`) |
 | `src/core/config.py` (inference constants) | `src/Synapic.Inference/config.py` | ✅ ported (UI constants dropped) |
 | — (new thin wrapper) | `src/Synapic.Inference/service.py` | ✅ new FastAPI app |
 | `main.spec` | `src/Synapic.Inference/synapic-inference.spec` | ✅ adapted (deps trimmed) |
@@ -52,8 +52,8 @@ File-by-file porting map from the Python app
 
 - ✅ `dotnet build` clean (TreatWarningsAsErrors)
 - ✅ 6 contract tests (Synapic.Shared.Tests)
-- ✅ 119 C# service/model/view-model tests (Synapic.Avalonia.Tests)
-- ✅ 94 pytest sidecar tests incl. live FastAPI contract checks
+- ✅ 148 C# service/model/view-model tests (Synapic.Avalonia.Tests)
+- ✅ 189 pytest sidecar tests incl. live FastAPI contract checks
 
 See [`testing.md`](testing.md) for what each suite covers and which tests are
 environment-gated.

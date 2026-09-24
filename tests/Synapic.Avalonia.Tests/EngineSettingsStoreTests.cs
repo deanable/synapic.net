@@ -37,6 +37,7 @@ public class EngineSettingsStoreTests : IDisposable
             ProbabilityThreshold: 0.66,
             ProbabilityCandidates: new[] { "cat", "dog", "bird" },
             SystemPrompt: "You are a tagging engine.",
+            UserPrompt: "Give me JSON with description, category and keywords.",
             EmbeddingRescueEnabled: true,
             TagKeywords: true,
             TagCategories: false,
@@ -53,6 +54,7 @@ public class EngineSettingsStoreTests : IDisposable
         Assert.Equal(0.66, loaded.ProbabilityThreshold, 6);
         Assert.Equal(new[] { "cat", "dog", "bird" }, loaded.ProbabilityCandidates);
         Assert.Equal("You are a tagging engine.", loaded.SystemPrompt);
+        Assert.Equal("Give me JSON with description, category and keywords.", loaded.UserPrompt);
         Assert.True(loaded.EmbeddingRescueEnabled);
         Assert.True(loaded.TagKeywords);
         Assert.False(loaded.TagCategories);
@@ -83,6 +85,7 @@ public class EngineSettingsStoreTests : IDisposable
             ProbabilityThreshold: 0.5,
             ProbabilityCandidates: Array.Empty<string>(),
             SystemPrompt: "",
+            UserPrompt: "",
             EmbeddingRescueEnabled: false,
             TagKeywords: false,
             TagCategories: false,
@@ -117,6 +120,7 @@ public class EngineSettingsStoreTests : IDisposable
             ProbabilityThreshold: 0.7,
             ProbabilityCandidates: new[] { "x" },
             SystemPrompt: "prompt",
+            UserPrompt: "custom tag instruction",
             EmbeddingRescueEnabled: false,
             TagKeywords: true,
             TagCategories: true,
@@ -131,10 +135,38 @@ public class EngineSettingsStoreTests : IDisposable
         Assert.Equal(0.7, vm.ProbabilityThreshold, 6);
         Assert.Equal("x", vm.ProbabilityCandidates);
         Assert.Equal("prompt", vm.SystemPrompt);
+        Assert.Equal("custom tag instruction", vm.UserPrompt);
         Assert.False(vm.EmbeddingRescueEnabled);
         Assert.True(vm.TagKeywords);
         Assert.True(vm.TagCategories);
         Assert.False(vm.TagDescription);
+    }
+
+    [Fact]
+    public void Load_treats_a_missing_user_prompt_as_the_built_in_one()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+
+        // Anyone upgrading from a build without the editable tag instruction has
+        // no UserPrompt value at all: it must load as blank ("use the built-in
+        // instruction"), not crash and not invent a prompt.
+        _store.Save(new EngineSettingsParams(
+            ModelId: "some/model", Task: "image-text-to-text", Device: "cpu",
+            ConfidenceThreshold: 0.3, ProbabilityMode: "both",
+            ProbabilityThreshold: 0.5, ProbabilityCandidates: Array.Empty<string>(),
+            SystemPrompt: "", UserPrompt: "custom", EmbeddingRescueEnabled: false,
+            TagKeywords: true, TagCategories: true, TagDescription: true));
+
+        using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(_keyPath, writable: true))
+        {
+            Assert.NotNull(key);
+            key!.DeleteValue("UserPrompt");
+        }
+
+        var loaded = _store.Load();
+
+        Assert.NotNull(loaded);
+        Assert.Equal("", loaded.UserPrompt);
     }
 
     [Fact]
@@ -172,6 +204,7 @@ public class EngineSettingsStoreTests : IDisposable
         vm.ProbabilityThreshold = 0.8;
         vm.ProbabilityCandidates = "a, b , c";
         vm.SystemPrompt = "sys";
+        vm.UserPrompt = "instruction";
         vm.TagKeywords = false;
         vm.TagDescription = false;
         vm.TagCategories = true;
@@ -186,6 +219,7 @@ public class EngineSettingsStoreTests : IDisposable
         Assert.Equal("probability", loaded.ProbabilityMode);
         Assert.Equal(0.8, loaded.ProbabilityThreshold, 6);
         Assert.Equal(new[] { "a", "b", "c" }, loaded.ProbabilityCandidates);
+        Assert.Equal("instruction", loaded.UserPrompt);
         Assert.True(loaded.TagCategories);
         Assert.False(loaded.TagKeywords);
         Assert.False(loaded.TagDescription);
@@ -200,7 +234,7 @@ public class EngineSettingsStoreTests : IDisposable
             ModelId: "m", Task: "image-text-to-text", Device: "cpu",
             ConfidenceThreshold: 0.3, ProbabilityMode: "both",
             ProbabilityThreshold: 0.5, ProbabilityCandidates: Array.Empty<string>(),
-            SystemPrompt: "", EmbeddingRescueEnabled: false,
+            SystemPrompt: "", UserPrompt: "", EmbeddingRescueEnabled: false,
             TagKeywords: true, TagCategories: true, TagDescription: true));
         _store.Clear();
 

@@ -139,6 +139,20 @@ Models present in the HF cache (`HF_HOME`).
 | `path` | string | yes |
 | `downloaded` | boolean | no |
 
+### `GET /prompt`
+
+The tag instruction built into this sidecar, which `/tag` uses when the request has no `user_prompt`.
+
+**Responses**
+
+- `200` — The built-in tag instruction (PromptDefaultsDto): what /tag sends when the request has no user_prompt.
+
+**`200` body** — `PromptDefaultsDto` (C# `Synapic.Shared.Contracts.PromptDefaultsDto`)
+
+| field | type | optional |
+|-------|------|----------|
+| `default_user_prompt` | string | no |
+
 ### `POST /shutdown`
 
 Graceful exit; the host also kills the process tree after a grace period.
@@ -231,6 +245,12 @@ Wire shapes of every DTO used above (nested DTOs included).
 | `probability_mode` | string | yes |
 | `probability_threshold` | number | yes |
 
+### `PromptDefaultsDto`
+
+| field | type | optional |
+|-------|------|----------|
+| `default_user_prompt` | string | no |
+
 ### `TagResponse`
 
 | field | type | optional |
@@ -280,6 +300,7 @@ Wire shapes of every DTO used above (nested DTOs included).
 | `probability_threshold` | number | no |
 | `candidate_labels` | array of string | yes |
 | `system_prompt` | string | yes |
+| `user_prompt` | string | yes |
 | `max_new_tokens` | integer | no |
 
 ### `DownloadRequest`

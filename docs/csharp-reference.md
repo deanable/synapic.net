@@ -102,9 +102,11 @@ updates are marshalled to the UI thread.
   (`IsLocalSelected` / `IsDaminionSelected` — the getter-only booleans are not
   two-way bindable).
 - Local: `LocalPath`, `LocalRecursive`, folder browse.
-- Daminion: URL/user/password/catalog, `ConnectCommand` (re-evaluated as
-  fields change), `Disconnect`, `ConnectedClient`, `IsDaminionConnected`,
-  `ConnectionMessage`, `ActiveCatalog` (the catalog GUID the login landed on).
+- Daminion: URL/user/password, `ConnectCommand` (re-evaluated as fields
+  change), `Disconnect`, `ConnectedClient`, `IsDaminionConnected`,
+  `ConnectionMessage`, `ActiveCatalog` (the catalog GUID the login landed on —
+  the catalog is chosen by the server URL, so it is reported rather than
+  entered).
 - Scope: `ScopeIndex` → `all` / `search` / `collection` / `saved_search` with
   `SavedSearches` / `Collections` pickers loaded after connect (manual id
   entry always available as a fallback).

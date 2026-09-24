@@ -24,6 +24,13 @@
 #endif
 
 [Setup]
+; AppId is an identity, not a display string: Inno only appends to an existing
+; uninstall log when both AppIds match, and it names the Uninstall registry key
+; ({AppId}_is1). It does *not* have to be a GUID - Inno accepts any string and
+; defaults to AppName - so the hand-written value below is legal as-is. It also
+; shipped in v0.1.0, and changing it would strand that install: a second
+; Add/Remove Programs entry with no upgrade path. Leave it alone unless that is
+; genuinely the intent.
 AppId={{8A7C2C31-5E0D-4B21-9C4F-SYNAPICNET01}
 AppName={#AppName}
 AppVersion={#AppVersion}
@@ -31,6 +38,8 @@ AppPublisher={#AppPublisher}
 DefaultDirName={autopf}\{#AppName}
 DefaultGroupName={#AppName}
 UninstallDisplayIcon={app}\{#AppExe}
+; Paths in this script resolve relative to the script's own directory (build/).
+SetupIconFile=..\assets\icons\Icon.ico
 OutputDir={#ArtifactsDir}
 OutputBaseFilename=Synapic-Setup-{#Rid}
 Compression=lzma2/max

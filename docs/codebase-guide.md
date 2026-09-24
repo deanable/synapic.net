@@ -227,12 +227,43 @@ Notes:
 
 ## 8. Engine settings → prompt behaviour (practical notes)
 
-- For the VLM (`image-text-to-text`), the **only** way to steer the output is
-  the **system prompt** plus the fixed user instruction
-  (`inference_engine.DEFAULT_VLM_USER_PROMPT`) that asks for a JSON object with
-  `description`, `category`, and `keywords`. A system prompt must therefore
-  keep demanding raw JSON; the model's `category` is what lands in the file's
-  category/headline field (Title-Cased).
+- For the VLM (`image-text-to-text`), the output is steered by three things:
+  the **system prompt**, the **tag instruction** (both editable in Step 2), and
+  the shape the extractor can read. The model's `category` is what lands in the
+  file's category/headline field (Title-Cased).
+- The **tag instruction** is `/tag`'s `user_prompt`. Step 2 keeps it in the
+  `UserPrompt` field (session + registry + config file) and sends it only when
+  non-blank: **blank means "use the sidecar's built-in instruction"**, so
+  clearing the box is always a safe way back to a prompt that parses. The host
+  keeps no copy of the built-in text - "Use built-in instruction" loads it from
+  `GET /prompt` (the same value `/tag` falls back to, so the two cannot drift),
+  and "Reset to built-in" clears the box back to that default.
+- Because a hand-edited instruction can quietly cost you a field, the sidecar
+  logs a warning when a **custom** instruction comes back with an empty
+  description/category/keywords ("check that it asks for those keys"); measured,
+  asking for the three keys without specifying that keywords are an array of
+  5-10 tags returns valid JSON with no keywords at all. Warnings are visible in
+  the Step 3 log panel.
+- The built-in tag instruction is deliberately explicit rather than a one-liner: it
+  bans code fences and text outside the object, demands double quotes (the
+  model's own preference is Python-style single quotes), asks for a single-line
+  description (a literal newline inside a string is not valid JSON), and shows
+  the object shape. Measured on the default model, the one-sentence version it
+  replaced produced **zero** strictly valid JSON replies out of 13 — all fenced,
+  three single-quoted — so `tag_extractor` rescued every one and any rescue
+  failure wrote the raw payload into Description. The wording now shipped is
+  13/13. Treat it as load-bearing; `test_tag_prompt.py` guards it.
+- A **system prompt must not restate the format.** It is prepended, so asking
+  for a different shape (bare prose, a different key set, a markdown report)
+  fights the instruction above and is the one way to make the parser's job hard
+  again. Ask for tone, vocabulary, or locale instead.
+- The system turn is built by `inference_engine.build_vlm_messages` as content
+  **parts**, not a bare string. transformers 5.1's image-text-to-text
+  `preprocess` reads `["type"]` off every content part of every message, so a
+  string system content raised `TypeError: string indices must be integers`
+  before the model was called — a custom system prompt failed *every* image of a
+  run with HTTP 500. Measured with and without a system prompt: 13/13 valid JSON
+  replies either way (`build/check-tag-prompt.py`).
 - **Probability mode / candidate labels do not constrain a VLM.** The scoring
   ladder only runs for `image-classification` pipelines (tier 2, label
   confidence) or the CLIP embedding rescue (tier 2.5). For a VLM,

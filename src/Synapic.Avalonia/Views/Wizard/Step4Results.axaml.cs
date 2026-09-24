@@ -35,9 +35,11 @@ public partial class Step4Results : UserControl
     {
         if (_vm is null || _vm.Results.Count == 0) return;
         var last = _vm.Results[^1];
-        // Post so the row container exists before we ask the grid to reveal it.
+        // Post so the row container exists before we ask the grid to reveal it,
+        // and re-check on the way in: the grid is gone once the window closes.
         Dispatcher.UIThread.Post(() =>
         {
+            if (!ListAutoScroll.CanReveal(ResultsGrid, _vm.Results.Count)) return;
             if (ResultsGrid.Columns.Count > 0)
                 ResultsGrid.ScrollIntoView(last, ResultsGrid.Columns[0]);
         });

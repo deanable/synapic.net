@@ -23,6 +23,14 @@ exec "$HERE/usr/bin/Synapic" "$@"
 EOF
 chmod +x "$APP_DIR/AppRun"
 
+# linuxdeploy derives the installed icon name from the desktop file's Icon=
+# entry, so the PNG has to exist or the AppImage build refuses to run.
+ICON_FILE="$REPO_ROOT/assets/icons/Icon.png"
+if [[ ! -f "$ICON_FILE" ]]; then
+  echo "ERROR: app icon not found at $ICON_FILE" >&2
+  exit 1
+fi
+
 mkdir -p "$APP_DIR/usr/share/metainfo"
 cat > "$APP_DIR/synapic.desktop" <<'EOF'
 [Desktop Entry]
@@ -50,7 +58,8 @@ fi
 echo "Building AppImage"
 "$LINUXDEPLOY" --appdir "$APP_DIR" --output appimage "${GPG_SIGN[@]}" \
   --executable "$APP_DIR/usr/bin/Synapic" \
-  --desktop-file "$APP_DIR/synapic.desktop"
+  --desktop-file "$APP_DIR/synapic.desktop" \
+  --icon-file "$ICON_FILE"
 
 mv "$REPO_ROOT"/Synapic*.AppImage "$ARTIFACTS_DIR/" 2>/dev/null || true
 ls -lh "$ARTIFACTS_DIR"

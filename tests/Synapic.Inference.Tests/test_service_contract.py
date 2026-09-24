@@ -84,6 +84,22 @@ class TestConfig:
         assert resp.status_code == 422
 
 
+class TestPromptDefaults:
+    """GET /prompt: what Step 2 loads into the editable tag-instruction box."""
+
+    def test_returns_the_instruction_tag_actually_falls_back_to(self, client):
+        import inference_engine
+
+        resp = client.get("/prompt")
+        assert resp.status_code == 200
+        # Equality with the module constant is the whole point: the host must not
+        # keep its own copy of the built-in prompt, or the two drift apart.
+        assert resp.json()["default_user_prompt"] == inference_engine.DEFAULT_VLM_USER_PROMPT
+
+    def test_instruction_is_not_empty(self, client):
+        assert client.get("/prompt").json()["default_user_prompt"].strip()
+
+
 class TestTagValidation:
     def test_missing_image_404(self, client):
         resp = client.post("/tag", json={"image_path": "/nonexistent/image.jpg"})
@@ -93,9 +109,60 @@ class TestTagValidation:
         resp = client.post("/tag", json={"image_path": ""})
         assert resp.status_code == 422
 
+    def test_user_prompt_is_an_accepted_option(self, client):
+        # Rejected only for the missing image, i.e. the option itself is valid.
+        resp = client.post(
+            "/tag",
+            json={
+                "image_path": "/nonexistent/image.jpg",
+                "options": {"user_prompt": "Describe this image as JSON."},
+            },
+        )
+        assert resp.status_code == 404
+
+    def test_overlong_user_prompt_422(self, client):
+        # A runaway edit must not turn every request into a huge prompt.
+        resp = client.post(
+            "/tag",
+            json={
+                "image_path": "/nonexistent/image.jpg",
+                "options": {"user_prompt": "x" * 4001},
+            },
+        )
+        assert resp.status_code == 422
+
+    def test_blank_user_prompt_is_accepted_as_the_default(self, client):
+        # Blank is how the UI says "built-in instruction", not an error.
+        resp = client.post(
+            "/tag",
+            json={
+                "image_path": "/nonexistent/image.jpg",
+                "options": {"user_prompt": "   "},
+            },
+        )
+        assert resp.status_code == 404
+
 
 class TestShutdown:
-    def test_shutdown_returns_json(self, client):
+    def test_shutdown_returns_json(self, client, monkeypatch):
+        # The route schedules a hard process exit 0.5s later via
+        # service._delayed_exit -> os._exit(0). In-process that thread takes the
+        # whole interpreter down mid-run: pytest then exits 0 with no summary
+        # while everything after this point silently never runs. Stub the exit
+        # here; test_delayed_exit_hard_exits_the_process covers the real effect
+        # without killing the test run.
+        monkeypatch.setattr(service, "_delayed_exit", lambda: None)
+
         resp = client.post("/shutdown")
+
         assert resp.status_code == 200
         assert resp.json()["status"] == "shutting_down"
+
+    def test_delayed_exit_hard_exits_the_process(self, monkeypatch):
+        """What the route is actually for: os._exit(0) once the response flushed."""
+        exits = []
+        monkeypatch.setattr(service.os, "_exit", exits.append)
+
+        service._delayed_exit()
+
+        assert exits == [0]

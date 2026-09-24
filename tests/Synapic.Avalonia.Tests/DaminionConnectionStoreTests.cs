@@ -31,7 +31,7 @@ public class DaminionConnectionStoreTests : IDisposable
         if (!OperatingSystem.IsWindows()) return; // registry is Windows-only
 
         _store.Save(new DaminionConnectionParams(
-            "http://damserver.local/daminion", "admin", "s3cret!", "MyCatalog",
+            "http://damserver.local/daminion", "admin", "s3cret!",
             "all", "", "", "", "all", false, false, false, 100, 100, false));
 
         var loaded = _store.Load();
@@ -40,7 +40,6 @@ public class DaminionConnectionStoreTests : IDisposable
         Assert.Equal("http://damserver.local/daminion", loaded.ServerUrl);
         Assert.Equal("admin", loaded.Username);
         Assert.Equal("s3cret!", loaded.Password);
-        Assert.Equal("MyCatalog", loaded.CatalogId);
     }
 
     [Fact]
@@ -57,7 +56,7 @@ public class DaminionConnectionStoreTests : IDisposable
         if (!OperatingSystem.IsWindows()) return;
 
         _store.Save(new DaminionConnectionParams(
-            "http://damserver.local/daminion", "admin", "s3cret!", "",
+            "http://damserver.local/daminion", "admin", "s3cret!",
             "all", "", "", "", "all", false, false, false, 100, 100, false));
 
         // Read the raw registry value: it must be a non-empty binary blob and
@@ -76,7 +75,7 @@ public class DaminionConnectionStoreTests : IDisposable
         if (!OperatingSystem.IsWindows()) return;
 
         _store.Save(new DaminionConnectionParams(
-            "http://damserver.local/daminion", "admin", "s3cret!", "Cat",
+            "http://damserver.local/daminion", "admin", "s3cret!",
             "all", "", "", "", "all", false, false, false, 100, 100, false));
 
         // Corrupt the ciphertext (simulates another-user/moved-profile data).
@@ -92,7 +91,6 @@ public class DaminionConnectionStoreTests : IDisposable
         Assert.NotNull(loaded);
         Assert.Equal("http://damserver.local/daminion", loaded.ServerUrl);
         Assert.Equal("admin", loaded.Username);
-        Assert.Equal("Cat", loaded.CatalogId);
         Assert.Equal("", loaded.Password);
     }
 
@@ -102,10 +100,10 @@ public class DaminionConnectionStoreTests : IDisposable
         if (!OperatingSystem.IsWindows()) return;
 
         _store.Save(new DaminionConnectionParams(
-            "http://damserver.local/daminion", "admin", "s3cret!", "",
+            "http://damserver.local/daminion", "admin", "s3cret!",
             "all", "", "", "", "all", false, false, false, 100, 100, false));
         _store.Save(new DaminionConnectionParams(
-            "http://damserver.local/daminion", "admin", "", "",
+            "http://damserver.local/daminion", "admin", "",
             "all", "", "", "", "all", false, false, false, 100, 100, false));
 
         var loaded = _store.Load();
@@ -121,7 +119,7 @@ public class DaminionConnectionStoreTests : IDisposable
         if (!OperatingSystem.IsWindows()) return;
 
         _store.Save(new DaminionConnectionParams(
-            "http://damserver.local/daminion", "admin", "s3cret!", "",
+            "http://damserver.local/daminion", "admin", "s3cret!",
             "all", "", "", "", "all", false, false, false, 100, 100, false));
         _store.Clear();
 
@@ -140,7 +138,6 @@ public class DaminionConnectionStoreTests : IDisposable
             ServerUrl: "http://damserver.local/daminion",
             Username: "admin",
             Password: "s3cret!",
-            CatalogId: "MyCatalog",
             DaminionScope: "search",
             SearchTerm: "forest lake",
             SavedSearchId: "7",
@@ -159,7 +156,6 @@ public class DaminionConnectionStoreTests : IDisposable
         Assert.Equal("http://damserver.local/daminion", loaded.ServerUrl);
         Assert.Equal("admin", loaded.Username);
         Assert.Equal("s3cret!", loaded.Password);
-        Assert.Equal("MyCatalog", loaded.CatalogId);
         Assert.Equal("search", loaded.DaminionScope);
         Assert.Equal("forest lake", loaded.SearchTerm);
         Assert.Equal("7", loaded.SavedSearchId);
@@ -181,7 +177,7 @@ public class DaminionConnectionStoreTests : IDisposable
         // Only the connection params saved — scope/filter/limit fields should
         // fall back to the form defaults (all / "" / all / 100 / 100 / false).
         _store.Save(new DaminionConnectionParams(
-            "http://x", "u", "p", "Cat",
+            "http://x", "u", "p",
             "all", "", "", "", "all", false, false, false, 100, 100, false));
 
         var loaded = _store.Load();
@@ -209,7 +205,6 @@ public class DaminionConnectionStoreTests : IDisposable
             ServerUrl: "http://damserver.local/daminion",
             Username: "admin",
             Password: "s3cret!",
-            CatalogId: "Cat42",
             DaminionScope: "search",
             SearchTerm: "forest lake",
             SavedSearchId: "7",
@@ -227,7 +222,6 @@ public class DaminionConnectionStoreTests : IDisposable
         Assert.Equal("http://damserver.local/daminion", vm.DaminionUrl);
         Assert.Equal("admin", vm.DaminionUser);
         Assert.Equal("s3cret!", vm.DaminionPass);
-        Assert.Equal("Cat42", vm.DaminionCatalogId);
         Assert.Equal(1, vm.ScopeIndex); // "search"
         Assert.Equal("forest lake", vm.SearchTerm);
         Assert.Equal("7", vm.SavedSearchId);
@@ -249,7 +243,7 @@ public class DaminionConnectionStoreTests : IDisposable
         // Hydration passes every field through, including non-default ScopeIndex /
         // StatusFilterIndex values (they round-trip via the string form).
         _store.Save(new DaminionConnectionParams(
-            ServerUrl: "http://x", Username: "u", Password: "p", CatalogId: "C",
+            ServerUrl: "http://x", Username: "u", Password: "p",
             DaminionScope: "saved_search", SearchTerm: "", SavedSearchId: "3",
             CollectionId: "", StatusFilter: "unassigned",
             UntaggedKeywords: true, UntaggedCategories: true,
@@ -277,7 +271,6 @@ public class DaminionConnectionStoreTests : IDisposable
         Assert.Equal("", vm.DaminionUrl);
         Assert.Equal("", vm.DaminionUser);
         Assert.Equal("", vm.DaminionPass);
-        Assert.Equal("", vm.DaminionCatalogId);
         Assert.Equal(0, vm.ScopeIndex);
         Assert.Equal("", vm.SearchTerm);
         Assert.Equal("", vm.SavedSearchId);

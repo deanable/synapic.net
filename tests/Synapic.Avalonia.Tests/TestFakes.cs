@@ -41,6 +41,18 @@ internal sealed class FakeSidecar : IInferenceSidecar
     public Task<HealthResponse> GetHealthAsync(CancellationToken ct = default)
         => Task.FromResult(new HealthResponse());
 
+    /// <summary>Stand-in for the sidecar's built-in instruction.</summary>
+    public string PromptDefaults { get; set; } = "BUILT-IN INSTRUCTION";
+
+    /// <summary>How often the built-in instruction was requested (caching check).</summary>
+    public int PromptFetchCount { get; private set; }
+
+    public Task<PromptDefaultsDto> GetPromptDefaultsAsync(CancellationToken ct = default)
+    {
+        PromptFetchCount++;
+        return Task.FromResult(new PromptDefaultsDto { DefaultUserPrompt = PromptDefaults });
+    }
+
     public void RaiseStatus(SidecarStatus status, string? message = null)
     {
         CurrentStatus = status;

@@ -24,6 +24,7 @@ namespace Synapic.Shared;
 [JsonSerializable(typeof(ScoringResult))]
 [JsonSerializable(typeof(ScoredKeyword))]
 [JsonSerializable(typeof(ConfigDto))]
+[JsonSerializable(typeof(PromptDefaultsDto))]
 [JsonSerializable(typeof(Dictionary<string, double>))]
 [JsonSerializable(typeof(Dictionary<string, object>))]
 [JsonSerializable(typeof(JsonElement))]

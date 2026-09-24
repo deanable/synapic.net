@@ -81,6 +81,18 @@ public sealed class InferenceApiClient
         throw new InferenceApiException((int)resp.StatusCode, detail);
     }
 
+    /// <summary>
+    /// The sidecar's built-in tag instruction, so Step 2 can seed the editable
+    /// box with the shipped wording instead of shipping a copy of it.
+    /// </summary>
+    public async Task<PromptDefaultsDto> GetPromptDefaultsAsync(CancellationToken ct = default)
+    {
+        using var resp = await _http.GetAsync("prompt", ct).ConfigureAwait(false);
+        resp.EnsureSuccessStatusCode();
+        var prompt = await resp.Content.ReadFromJsonAsync(SynapicJsonContext.Default.PromptDefaultsDto, ct).ConfigureAwait(false);
+        return prompt ?? new PromptDefaultsDto();
+    }
+
     public async Task<ConfigDto> GetConfigAsync(CancellationToken ct = default)
     {
         using var resp = await _http.GetAsync("config", ct).ConfigureAwait(false);

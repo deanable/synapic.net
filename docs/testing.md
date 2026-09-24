@@ -25,10 +25,13 @@ python -m pytest tests/Synapic.Inference.Tests -q
 | `WizardNavigationTests` | Forward/back navigation, validation errors, step-entry side effects. |
 | `Step1DatasourceTests` | `ConnectCommand` enablement and `CanExecuteChanged` notifications as credentials change. |
 | `Step2EngineTests` | Engine view-model state → session propagation. |
+| `TagInstructionTests` | The editable tag instruction: blank means "the sidecar's built-in prompt" and stays null on the wire, "Use built-in instruction" loads the sidecar's own text (once, cached) and never overwrites the box with an empty answer, reset clears back to the default, and the value round-trips through the registry. |
+| `Step2PromptBindingTests` | The Step 2 prompt editor through real compiled XAML: the box two-way binds to `UserPrompt` and both buttons carry their commands (a mistyped Avalonia binding is otherwise silent). |
 | `ProcessingEtaTests` | ETA math (`EstimateProgress`, `ProcessingOrchestrator.EstimateProgress`) and `ProcessAll` propagation from Step 1 into the selection. |
 | `TagFieldSelectionTests` | Which returned fields are written, per `TagFieldSelection` permutation, through a fake sidecar + capturing metadata writer. |
 | `PauseTests` | Pause/resume semantics (running items finish, queued items wait) and cancellation wins. |
 | `MainWindowPopulationTests` | Main-window/shell population and server-detection wiring. |
+| `ListAutoScrollTests` | Teardown safety: the view model stops feeding the UI log once the shell detaches it, and a list that is not attached is never scrolled (the "Invalid Arrange rectangle" crash on close). |
 | `ServerDetectionTests` | `MainWindowViewModel.DetectServerAsync`, buildable RIDs, the variant panel, and `/health` download-status application (`ApplyDownloadStatus`). |
 | `SidecarBuildProgressTrackerTests` | Raw build-output → stage/percent mapping. |
 | `DedupServiceTests` + `DedupTestHarness` | pHash/dHash/aHash grouping and thresholds on generated images. |
@@ -79,11 +82,13 @@ resets the download registry between tests.
 
 | File | What it pins down |
 |------|-------------------|
-| `test_service_contract.py` | Served routes via `TestClient`: `/health` shape and status, `/models/list`, `/config` GET/PUT (incl. model-switch unload), `/tag` validation (422/404), `/shutdown`. |
+| `test_service_contract.py` | Served routes via `TestClient`: `/health` shape and status, `/models/list`, `/config` GET/PUT (incl. model-switch unload), `/prompt` returning exactly the instruction `/tag` falls back to, `/tag` validation (422/404, incl. that `user_prompt` is accepted, that whitespace means "built-in", and that an over-long instruction is rejected), `/shutdown`. |
 | `test_model_loader.py` | Compatibility rules, task suggestion, fuzzy label matching, cache heuristics, state/download-progress, and concurrent model loads (the build lock). |
 | `test_keyword_scoring.py` | Softmax constructions, sum-to-one invariant, thresholding, and the `ScoreResult` contract. |
-| `test_tag_extractor.py` | `json_utils` extraction/repair, Title Case, and extraction for classification / zero-shot / image-to-text, including limits and de-duplication. |
-| `test_inference_engine.py` | `_generation_kwargs`: clears the conflicting `max_length`, does not mutate the pipeline's config, and falls back for unknown pipeline shapes (the transformers-warning fix). |
+| `test_tag_extractor.py` | `json_utils` extraction/repair — including the payload shapes a small VLM gets wrong (envelopes, capitalised or synonymous keys, a literal newline in a string, truncation inside a string or array, JSON delivered as a string) and the unrecognised payload that is deliberately left as raw text — plus Title Case and extraction for classification / zero-shot / image-to-text, including limits and de-duplication. |
+| `test_inference_engine.py` | The VLM message shape from `build_vlm_messages` (every turn carries content *parts* — a bare-string system turn raises `TypeError: string indices must be integers` inside transformers 5.1 and failed every image of a run) plus an end-to-end `run_inference` through a fake pipeline with and without a system prompt; and `_generation_kwargs`: clears the conflicting `max_length`, pins greedy decoding, does not mutate the pipeline's config, and falls back for unknown pipeline shapes (the transformers-warning fix). |
+| `test_tag_prompt.py` | `DEFAULT_VLM_USER_PROMPT` names every key `tag_extractor` reads, bans code fences and surrounding text, demands double quotes, asks for a single-line description, and shows the object shape. These are format guards, not prose review: the wording they pin took measured strict-JSON compliance from 0/13 to 13/13 (harness in `build/check-tag-prompt.py`), so dropping one sends every reply back through the rescue path. |
+| `test_check_installer_appid.py` | The Windows installer's AppId guard in `build/check-installer-appid.py`: Inno's `{{` escaping, comment and section handling, duplicate/constant/absent directives, and the refusal when the script disagrees with `build/installer-appid.txt` — including that the repository's own two files agree. |
 | `test_check_sidecar_variant.py` | The CPU/CUDA payload rules in `build/check-sidecar-variant.py`: a CPU bundle must contain no CUDA runtime binaries (but torch's CUDA *python* modules are not leaks), a CUDA bundle must contain `torch_cuda.dll` plus cudart/cublas/cudnn, and optional extras may be absent. Runs without torch or PyInstaller installed. |
 | `test_warmup.py` | Cold start: `_wait_for_model_ready` returns at once when idle, blocks until an in-flight load finishes, times out into a 503; `_warm_up_model` skips itself when disabled or when the weights are absent, never leaks an `error` status on failure (the host treats that as fatal), and reports the model when it succeeds. |
 | `test_protocol_doc.py` | `build/generate-protocol-doc.py --check`: the committed `sidecar-protocol.md` matches the live OpenAPI schema + the C# DTOs, so the contract doc cannot drift. |
@@ -130,6 +135,15 @@ PRs use a path filter (`src/**`, `tests/**`, `build/**`, workflows, solution,
 version=0.0.0-dryrun`), which builds and smoke-tests everything while skipping
 the publish job. Nothing in this document's suites covers it — treat a release
 change as untested until a dry run is green.
+
+### Measurement tools (not run in CI)
+
+Some behaviour can only be measured against the real model, so it is measured
+by hand and then pinned by a unit test that runs in CI:
+
+| Tool | What it measures |
+|------|------------------|
+| `build/check-tag-prompt.py` | Strict-JSON compliance of the tag prompt on the default model, per prompt variant (`AB_VARIANTS`/`AB_IMAGES` filter a run). The numbers it produces are quoted in `inference_engine.DEFAULT_VLM_USER_PROMPT`'s comment and guarded by `test_tag_prompt.py`. |
 
 ## Conventions when adding tests
 

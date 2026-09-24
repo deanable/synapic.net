@@ -48,7 +48,6 @@ public sealed class DaminionSettings
     public string ServerUrl { get; set; } = "";
     public string Username { get; set; } = "";
     // Password is intentionally NOT persisted in plain config (entered per session).
-    public string CatalogId { get; set; } = "";
     public string Scope { get; set; } = "all";
     public string SavedSearchId { get; set; } = "";
     public string CollectionId { get; set; } = "";
@@ -70,6 +69,14 @@ public sealed class EngineSettings
     public double ProbabilityThreshold { get; set; } = 0.5;
     public string[] ProbabilityCandidates { get; set; } = Array.Empty<string>();
     public string SystemPrompt { get; set; } = "";
+
+    /// <summary>
+    /// Custom tag instruction. Empty means the sidecar's built-in instruction,
+    /// which is why a blank value is the safe thing to persist rather than a copy
+    /// of the built-in wording that would freeze at today's version of it.
+    /// </summary>
+    public string UserPrompt { get; set; } = "";
+
     public bool EmbeddingRescueEnabled { get; set; }
 }
 

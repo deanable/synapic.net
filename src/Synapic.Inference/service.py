@@ -8,6 +8,7 @@ Entry point for PyInstaller (spec §4). Implements the HTTP contract from
 - ``POST /models/download`` → DownloadRequest (202 if already downloading)
 - ``POST /tag``             → TagRequest → TagResponse
 - ``GET/PUT /config``       → inference ConfigDto
+- ``GET  /prompt``          → the built-in tag instruction (PromptDefaultsDto)
 - ``POST /shutdown``        → graceful exit
 
 Port-file protocol (spec §2): launched with ``--port=0``, the OS assigns a
@@ -66,6 +67,10 @@ class TagOptionsModel(BaseModel):
     probability_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
     candidate_labels: list[str] | None = None
     system_prompt: str | None = None
+    # The tag instruction. Editable in Step 2; absent/blank means the sidecar's
+    # own DEFAULT_VLM_USER_PROMPT. Bounded so a runaway edit cannot turn every
+    # request into a huge prompt (the model's context is finite).
+    user_prompt: str | None = Field(default=None, max_length=4000)
     max_new_tokens: int = Field(default=512, ge=1, le=4096)
 
 
@@ -110,7 +115,6 @@ _config_lock = threading.Lock()
 
 _download_threads: dict[str, threading.Thread] = {}
 _download_lock = threading.Lock()
-_shutdown_event = threading.Event()
 
 _uvicorn_server: uvicorn.Server | None = None
 
@@ -403,6 +407,7 @@ def tag(body: TagRequestModel) -> dict:
             candidate_labels=options.candidate_labels,
             system_prompt=options.system_prompt or "",
             max_new_tokens=options.max_new_tokens,
+            user_prompt=options.user_prompt or "",
         )
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
@@ -411,6 +416,28 @@ def tag(body: TagRequestModel) -> dict:
         raise HTTPException(status_code=500, detail=f"Inference failed: {e}") from e
 
     return response
+
+
+@app.get(
+    "/prompt",
+    responses={
+        200: {
+            "description": (
+                "The built-in tag instruction (PromptDefaultsDto): what /tag sends "
+                "when the request has no user_prompt."
+            )
+        }
+    },
+)
+def get_prompt_defaults() -> dict:
+    """Hand the host the exact instruction built into this sidecar.
+
+    Step 2 loads it into the editable box so a user can tweak the shipped
+    wording instead of retyping it, and so the box can always show what a blank
+    field actually means. The sidecar stays the single source of truth - a copy
+    in the host would silently drift the moment the built-in prompt changes.
+    """
+    return {"default_user_prompt": inference_engine.DEFAULT_VLM_USER_PROMPT}
 
 
 @app.get(
@@ -449,7 +476,8 @@ def put_config(body: ConfigModel) -> dict:
     },
 )
 def shutdown() -> dict:
-    _shutdown_event.set()
+    # Scheduling the exit is the whole job: nothing waits on a flag, and the hard
+    # os._exit() below is what actually stops the server.
     threading.Thread(target=_delayed_exit, name="shutdown", daemon=True).start()
     return {"status": "shutting_down"}
 

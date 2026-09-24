@@ -26,6 +26,25 @@ if (-not $iscc) {
 }
 if (-not $iscc) { throw "Inno Setup 6 (ISCC.exe) not found - install from https://jrsoftware.org/isinfo.php" }
 
+# AppId is the uninstall identity, so changing it makes Windows treat this build
+# as a different application: a second Add/Remove Programs entry, the previous
+# version's files left on disk, and no upgrade path. Refuse to compile unless the
+# script agrees with the AppId that has actually shipped - see
+# build/check-installer-appid.py and build/installer-appid.txt.
+$guardPython = Join-Path $PSScriptRoot "_python/$Rid/python/python.exe"
+if (-not (Test-Path $guardPython)) {
+    $onPath = Get-Command python -ErrorAction SilentlyContinue
+    if (-not $onPath) { $onPath = Get-Command py -ErrorAction SilentlyContinue }
+    if (-not $onPath) {
+        throw "Python is required to run the AppId guard - run build/fetch-python.ps1 -Rid $Rid first"
+    }
+    $guardPython = $onPath.Source
+}
+& $guardPython (Join-Path $PSScriptRoot "check-installer-appid.py")
+if ($LASTEXITCODE -ne 0) {
+    throw "Refusing to build: build/installer-windows.iss no longer matches the shipped AppId."
+}
+
 # Stage the .NET 10 Desktop Runtime installer next to the payload so the Inno
 # setup bundles it as an offline prerequisite. The app is published
 # framework-dependent on Windows to keep the bundle small; when this file is
