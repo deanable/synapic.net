@@ -1,16 +1,12 @@
 # Synapic .NET Migration Specification
 
-# \## Avalonia UI + Python Sidecar (PyInstaller) Architecture
-
-
-
-
+## Avalonia UI + Python Sidecar (PyInstaller) Architecture
 
 This is a port from https://github.com/deanable/Synapic Located at C:\\Users\\deank\\repos\\Synapic
 
 # 
 
-# \*\*Version:\*\* 1.0  
+*Version:* 1.0  
 
 # \*\*Target:\*\* Cross-platform (Windows, Linux, macOS)  
 
