@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Synapic.Avalonia.Models;
 using Synapic.Avalonia.Services;
+using Synapic.Avalonia.Services.Processing;
 using Synapic.Shared.Contracts;
 
 namespace Synapic.Avalonia.ViewModels.Steps;
@@ -153,6 +154,28 @@ public partial class Step2EngineViewModel : ViewModelBase
     /// <summary>Drives the "select at least one" hint; at least one must stay checked to proceed.</summary>
     public bool HasNoTagFieldSelected => !(TagKeywords || TagCategories || TagDescription);
 
+    /// <summary>
+    /// True when a run would drop one of the three fields the model returns.
+    /// The checkboxes are the only thing that decides this, and the write step
+    /// honours it silently, so it is called out on screen: otherwise a partial
+    /// selection is invisible until nothing but keywords turns up in Daminion.
+    /// </summary>
+    public bool HasPartialTagFieldSelection =>
+        !HasNoTagFieldSelected && !(TagKeywords && TagCategories && TagDescription);
+
+    /// <summary>
+    /// The fields a run will write, in words ("keywords only"). The multimodal
+    /// instruction always asks for all three, so this describes the write step
+    /// and not what the model produced.
+    /// </summary>
+    public string TagFieldSummary =>
+        new TagFieldSelection(TagCategories, TagKeywords, TagDescription).Summary;
+
+    /// <summary>On-screen warning for a partial selection.</summary>
+    public string TagFieldWarning =>
+        $"Writing {TagFieldSummary} — the model still returns all three fields. "
+        + "Tick the other boxes to tag those too.";
+
     /// <summary>Persist the current Step 2 settings to the registry (called on step exit).</summary>
     public void SaveToStore()
     {
@@ -188,19 +211,28 @@ public partial class Step2EngineViewModel : ViewModelBase
     partial void OnTagKeywordsChanged(bool value)
     {
         PushToSession();
-        OnPropertyChanged(nameof(HasNoTagFieldSelected));
+        NotifyTagFieldSelectionChanged();
     }
 
     partial void OnTagCategoriesChanged(bool value)
     {
         PushToSession();
-        OnPropertyChanged(nameof(HasNoTagFieldSelected));
+        NotifyTagFieldSelectionChanged();
     }
 
     partial void OnTagDescriptionChanged(bool value)
     {
         PushToSession();
+        NotifyTagFieldSelectionChanged();
+    }
+
+    /// <summary>Refresh every hint that describes the current field selection.</summary>
+    private void NotifyTagFieldSelectionChanged()
+    {
         OnPropertyChanged(nameof(HasNoTagFieldSelected));
+        OnPropertyChanged(nameof(HasPartialTagFieldSelection));
+        OnPropertyChanged(nameof(TagFieldSummary));
+        OnPropertyChanged(nameof(TagFieldWarning));
     }
 
     // ── Local engine (the only engine) ──────────────────────────────────────
@@ -368,29 +400,6 @@ public partial class Step2EngineViewModel : ViewModelBase
         PromptMessage = "Using the built-in instruction.";
     }
 
-    [RelayCommand]
-    private async Task RefreshModelsAsync(CancellationToken ct)
-    {
-        IsLoadingModels = true;
-        ModelsMessage = null;
-        try
-        {
-            var models = await _sidecar.ListModelsAsync(ct);
-            LocalModels.Clear();
-            foreach (var m in models.OrderByDescending(m => m.Downloaded).ThenBy(m => m.Id))
-                LocalModels.Add(m);
-            ModelsMessage = $"{LocalModels.Count} local models found";
-        }
-        catch (Exception e)
-        {
-            ModelsMessage = $"Could not list models: {e.Message} (is the server running?)";
-        }
-        finally
-        {
-            IsLoadingModels = false;
-        }
-    }
-
     // ── System-prompt presets (the combobox history) ─────────────────────────
 
     /// <summary>
@@ -511,6 +520,29 @@ public partial class Step2EngineViewModel : ViewModelBase
             SelectedSystemPromptPreset = null;
 
         SystemPromptMessage = $"Removed the system-prompt preset \"{value}\".";
+    }
+
+    [RelayCommand]
+    private async Task RefreshModelsAsync(CancellationToken ct)
+    {
+        IsLoadingModels = true;
+        ModelsMessage = null;
+        try
+        {
+            var models = await _sidecar.ListModelsAsync(ct);
+            LocalModels.Clear();
+            foreach (var m in models.OrderByDescending(m => m.Downloaded).ThenBy(m => m.Id))
+                LocalModels.Add(m);
+            ModelsMessage = $"{LocalModels.Count} local models found";
+        }
+        catch (Exception e)
+        {
+            ModelsMessage = $"Could not list models: {e.Message} (is the server running?)";
+        }
+        finally
+        {
+            IsLoadingModels = false;
+        }
     }
 
     [RelayCommand]

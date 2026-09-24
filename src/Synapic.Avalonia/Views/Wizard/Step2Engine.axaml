@@ -42,13 +42,18 @@
            three, so this selects the permutation that gets written. -->
       <StackPanel Orientation="Horizontal" Spacing="16">
         <TextBlock Text="Tag fields:" VerticalAlignment="Center" />
-        <CheckBox Content="Keywords" IsChecked="{Binding TagKeywords}" />
-        <CheckBox Content="Categories" IsChecked="{Binding TagCategories}" />
-        <CheckBox Content="Description" IsChecked="{Binding TagDescription}" />
+        <CheckBox x:Name="TagKeywordsBox" Content="Keywords" IsChecked="{Binding TagKeywords}" />
+        <CheckBox x:Name="TagCategoriesBox" Content="Categories" IsChecked="{Binding TagCategories}" />
+        <CheckBox x:Name="TagDescriptionBox" Content="Description" IsChecked="{Binding TagDescription}" />
         <TextBlock Text="Select at least one field to continue"
                    IsVisible="{Binding HasNoTagFieldSelected}"
                    Foreground="Red" VerticalAlignment="Center" />
       </StackPanel>
+      <!-- A partial selection only shows up in Daminion as missing fields, so
+           spell out what this run will write while it can still be changed. -->
+      <TextBlock x:Name="TagFieldWarningText" TextWrapping="Wrap" Foreground="DarkOrange"
+                 IsVisible="{Binding HasPartialTagFieldSelection}"
+                 Text="{Binding TagFieldWarning}" />
 
       <StackPanel Orientation="Horizontal" Spacing="16">
         <TextBlock Text="Confidence threshold:" VerticalAlignment="Center" />

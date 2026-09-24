@@ -166,6 +166,13 @@ public sealed class EngineState
     /// <summary>A batch is only meaningful when at least one field will be tagged.</summary>
     public bool HasSelectedTagField => TagKeywords || TagCategories || TagDescription;
 
+    /// <summary>
+    /// True when a run would drop one of the three fields the model returns. The
+    /// write step honours this silently, so it is worth saying out loud.
+    /// </summary>
+    public bool HasPartialTagFieldSelection =>
+        HasSelectedTagField && !ToTagFieldSelection().IsAll;
+
     public TagFieldSelection ToTagFieldSelection() =>
         new(TagCategories, TagKeywords, TagDescription);
 }

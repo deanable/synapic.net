@@ -281,7 +281,11 @@ Notes:
 - `Confidence threshold` applies to classification/zero-shot extraction, not to
   the VLM's category.
 - **Which fields get written** is chosen by the Step 2 "Tag fields"
-  checkboxes (`TagFieldSelection`); the model always returns all three.
+  checkboxes (`TagFieldSelection`, persisted to the registry and re-hydrated on
+  startup); the model always returns all three. The write step drops the
+  unticked fields silently, so a partial selection is announced twice: in Step 2
+  while it can still be changed, and in the batch's first log line (`writing
+  keywords only`) - the missing fields otherwise look like a broken model.
 
 ## 9. Metadata writing (what lands where)
 
@@ -347,6 +351,7 @@ executables as their own release assets — see `packaging.md`.
 | `Stale server build: exe built … but the sidecar source changed …` | `InferenceSidecarService.DescribeStaleness` — the running exe predates `src/Synapic.Inference`; rebuild from the setup panel. The status bar shows "stale build, rebuild recommended" too. |
 | `Both max_new_tokens (...) and max_length (...) seem to have been set` | Fixed in `inference_engine._generation_kwargs` (clones the pipeline generation config, pins `max_new_tokens`, clears `max_length`). |
 | `Progress scoring unavailable: ...` | Expected when probability/candidate labels are used with a VLM (see §8). |
+| Only keywords reach Daminion (no category/description) | Not the model: the write step keeps only the fields ticked in Step 2 ("Tag fields"), which persist in `HKCU\Software\Synapic\Engine` as `TagKeywords`/`TagCategories`/`TagDescription`. The batch's first log line names them (`writing keywords only`); a `/tag` call always returns all three. |
 | `Daminion returned the same ids as the previous page` | Infinite-loop guard in `FetchItemsAsync` (offset ignored server-side). |
 | `Count N matches total catalog size despite filters` | `GetFilteredItemCountAsync` sanity fallback. |
 | `[sidecar:err] ...` lines in the UI log | Sidecar stderr, forwarded verbatim through `LogReceived`. |

@@ -103,6 +103,23 @@ public class TagFieldSelectionTests
     }
 
     [Fact]
+    public void Summary_NamesTheFieldsARunWillWrite()
+    {
+        // What the batch line and the Step 2 warning are built from, so the
+        // words have to stay in step with the flags.
+        Assert.True(TagFieldSelection.All.IsAll);
+        Assert.Equal("keywords, categories and description", TagFieldSelection.All.Summary);
+        Assert.Equal("keywords only",
+            new TagFieldSelection(Category: false, Keywords: true, Description: false).Summary);
+        Assert.Equal("categories and description",
+            new TagFieldSelection(Category: true, Keywords: false, Description: true).Summary);
+
+        var none = new TagFieldSelection(Category: false, Keywords: false, Description: false);
+        Assert.False(none.IsAll);
+        Assert.Equal("nothing (no tag field is selected)", none.Summary);
+    }
+
+    [Fact]
     public async Task KeywordsOnly_DropsCategoryAndDescription()
     {
         var writer = new CapturingMetadataWriter();

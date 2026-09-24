@@ -43,6 +43,33 @@ public sealed record ProcessProgress(
 public sealed record TagFieldSelection(bool Category = true, bool Keywords = true, bool Description = true)
 {
     public static TagFieldSelection All { get; } = new();
+
+    /// <summary>True when nothing is dropped: all three returned fields are written.</summary>
+    public bool IsAll => Category && Keywords && Description;
+
+    /// <summary>
+    /// The fields a run will write, in words ("keywords only", "categories and
+    /// keywords"). One multimodal call always returns description, category and
+    /// keywords; this is the permutation the app keeps, so it is also the answer
+    /// to "why did only keywords get tagged?".
+    /// </summary>
+    public string Summary
+    {
+        get
+        {
+            var names = new List<string>(3);
+            if (Keywords) names.Add("keywords");
+            if (Category) names.Add("categories");
+            if (Description) names.Add("description");
+            return names.Count switch
+            {
+                0 => "nothing (no tag field is selected)",
+                1 => names[0] + " only",
+                2 => $"{names[0]} and {names[1]}",
+                _ => $"{names[0]}, {names[1]} and {names[2]}",
+            };
+        }
+    }
 }
 
 /// <summary>How images are fetched for inference (spec §5.2 Step 1).</summary>
@@ -223,7 +250,14 @@ public sealed class ProcessingOrchestrator
         results ??= new List<ProcessItemResult>();
         var resultsLock = new object();
 
-        await log($"Starting batch: {total} items").ConfigureAwait(false);
+        // Say which fields will be written before the first item runs. The
+        // model returns all three whatever this says; only the write step
+        // honours it, so a partial selection used to look exactly like the
+        // model having stopped producing fields.
+        var writtenFields = tagFields ?? TagFieldSelection.All;
+        await log($"Starting batch: {total} items — writing {writtenFields.Summary}").ConfigureAwait(false);
+        SynapicLog.Info(nameof(ProcessingOrchestrator),
+            $"Batch started: {total} items, writing {writtenFields.Summary}");
 
         using var throttle = new SemaphoreSlim(_maxDegreeOfParallelism);
         var tasks = items.Select(item => Task.Run(async () =>
