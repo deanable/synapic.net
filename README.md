@@ -1,4 +1,4 @@
-# \# Synapic .NET Migration Specification
+\# Synapic .NET Migration Specification
 
 # \## Avalonia UI + Python Sidecar (PyInstaller) Architecture
 
