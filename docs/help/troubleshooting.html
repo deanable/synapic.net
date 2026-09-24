@@ -1,0 +1,117 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>Troubleshooting</title>
+<link rel="stylesheet" type="text/css" href="help.css">
+</head>
+<body>
+
+<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; Troubleshooting</p>
+
+<h1>Troubleshooting</h1>
+
+<p class="lead">Symptom, cause, fix. Almost everything here is confirmed by the
+log &mdash; <span class="path">logs\synapic.log</span> next to the executable
+&mdash; so start by opening it.</p>
+
+<h2>First, two rules</h2>
+
+<ul>
+<li><span class="term">If a field is missing, check Step 2 before anything
+else.</span> The write step keeps only the tag fields you ticked, and does it
+silently. See <a href="step2-tag-fields.html">Tag fields</a>.</li>
+<li><span class="term">If it is slow, check what else is running.</span> Four
+images are in flight at once, first runs download and load a model, and a batch
+competes with everything else on the machine. See <a
+href="#performance">speed and timings</a>.</li>
+</ul>
+
+<h2 id="sidecar">The inference server</h2>
+
+<table>
+<tr><th class="setting">Symptom</th><th>Cause and fix</th></tr>
+<tr><td>Wizard is greyed out; <span class="ui">Inference sidecar required</span></td><td>No inference server exists. Build one from the setup panel: <a href="first-run-sidecar.html">Build the inference server</a>.</td></tr>
+<tr><td><span class="ui">Server not detected</span> and nothing to build</td><td>No server executable for this platform. Install a release that includes one, or drop a standalone server next to <span class="path">Synapic.exe</span>.</td></tr>
+<tr><td>Build stops part-way, rows stay on <span class="ui">Not built</span></td><td>The build log is in the log pane. A first build needs the network to fetch Python and the inference packages; a later failure is often disk space. Rebuild once the cause is gone.</td></tr>
+<tr><td><span class="ui">Server starting&hellip;</span> for more than two minutes</td><td>A cold start unpacks and loads the model, which is genuinely slow the first time. If it never resolves, the log contains the server's own output &mdash; usually a missing model or a driver problem.</td></tr>
+<tr><td><code>Timed out waiting for the sidecar port file</code></td><td>The server process never got far enough to publish its port. Look a few lines up in the log for its error: a corrupted build, an antivirus quarantine, or no write access to the temporary folder.</td></tr>
+<tr><td><code>Sidecar process exited unexpectedly</code></td><td>The server crashed mid-run. Restart it from the toolbar; if it repeats on the same image, that image is the suspect &mdash; a truncated or unusual file.</td></tr>
+<tr><td><code>Model loading &mdash; retry shortly</code></td><td>The server is still loading the model. Wait for it to report healthy; Synapic retries the request once by itself.</td></tr>
+<tr><td><span class="ui">stale build, rebuild recommended</span></td><td>Developer checkouts only: the server executable predates the inference source. Rebuild that variant.</td></tr>
+</table>
+
+<h2 id="tagging">Tags that are missing or wrong</h2>
+
+<table>
+<tr><th class="setting">Symptom</th><th>Cause and fix</th></tr>
+<tr><td>Only keywords were written</td><td>The Step 2 tag-field selection. Check the boxes, the orange warning, and the batch's first log line: <a href="step2-tag-fields.html#diagnose">the diagnosis recipe</a>.</td></tr>
+<tr><td>Category or description is empty for every image</td><td>A custom tag instruction that stopped asking for those keys. Press <span class="ui">Reset to built-in</span> in Step 2 and run one image to confirm.</td></tr>
+<tr><td>Keywords came back empty although the description looks fine</td><td>Same cause: with a custom instruction, the reply can be valid JSON without a keyword list. The server logs a warning when this happens; reset to the built-in instruction.</td></tr>
+<tr><td>Raw JSON or code fences appear in the description</td><td>The model's reply could not be read as the expected shape &mdash; almost always a custom instruction or system prompt that asked for a different format. Clear both.</td></tr>
+<tr><td>Descriptions are vague and generic</td><td>The image was downscaled too far. Raise <span class="ui">AI image scale</span> to 100% and turn off the 200-pixel thumbnail: <a href="step1-limits.html">How many items to process</a>.</td></tr>
+<tr><td>Categories are plausible but not your vocabulary</td><td>The model is not constrained to a list. Steer it with a system prompt, or curate categories by hand &mdash; see <a href="step4-results.html">Step 4</a>.</td></tr>
+<tr><td>A run finishes suspiciously fast, with no results</td><td>The batch found nothing. The log says <code>Found 0 image files</code> or reports no matching items; check the folder path, the scope and the filters.</td></tr>
+</table>
+
+<h2 id="daminion">Daminion</h2>
+
+<table>
+<tr><th class="setting">Symptom</th><th>Cause and fix</th></tr>
+<tr><td><span class="ui">Connection failed</span></td><td>Wrong URL (include the scheme and the virtual directory), server unreachable, or bad credentials. See <a href="step1-daminion.html">Connecting to Daminion</a>.</td></tr>
+<tr><td>Connected, but the collection or saved-search lists are empty</td><td>Those endpoints did not answer. Tagging still works: type the id in the small box beside the picker.</td></tr>
+<tr><td>Count looks wrong, or counting fails</td><td>The count is a server-side preview. If it fails, the batch still applies your filters; check the newest log line for the reason.</td></tr>
+<tr><td><code>Daminion returned the same ids as the previous page</code></td><td>The server ignored the paging offset. Synapic stops rather than looping; the batch covers the items fetched so far, so narrow the scope and run again.</td></tr>
+<tr><td><code>Could not download image for item 12345</code></td><td>The item exists but its image could not be fetched: a permissions problem, or a file the server cannot find.</td></tr>
+<tr><td>Items are updated but keywords are missing in Daminion</td><td>Look at the write path rather than the model: check the tag-field selection, then whether the account may write keywords. <span class="ui">Verify Daminion Writes</span> in Step 4 reports what the catalog actually holds.</td></tr>
+</table>
+
+<h2 id="performance">Speed and timings</h2>
+
+<table>
+<tr><th class="setting">Symptom</th><th>Cause and fix</th></tr>
+<tr><td>Five to ten seconds per image on CPU</td><td>Normal for the default model. Up to four images run at once, so the batch finishes four times faster than that per-image figure suggests.</td></tr>
+<tr><td>One image appears to take a minute</td><td>The first image includes the model download (once, about 860 MB) and the load. Judge timings from the second image on.</td></tr>
+<tr><td>Every run is slower than the one before</td><td>Something else is using the machine, or the batch is fetching over a slow link. Sort the Daminion case by using the 200-pixel thumbnail for the first pass.</td></tr>
+<tr><td>GPU build is not dramatically faster</td><td>Expected in some cases: four parallel calls can contend for one GPU, and a small model is often not GPU-bound. Compare on a real batch before drawing conclusions.</td></tr>
+<tr><td>Memory climbs and the machine swaps</td><td>Large images at 100% scale, or several batches in one session. Restart Synapic between large runs to release the inference server's memory.</td></tr>
+</table>
+
+<h2 id="results">Failed writes and retries</h2>
+
+<table>
+<tr><th class="setting">Symptom</th><th>Cause and fix</th></tr>
+<tr><td>Rows with status <span class="ui">Write Failed</span></td><td>The image was tagged but could not be written: a read-only file or folder, a file in use, or a metadata update Daminion refused. Fix the cause, then <span class="ui">Retry Failed</span>.</td></tr>
+<tr><td><span class="ui">Retry Failed</span> does nothing</td><td>It only retries rows that are not successes. If every row succeeded, there is nothing to do.</td></tr>
+<tr><td>Retrying fails the same way</td><td>The source is the problem, not the moment. Check the file exists, is readable, and is not locked by another application.</td></tr>
+<tr><td>Verification reports mismatches</td><td>The catalog does not hold what Synapic wrote. Check permissions on the account, and whether another process or a deduplicating tool has since changed those items.</td></tr>
+<tr><td>CSV export says nothing happened</td><td>Export needs at least one row. Run a batch first.</td></tr>
+</table>
+
+<h2>Nothing else worked: what to collect</h2>
+
+<ol class="steps">
+<li><span class="path">logs\synapic.log</span> for the run in question.</li>
+<li>The archived log before it, if the problem started earlier:
+<span class="path">logs\archives\</span>.</li>
+<li>Anything in <span class="path">logs\crashes\</span>, which holds the
+exception and a snapshot of the log at the moment of a crash.</li>
+<li>A one-line description of what you expected and what happened, including the
+settings on screen &mdash; or simply the batch's first log line, which records
+them.</li>
+</ol>
+
+<p>The <a href="admin-logs-support.html#support">support checklist</a> has the
+same list with the paths spelled out.</p>
+
+<div class="seealso">
+<h2>See also</h2>
+<ul>
+<li><a href="step3-log.html">Reading the log</a></li>
+<li><a href="faq.html">Frequently asked questions</a></li>
+<li><a href="admin-logs-support.html">Logs, crashes and support</a></li>
+</ul>
+</div>
+
+</body>
+</html>

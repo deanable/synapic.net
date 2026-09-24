@@ -1,0 +1,104 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>The five-step workflow</title>
+<link rel="stylesheet" type="text/css" href="help.css">
+</head>
+<body>
+
+<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; How Synapic works &rsaquo; The five-step workflow</p>
+
+<h1>The five-step workflow</h1>
+
+<p class="lead">One image at a time, Synapic fetches the image, asks the model
+for tags, and writes the tags. The five steps are the decisions you get to make
+before and after that loop.</p>
+
+<h2>The steps</h2>
+
+<table>
+<tr><th class="setting">Step</th><th>The decision</th><th>Where it is remembered</th></tr>
+<tr><td>1 &mdash; Datasource</td><td>A folder on disk, or a Daminion catalog plus scope, filters and how many items to take</td><td>Daminion settings: registry, on a successful connect</td></tr>
+<tr><td>2 &mdash; Engine</td><td>Model and device, prompts, and which of the three returned fields to write</td><td>Registry, when you leave the step</td></tr>
+<tr><td>3 &mdash; Process</td><td>Nothing &mdash; you watch, pause, resume or abort</td><td>&mdash;</td></tr>
+<tr><td>4 &mdash; Results</td><td>Review, export, retry failures, verify Daminion writes</td><td>&mdash;</td></tr>
+<tr><td>Deduplication</td><td>A separate scan for near-duplicate files with a bulk action</td><td>&mdash;</td></tr>
+</table>
+
+<h2>What happens to each image</h2>
+
+<ol class="steps">
+<li><span class="term">Fetch.</span> For a folder, Synapic lists the image files
+it recognises (<span class="path">.jpg</span>, <span class="path">.jpeg</span>,
+<span class="path">.png</span>, <span class="path">.tif</span>, <span
+class="path">.tiff</span>) &mdash; recursively if you asked for that. For
+Daminion, it pages through the catalog for the items your scope and filters
+select, and downloads an image (or a thumbnail) for each item as it reaches
+it.</li>
+<li><span class="term">Tag.</span> The image goes to the inference server, which
+returns three things in one call: a category, a list of keywords, and a
+description.</li>
+<li><span class="term">Write.</span> Synapic keeps the fields you ticked in Step
+2 and writes them &mdash; XMP metadata in the file for a folder, or a metadata
+update for a Daminion item. Fields you did not tick are discarded here, not at the
+model.</li>
+<li><span class="term">Record.</span> The outcome is appended to the run's
+results: success, write failure, or an error explaining why that image could not
+be processed.</li>
+</ol>
+
+<div class="note">
+<p class="first">One call, three results.</p>
+<p>There is no per-field choice of model or task, and no second request for the
+description. A single multimodal call produces everything, which is why Step 2's
+field checkboxes only change what gets <em>written</em>. See <a
+href="step2-tag-fields.html">Tag fields: what gets written</a>.</p>
+</div>
+
+<h2>How much runs at once</h2>
+
+<p>Synapic keeps <span class="term">four images in flight</span> during a batch:
+while one image is waiting for the model, another can be downloaded and a third
+written. Two consequences are worth knowing before you read a log or a stopwatch:</p>
+
+<ul>
+<li><span class="term">Throughput is not latency.</span> Four images finishing
+roughly every ten seconds means one image every two or three seconds on average,
+while each individual image still took ten. A folder of 200 images therefore takes
+minutes, not seconds &mdash; and the ETA in Step 3 is computed from completed
+images, so it settles after the first couple.</li>
+<li><span class="term">A GPU changes the arithmetic.</span> Four parallel calls
+share one model. On a CPU that is usually a win; on a small GPU the calls can
+contend, so a CUDA build does not always beat a CPU build by the factor the
+hardware suggests. Judge it on a batch of real images rather than one image.</li>
+</ul>
+
+<h2>What Synapic deliberately does not do</h2>
+
+<ul>
+<li><span class="term">No cloud service.</span> There is no hosted engine and no
+API key to store; the only model is the local one.</li>
+<li><span class="term">No review step before writing.</span> Tags are written as
+the batch runs. If you want to approve things first, run against a folder or a
+disposable collection, then apply the same settings to the real target.</li>
+<li><span class="term">No automatic language translation or vocabulary
+control.</span> The model writes in the language the image implies. A system
+prompt is how you steer that; see <a href="step2-prompts.html">Prompts</a>.</li>
+<li><span class="term">No undo.</span> A metadata write replaces the previous
+values of the fields Synapic manages. Keep a backup of a collection before a
+large first run.</li>
+</ul>
+
+<div class="seealso">
+<h2>See also</h2>
+<ul>
+<li><a href="step1-datasource.html">Step 1 &mdash; Datasource</a></li>
+<li><a href="step2-engine.html">Step 2 &mdash; Engine</a></li>
+<li><a href="metadata-written.html">What gets written to your images</a></li>
+<li><a href="window-overview.html">The main window</a></li>
+</ul>
+</div>
+
+</body>
+</html>

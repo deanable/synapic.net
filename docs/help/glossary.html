@@ -1,0 +1,92 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>Glossary</title>
+<link rel="stylesheet" type="text/css" href="help.css">
+</head>
+<body>
+
+<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; Glossary</p>
+
+<h1>Glossary</h1>
+
+<p class="lead">The words this help uses, and the words your DAM uses, defined
+the way Synapic means them.</p>
+
+<h2>Synapic's own vocabulary</h2>
+
+<table>
+<tr><th class="setting">Term</th><th>Meaning</th></tr>
+<tr><td><span class="term">Inference server</span> / <span class="term">sidecar</span></td><td>The separate program that loads the model and answers one tagging request per image. Synapic starts it, talks to it over a local port, and stops it. See <a href="first-run-sidecar.html">Build the inference server</a>.</td></tr>
+<tr><td><span class="term">Variant</span></td><td>A build of the inference server for a particular runtime: the CPU build, or the CUDA build for NVIDIA GPUs.</td></tr>
+<tr><td><span class="term">Model</span></td><td>The vision-language network that turns an image into a category, keywords and a description. Default: <code>LiquidAI/LFM2.5-VL-450M</code>.</td></tr>
+<tr><td><span class="term">Model cache</span></td><td>The folder holding downloaded model weights, shared by every install on the machine: <span class="path">%LOCALAPPDATA%\Synapic\models</span>.</td></tr>
+<tr><td><span class="term">Batch</span></td><td>One run of Step 3: fetch, tag, write, for the items your Step 1 settings selected.</td></tr>
+<tr><td><span class="term">Tag fields</span></td><td>The three checkboxes in Step 2 that decide which of the model's results are written: keywords, categories, description.</td></tr>
+<tr><td><span class="term">System prompt</span></td><td>Optional context prepended to every request &mdash; tone, language, vocabulary. It must not change the output format.</td></tr>
+<tr><td><span class="term">Tag instruction</span></td><td>The instruction that asks the model for its result. Blank means the built-in instruction, which is the tested one.</td></tr>
+<tr><td><span class="term">ETA</span></td><td>Estimated time remaining for a batch, calculated from completed images and their average duration. Not available until the first image finishes.</td></tr>
+<tr><td><span class="term">Throughput vs latency</span></td><td>Latency is how long one image takes (about ten seconds on CPU); throughput is how many finish per minute. Four images run at once, so those numbers differ by roughly four.</td></tr>
+<tr><td><span class="term">Stale build</span></td><td>A developer-checkout warning: the inference server executable is older than the source it was built from.</td></tr>
+<tr><td><span class="term">Warm-up</span></td><td>The server loading the model at startup so the first image of a batch does not pay for it.</td></tr>
+</table>
+
+<h2>Daminion and DAM vocabulary</h2>
+
+<table>
+<tr><th class="setting">Term</th><th>Meaning in Synapic</th></tr>
+<tr><td><span class="term">DAM</span></td><td>Digital asset management: the system that stores your images and their metadata. Daminion is the one Synapic integrates with.</td></tr>
+<tr><td><span class="term">Catalog</span></td><td>A Daminion database. Chosen by the server URL you log in to; Synapic reports which one is active.</td></tr>
+<tr><td><span class="term">Scope</span></td><td>Which part of the catalog a run looks at: everything, a keyword search, a shared collection, or a saved search.</td></tr>
+<tr><td><span class="term">Collection</span> (shared collection)</td><td>A named group of items in Daminion that people assemble by hand or by rule.</td></tr>
+<tr><td><span class="term">Saved search</span></td><td>A query saved in Daminion. The richest way to define a batch without re-creating the selection in Synapic.</td></tr>
+<tr><td><span class="term">Status flag</span></td><td>Daminion's triage state for an item: approved, rejected, or unassigned. Step 1 can filter on it.</td></tr>
+<tr><td><span class="term">Untagged filter</span></td><td>The Step 1 option to select only items where keywords, categories or the description are still empty.</td></tr>
+<tr><td><span class="term">Item</span> / <span class="term">asset</span></td><td>One image in the catalog. Synapic tags items; for a folder it tags files, which are the same thing.</td></tr>
+<tr><td><span class="term">Paging</span></td><td>Fetching items in pages. <span class="ui">Process all</span> keeps paging until Daminion returns nothing.</td></tr>
+</table>
+
+<h2>Metadata vocabulary</h2>
+
+<table>
+<tr><th class="setting">Term</th><th>Meaning</th></tr>
+<tr><td><span class="term">XMP</span></td><td>The metadata standard Synapic writes into files. Readable by Adobe applications, Daminion and Windows itself, which is why a tagged folder travels well.</td></tr>
+<tr><td><span class="term">dc:subject</span></td><td>The XMP property that holds keywords.</td></tr>
+<tr><td><span class="term">dc:description</span></td><td>The XMP property that holds the description.</td></tr>
+<tr><td><span class="term">photoshop:Headline</span></td><td>Where the category goes, as a short headline.</td></tr>
+<tr><td><span class="term">Iptc4xmpCore:IntellectualGenre</span></td><td>A second home for the category, understood by IPTC-aware tools.</td></tr>
+<tr><td><span class="term">Sidecar</span> (the other meaning)</td><td>A metadata file stored next to an image. TIFF files get an <span class="path">.xmp</span> sidecar; do not confuse it with the inference server, which this help also calls a sidecar.</td></tr>
+</table>
+
+<h2>Deduplication</h2>
+
+<table>
+<tr><th class="setting">Term</th><th>Meaning</th></tr>
+<tr><td><span class="term">Perceptual hash</span></td><td>A 64-bit fingerprint of what an image looks like, so two copies compare as equal even after re-encoding or resizing.</td></tr>
+<tr><td><span class="term">pHash / dHash / aHash / ColorMoment</span></td><td>The four fingerprinting algorithms the deduplication tool offers, from the most robust (pHash) to the most colour-oriented (ColorMoment).</td></tr>
+<tr><td><span class="term">Threshold</span></td><td>How different two fingerprints may be and still count as duplicates. 0.90 by default; higher is stricter.</td></tr>
+<tr><td><span class="term">Keep item</span></td><td>The one file in a duplicate group that is left alone; the chosen action applies to the others.</td></tr>
+</table>
+
+<h2>Windows plumbing</h2>
+
+<table>
+<tr><th class="setting">Term</th><th>Meaning</th></tr>
+<tr><td><span class="term">HKCU</span></td><td><code>HKEY_CURRENT_USER</code>, the per-user part of the Windows registry. Synapic writes there, which is why no administrator rights are needed for settings.</td></tr>
+<tr><td><span class="term">DPAPI</span></td><td>Windows data protection, used to encrypt the stored Daminion password so only that Windows account on that machine can read it.</td></tr>
+<tr><td><span class="term">CHM</span></td><td>Compiled HTML Help: this help file, <span class="path">Synapic.chm</span>.</td></tr>
+<tr><td><span class="term">.NET Desktop Runtime</span></td><td>The Microsoft runtime Synapic needs to start. The Windows installer supplies it if it is missing.</td></tr>
+</table>
+
+<div class="seealso">
+<h2>See also</h2>
+<ul>
+<li><a href="workflow-overview.html">The five-step workflow</a></li>
+<li><a href="metadata-written.html">What gets written to your images</a></li>
+<li><a href="faq.html">Frequently asked questions</a></li>
+</ul>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,100 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>What you need</title>
+<link rel="stylesheet" type="text/css" href="help.css">
+</head>
+<body>
+
+<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; Getting started &rsaquo; What you need</p>
+
+<h1>What you need</h1>
+
+<p class="lead">Synapic runs the model locally, so most of what it needs is
+disk space and patience on the first run. It does not need an internet
+connection to tag, once the model is on the machine.</p>
+
+<h2>Operating system</h2>
+
+<table>
+<tr><th class="setting">Platform</th><th>What you get</th></tr>
+<tr><td>Windows 10 or 11, 64-bit</td><td>The installer (<span class="path">Synapic-Setup-win-x64.exe</span>) &mdash; the primary, fully supported platform. Everything in this help is written for it.</td></tr>
+<tr><td>macOS on Apple silicon</td><td>A disk image (<span class="path">Synapic-osx-arm64.dmg</span>) built by the same pipeline.</td></tr>
+<tr><td>Linux, 64-bit</td><td>No installer yet. Take the published Linux inference server and run it beside a build of the app.</td></tr>
+</table>
+
+<div class="note">
+<p class="first">Step 1 and Step 2 settings are stored in the Windows registry.</p>
+<p>On Windows, the app remembers your Daminion connection and your engine
+settings between runs. Off Windows there is no registry, so those stores do
+nothing: the app still works, but you re-enter the settings each time. See
+<a href="admin-settings-files.html">Files, folders and registry keys</a>.</p>
+</div>
+
+<h2>Software</h2>
+
+<ul>
+<li><span class="term">.NET 10 Desktop Runtime.</span> Required, and the
+Windows installer handles it: it either bundles a copy or downloads the official
+installer at the Ready step and runs it silently. You only meet this if you
+install by copying files.</li>
+<li><span class="term">Daminion Server</span> (only if you tag a catalog rather
+than a folder): the HTTP API reachable from the machine, plus an account that may
+read the items and update their metadata.</li>
+<li><span class="term">Git, .NET SDK and Python</span> are needed only to build
+Synapic or its inference server from source, not to use a release.</li>
+</ul>
+
+<h2>Disk space</h2>
+
+<table>
+<tr><th class="setting">What</th><th>Space</th><th>Where it goes</th></tr>
+<tr><td>The application</td><td>A few hundred MB</td><td><span class="path">C:\Program Files\Synapic</span></td></tr>
+<tr><td>The model</td><td>About 860 MB, once</td><td><span class="path">%LOCALAPPDATA%\Synapic\models</span> (shared by every install of the app)</td></tr>
+<tr><td>Building the CPU inference server</td><td>Several GB, during the build only</td><td>A build workspace under the app's own folder; the result is one executable</td></tr>
+<tr><td>The CUDA inference server</td><td>About 2.5 GB as a finished executable</td><td>Same as above</td></tr>
+</table>
+
+<div class="warning">
+<p class="first">Uninstalling removes the model cache.</p>
+<p>The Windows uninstaller deletes <span
+class="path">%LOCALAPPDATA%\Synapic\models</span>, so a reinstall downloads the
+model again. If you plan to reinstall, or you are on a metered connection, copy
+that folder somewhere safe first.</p>
+</div>
+
+<h2>Hardware</h2>
+
+<ul>
+<li><span class="term">Any modern 64-bit CPU</span> runs the model. Expect
+roughly ten seconds per image on a mid-range laptop CPU, which is why tagging a
+large catalog is a background job rather than something you watch.</li>
+<li><span class="term">An NVIDIA GPU</span> with a current driver makes it
+substantially faster. Synapic ships a CUDA build of the inference server for
+that case; see <a href="first-run-sidecar.html">Build the inference server</a>.</li>
+<li><span class="term">16 GB of RAM</span> is comfortable. The model itself needs
+a little over a gigabyte, and the app runs up to four images at once.</li>
+<li><span class="term">An SSD</span> matters more than you would expect for a
+large Daminion batch, because every image is fetched (or read) before tagging.</li>
+</ul>
+
+<h2>Network</h2>
+
+<p>Nothing about tagging leaves the machine: the app talks only to the inference
+server on <span class="path">127.0.0.1</span> and to your Daminion server. An
+internet connection is used for exactly three optional things: downloading the
+model the first time, building an inference server from source, and installing
+the .NET runtime when the installer cannot find one.</p>
+
+<div class="seealso">
+<h2>See also</h2>
+<ul>
+<li><a href="getting-started.html">Install and first run</a></li>
+<li><a href="first-run-sidecar.html">Build the inference server</a></li>
+<li><a href="admin-deploy.html">Deploying to many machines</a> &mdash; pre-seeding the model and installing offline</li>
+</ul>
+</div>
+
+</body>
+</html>

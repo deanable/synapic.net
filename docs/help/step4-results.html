@@ -1,0 +1,104 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>Step 4 &mdash; Results</title>
+<link rel="stylesheet" type="text/css" href="help.css">
+</head>
+<body>
+
+<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; The workflow &rsaquo; Step 4 &mdash; Results</p>
+
+<h1>Step 4 &mdash; Results</h1>
+
+<p class="lead">One row per image, with what the model produced and what happened
+to it. This is where you confirm a run did what you meant, before you widen it to
+the rest of the library.</p>
+
+<h2>The summary line</h2>
+
+<p><span class="ui">40 succeeded (0 verified), 2 failed, 42 total</span></p>
+
+<p>The verified count only moves when you ask Synapic to re-read a Daminion
+catalog. On a folder run it stays at zero, and that is not a problem &mdash; the
+file was written, and there is nothing to re-read.</p>
+
+<h2>The grid</h2>
+
+<table>
+<tr><th class="setting">Column</th><th>What it shows</th></tr>
+<tr><td>File</td><td>The image's file name.</td></tr>
+<tr><td>Status</td><td>The outcome for that image (see below).</td></tr>
+<tr><td>Category</td><td>The category the model produced.</td></tr>
+<tr><td>Keywords</td><td>The keyword list, joined for readability.</td></tr>
+<tr><td>Description</td><td>The one-line description.</td></tr>
+</table>
+
+<p>Columns are sortable, which is the quickest way to see the trouble: sort by
+Status to put every failure together, or by Description to spot the vague ones.</p>
+
+<h3>What the statuses mean</h3>
+
+<table>
+<tr><th class="setting">Status</th><th>Meaning</th></tr>
+<tr><td>Success</td><td>The image was tagged and the result was written.</td></tr>
+<tr><td>Write Failed</td><td>The image was tagged, but writing the result failed &mdash; a permissions problem on a folder, or a metadata update Daminion refused. The model's output is still in the row, so nothing was wasted.</td></tr>
+<tr><td>Verified</td><td>A Daminion item whose stored metadata was re-read and matched what Synapic wrote.</td></tr>
+</table>
+
+<div class="warning">
+<p class="first">"Success" means written, not "the model was right".</p>
+<p>Rows record what happened, not whether the tags are good. A run that writes
+twenty wrong keywords still reports twenty successes. The only honest check of
+quality is looking at the images &mdash; and at a few items in Daminion.</p>
+</div>
+
+<h2>The buttons</h2>
+
+<table>
+<tr><th class="setting">Button</th><th>What it does</th></tr>
+<tr><td><span class="ui">Export CSV</span></td><td>Writes the whole result set to <span class="path">Documents\synapic_results_&lt;timestamp&gt;.csv</span>, with columns for file name, status, tags, category, keywords, description, probabilities and scoring tier. Useful when a curator wants to review the run away from Synapic.</td></tr>
+<tr><td><span class="ui">Retry Failed</span></td><td>Re-does only the rows whose status is not a success. Synapic re-fetches those items from the source, drops the old failed entries, and runs them again with the current settings. Fix the cause first &mdash; a missing file will fail the same way twice.</td></tr>
+<tr><td><span class="ui">Verify Daminion Writes</span></td><td>Available when Step 1 has a live Daminion connection. Re-reads the metadata of each successful Daminion item and compares it with what was supposed to be written: matching items become <span class="ui">Verified</span>, mismatches are listed in the summary and the log.</td></tr>
+<tr><td><span class="ui">Refresh</span></td><td>Reloads the grid from the run's results. Use it after a retry or a verification.</td></tr>
+</table>
+
+<div class="tip">
+<p class="first">Verification is the answer to "did it actually stick?"</p>
+<p>After a large Daminion run, press <span class="ui">Verify Daminion Writes</span>
+and read the summary. If it reports mismatches, the write path is the problem
+&mdash; permissions, a locked item, or a field Daminion would not accept &mdash;
+and you have found that out before announcing the run as finished.</p>
+</div>
+
+<h2>A sane routine after a run</h2>
+
+<ol class="steps">
+<li>Read the summary line: any failures at all?</li>
+<li>Sort by Status to see them, and check the log for the reasons.</li>
+<li>On a Daminion run, verify the writes.</li>
+<li>Open two or three of the images in Daminion and look at what landed. This is
+the only step that catches a run that was technically perfect and creatively
+wrong.</li>
+<li>Export the CSV if someone else needs to review it.</li>
+</ol>
+
+<h2>Related topics</h2>
+
+<p>The results grid is a report, not a control panel: there is no way to edit a
+tag here and push it back. To change an outcome, adjust <a
+href="step2-engine.html">Step 2</a> and run the affected items again &mdash; a
+re-run replaces the fields Synapic manages, so it is safe to repeat.</p>
+
+<div class="seealso">
+<h2>See also</h2>
+<ul>
+<li><a href="step3-process.html">Step 3 &mdash; Process</a></li>
+<li><a href="step3-log.html">Reading the log</a></li>
+<li><a href="metadata-written.html">What gets written to your images</a></li>
+<li><a href="troubleshooting.html#results">Troubleshooting: failed writes and retries</a></li>
+</ul>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,97 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>Step 1 &mdash; Datasource</title>
+<link rel="stylesheet" type="text/css" href="help.css">
+</head>
+<body>
+
+<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; The workflow &rsaquo; Step 1 &mdash; Datasource</p>
+
+<h1>Step 1 &mdash; Datasource</h1>
+
+<p class="lead">Step 1 answers one question: which images? Everything else in the
+run follows from it, so this is the step worth getting right.</p>
+
+<h2>Two kinds of source</h2>
+
+<table>
+<tr><th class="setting">Source</th><th>When to use it</th><th>Where the tags go</th></tr>
+<tr><td><span class="ui">Local Folder</span></td><td>Images on this machine or a mounted share. The simplest and fastest path, and the safest way to trial the model.</td><td>Into the image files themselves, as XMP metadata</td></tr>
+<tr><td><span class="ui">Daminion Server</span></td><td>Images managed by Daminion, where the catalog is the source of truth.</td><td>Into the Daminion catalog, through its API</td></tr>
+</table>
+
+<p>You can switch between them freely; the two panels below the radio buttons are
+mutually exclusive, and the rest of the step only shows what applies.</p>
+
+<h2>Local folder</h2>
+
+<ol class="steps">
+<li>Choose <span class="ui">Local Folder</span>.</li>
+<li>Type a path into <span class="ui">Folder containing images</span>, or use
+<span class="ui">Browse&hellip;</span> to pick one.</li>
+<li>Tick <span class="ui">Include subfolders (recursive scan)</span> if you want
+the whole tree rather than just that folder.</li>
+</ol>
+
+<p>Synapic collects files with the extensions it can read and write:
+<span class="path">.jpg</span>, <span class="path">.jpeg</span>,
+<span class="path">.png</span>, <span class="path">.tif</span> and
+<span class="path">.tiff</span>. Anything else in the folder is ignored, which is
+why a scan of a mixed folder can find fewer images than the folder appears to
+hold.</p>
+
+<div class="tip">
+<p class="first">A folder is not just for testing.</p>
+<p>Because the tags go into the files, a tagged folder is portable: copy it to a
+machine without Synapic and the keywords and description travel with the images.
+That makes a folder run the right choice for an archive you own outright, and for
+any library that is not in Daminion yet.</p>
+</div>
+
+<h2>Daminion server</h2>
+
+<p>Connecting, choosing a scope and filtering the catalog are big enough subjects
+to have their own topics:</p>
+
+<ul>
+<li><a href="step1-daminion.html">Connecting to Daminion</a> &mdash; URL,
+credentials, and what happens on connect.</li>
+<li><a href="step1-scope-filters.html">Scope and filters</a> &mdash; which items
+from the catalog, and which of them still need tagging.</li>
+<li><a href="step1-limits.html">How many items to process</a> &mdash; limits,
+image size, and counting before you commit.</li>
+</ul>
+
+<h2>What Step 1 is not</h2>
+
+<ul>
+<li>It does not start anything. Choosing a source only fills in the session;
+processing begins in Step 3.</li>
+<li>It does not validate that your folder contains images before you leave.
+Synapic tells you when the batch starts, in the log &mdash; "Found 0 image files"
+is the line to look for when a run finishes suspiciously fast.</li>
+<li>It does not change your files. Nothing is written until a batch runs.</li>
+</ul>
+
+<div class="note">
+<p class="first">Your Daminion credentials are stored, your folder path is not.</p>
+<p>On Windows, a <em>successful</em> Daminion connect saves the connection, scope,
+filters and limits so the next run only needs a button press. A failed login
+never overwrites a working set. The local folder path lives only in the session
+and in the app config.</p>
+</div>
+
+<div class="seealso">
+<h2>See also</h2>
+<ul>
+<li><a href="step1-daminion.html">Connecting to Daminion</a></li>
+<li><a href="step1-scope-filters.html">Scope and filters</a></li>
+<li><a href="step2-engine.html">Step 2 &mdash; Engine</a></li>
+<li><a href="metadata-written.html">What gets written to your images</a></li>
+</ul>
+</div>
+
+</body>
+</html>

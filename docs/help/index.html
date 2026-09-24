@@ -1,0 +1,94 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>Welcome to Synapic Help</title>
+<link rel="stylesheet" type="text/css" href="help.css">
+</head>
+<body>
+
+<h1>Welcome to Synapic Help</h1>
+
+<p class="lead">Synapic tags an image library with a vision-language model that
+runs on your own machine, and writes the result into the images themselves or
+into a Daminion catalog. Nothing is uploaded anywhere, and there are no API keys
+to configure.</p>
+
+<h2>What Synapic does</h2>
+
+<p>For each image, one model call produces three things: a <span
+class="term">category</span>, a set of <span class="term">keywords</span>, and a
+<span class="term">description</span>. Synapic writes the ones you ask for, and
+you choose where they land:</p>
+
+<ul>
+<li>into the image file's own metadata (XMP), for a folder on disk; or</li>
+<li>into your Daminion catalog, through the Daminion API.</li>
+</ul>
+
+<p>The app is a four-step wizard &mdash; pick the images, choose the engine
+settings, run the batch, review the results &mdash; plus a separate
+deduplication tool. The engine itself is a second program, the <span
+class="term">inference server</span> (also called the sidecar); Synapic starts it
+for you once one is built.</p>
+
+<h2>Where to start</h2>
+
+<table>
+<tr><th class="setting">If you want to&hellip;</th><th>Read</th></tr>
+<tr><td>Install Synapic and tag your first images</td><td><a href="getting-started.html">Install and first run</a></td></tr>
+<tr><td>Understand why the app asks you to build a server</td><td><a href="first-run-sidecar.html">Build the inference server</a></td></tr>
+<tr><td>Learn the wizard, window by window</td><td><a href="workflow-overview.html">The five-step workflow</a> and <a href="window-overview.html">The main window</a></td></tr>
+<tr><td>Connect to Daminion and choose what to process</td><td><a href="step1-datasource.html">Step 1 &mdash; Datasource</a></td></tr>
+<tr><td>Decide which tags get written</td><td><a href="step2-tag-fields.html">Tag fields: what gets written</a></td></tr>
+<tr><td>Find out why something went wrong</td><td><a href="troubleshooting.html">Troubleshooting</a></td></tr>
+<tr><td>Deploy or support Synapic on other machines</td><td><a href="admin-install.html">Administrator guide</a></td></tr>
+</table>
+
+<h2>Two things worth knowing up front</h2>
+
+<div class="tip">
+<p class="first">Still only keywords? Check Step 2 before anything else.</p>
+<p>The model always returns all three fields. The app writes only the ones
+ticked under <span class="ui">Tag fields</span> in Step 2, and it does that
+quietly &mdash; the log still says the item was updated. If your catalog turns up
+with keywords but no category or description, that checkbox row is the cause; see
+<a href="step2-tag-fields.html">Tag fields: what gets written</a>.</p>
+</div>
+
+<div class="tip">
+<p class="first">The first batch is always the slow one.</p>
+<p>The first run downloads the model (about 860 MB) and loads it into memory
+before the first image is tagged. Later runs reuse the downloaded model and
+start tagging in seconds. Timings that look alarming on the first batch are
+usually this, not a fault.</p>
+</div>
+
+<h2>What is new in this version</h2>
+
+<ul class="checks">
+<li><span class="term">System-prompt history.</span> Every system prompt you use
+in Step 2 is remembered, so earlier wording is one click away instead of gone.
+See <a href="step2-prompts.html">Prompts</a>.</li>
+<li><span class="term">Step 2 says what a run will write.</span> A partial
+<span class="ui">Tag fields</span> selection now warns on screen and in the
+batch's first log line. See <a href="step2-tag-fields.html">Tag fields</a>.</li>
+</ul>
+
+<h2>Using this help</h2>
+
+<p>The help window has three tabs: <span class="ui">Contents</span> to browse
+topics by task, <span class="ui">Index</span> to look up a word such as a setting
+name, and <span class="ui">Search</span> to search the full text. Every topic
+ends with links to related topics.</p>
+
+<div class="seealso">
+<h2>See also</h2>
+<ul>
+<li><a href="requirements.html">What you need</a></li>
+<li><a href="glossary.html">Glossary</a></li>
+</ul>
+</div>
+
+</body>
+</html>

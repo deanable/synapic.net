@@ -1,0 +1,96 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>Scope and filters</title>
+<link rel="stylesheet" type="text/css" href="help.css">
+</head>
+<body>
+
+<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; The workflow &rsaquo; Step 1 &rsaquo; Scope and filters</p>
+
+<h1>Scope and filters</h1>
+
+<p class="lead">Scope says which part of the catalog to look at; filters say
+which of those items are worth your time. Together they decide the batch, so a
+count before you start saves hours.</p>
+
+<h2>Scope</h2>
+
+<table>
+<tr><th class="setting">Scope</th><th>What it selects</th><th>You also provide</th></tr>
+<tr><td><span class="ui">Entire catalog</span></td><td>Everything the login can see</td><td>Nothing</td></tr>
+<tr><td><span class="ui">Keyword search</span></td><td>Items matching search terms</td><td>A <span class="ui">Search term</span></td></tr>
+<tr><td><span class="ui">Shared collection</span></td><td>Items in one shared collection</td><td>A collection, picked by name or by id</td></tr>
+<tr><td><span class="ui">Saved search</span></td><td>Items matching a saved search defined in Daminion</td><td>A saved search, picked by name or by id</td></tr>
+</table>
+
+<p>For collections and saved searches, the list is read from the server when you
+connect. The small <span class="ui">id</span> box beside each picker is for the
+cases where the list is empty or you know the id: type it and the picker follows.
+That is also how a saved search or collection is restored from a previous run.</p>
+
+<div class="tip">
+<p class="first">Saved searches are the best-kept secret in Step 1.</p>
+<p>Daminion's own query language is far richer than "keyword search" here. Build
+the selection you want in Daminion, save it, then run Synapic against that saved
+search &mdash; and rebuild the batch after your curation changes, without touching
+Synapic.</p>
+</div>
+
+<h2>Filters</h2>
+
+<table>
+<tr><th class="setting">Filter</th><th>What it does</th></tr>
+<tr><td><span class="ui">Status</span></td><td>Restricts to items with a Daminion status flag: <span class="ui">All</span>, <span class="ui">Approved</span>, <span class="ui">Rejected</span> or <span class="ui">Unassigned</span>. Use it to keep a run inside a reviewed set, or to tag only what nobody has triaged yet.</td></tr>
+<tr><td><span class="ui">Only items with untagged</span></td><td>Three independent checkboxes &mdash; <span class="ui">Keywords</span>, <span class="ui">Categories</span>, <span class="ui">Description</span>. Each one limits the batch to items where that field is still empty. Tick one to fill a gap, or all three to find items nobody has touched.</td></tr>
+<tr><td><span class="ui">Select all untagged</span></td><td>Ticks all three of the above in one press. The usual starting point for a first pass over a catalog.</td></tr>
+</table>
+
+<h2>Counting before you start</h2>
+
+<p><span class="ui">Count matching items</span> asks the server how many items the
+current scope and filters select, without downloading anything. It is the cheapest
+sanity check Synapic offers, and it is worth doing every time before a long
+batch:</p>
+
+<ul>
+<li>A count of 0 means the batch will do nothing. Check the scope and the status
+filter before assuming the model failed.</li>
+<li>A count in the hundreds of thousands means you probably wanted a filter.</li>
+<li>If the count looks implausible, the log records it. Synapic falls back to a
+sanity value if the server reports a count larger than the catalog itself.</li>
+</ul>
+
+<div class="note">
+<p class="first">The filters are applied by Daminion, not by Synapic.</p>
+<p>Untagged-field and status filters become part of the request, so the batch
+never downloads items it would only skip. That also means an item whose metadata
+lives outside the fields Daminion considers "tags" can look untagged to Synapic
+while looking complete to you.</p>
+</div>
+
+<h2>Deciding what to process first</h2>
+
+<ol class="steps">
+<li>Start with <span class="ui">Saved search</span> or <span class="ui">Shared
+collection</span> and a small limit &mdash; a hundred items at most &mdash; to see
+the model's output on your own material.</li>
+<li>Review the results in Step 4, and look at a few items in Daminion.</li>
+<li>Only then widen the scope, or lift the limit, for the full batch.</li>
+</ol>
+
+<p>On a CPU-only machine a catalog of 10,000 images is an overnight job, so it is
+worth being sure about the settings before you start it.</p>
+
+<div class="seealso">
+<h2>See also</h2>
+<ul>
+<li><a href="step1-daminion.html">Connecting to Daminion</a></li>
+<li><a href="step1-limits.html">How many items to process</a></li>
+<li><a href="step3-process.html">Step 3 &mdash; Process</a></li>
+</ul>
+</div>
+
+</body>
+</html>

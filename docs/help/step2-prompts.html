@@ -1,0 +1,124 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>Prompts: system prompt and tag instruction</title>
+<link rel="stylesheet" type="text/css" href="help.css">
+</head>
+<body>
+
+<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; The workflow &rsaquo; Step 2 &rsaquo; Prompts</p>
+
+<h1>Prompts: system prompt and tag instruction</h1>
+
+<p class="lead">Step 2 has two text boxes, and it is easy to confuse them. One
+sets the context the model works in; the other says what the model must produce.
+Only the second one can break the result, and you do not need to touch either.</p>
+
+<h2>Which box does what</h2>
+
+<table>
+<tr><th class="setting">Box</th><th>Its job</th><th>Safe to leave alone?</th></tr>
+<tr><td><span class="ui">System prompt (optional VLM context)</span></td><td>Context prepended to every request: tone, vocabulary, language, domain.</td><td>Yes &mdash; blank by default</td></tr>
+<tr><td><span class="ui">Tag instruction (sent to the model for every image)</span></td><td>The instruction that asks for the result. It is the thing that makes the reply parsable.</td><td>Yes &mdash; blank means the built-in one</td></tr>
+</table>
+
+<h2>The system prompt</h2>
+
+<p>The system prompt is prepended to the request, so it colours everything the
+model says without changing the shape of the answer. Use it for things that stay
+true across a whole library:</p>
+
+<ul>
+<li><span class="term">Language and spelling.</span> "Write keywords in British
+English." "Write the description in German."</li>
+<li><span class="term">Tone and length.</span> "Descriptions are one sentence,
+factual, no marketing language."</li>
+<li><span class="term">Domain vocabulary.</span> "This is an archive of
+architectural photography; prefer established architectural terms."</li>
+<li><span class="term">Things to avoid.</span> "Never use the word 'image' or
+'photo' in the description."</li>
+</ul>
+
+<div class="warning">
+<p class="first">Never ask the system prompt for a different output shape.</p>
+<p>Synapic reads a category, a keyword list and a description out of the reply.
+If the system prompt asks for prose, a different set of keys, or a markdown
+report, it fights the instruction below it &mdash; and that is the one reliable
+way to make the parser's job hard. Anything the app cannot recognise ends up in
+the description as raw text. Steer the wording, not the format.</p>
+</div>
+
+<h2>The saved system prompts</h2>
+
+<p>The system prompt is the field people iterate on, so the app keeps a history
+of them rather than one copy. The combobox above the box lists every system
+prompt you have used, most recent first.</p>
+
+<table>
+<tr><th class="setting">Action</th><th>What happens</th></tr>
+<tr><td>Type a prompt and leave the box (or move off Step 2)</td><td>It is committed to the history and selected in the list. A blank box is never saved.</td></tr>
+<tr><td>Pick an entry from the list</td><td>It fills the box.</td></tr>
+<tr><td>Highlight an entry and press <kbd>Delete</kbd></td><td>The entry is removed from the history. If it was the prompt in the box, the box is cleared too &mdash; otherwise the next commit would simply save it again.</td></tr>
+<tr><td>Read the line under the box</td><td>Confirms what happened: saved, removed, or that nothing was selected to remove.</td></tr>
+</table>
+
+<p>The history lives in a small JSON file, <span
+class="path">%APPDATA%\Synapic\system-prompts.json</span>, newest first and capped
+in length. It is a convenience list, not the setting: the prompt actually used by
+a run is stored with the rest of your Step 2 settings, so pruning this list can
+never change how a batch behaves.</p>
+
+<h2>The tag instruction</h2>
+
+<p>This is the <code>user_prompt</code> the inference server receives. Blank
+means <span class="term">use the built-in instruction</span>, which is the
+default and the version that is tested against the model:</p>
+
+<ul>
+<li><span class="ui">Use built-in instruction</span> loads the server's own text
+into the box, so you can read it or adapt it. It comes from the running server
+rather than a copy in the app, so the two can never disagree.</li>
+<li><span class="ui">Reset to built-in</span> clears the box back to blank &mdash;
+which, again, means built-in.</li>
+<li>An orange <span class="ui">Using a custom instruction</span> marker appears
+whenever the box holds text, so a forgotten experiment is visible.</li>
+</ul>
+
+<div class="note">
+<p class="first">A custom instruction must keep asking for the same JSON shape.</p>
+<p>The built-in instruction asks for a JSON object with the three keys Synapic
+reads. A custom instruction has to do the same, and be explicit that the keywords
+are a list of tags. An instruction that merely mentions the three keys can come
+back with valid JSON and no keywords at all; the server logs a warning when that
+happens, so check the log if a run suddenly produces empty fields.</p>
+</div>
+
+<h2>Trying prompt changes without wasting a batch</h2>
+
+<ol class="steps">
+<li>Copy ten representative images into a scratch folder.</li>
+<li>Run them with your current settings and note what you think of the output in
+Step 4.</li>
+<li>Change one thing &mdash; the system prompt, and only the system prompt.</li>
+<li>Run the same ten again and compare. Tags are replaced, not merged, so the
+second run is the one you judge.</li>
+</ol>
+
+<p>One change at a time, on the same images, is what makes prompt work
+informative rather than superstitious. If the output degrades and you cannot say
+why, clear the system prompt and reset the instruction to built-in: that is the
+configuration the app is tested with.</p>
+
+<div class="seealso">
+<h2>See also</h2>
+<ul>
+<li><a href="step2-tag-fields.html">Tag fields: what gets written</a></li>
+<li><a href="step2-settings.html">What Step 2 remembers</a></li>
+<li><a href="step3-log.html">Reading the log</a></li>
+<li><a href="admin-settings-files.html#paths">Files, folders and registry keys</a></li>
+</ul>
+</div>
+
+</body>
+</html>

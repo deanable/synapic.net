@@ -1,0 +1,91 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>What gets written to your images</title>
+<link rel="stylesheet" type="text/css" href="help.css">
+</head>
+<body>
+
+<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; How Synapic works &rsaquo; What gets written</p>
+
+<h1>What gets written to your images</h1>
+
+<p class="lead">Synapic writes standard XMP metadata, in the properties other
+applications already understand. For a folder, into the files; for Daminion,
+through the catalog's own API.</p>
+
+<h2>The three fields, and where they land</h2>
+
+<table>
+<tr><th class="setting">Tag field</th><th>File metadata</th><th>Daminion</th></tr>
+<tr><td>Category</td><td><code>photoshop:Headline</code>, plus <code>Iptc4xmpCore:IntellectualGenre</code></td><td>The item's Categories tag</td></tr>
+<tr><td>Keywords</td><td><code>dc:subject</code> (a bag of subjects)</td><td>The item's Keywords tag</td></tr>
+<tr><td>Description</td><td><code>dc:description</code>, as the <code>x-default</code> alternative</td><td>The item's Description</td></tr>
+</table>
+
+<p>Choosing standard properties is deliberate: Adobe Bridge, Lightroom, Windows
+Explorer, Daminion and most DAM importers already show <code>dc:subject</code> as
+keywords and <code>dc:description</code> as the description, so a tagged folder
+means the same thing everywhere.</p>
+
+<h2>By file type</h2>
+
+<table>
+<tr><th class="setting">Format</th><th>How it is written</th></tr>
+<tr><td>JPEG (<span class="path">.jpg</span>, <span class="path">.jpeg</span>)</td><td>A minimal XMP packet is inserted or replaced as an APP1 segment by byte surgery. The image is <em>not</em> re-encoded, so the pixels are untouched and the file does not lose quality.</td></tr>
+<tr><td>PNG (<span class="path">.png</span>)</td><td>An international-text chunk (<code>iTXt</code>, with the Adobe XMP identifier) is written just after the header. Like the JPEG path, the image data is left alone.</td></tr>
+<tr><td>TIFF (<span class="path">.tif</span>, <span class="path">.tiff</span>)</td><td>An <span class="path">.xmp</span> sidecar file is written next to the image, which is what Daminion and Windows Photos honour for TIFF. The tags are therefore <em>not</em> inside the TIFF itself &mdash; if you copy the image somewhere, copy the sidecar too, or the tags will not follow.</td></tr>
+<tr><td>Daminion items</td><td>Written back through the catalog's item-update API. No files on disk are touched by Synapic at all in this mode.</td></tr>
+</table>
+
+<h2>What happens to values that were already there</h2>
+
+<ul>
+<li><span class="term">Replaced, not merged.</span> A run writes the properties in
+the table above, replacing whatever they held. Keyword lists are not appended to:
+the new list becomes the list.</li>
+<li><span class="term">Untouched everywhere else.</span> Synapic does not write
+other XMP properties, EXIF, IPTC or filename fields. Your camera data, ratings,
+copyright and existing non-keyword metadata stay as they were.</li>
+<li><span class="term">Two writers, one truth.</span> A folder run writes files,
+not a catalog, so Daminion will only see those tags when it re-reads the files.
+In Daminion mode the writing happens the other way round. Pick the mode that
+matches where the metadata is authoritative for you.</li>
+</ul>
+
+<div class="warning">
+<p class="first">Keep a backup before the first big run.</p>
+<p>There is no undo. A run over 5,000 images replaces the keywords, headline and
+description of each one, and the previous values are gone. Copy a sample, or the
+whole set, until you trust the settings.</p>
+</div>
+
+<h2>Reading it back</h2>
+
+<p>Synapic can read the same properties it writes, plus IPTC and EXIF fallbacks
+for images tagged by other tools. That is what
+<span class="ui">Verify Daminion Writes</span> uses, and what the round-trip
+tests exercise: write a file, read it, and check the three values came back
+intact.</p>
+
+<h2>Checking a file yourself</h2>
+
+<table>
+<tr><th class="setting">What you have</th><th>How to look</th></tr>
+<tr><td>Windows Explorer</td><td>Right-click the file, Properties, Details &mdash; keywords and title are in the standard columns.</td></tr>
+<tr><td>Daminion</td><td>Re-import or refresh the folder, then look at the item's keywords, categories and description.</td></tr>
+<tr><td>Any XMP-aware tool</td><td>Adobe Bridge, ExifTool, Lightroom or Photos all show <code>dc:subject</code> and <code>dc:description</code>.</td></tr>
+</table>
+
+<div class="seealso">
+<h2>See also</h2>
+<ul>
+<li><a href="step2-tag-fields.html">Tag fields: what gets written</a></li>
+<li><a href="step3-process.html">Step 3 &mdash; Process</a></li>
+<li><a href="step4-results.html">Step 4 &mdash; Results</a></li>
+</ul>
+</div>
+
+</body>
+</html>

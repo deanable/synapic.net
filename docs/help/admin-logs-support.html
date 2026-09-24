@@ -1,0 +1,122 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>Logs, crashes and support</title>
+<link rel="stylesheet" type="text/css" href="help.css">
+</head>
+<body>
+
+<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; Administrator guide &rsaquo; Logs, crashes and support</p>
+
+<h1>Logs, crashes and support</h1>
+
+<p class="lead">Every run leaves an honest record. Knowing where it is turns most
+support conversations into a single attachment.</p>
+
+<h2 id="logs">Where the logs are</h2>
+
+<table>
+<tr><th class="setting">File</th><th>Contents</th></tr>
+<tr><td><span class="path">logs\synapic.log</span></td><td>The current run, written as it happens. It starts empty on each app start.</td></tr>
+<tr><td><span class="path">logs\archives\synapic-&lt;date&gt;-&lt;time&gt;.log</span></td><td>Previous runs. Each start moves the old log here and keeps the ten most recent, so a week of work is usually still on disk.</td></tr>
+<tr><td><span class="path">logs\crashes\crash-&lt;stamp&gt;-&lt;source&gt;.txt</span></td><td>One file per crash, holding the exception and a snapshot of the log at that moment. The most recent reports are kept.</td></tr>
+<tr><td><span class="path">logs\synapic-usage.json</span></td><td>Opt-in local counters: batches run, items processed, duplicates found. No service is contacted, ever.</td></tr>
+</table>
+
+<p>The folder is next to the executable &mdash; <span class="path">C:\Program
+Files\Synapic\logs</span> on a default install. If that folder is not writable,
+Synapic falls back to <span class="path">%LOCALAPPDATA%\Synapic\logs</span>, and
+says so in the UI log when it starts. Check there first if the expected folder is
+empty.</p>
+
+<div class="note">
+<p class="first">The log's level is a config setting.</p>
+<p><code>ui.logLevel</code> in <span class="path">config.json</span> defaults to
+<code>info</code>. Internal debugging detail (including per-field model output) is
+logged at a level you will not see in the file; the UI log pane and the batch's
+own lines are what to read instead. See <a
+href="admin-settings-files.html#paths">Files, folders and registry keys</a>.</p>
+</div>
+
+<h2>What a log tells you</h2>
+
+<ul>
+<li><span class="term">What settings a run used.</span> The batch's first line
+names the tag fields being written, which settles a whole class of "fields are
+missing" reports without any guesswork. See <a href="step2-tag-fields.html">Tag
+fields</a>.</li>
+<li><span class="term">What each image produced.</span> A result line per image
+with the category, the keyword count and the start of the description.</li>
+<li><span class="term">Why an image failed.</span> A failure line with the
+reason, matched to the row in Step 4.</li>
+<li><span class="term">What the inference server said.</span> Its error stream is
+passed through verbatim, prefixed <code>[sidecar:err]</code>, which is where
+model-loading and packaging problems surface.</li>
+</ul>
+
+<p><a href="step3-log.html">Reading the log</a> explains the individual lines.</p>
+
+<h2 id="support">What to send with a support request</h2>
+
+<ol class="steps">
+<li><span class="path">logs\synapic.log</span> for the session in question.</li>
+<li>If the problem started earlier, the matching file from
+<span class="path">logs\archives\</span> &mdash; the file names carry the run's
+start time.</li>
+<li>Anything in <span class="path">logs\crashes\</span>, especially if the app
+closed unexpectedly.</li>
+<li>Which version and which inference server variant: read them from the status
+area and the setup panel &mdash; for example <span class="ui">Server running
+(port 51234)</span> plus a server row reading <span class="ui">Built</span> with
+its variant and size.</li>
+<li>One sentence on the expectation: what you asked for and what happened
+instead. The log records the settings, not your intent.</li>
+</ol>
+
+<div class="tip">
+<p class="first">Reproduce it small.</p>
+<p>Most problems worth reporting can be shown with a single folder of five
+images, or one Daminion item. A small reproduction makes the log a few dozen lines
+instead of fifty thousand, and the answer usually arrives faster.</p>
+</div>
+
+<h2>Privacy in the logs</h2>
+
+<table>
+<tr><th class="setting">Appears</th><th>Does not appear</th></tr>
+<tr><td>File names and folder paths</td><td>Image contents, which never leave the machine</td></tr>
+<tr><td>The Daminion server URL and username</td><td>The Daminion password, which is stored separately and encrypted</td></tr>
+<tr><td>Model ids, device, settings and error messages</td><td>Anything about other applications on the machine</td></tr>
+</table>
+
+<p>Logs are text files in the install folder, so normal file-retention rules
+apply: delete or archive them as your policy requires. Nothing is transmitted
+anywhere by the app itself.</p>
+
+<h2>Two practical gotchas</h2>
+
+<ul>
+<li><span class="term">An empty-looking help file.</span> If
+<span class="path">Synapic.chm</span> opens with blank pages or a missing
+Contents pane, Windows has blocked it as an attachment. Right-click the file,
+choose <span class="ui">Properties</span>, tick <span
+class="ui">Unblock</span>, and reopen. Copies distributed over a network share
+hit this too.</li>
+<li><span class="term">A log folder that is empty after a crash.</span> The app
+could not write to the install folder. Look in
+<span class="path">%LOCALAPPDATA%\Synapic\logs</span>; a crash before logging
+initialised is the one case where there is genuinely nothing to read.</li>
+</ul>
+
+<div class="seealso">
+<h2>See also</h2>
+<ul>
+<li><a href="troubleshooting.html">Troubleshooting</a></li>
+<li><a href="step3-log.html">Reading the log</a></li>
+<li><a href="admin-settings-files.html">Files, folders and registry keys</a></li>
+</ul>
+</div>
+
+</body>
+</html>

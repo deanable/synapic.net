@@ -1,0 +1,111 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>Build the inference server</title>
+<link rel="stylesheet" type="text/css" href="help.css">
+</head>
+<body>
+
+<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; Getting started &rsaquo; Build the inference server</p>
+
+<h1>Build the inference server</h1>
+
+<p class="lead">The model does not run inside Synapic. It runs in a second
+program, the inference server, which Synapic starts and talks to over a local
+port. Until one exists, the wizard is disabled on purpose.</p>
+
+<h2>Why there is a separate server</h2>
+
+<p>The model needs a Python deep-learning runtime &mdash; hundreds of megabytes of
+native libraries that have nothing to do with a desktop UI. Keeping them in their
+own process means the app starts instantly, and a crashed model cannot take your
+batch down with it. Synapic spawns the server, waits for it to report healthy,
+sends it one request per image, and shuts it down when the app closes.</p>
+
+<p>You only see it in two places: the status dot in the toolbar, and the build
+panel below it.</p>
+
+<h2>Building one</h2>
+
+<ol class="steps">
+<li>Look at the setup panel. Each row is a variant that can be built on this
+machine: <span class="ui">CPU</span> (runs anywhere) and, on Windows,
+<span class="ui">CUDA (NVIDIA GPU)</span> (much faster on a supported card). The
+small grey text next to the name is the variant's runtime identifier, for example
+<code>win-x64</code> or <code>win-x64-cuda</code>.</li>
+<li>Press <span class="ui">Build sidecar</span> on the row you want.</li>
+<li>Watch the row. It shows a progress bar and the current stage, such as
+fetching Python, installing packages, or packaging. A first build also fetches a
+private copy of Python and the inference packages, which is why it is slow; a
+rebuild reuses what it can.</li>
+<li>When the row reads <span class="ui">Built</span> with a size, the server can
+start. Synapic starts it automatically; the status text moves to
+<span class="ui">Server running (port &hellip;)</span>.</li>
+</ol>
+
+<h2>Which variant should I build?</h2>
+
+<table>
+<tr><th class="setting">Variant</th><th>When to choose it</th></tr>
+<tr><td><span class="ui">CPU</span></td><td>Always a safe choice. Works on every machine, needs no GPU driver, and is what to build first. Tagging takes several seconds per image.</td></tr>
+<tr><td><span class="ui">CUDA (NVIDIA GPU)</span></td><td>When the machine has an NVIDIA card with a current driver. The build is larger (about 2.5 GB) and slower to produce, and it falls back to CPU if no usable GPU is present, so it is safe to install anywhere.</td></tr>
+</table>
+
+<div class="tip">
+<p class="first">You can have both.</p>
+<p>Building both is normal for a workstation: use the CUDA variant day to day and
+keep the CPU one as a fallback. They are independent executables and the build of
+one cannot break the other.</p>
+</div>
+
+<h2>Updating or replacing the server</h2>
+
+<p>The server is one self-contained executable. To update it without
+reinstalling Synapic, put the new file next to <span
+class="path">Synapic.exe</span>, named <span
+class="path">synapic-inference.exe</span>, replacing the existing one, then
+restart Synapic. That is the supported way to move a machine onto a newer or
+different variant &mdash; for example switching a workstation to the CUDA build
+after buying a GPU.</p>
+
+<div class="warning">
+<p class="first">Do not delete the server while Synapic is running.</p>
+<p>A running batch will fail image by image. Stop the server from the toolbar
+first, close Synapic, then replace the file.</p>
+</div>
+
+<h2>The model itself</h2>
+
+<p>Building a server does not download the model. The model arrives the first
+time an image is tagged, about 860 MB, and is cached per machine under <span
+class="path">%LOCALAPPDATA%\Synapic\models</span>. Later runs, and other
+installs of Synapic on the same machine, reuse it.</p>
+
+<p>Organisationally this matters in two cases: moving a machine to a faster
+variant does not re-download the model, and a machine with no internet access
+needs that folder seeded before it can tag anything. See <a
+href="admin-deploy.html">Deploying to many machines</a>.</p>
+
+<h2>When something looks wrong</h2>
+
+<table>
+<tr><th class="setting">What you see</th><th>What to do</th></tr>
+<tr><td><span class="ui">Server not detected</span> and no buildable rows</td><td>There is no source checkout or prebuilt server for this machine's platform. Install a release build that includes one.</td></tr>
+<tr><td>Build fails part-way</td><td>The log pane has the build's own output. A failed first build is usually the network (fetching Python or packages), and rebuilding after the network is back is the fix.</td></tr>
+<tr><td>Status stuck on <span class="ui">Server starting&hellip;</span></td><td>A cold start really can take up to two minutes. If it exceeds that, the log says why; see <a href="troubleshooting.html#sidecar">Troubleshooting: the inference server</a>.</td></tr>
+<tr><td><span class="ui">stale build, rebuild recommended</span></td><td>Developer checkouts only: the server executable is older than the inference source. Rebuild the variant from the panel.</td></tr>
+</table>
+
+<div class="seealso">
+<h2>See also</h2>
+<ul>
+<li><a href="getting-started.html">Install and first run</a></li>
+<li><a href="window-overview.html">The main window</a></li>
+<li><a href="admin-deploy.html">Deploying to many machines</a></li>
+<li><a href="troubleshooting.html#sidecar">Troubleshooting: the inference server</a></li>
+</ul>
+</div>
+
+</body>
+</html>

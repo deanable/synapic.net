@@ -1,0 +1,78 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>How many items to process</title>
+<link rel="stylesheet" type="text/css" href="help.css">
+</head>
+<body>
+
+<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; The workflow &rsaquo; Step 1 &rsaquo; How many items to process</p>
+
+<h1>How many items to process</h1>
+
+<p class="lead">The last row of Step 1 decides how big the batch is and how much
+of each image the model looks at. Both are about time, not quality.</p>
+
+<h2>How many items</h2>
+
+<table>
+<tr><th class="setting">Control</th><th>What it does</th></tr>
+<tr><td><span class="ui">Max items</span></td><td>The ceiling for this run: 100 by default, raised in steps of 50. The batch stops when it has taken that many items. Setting it to 0 removes the ceiling, exactly as <span class="ui">Process all</span> does.</td></tr>
+<tr><td><span class="ui">Process all (page until empty)</span></td><td>Ignores the ceiling and keeps requesting pages of results until the server returns none. This is the switch for a catalog larger than a single API response &mdash; without it, a big catalog can look like it was fully processed when only the first page was.</td></tr>
+<tr><td><span class="ui">Count matching items</span></td><td>Reports how many items the scope and filters select, so you can size the job before running it. See <a href="step1-scope-filters.html">Scope and filters</a>.</td></tr>
+</table>
+
+<div class="note">
+<p class="first">Order of work is the catalog's, not yours.</p>
+<p>Items arrive in pages as the server returns them. There is no "start with the
+newest" option: if order matters, encode it as a scope (a saved search that sorts
+what you want first) rather than a limit.</p>
+</div>
+
+<h2>How much of each image the model sees</h2>
+
+<table>
+<tr><th class="setting">Control</th><th>What it does</th></tr>
+<tr><td><span class="ui">AI image scale</span></td><td>Downscales the image before tagging: <span class="ui">100%</span> (default), <span class="ui">75%</span>, <span class="ui">50%</span> or <span class="ui">25%</span>. Smaller means faster and less memory; the model still sees the whole frame, just with less detail.</td></tr>
+<tr><td><span class="ui">Use fixed 200px thumbnail (fast)</span></td><td>Asks Daminion for its 200-pixel thumbnail instead of the full image, which is dramatically faster on a large catalog. It overrides the scale setting.</td></tr>
+</table>
+
+<div class="warning">
+<p class="first">Thumbnails trade quality for speed, and you can hear it.</p>
+<p>At 200 pixels the model often misses fine detail: a small sign, a serial
+number, the difference between two similar species. It is the right setting for a
+first pass over a huge catalog, and the wrong setting for the run you intend to
+keep. If your descriptions come back vague and generic, raise the scale before
+changing the prompt.</p>
+</div>
+
+<h2>Sizing a run you can actually finish</h2>
+
+<table>
+<tr><th class="setting">Setting</th><th>Use it when</th></tr>
+<tr><td>100%, folder, 100 items</td><td>Trying the model on your own images, or tagging a curated set properly.</td></tr>
+<tr><td>75% or 50%, folder</td><td>Ordinary work on a machine without a GPU: a little faster, with little visible loss.</td></tr>
+<tr><td>30&ndash;50%, Daminion, saved search</td><td>A big catalog where the tags will be reviewed before anyone trusts them.</td></tr>
+<tr><td>200px thumbnail, Process all</td><td>A first pass over tens of thousands of items, to triage what deserves a full run.</td></tr>
+</table>
+
+<div class="tip">
+<p class="first">You can run the same items twice.</p>
+<p>Tags are written, not merged: a second run over the same items replaces the
+keywords, category and description that Synapic manages. That makes "rough pass
+now, proper pass later" a viable plan &mdash; just be aware that the second run
+overwrites the first, rather than adding to it.</p>
+</div>
+
+<div class="seealso">
+<h2>See also</h2>
+<ul>
+<li><a href="step1-scope-filters.html">Scope and filters</a></li>
+<li><a href="step3-process.html">Step 3 &mdash; Process</a> &mdash; progress, ETA, pause and abort</li>
+<li><a href="metadata-written.html">What gets written to your images</a></li>
+</ul>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,293 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<HTML>
+<HEAD>
+<meta name="GENERATOR" content="Microsoft&reg; HTML Help Workshop 4.1">
+<!-- Sitemap 1.0 -->
+</HEAD><BODY>
+<UL>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="abort a batch">
+		<param name="Local" value="step3-process.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="active catalog">
+		<param name="Local" value="step1-daminion.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="AI image scale">
+		<param name="Local" value="step1-limits.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="algorithms, deduplication">
+		<param name="Local" value="dedup.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="archived logs">
+		<param name="Local" value="admin-logs-support.html#logs">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="built-in tag instruction">
+		<param name="Local" value="step2-prompts.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="build the inference server">
+		<param name="Local" value="first-run-sidecar.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="catalog">
+		<param name="Local" value="step1-daminion.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="categories, writing">
+		<param name="Local" value="step2-tag-fields.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="CHM help file">
+		<param name="Local" value="glossary.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="collection, shared">
+		<param name="Local" value="step1-scope-filters.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="config.json">
+		<param name="Local" value="admin-settings-files.html#paths">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="confidence threshold">
+		<param name="Local" value="step2-engine.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="connection, Daminion">
+		<param name="Local" value="step1-daminion.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="count matching items">
+		<param name="Local" value="step1-scope-filters.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="crash reports">
+		<param name="Local" value="admin-logs-support.html#logs">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="CSV export">
+		<param name="Local" value="step4-results.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="CUDA server build">
+		<param name="Local" value="first-run-sidecar.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="Daminion">
+		<param name="Local" value="step1-daminion.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="deduplication">
+		<param name="Local" value="dedup.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="Delete key, system prompts">
+		<param name="Local" value="step2-prompts.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="deleting duplicate images">
+		<param name="Local" value="dedup.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="description, writing">
+		<param name="Local" value="step2-tag-fields.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="device">
+		<param name="Local" value="step2-engine.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="disk space">
+		<param name="Local" value="requirements.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="ETA">
+		<param name="Local" value="step3-process.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="export results">
+		<param name="Local" value="step4-results.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="files written by Synapic">
+		<param name="Local" value="admin-settings-files.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="filters, Daminion">
+		<param name="Local" value="step1-scope-filters.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="firewall">
+		<param name="Local" value="admin-deploy.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="folder, local images">
+		<param name="Local" value="step1-datasource.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="full-text search in help">
+		<param name="Local" value="index.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="glossary">
+		<param name="Local" value="glossary.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="GPU acceleration">
+		<param name="Local" value="first-run-sidecar.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="HKCU registry keys">
+		<param name="Local" value="admin-settings-files.html#registry">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="image scale">
+		<param name="Local" value="step1-limits.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="installation">
+		<param name="Local" value="getting-started.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="keywords, writing">
+		<param name="Local" value="step2-tag-fields.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="log file">
+		<param name="Local" value="admin-logs-support.html#logs">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="max items">
+		<param name="Local" value="step1-limits.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="metadata, what is written">
+		<param name="Local" value="metadata-written.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="model cache">
+		<param name="Local" value="admin-settings-files.html#paths">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="model, choosing">
+		<param name="Local" value="step2-engine.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="pause">
+		<param name="Local" value="step3-process.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="performance">
+		<param name="Local" value="troubleshooting.html#performance">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="pHash">
+		<param name="Local" value="dedup.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="presets, system prompt">
+		<param name="Local" value="step2-prompts.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="probability mode">
+		<param name="Local" value="step2-engine.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="Process all">
+		<param name="Local" value="step1-limits.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="prompts">
+		<param name="Local" value="step2-prompts.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="RAW files, not supported">
+		<param name="Local" value="faq.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="registry keys">
+		<param name="Local" value="admin-settings-files.html#registry">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="requirements">
+		<param name="Local" value="requirements.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="retry failed items">
+		<param name="Local" value="step4-results.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="saved search">
+		<param name="Local" value="step1-scope-filters.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="scope">
+		<param name="Local" value="step1-scope-filters.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="sidecar">
+		<param name="Local" value="first-run-sidecar.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="silent installation">
+		<param name="Local" value="admin-install.html#silent">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="stale build">
+		<param name="Local" value="troubleshooting.html#sidecar">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="Start Over">
+		<param name="Local" value="window-overview.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="status flags, Daminion">
+		<param name="Local" value="step1-scope-filters.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="system prompt">
+		<param name="Local" value="step2-prompts.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="tag fields">
+		<param name="Local" value="step2-tag-fields.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="thumbnail, 200 pixel">
+		<param name="Local" value="step1-limits.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="troubleshooting">
+		<param name="Local" value="troubleshooting.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="uninstall">
+		<param name="Local" value="admin-install.html#upgrade">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="untagged filters">
+		<param name="Local" value="step1-scope-filters.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="upgrade">
+		<param name="Local" value="admin-install.html#upgrade">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="verify Daminion writes">
+		<param name="Local" value="step4-results.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="Write Failed status">
+		<param name="Local" value="step4-results.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="XMP metadata">
+		<param name="Local" value="metadata-written.html">
+		</OBJECT>
+</UL>
+</BODY></HTML>

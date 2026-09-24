@@ -1,0 +1,129 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>Frequently asked questions</title>
+<link rel="stylesheet" type="text/css" href="help.css">
+</head>
+<body>
+
+<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; Frequently asked questions</p>
+
+<h1>Frequently asked questions</h1>
+
+<h2>Does Synapic upload my images anywhere?</h2>
+
+<p>No. The model runs on your machine, the app talks to it over a local port, and
+the only network traffic is to your own Daminion server. There is no cloud engine
+and no API key to configure, by design.</p>
+
+<h2>Which model does it use?</h2>
+
+<p>A small vision-language model, <code>LiquidAI/LFM2.5-VL-450M</code> by
+default, chosen because it is quick enough on an ordinary CPU. You can point Step
+2 at another compatible model id, and the list shows what is already in the local
+cache. See <a href="step2-engine.html">Step 2 &mdash; Tagging Engine</a>.</p>
+
+<h2>Why does the app insist on building an "inference server"?</h2>
+
+<p>The model needs a Python deep-learning runtime that has no business inside a
+desktop UI. Keeping it in its own process means the app starts instantly and a
+model crash cannot take your batch with it. You build it once. See <a
+href="first-run-sidecar.html">Build the inference server</a>.</p>
+
+<h2>Why did only keywords get tagged?</h2>
+
+<p>Because only keywords were selected. The three boxes under
+<span class="ui">Tag fields</span> in Step 2 decide which of the model's three
+results are written, and the choice is remembered. It is the first thing to check
+when a field is missing &mdash; ahead of the model, the prompt and the server. See
+<a href="step2-tag-fields.html#diagnose">the diagnosis recipe</a>.</p>
+
+<h2>Does it overwrite keywords that are already there?</h2>
+
+<p>Yes. A run replaces the keywords, category/headline and description that
+Synapic manages, rather than adding to them. Nothing else in the file is touched.
+Keep a backup before a first large run; there is no undo.</p>
+
+<h2>Can I undo a run?</h2>
+
+<p>Not from Synapic. The writes go straight into the files or the catalog. If you
+need a rollback, restore from a backup or from the DAM's own version history, or
+re-run the items with different settings.</p>
+
+<h2>Which file types can it tag?</h2>
+
+<p>JPEG, PNG and TIFF &mdash; <span class="path">.jpg</span>,
+<span class="path">.jpeg</span>, <span class="path">.png</span>,
+<span class="path">.tif</span> and <span class="path">.tiff</span>. Camera RAW
+files are <em>not</em> supported: they are skipped, so a folder of RAW files
+produces no work. Export JPEGs from your raw processor instead.</p>
+
+<h2>Does it need an internet connection?</h2>
+
+<p>Only to download the model the first time (about 860 MB) and to build an
+inference server from source (which fetches Python and packages). After that,
+tagging a folder works entirely offline. A Daminion run needs your own server,
+which is usually on the local network.</p>
+
+<h2>How long does a batch take?</h2>
+
+<p>Roughly ten seconds per image on a CPU, as a rule of thumb, with four images
+in flight at once. A thousand images is therefore an hour or two of unattended
+work; a hundred thousand is a multi-day job that belongs on a GPU machine. See
+<a href="troubleshooting.html#performance">speed and timings</a>.</p>
+
+<h2>Is the GPU build worth it?</h2>
+
+<p>On a suitable NVIDIA card with current drivers, yes &mdash; often several
+times faster. It is not a linear speed-up though: four parallel requests share one
+model, so expect less than the raw hardware ratio. Judge it on a real batch.</p>
+
+<h2>Can two people run Synapic at the same time?</h2>
+
+<p>On the same machine, each app instance starts its own inference server, so
+they do not interfere. They do share the model cache, which is fine, and each
+Windows account keeps its own settings. Pointed at the same folder, though, two
+runs can fight over the same files &mdash; give each run a different scope.</p>
+
+<h2>Where are my settings kept?</h2>
+
+<p>Step 1's connection and Step 2's engine settings live in the Windows registry
+under <code>HKCU\Software\Synapic</code>, per user. The saved system prompts are a
+JSON file in <span class="path">%APPDATA%\Synapic</span>, and the model cache
+lives in <span class="path">%LOCALAPPDATA%\Synapic\models</span>. Full list:
+<a href="admin-settings-files.html">Files, folders and registry keys</a>.</p>
+
+<h2>Do the confidence and probability settings do anything?</h2>
+
+<p>Not with the local vision-language model. They belong to the classification
+and zero-shot scoring paths, and are ignored here; a log line about progress
+scoring being unavailable is expected. Leave them at their defaults.</p>
+
+<h2>Can I see the tags before they are written?</h2>
+
+<p>Not in the wizard &mdash; the batch writes as it goes. The practical
+alternative is to run against a copy of the images (or a scratch collection),
+review the results in Step 4, and then run the real target with the settings you
+settled on.</p>
+
+<h2>Why does the help not open with F1?</h2>
+
+<p>It is not wired into the app yet, so open <span
+class="path">Synapic.chm</span> from the folder where Synapic is installed. If the
+pages look blank, Windows has blocked the file: right-click the
+<span class="path">.chm</span>, choose <span class="ui">Properties</span>, tick
+<span class="ui">Unblock</span>. See <a href="admin-logs-support.html#support">Logs,
+crashes and support</a>.</p>
+
+<div class="seealso">
+<h2>See also</h2>
+<ul>
+<li><a href="troubleshooting.html">Troubleshooting</a></li>
+<li><a href="glossary.html">Glossary</a></li>
+<li><a href="requirements.html">What you need</a></li>
+</ul>
+</div>
+
+</body>
+</html>

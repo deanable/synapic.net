@@ -1,0 +1,138 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>The main window</title>
+<link rel="stylesheet" type="text/css" href="help.css">
+</head>
+<body>
+
+<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; Getting started &rsaquo; The main window</p>
+
+<h1>The main window</h1>
+
+<p class="lead">Everything happens in one window: a thin toolbar for the
+inference server at the top, the wizard in the middle, and a live log along the
+bottom.</p>
+
+<h2>The toolbar</h2>
+
+<table>
+<tr><th class="setting">Control</th><th>What it does</th></tr>
+<tr><td><span class="ui">Start Server</span></td><td>Starts the inference server. Synapic already starts it for you when the app opens; this is for when you have stopped it deliberately.</td></tr>
+<tr><td><span class="ui">Stop Server</span></td><td>Shuts the inference server down, freeing its memory. Tagging is unavailable while it is stopped.</td></tr>
+<tr><td><span class="ui">Build Server</span></td><td>Appears only when no server executable exists at all, and opens the same build options as the setup panel below.</td></tr>
+<tr><td>Status dot and text</td><td>The state of the inference server at a glance; the wording is listed below.</td></tr>
+<tr><td>Progress bar</td><td>Appears while a model is being downloaded, with the size and speed written next to it.</td></tr>
+</table>
+
+<h3>What the status text means</h3>
+
+<table>
+<tr><th class="setting">Status</th><th>Meaning</th></tr>
+<tr><td>Detecting server&hellip;</td><td>Startup: Synapic is looking for a server executable next to the app or in a development checkout.</td></tr>
+<tr><td>Server not detected</td><td>No server executable was found. Build one; the setup panel appears automatically.</td></tr>
+<tr><td>Building server&hellip;</td><td>A build is running. The first build downloads Python and the inference packages, so it is the longest step in the whole product.</td></tr>
+<tr><td>Server stopped</td><td>A server exists but is not running. Press <span class="ui">Start Server</span>.</td></tr>
+<tr><td>Server starting&hellip; (first launch can take up to 2 minutes)</td><td>The process is up and Synapic is waiting for its <span class="path">/health</span> report. A cold start unpacks and loads the model.</td></tr>
+<tr><td>Server running (port&nbsp;NNNNN)</td><td>Ready to tag. The port is chosen by the operating system and is for this run only.</td></tr>
+<tr><td>Server error &mdash; see log</td><td>The server exited or never became healthy. The log has its own output; see <a href="troubleshooting.html#sidecar">Troubleshooting: the inference server</a>.</td></tr>
+</table>
+
+<div class="note">
+<p class="first">"stale build, rebuild recommended"</p>
+<p>Appended to <span class="ui">Server running</span> when the server executable
+is older than the inference source code it was built from. It still works; you
+are being told that a rebuild would pick up changes. Prebuilt releases never show
+this &mdash; it is a developer-checkout message.</p>
+</div>
+
+<h2>The setup panel</h2>
+
+<p>When Synapic cannot find a usable server, or when a variant you could build is
+still missing, a panel appears under the toolbar listing each buildable variant
+with its state and a <span class="ui">Build sidecar</span> button.</p>
+
+<ul>
+<li>The wizard below stays <span class="term">disabled</span> until at least one
+server exists. This is deliberate: nothing in the wizard can work without
+one.</li>
+<li>While a variant is building, its row shows a progress bar and the stage it is
+in (fetching Python, installing packages, packaging).</li>
+<li>Each row's detail line says what that variant is for &mdash; usually that it
+runs anywhere, or that it needs an NVIDIA GPU.</li>
+</ul>
+
+<p>See <a href="first-run-sidecar.html">Build the inference server</a>.</p>
+
+<h2>The wizard</h2>
+
+<p>Five tabs select the step:</p>
+
+<table>
+<tr><th class="setting">Tab</th><th>What you decide there</th></tr>
+<tr><td>1 &middot; Datasource</td><td>Which images: a folder, or a Daminion catalog with scope and filters.</td></tr>
+<tr><td>2 &middot; Engine</td><td>Model, device, prompts, and which of the three tag fields get written.</td></tr>
+<tr><td>3 &middot; Process</td><td>Run the batch, watch progress, pause, resume or abort.</td></tr>
+<tr><td>4 &middot; Results</td><td>What happened per image: export, retry, verify.</td></tr>
+<tr><td>Deduplication</td><td>A separate tool that finds near-duplicate images in a folder.</td></tr>
+</table>
+
+<p>Below the tabs is one navigation row: a hint describing what the next step
+needs, a <span class="ui">Back</span> button, and a main button whose label
+changes with the step (<span class="ui">Next</span>,
+<span class="ui">Start Processing</span>, and so on). Two things can block
+movement:</p>
+
+<ul>
+<li>A red validation message, for example when Step 1 has no datasource or Step 2
+has no tag field ticked. The message names what is missing.</li>
+<li>An <span class="ui">Start Over</span> button appears once a run has produced
+results; it clears the session and returns you to Step 1.</li>
+</ul>
+
+<div class="warning">
+<p class="first">Navigation is locked while a batch runs.</p>
+<p>While Step 3 is processing, you cannot switch steps. Pause or abort the batch
+first &mdash; changing the engine half-way through a run is not something the app
+tries to make sense of.</p>
+</div>
+
+<h2>The log</h2>
+
+<p>A live view of what the app is doing, newest line at the bottom, scrolling
+itself as the batch progresses. It carries three kinds of line: the app's own
+progress messages, anything the inference server writes to its error stream
+(prefixed <code>[sidecar:err]</code>), and any warnings the app raises.</p>
+
+<p>The same content is written to <span class="path">logs\synapic.log</span> next
+to the executable, with the previous run archived. Recent lines are kept in the
+pane, so a long batch does not grow the window without limit.</p>
+
+<p><a href="step3-log.html">Reading the log</a> explains the lines worth
+knowing.</p>
+
+<h2>Keyboard</h2>
+
+<ul>
+<li>There are no global shortcuts: no <kbd>F1</kbd> help, no
+<kbd>Ctrl</kbd>+<kbd>P</kbd>. The toolbar and the wizard buttons are the
+controls.</li>
+<li>One key matters: <kbd>Delete</kbd> removes the highlighted entry from the
+saved system-prompt list in Step 2. See <a href="step2-prompts.html">Prompts</a>.</li>
+<li>In the log and the results grid, the usual navigation keys work
+(<kbd>Tab</kbd>, arrow keys, <kbd>Ctrl</kbd>+<kbd>C</kbd> to copy the selected
+text).</li>
+</ul>
+
+<div class="seealso">
+<h2>See also</h2>
+<ul>
+<li><a href="workflow-overview.html">The five-step workflow</a></li>
+<li><a href="step1-datasource.html">Step 1 &mdash; Datasource</a></li>
+<li><a href="admin-logs-support.html">Logs, crashes and support</a></li>
+</ul>
+</div>
+
+</body>
+</html>

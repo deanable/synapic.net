@@ -1,0 +1,102 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>Install and first run</title>
+<link rel="stylesheet" type="text/css" href="help.css">
+</head>
+<body>
+
+<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; Getting started &rsaquo; Install and first run</p>
+
+<h1>Install and first run</h1>
+
+<p class="lead">From download to tagged images, in five steps. The only part
+that takes real time is the first one, and you only do it once.</p>
+
+<h2>Install</h2>
+
+<ol class="steps">
+<li>Run <span class="path">Synapic-Setup-win-x64.exe</span>. Windows asks for
+administrator rights, because the app installs under
+<span class="path">C:\Program Files\Synapic</span>.</li>
+<li>If the .NET 10 Desktop Runtime is missing, the installer takes care of it at
+the Ready step &mdash; silently, from the copy bundled in the setup or by
+downloading the official installer. You may see a restart prompt afterwards.</li>
+<li>Choose whether you want a desktop icon, then finish. The installer offers to
+launch Synapic for you.</li>
+</ol>
+
+<p>For unattended installs and for the other platforms, see <a
+href="admin-install.html">Installing and upgrading</a>.</p>
+
+<h2>First run</h2>
+
+<p>Synapic opens on the toolbar, the wizard, and the log. If this is a fresh
+install, the first thing you will notice is that the wizard is greyed out and a
+panel says <span class="ui">Inference sidecar required</span>. That is expected:
+nothing can be tagged until an inference server exists.</p>
+
+<ol class="steps">
+<li><span class="term">Build an inference server.</span> In the panel, press
+<span class="ui">Build sidecar</span> on the CPU row. The first build downloads a
+private Python and the packages the model needs, so expect minutes, not seconds.
+Full detail: <a href="first-run-sidecar.html">Build the inference server</a>.</li>
+<li><span class="term">Let the server start.</span> Synapic launches the server
+as soon as one exists, and the status dot turns green with
+<span class="ui">Server running (port &hellip;)</span>. The very first launch is
+slow &mdash; up to a couple of minutes &mdash; because the model is unpacked and
+loaded.</li>
+<li><span class="term">Choose images.</span> In <a href="step1-datasource.html">Step 1
+&mdash; Datasource</a>, either point at a folder on disk or connect to Daminion.
+For a first test, a small folder is the kindest choice.</li>
+<li><span class="term">Run the batch.</span> Go to <a href="step3-process.html">Step 3
+&mdash; Process</a> and press <span class="ui">Start Processing</span>. The first
+image also triggers the model download (about 860 MB) if the model has never been
+used on this machine.</li>
+<li><span class="term">Review.</span> <a href="step4-results.html">Step 4 &mdash;
+Results</a> lists what happened to every image, and
+<span class="ui">Verify Daminion Writes</span> re-reads a Daminion catalog to
+confirm the tags really landed.</li>
+</ol>
+
+<h2>A safe first batch</h2>
+
+<p>To see what the model produces without committing anything, tag a copy of a
+dozen images in a folder:</p>
+
+<ol class="steps">
+<li>Step 1: choose <span class="ui">Local Folder</span>, point at the copy, and
+leave <span class="ui">Include subfolders</span> off.</li>
+<li>Step 2: leave the defaults. The three <span class="ui">Tag fields</span> boxes
+are ticked, so all three results are written into the files' XMP metadata.</li>
+<li>Step 3: <span class="ui">Start Processing</span>, then read the log as it
+scrolls. A line per image reports the category, the number of keywords, and the
+start of the description.</li>
+<li>Step 4: check the rows, then look at one of the files in your own image
+viewer or in Daminion to see the metadata.</li>
+</ol>
+
+<h2>What the first run costs you in time</h2>
+
+<table>
+<tr><th class="setting">Stage</th><th>What happens</th><th>Roughly</th></tr>
+<tr><td>Building the inference server</td><td>Downloads a standalone Python and the inference packages, then packages them into one executable</td><td>Minutes to tens of minutes, once</td></tr>
+<tr><td>First server start</td><td>Unpacks the executable and imports the runtime</td><td>Up to two minutes, every launch</td></tr>
+<tr><td>Model download</td><td>About 860 MB, once per machine</td><td>Depends on the connection</td></tr>
+<tr><td>Model load</td><td>Weights into memory before the first tag</td><td>Tens of seconds on CPU</td></tr>
+<tr><td>Each image after that</td><td>One model call plus a metadata write</td><td>Around ten seconds on CPU; less on a GPU</td></tr>
+</table>
+
+<div class="seealso">
+<h2>See also</h2>
+<ul>
+<li><a href="requirements.html">What you need</a></li>
+<li><a href="window-overview.html">The main window</a></li>
+<li><a href="workflow-overview.html">The five-step workflow</a></li>
+<li><a href="troubleshooting.html#sidecar">Troubleshooting: the inference server</a></li>
+</ul>
+</div>
+
+</body>
+</html>

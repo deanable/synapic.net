@@ -14,6 +14,7 @@ phase plan that tracked it.
 | [`testing.md`](testing.md) | Test projects, what each suite pins down, and how to run them. |
 | [`packaging.md`](packaging.md) | Installers, signing, bundle layout, upgrade path. |
 | [`migration-checklist.md`](migration-checklist.md) | File-by-file porting map from the original Python app. |
+| [`help/`](help/README.md) | The **user and administrator help** itself: HTML topics compiled into `Synapic.chm` by `docs/help/build-chm.ps1` (HTML Help Workshop). Separate from this developer documentation set, and checked by `docs/help/check-help.py`. |
 
 ## 30-second orientation
 

@@ -1,0 +1,102 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>Step 3 &mdash; Process</title>
+<link rel="stylesheet" type="text/css" href="help.css">
+</head>
+<body>
+
+<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; The workflow &rsaquo; Step 3 &mdash; Process</p>
+
+<h1>Step 3 &mdash; Process</h1>
+
+<p class="lead">Nothing to decide here: press Start and watch, or leave it
+running. This is the step that writes to your library, so the controls around
+stopping it are worth knowing.</p>
+
+<h2>The controls</h2>
+
+<table>
+<tr><th class="setting">Control</th><th>What it does</th></tr>
+<tr><td><span class="ui">Start Processing</span></td><td>Begins the batch: fetch the items, then tag and write them one by one. Disabled while a batch is running, and while Step 2 has no tag field ticked.</td></tr>
+<tr><td><span class="ui">Pause</span></td><td>Stops taking new images. Items already in flight finish and are written, so pausing never abandons half-tagged work.</td></tr>
+<tr><td><span class="ui">Resume</span></td><td>Continues from where the batch stopped.</td></tr>
+<tr><td><span class="ui">Abort</span></td><td>Cancels the batch. It always wins over a pause, and it takes effect as soon as the items in flight have been dealt with.</td></tr>
+</table>
+
+<div class="note">
+<p class="first">Pause is finished-work-safe; abort is not a rollback.</p>
+<p>Aborting stops the run, but every image already tagged and written stays
+written. There is no undo step: use a small folder or a scratch collection if you
+want to experiment freely.</p>
+</div>
+
+<h2>Reading the progress line</h2>
+
+<table>
+<tr><th class="setting">What you see</th><th>Meaning</th></tr>
+<tr><td><span class="ui">Fetching items&hellip;</span></td><td>The run is still collecting the work list, before any tagging. For Daminion this is paging through the catalog, which can take seconds or minutes on a large scope. Nothing has been tagged yet.</td></tr>
+<tr><td><span class="ui">12/40 (0 failed)</span></td><td>Items completed out of the total, with the failure count. The total is known once fetching finishes.</td></tr>
+<tr><td><span class="ui">ETA ~3m 20s remaining &mdash; ~10s per image</span></td><td>Time remaining and the average cost of one image, both estimated from completed items. It appears once the first image has finished.</td></tr>
+<tr><td><span class="ui">No items matched the current filters</span></td><td>The batch found nothing to do. Check the scope, filters and limit in Step 1 &mdash; the model was never asked.</td></tr>
+<tr><td>The current file name</td><td>The image being worked on right now.</td></tr>
+</table>
+
+<div class="tip">
+<p class="first">Expect the first image to take much longer than the rest.</p>
+<p>Until the model is loaded, the app is waiting rather than tagging. On a cold
+start that can be a minute or more, and the model download (about 860 MB) happens
+here too if it has never run on this machine. Judge the per-image time from the
+second image onwards.</p>
+</div>
+
+<h2>What one image involves</h2>
+
+<ol class="steps">
+<li>The image is obtained: read from the folder, or downloaded from Daminion
+&mdash; full size, scaled, or as a 200-pixel thumbnail, depending on <a
+href="step1-limits.html">your Step 1 settings</a>.</li>
+<li>It is sent to the inference server, which returns a category, keywords and a
+description in one call.</li>
+<li>The fields you ticked in <a href="step2-tag-fields.html">Step 2</a> are
+written to the file or the catalog.</li>
+<li>The outcome is recorded for Step 4, and a line is appended to the log.</li>
+</ol>
+
+<p>Up to four images are in flight at once, which is why the per-image time on
+screen (about ten seconds on a CPU) is longer than the rate the batch actually
+finishes at. See <a href="workflow-overview.html">The five-step workflow</a>.</p>
+
+<h2>While a batch runs</h2>
+
+<ul>
+<li>The wizard is locked: you cannot change steps or settings mid-run. Pause or
+abort first.</li>
+<li>Every completion is written to <span
+class="path">logs\synapic.log</span> as it happens, so closing the window by
+accident does not lose the record of what was written.</li>
+<li>The log pane keeps the most recent lines on screen; the file keeps the whole
+run.</li>
+<li>Step 4 is filled in as the batch goes, so you can switch to it once the run
+finishes (or after aborting) and see everything that happened.</li>
+</ul>
+
+<div class="warning">
+<p class="first">Do not stop the inference server from the toolbar mid-batch.</p>
+<p>Everything queued fails immediately. If you need the memory back, pause the
+batch first, wait for the items in flight to finish, then disconnect or stop.</p>
+</div>
+
+<div class="seealso">
+<h2>See also</h2>
+<ul>
+<li><a href="step3-log.html">Reading the log</a></li>
+<li><a href="step4-results.html">Step 4 &mdash; Results</a></li>
+<li><a href="metadata-written.html">What gets written to your images</a></li>
+<li><a href="troubleshooting.html#performance">Troubleshooting: speed and timings</a></li>
+</ul>
+</div>
+
+</body>
+</html>

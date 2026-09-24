@@ -1,0 +1,132 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>Files, folders and registry keys</title>
+<link rel="stylesheet" type="text/css" href="help.css">
+</head>
+<body>
+
+<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; Administrator guide &rsaquo; Files, folders and registry keys</p>
+
+<h1>Files, folders and registry keys</h1>
+
+<p class="lead">Everything Synapic writes, and where. Useful for scripting a
+rollout, backing up a user's configuration, or proving to an auditor that nothing
+interesting leaves the machine.</p>
+
+<h2 id="paths">Files and folders</h2>
+
+<table>
+<tr><th class="setting">What</th><th>Path</th><th>Notes</th></tr>
+<tr><td>Application settings</td><td><span class="path">%APPDATA%\Synapic\config.json</span></td><td>Wizard defaults and UI preferences. Off Windows: <span class="path">$XDG_CONFIG_HOME/Synapic/config.json</span> or <span class="path">~/.config/Synapic/config.json</span>.</td></tr>
+<tr><td>Saved system prompts</td><td><span class="path">%APPDATA%\Synapic\system-prompts.json</span></td><td>The Step 2 prompt history, newest first. Pruning it never changes a run's current settings. See <a href="step2-prompts.html">Prompts</a>.</td></tr>
+<tr><td>Current log</td><td><span class="path">logs\synapic.log</span> next to the executable</td><td>Falls back to <span class="path">%LOCALAPPDATA%\Synapic\logs</span> when the install folder is not writable. Starts empty each run.</td></tr>
+<tr><td>Previous logs</td><td><span class="path">logs\archives\</span></td><td>Each start moves the previous log in here; the ten most recent are kept.</td></tr>
+<tr><td>Crash reports</td><td><span class="path">logs\crashes\</span></td><td>One text file per crash: the exception plus a snapshot of the run's log.</td></tr>
+<tr><td>Usage counters</td><td><span class="path">logs\synapic-usage.json</span></td><td>Only written when the user opts in. Local counts, no service involved.</td></tr>
+<tr><td>Model cache</td><td><span class="path">%LOCALAPPDATA%\Synapic\models</span></td><td>Per user, shared by every Synapic install for that user. Off Windows: <span class="path">~/.cache/synapic/models</span>. Deleted by the uninstaller.</td></tr>
+<tr><td>Inference server port file</td><td><span class="path">%TEMP%\synapic_port_&lt;pid&gt;.txt</span></td><td>Two lines: the port, then the server's process id. Created per launch and used to find the server; it contains nothing sensitive.</td></tr>
+</table>
+
+<h3>The configuration file</h3>
+
+<p>JSON with a version number (currently <code>2</code>). Unknown fields are
+preserved when the app rewrites it, so a hand-added key survives.</p>
+
+<table>
+<tr><th class="setting">Key</th><th>Meaning</th></tr>
+<tr><td><code>version</code></td><td>Config schema version.</td></tr>
+<tr><td><code>datasource.type</code>, <code>.localPath</code>, <code>.localRecursive</code></td><td>The local-folder side of Step 1.</td></tr>
+<tr><td><code>datasource.daminion.*</code></td><td>Server URL, username, scope, search term, ids, untagged filters, status filter and max items. The password is <em>not</em> here; it lives encrypted in the registry.</td></tr>
+<tr><td><code>engine.modelId</code>, <code>.task</code>, <code>.device</code></td><td>The default engine selection, for example <code>LiquidAI/LFM2.5-VL-450M</code>, <code>image-text-to-text</code>, <code>cpu</code>.</td></tr>
+<tr><td><code>engine.confidenceThreshold</code>, <code>.probabilityMode</code>, <code>.probabilityThreshold</code>, <code>.probabilityCandidates</code></td><td>The scoring controls. They do not affect the local vision-language model.</td></tr>
+<tr><td><code>engine.systemPrompt</code>, <code>.userPrompt</code></td><td>The two prompt boxes. An empty <code>userPrompt</code> means the built-in tag instruction.</td></tr>
+<tr><td><code>processing.maxItems</code>, <code>.autoPaginate</code>, <code>.resizeScale</code>, <code>.useThumbnailOverride</code></td><td>Batch size and image-scaling defaults.</td></tr>
+<tr><td><code>ui.theme</code>, <code>.logLevel</code></td><td><code>system</code> theme and <code>info</code> logging by default.</td></tr>
+<tr><td><code>ui.autoLaunchSidecar</code></td><td><code>true</code> by default: the inference server starts with the app. Set it to <code>false</code> to make starting the server a manual step.</td></tr>
+<tr><td><code>ui.telemetryEnabled</code></td><td><code>false</code> unless a user opts in.</td></tr>
+</table>
+
+<h2 id="registry">Registry keys</h2>
+
+<p>Both stores are under <code>HKEY_CURRENT_USER</code>, so they are per user and
+need no administrator rights. They exist on Windows only: on Linux and macOS the
+app runs with defaults and forgets these settings between runs.</p>
+
+<h3>Step 2 &mdash; <code>HKCU\Software\Synapic\Engine</code></h3>
+
+<table>
+<tr><th class="setting">Value</th><th>Type</th><th>Default</th></tr>
+<tr><td><code>ModelId</code></td><td>String</td><td><code>LiquidAI/LFM2.5-VL-450M</code></td></tr>
+<tr><td><code>Task</code></td><td>String</td><td><code>image-text-to-text</code></td></tr>
+<tr><td><code>Device</code></td><td>String</td><td><code>cpu</code> (others: <code>cuda</code>, <code>mps</code>)</td></tr>
+<tr><td><code>ConfidenceThreshold</code></td><td>String (number)</td><td><code>0.3</code></td></tr>
+<tr><td><code>ProbabilityMode</code></td><td>String</td><td><code>both</code> (others: <code>llm</code>, <code>probability</code>)</td></tr>
+<tr><td><code>ProbabilityThreshold</code></td><td>String (number)</td><td><code>0.5</code></td></tr>
+<tr><td><code>ProbabilityCandidates</code></td><td>String</td><td>empty</td></tr>
+<tr><td><code>SystemPrompt</code></td><td>String</td><td>empty</td></tr>
+<tr><td><code>UserPrompt</code></td><td>String</td><td>empty, meaning the built-in tag instruction</td></tr>
+<tr><td><code>EmbeddingRescueEnabled</code></td><td>DWORD</td><td><code>0</code>. Persisted for compatibility; the local model does not use it.</td></tr>
+<tr><td><code>TagKeywords</code></td><td>DWORD</td><td><code>1</code>. Whether keywords are written.</td></tr>
+<tr><td><code>TagCategories</code></td><td>DWORD</td><td><code>1</code>. Whether the category is written.</td></tr>
+<tr><td><code>TagDescription</code></td><td>DWORD</td><td><code>1</code>. Whether the description is written.</td></tr>
+</table>
+
+<div class="tip">
+<p class="first">Those last three values are the ones to check first in the field.</p>
+<p>They are the persisted <a href="step2-tag-fields.html">tag-field selection</a>,
+and if one is <code>0</code> the app will quietly stop writing that field to every
+item. Reading them takes seconds and settles the most common "Synapic only wrote
+keywords" report.</p>
+</div>
+
+<h3>Step 1 &mdash; <code>HKCU\Software\Synapic\Daminion</code></h3>
+
+<table>
+<tr><th class="setting">Value</th><th>Meaning</th></tr>
+<tr><td><code>ServerUrl</code>, <code>Username</code></td><td>The last connection that worked.</td></tr>
+<tr><td><code>PasswordEncrypted</code></td><td>The password, protected with Windows DPAPI for that user on that machine. Copying it elsewhere does not work, by design.</td></tr>
+<tr><td><code>DaminionScope</code></td><td><code>all</code>, <code>search</code>, <code>collection</code> or <code>saved_search</code>.</td></tr>
+<tr><td><code>SearchTerm</code>, <code>SavedSearchId</code>, <code>CollectionId</code></td><td>The scope's parameters.</td></tr>
+<tr><td><code>StatusFilter</code></td><td><code>all</code>, <code>approved</code>, <code>rejected</code> or <code>unassigned</code>.</td></tr>
+<tr><td><code>UntaggedKeywords</code>, <code>UntaggedCategories</code>, <code>UntaggedDescription</code></td><td>The "only items with untagged" filters.</td></tr>
+<tr><td><code>MaxItems</code></td><td>The batch ceiling used in the last connect, 100 by default.</td></tr>
+<tr><td><code>ResizeScale</code>, <code>UseThumbnailOverride</code>, <code>ProcessAll</code></td><td>Image scaling and the page-until-empty switch.</td></tr>
+</table>
+
+<p>This key is written only after a <em>successful</em> login, so a mistyped
+password can never overwrite a working configuration. Deleting the key resets
+Step 1 to defaults.</p>
+
+<h2>Backing up a user's configuration</h2>
+
+<ol class="steps">
+<li>Export both registry keys above with <span class="ui">Registry Editor</span>,
+or copy the values with a script.</li>
+<li>Copy <span class="path">%APPDATA%\Synapic\config.json</span> and, if the user
+cares about the prompt history,
+<span class="path">%APPDATA%\Synapic\system-prompts.json</span>.</li>
+<li>The model cache is a download, not configuration: copy it only to save time
+on an offline machine.</li>
+</ol>
+
+<div class="warning">
+<p class="first">Do not edit these while Synapic is running.</p>
+<p>The app reads settings at startup and writes them when you leave a step, so a
+change made in the middle of a session can be overwritten. Close the app first.
+See <a href="step2-settings.html">What Step 2 remembers</a>.</p>
+</div>
+
+<div class="seealso">
+<h2>See also</h2>
+<ul>
+<li><a href="admin-logs-support.html">Logs, crashes and support</a></li>
+<li><a href="admin-deploy.html">Deploying to many machines</a></li>
+<li><a href="step2-settings.html">What Step 2 remembers</a></li>
+<li><a href="step2-tag-fields.html">Tag fields: what gets written</a></li>
+</ul>
+</div>
+
+</body>
+</html>

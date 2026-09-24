@@ -1,0 +1,101 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>Step 2 &mdash; Tagging Engine</title>
+<link rel="stylesheet" type="text/css" href="help.css">
+</head>
+<body>
+
+<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; The workflow &rsaquo; Step 2 &mdash; Tagging Engine</p>
+
+<h1>Step 2 &mdash; Tagging Engine</h1>
+
+<p class="lead">Step 2 is where the interesting decisions live: which model runs,
+what you ask it for, and which of its answers are allowed to reach your images.
+The defaults are deliberately sensible; you can tag a whole library without
+changing anything here.</p>
+
+<h2>The model</h2>
+
+<p>Synapic ships with one family of models &mdash; a vision-language model that
+answers in the three fields this app needs. The list at the top of the step shows
+what is already in the local model cache, with each model's task, size, and a
+<span class="ui">&check; downloaded</span> marker.</p>
+
+<table>
+<tr><th class="setting">Control</th><th>What it does</th></tr>
+<tr><td><span class="ui">Refresh local models</span></td><td>Asks the inference server what models are in the cache. Run it after you download one elsewhere.</td></tr>
+<tr><td>Model list</td><td>Pick a cached model. The grey text is its task and size.</td></tr>
+<tr><td><span class="ui">Download model&hellip;</span></td><td>Fetches the selected model into the cache before you run a batch, so the download does not happen in the middle of one.</td></tr>
+<tr><td>Model id box</td><td>Type any compatible model repository id, for example <code>LiquidAI/LFM2.5-VL-450M</code>. This is the id sent to the inference server.</td></tr>
+</table>
+
+<div class="note">
+<p class="first">The default is chosen for a machine like yours.</p>
+<p>The shipped default (<code>LiquidAI/LFM2.5-VL-450M</code>) is a small
+multimodal model: quick enough on a laptop CPU to tag thousands of images
+overnight, and accurate enough to be useful. The task line beside the model list
+reads <span class="ui">Category + Keywords + Description (multimodal)</span>
+because there is no per-field choice: one call produces all three.</p>
+</div>
+
+<h2>Device</h2>
+
+<table>
+<tr><th class="setting">Device</th><th>Notes</th></tr>
+<tr><td><span class="ui">CPU</span></td><td>The default and always correct. Slower, but needs nothing special and cannot fail for driver reasons.</td></tr>
+<tr><td><span class="ui">CUDA</span></td><td>Requires the CUDA build of the inference server (see <a href="first-run-sidecar.html">Build the inference server</a>) and an NVIDIA driver. Much faster when both are present.</td></tr>
+<tr><td><span class="ui">MPS</span></td><td>Apple silicon GPU acceleration, on macOS builds.</td></tr>
+</table>
+
+<p>If the device does not match the server you have, requests fail with an error
+in the log. When in doubt choose <span class="ui">CPU</span>; it is the only
+device that needs no counterpart in the server build.</p>
+
+<h2>Scoring controls</h2>
+
+<p>Four controls on this row come from the general-purpose tagging pipeline:
+<span class="ui">Confidence threshold</span>, <span class="ui">Probability
+mode</span>, <span class="ui">Prob. threshold</span> and
+<span class="ui">Candidate labels</span>.</p>
+
+<div class="warning">
+<p class="first">They do not constrain the local model.</p>
+<p>The confidence and probability machinery applies to a different kind of model
+(classification and zero-shot label scoring). A vision-language model answers in
+prose, so those settings are ignored, and the log may say that progress scoring
+is unavailable &mdash; which is expected, not an error. Leave them at their
+defaults unless you are deliberately experimenting with candidates: no value here
+will make a category wrong, or right.</p>
+</div>
+
+<h2>The three things that shape the output</h2>
+
+<table>
+<tr><th class="setting">Control</th><th>Effect</th></tr>
+<tr><td><a href="step2-prompts.html">System prompt</a></td><td>Context prepended to every request: tone, vocabulary, language, domain. Optional, and remembered across runs.</td></tr>
+<tr><td><a href="step2-prompts.html">Tag instruction</a></td><td>What the model is asked to produce. Blank means the built-in instruction, which is the version that reliably returns all three fields.</td></tr>
+<tr><td><a href="step2-tag-fields.html">Tag fields</a></td><td>Which of the three returned fields are written. This one changes what lands in your library more than any other setting on the page.</td></tr>
+</table>
+
+<div class="tip">
+<p class="first">Read the tag fields page before your first big run.</p>
+<p>A single unticked box here is the most common reason a library ends up with
+keywords only, and the app will not interrupt you about it &mdash; it writes what
+you asked, and logs success. <a href="step2-tag-fields.html">Tag fields: what
+gets written</a> takes two minutes and can save a batch.</p>
+</div>
+
+<div class="seealso">
+<h2>See also</h2>
+<ul>
+<li><a href="step2-tag-fields.html">Tag fields: what gets written</a></li>
+<li><a href="step2-prompts.html">Prompts: system prompt and tag instruction</a></li>
+<li><a href="step2-settings.html">What Step 2 remembers</a></li>
+<li><a href="first-run-sidecar.html">Build the inference server</a></li>
+</ul>
+</div>
+
+</body>
+</html>

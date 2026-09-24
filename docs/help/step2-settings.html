@@ -1,0 +1,98 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>What Step 2 remembers</title>
+<link rel="stylesheet" type="text/css" href="help.css">
+</head>
+<body>
+
+<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; The workflow &rsaquo; Step 2 &rsaquo; What Step 2 remembers</p>
+
+<h1>What Step 2 remembers</h1>
+
+<p class="lead">Step 2 does not reset when you close the app. Everything on the
+page is restored the next time you open it &mdash; which is convenient, and the
+reason a setting changed once keeps applying.</p>
+
+<h2>When settings are saved</h2>
+
+<p>Your Step 2 settings are written when you <span class="term">leave the
+step</span> or move on in the wizard, not on every keystroke. That includes the
+system prompt, so a prompt you have typed and used is never only in memory.</p>
+
+<p>At startup the form is pre-filled from the saved values, so a repeated run is
+the same run.</p>
+
+<h2>What is remembered</h2>
+
+<table>
+<tr><th class="setting">Setting</th><th>Restored as</th></tr>
+<tr><td>Model id</td><td>The model the next run uses. Also kept in the app config file.</td></tr>
+<tr><td>Device</td><td>CPU, CUDA or MPS.</td></tr>
+<tr><td>Confidence, probability mode, probability threshold, candidate labels</td><td>Your last values. These do not affect the local model; see <a href="step2-engine.html">Step 2 &mdash; Tagging Engine</a>.</td></tr>
+<tr><td>System prompt</td><td>The prompt in the box, exactly as typed.</td></tr>
+<tr><td>Tag instruction</td><td>Your custom instruction, if you wrote one. Blank means the built-in instruction and is stored as blank.</td></tr>
+<tr><td><a href="step2-tag-fields.html">Tag fields</a></td><td>Which of the three fields get written &mdash; the setting most likely to surprise you later.</td></tr>
+</table>
+
+<p>Separately, the saved system prompts are kept as a list in their own file, so
+you can prune that history without touching the settings of a run. See <a
+href="step2-prompts.html">Prompts</a>.</p>
+
+<h2>Where it is stored</h2>
+
+<p>On Windows, in the registry under
+<code>HKCU\Software\Synapic\Engine</code>, as one value per setting. Nothing here
+needs administrator rights: it is a per-user key.</p>
+
+<div class="note">
+<p class="first">Off Windows, nothing is remembered.</p>
+<p>That store is Windows-only by design. On Linux and macOS the app works
+normally, but Step 2 starts from its defaults each time &mdash; worth knowing
+before you build a workflow that depends on a saved custom prompt.</p>
+</div>
+
+<h2>Resetting Step 2 to its defaults</h2>
+
+<table>
+<tr><th class="setting">To undo</th><th>Do this</th></tr>
+<tr><td>A changed setting</td><td>Change it back in Step 2 and leave the step. That is all: the values are read from the form.</td></tr>
+<tr><td>A partial tag-field selection</td><td>Tick all three <span class="ui">Tag fields</span> boxes, and check the orange warning line has gone.</td></tr>
+<tr><td>A custom tag instruction</td><td><span class="ui">Reset to built-in</span>, which clears the box.</td></tr>
+<tr><td>Everything at once</td><td>Delete the <code>Engine</code> key (or edit individual values) with <span class="ui">Registry Editor</span>. The app recreates it on the next save with default values.</td></tr>
+</table>
+
+<div class="warning">
+<p class="first">Editing the registry is immediate.</p>
+<p>The app reads these values at startup and writes them on leaving Step 2, so
+changing the key while Synapic is running can be overwritten by the running app.
+Close it first. <a href="admin-settings-files.html#registry">Files, folders and
+registry keys</a> lists every value by name.</p>
+</div>
+
+<h2>Settings that are not in Step 2</h2>
+
+<ul>
+<li><span class="term">The Daminion connection, scope, filters and limits</span>
+belong to Step 1. See <a href="step1-daminion.html">Connecting to Daminion</a>.</li>
+<li><span class="term">Whether the inference server starts with the app</span> is
+a config-file setting, not a UI option: <code>ui.autoLaunchSidecar</code> in
+<span class="path">%APPDATA%\Synapic\config.json</span>. See <a
+href="admin-settings-files.html#paths">Files, folders and registry keys</a>.</li>
+<li><span class="term">The model cache</span> is shared by every install on the
+machine and lives outside both stores. See <a
+href="first-run-sidecar.html">Build the inference server</a>.</li>
+</ul>
+
+<div class="seealso">
+<h2>See also</h2>
+<ul>
+<li><a href="step2-tag-fields.html">Tag fields: what gets written</a></li>
+<li><a href="step2-prompts.html">Prompts: system prompt and tag instruction</a></li>
+<li><a href="admin-settings-files.html#registry">Files, folders and registry keys</a></li>
+</ul>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,93 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>Reading the log</title>
+<link rel="stylesheet" type="text/css" href="help.css">
+</head>
+<body>
+
+<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; The workflow &rsaquo; Step 3 &rsaquo; Reading the log</p>
+
+<h1>Reading the log</h1>
+
+<p class="lead">The log is the app's account of what it did. Most support
+questions are answered by three lines: the one that starts a batch, the one that
+reports each image, and the one that ends the run.</p>
+
+<h2>Where the log is</h2>
+
+<table>
+<tr><th class="setting">Where</th><th>What it holds</th></tr>
+<tr><td>The <span class="ui">Log</span> pane at the bottom of the window</td><td>The most recent lines, scrolling as the batch runs. Includes the inference server's own error output, prefixed <code>[sidecar:err]</code>.</td></tr>
+<tr><td><span class="path">logs\synapic.log</span>, next to the executable</td><td>The current run, written as it happens. It starts empty each time the app starts.</td></tr>
+<tr><td><span class="path">logs\archives\</span></td><td>The previous runs. Each app start moves the old log here, and the ten most recent archives are kept.</td></tr>
+</table>
+
+<p>If the app cannot write next to the executable &mdash; a locked-down Program
+Files folder, for example &mdash; logs go to <span
+class="path">%LOCALAPPDATA%\Synapic\logs</span> instead. See <a
+href="admin-logs-support.html#logs">Logs, crashes and support</a>.</p>
+
+<h2>The lines worth knowing</h2>
+
+<table>
+<tr><th class="setting">Line</th><th>What it tells you</th></tr>
+<tr><td><code>Starting batch: 42 items &mdash; writing keywords, categories and description</code></td><td>The run began, and which of the three tag fields will be written. Read this first when fields come back missing: it names the selection that caused it. See <a href="step2-tag-fields.html">Tag fields</a>.</td></tr>
+<tr><td><code>Found 128 image files in D:\photos (recursive=True)</code></td><td>How many files the folder scan picked up, and whether subfolders were included.</td></tr>
+<tr><td><code>Fetched 500 Daminion items (scope=collection)</code></td><td>How many catalog items the scope and filters selected, before any tagging.</td></tr>
+<tr><td><code>Processing: IMG_0421.jpg...</code></td><td>An image has been taken up. Its result follows.</td></tr>
+<tr><td><code>Result: Cat: Landscape, Kws: 7, Desc: A mountain lake at sunrise...</code></td><td>What the model produced: the category, how many keywords, and the start of the description. If the category here looks right but your library has none, the problem is the write step, not the model.</td></tr>
+<tr><td><code>Failed: IMG_0422.jpg &mdash; &lt;reason&gt;</code></td><td>That image could not be tagged, with the reason. The image is counted as failed and recorded in Step 4.</td></tr>
+<tr><td><code>Batch finished: 40 ok, 2 failed, 42 total</code></td><td>The run's summary. These numbers are also reported in Step 4.</td></tr>
+<tr><td><code>Progress scoring unavailable: ...</code></td><td>Expected with the local model: the confidence and probability settings do not apply to it. Not an error. See <a href="step2-engine.html">Step 2 &mdash; Tagging Engine</a>.</td></tr>
+</table>
+
+<h2>When something goes wrong</h2>
+
+<table>
+<tr><th class="setting">Line</th><th>Likely cause</th></tr>
+<tr><td><code>Folder not found: D:\photos</code></td><td>The Step 1 path does not exist on this machine, or a drive is not mounted.</td></tr>
+<tr><td><code>Daminion client not connected</code></td><td>The session lost its connection. Reconnect in Step 1 and retry the batch.</td></tr>
+<tr><td><code>Could not download image for item 12345</code></td><td>The catalog item could not be fetched &mdash; a permissions problem, or a file that no longer exists on the Daminion side.</td></tr>
+<tr><td><code>Daminion returned the same ids as the previous page</code></td><td>Paging hit a server that ignored the offset. Synapic stops instead of looping forever; the batch covers what it fetched.</td></tr>
+<tr><td><code>Timed out waiting for the sidecar port file</code></td><td>The inference server failed to start. Its own output is in the log just above this line.</td></tr>
+<tr><td><code>Sidecar process exited unexpectedly</code></td><td>The server crashed. Restart it from the toolbar and retry; the log holds its last words.</td></tr>
+<tr><td><code>[sidecar:err] ...</code></td><td>The server's own error stream, passed through unchanged for exactly this purpose.</td></tr>
+</table>
+
+<h2>Using the log well</h2>
+
+<ul>
+<li><span class="term">Start from the top.</span> The batch's first line records
+the settings the run used, which is often the whole answer.</li>
+<li><span class="term">Count the result lines.</span> If they match the summary,
+every image was accounted for; a mismatch usually means the run was aborted.</li>
+<li><span class="term">Keep the file, not the pane.</span> The pane is a window
+onto the run; the file is the record. Archives from previous runs are still there
+after a restart, which is how you compare today's run with last week's.</li>
+<li><span class="term">Do not read timings from the log's order.</span> Four
+images are in flight at once, so lines interleave and gaps between them measure
+throughput, not how long one image took. Step 3's ETA line is the honest
+per-image figure.</li>
+</ul>
+
+<div class="tip">
+<p class="first">Send the log, not a screenshot.</p>
+<p>When asking for help, attach <span class="path">logs\synapic.log</span> and
+say which run it was. It carries the settings each batch used, so nobody has to
+guess at them. See <a href="admin-logs-support.html#support">Logs, crashes and
+support</a>.</p>
+</div>
+
+<div class="seealso">
+<h2>See also</h2>
+<ul>
+<li><a href="step3-process.html">Step 3 &mdash; Process</a></li>
+<li><a href="troubleshooting.html">Troubleshooting</a></li>
+<li><a href="admin-logs-support.html">Logs, crashes and support</a></li>
+</ul>
+</div>
+
+</body>
+</html>

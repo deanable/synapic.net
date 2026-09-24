@@ -1,0 +1,121 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>Tag fields: what gets written</title>
+<link rel="stylesheet" type="text/css" href="help.css">
+</head>
+<body>
+
+<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; The workflow &rsaquo; Step 2 &rsaquo; Tag fields</p>
+
+<h1>Tag fields: what gets written</h1>
+
+<p class="lead">One model call always produces a category, a set of keywords and
+a description. The three <span class="ui">Tag fields</span> checkboxes decide
+which of those three are written to your library. This is the setting behind
+almost every "Synapic only tagged keywords" report, so it is worth a minute.</p>
+
+<h2>The three checkboxes</h2>
+
+<table>
+<tr><th class="setting">Checkbox</th><th>Written as</th></tr>
+<tr><td><span class="ui">Keywords</span></td><td>The keyword list, as a bag of subjects (XMP <code>dc:subject</code> in a file; the Keywords tag in Daminion)</td></tr>
+<tr><td><span class="ui">Categories</span></td><td>The category, as a headline and intellectual genre in the file, and as the Categories tag in Daminion</td></tr>
+<tr><td><span class="ui">Description</span></td><td>The one-line description (XMP <code>dc:description</code>)</td></tr>
+</table>
+
+<p>All three are ticked by default. At least one must stay ticked or Step 2
+refuses to let you continue, with a red
+<span class="ui">Select at least one field to continue</span>.</p>
+
+<h2 id="partial">What a partial selection does</h2>
+
+<p>Untick a box and the model still produces that field &mdash; it is simply
+dropped at the write step, before anything reaches your library or catalog.
+Nothing is logged as skipped: the item is reported as updated like any other.</p>
+
+<p>Because that is invisible after the fact, Synapic says it twice.</p>
+
+<h3>On screen, in Step 2</h3>
+
+<p>An orange line appears under the checkboxes while the selection is partial,
+naming exactly what will be written:</p>
+
+<p><span class="ui">Writing keywords only &mdash; the model still returns all
+three fields. Tick the other boxes to tag those too.</span></p>
+
+<p>It is visible only where the decision is still changeable, which is the point.
+It disappears the moment all three boxes are ticked again.</p>
+
+<h3>In the log, at the start of every batch</h3>
+
+<p>The first line of a run states the same thing, so a log file answers the
+question without the UI:</p>
+
+<pre><code>Starting batch: 42 items &mdash; writing keywords only
+Batch finished: 42 ok, 0 failed, 42 total</code></pre>
+
+<p>The same summary goes to <span class="path">logs\synapic.log</span>, so a run
+recorded months ago still says which fields it wrote.</p>
+
+<h2 id="diagnose">"My items have keywords but no category or description"</h2>
+
+<p>Work through this in order. The first two steps find the cause in under a
+minute, and the third proves it beyond argument.</p>
+
+<ol class="steps">
+<li><span class="term">Look at Step 2.</span> Are all three
+<span class="ui">Tag fields</span> ticked? If the orange warning is on screen,
+this is the answer.</li>
+<li><span class="term">Look at the batch's first log line.</span> It names the
+written fields. If it says <code>writing keywords only</code>, the run did exactly
+what it was told.</li>
+<li><span class="term">Confirm the model is fine.</span> The inference server
+always returns all three fields; the selection only affects writing. To see that
+for yourself, tick all three boxes, run one image, and watch the result line name
+a category and a description like it always did.</li>
+</ol>
+
+<div class="note">
+<p class="first">Why it persists across restarts.</p>
+<p>The selection is saved with your other Step 2 settings, in
+<code>HKCU\Software\Synapic\Engine</code>, under <code>TagKeywords</code>,
+<code>TagCategories</code> and <code>TagDescription</code> (each a DWORD, 1 or 0).
+A partial selection survives closing the app, so a choice made once for one
+batch is the default for every batch after it. See <a
+href="step2-settings.html">What Step 2 remembers</a> and, for reading or
+resetting the values directly, <a href="admin-settings-files.html#registry">Files,
+folders and registry keys</a>.</p>
+</div>
+
+<h2>Choosing a selection on purpose</h2>
+
+<table>
+<tr><th class="setting">Selection</th><th>When it makes sense</th></tr>
+<tr><td>All three</td><td>The normal case: a complete record for each image.</td></tr>
+<tr><td>Keywords only</td><td>You curate categories and descriptions by hand and want Synapic to do the tedious part. Watch for the warning line and expect Step 4 summaries to count the same items as successful, which they are.</td></tr>
+<tr><td>Keywords and description</td><td>Your catalog's Categories field is a controlled vocabulary that the model should not write into.</td></tr>
+<tr><td>Description only</td><td>Rare: you want prose for an accessibility or catalogue-text workflow and nothing else.</td></tr>
+</table>
+
+<div class="warning">
+<p class="first">A partial selection is a durable decision.</p>
+<p>Because it is saved and re-applied silently, a selection set for a one-off run
+is easy to forget. If a batch surprises you with missing fields, this page is the
+first place to look &mdash; before the model, the prompt, or the inference server,
+none of which are responsible.</p>
+</div>
+
+<div class="seealso">
+<h2>See also</h2>
+<ul>
+<li><a href="metadata-written.html">What gets written to your images</a></li>
+<li><a href="step2-prompts.html">Prompts: system prompt and tag instruction</a></li>
+<li><a href="step3-log.html">Reading the log</a></li>
+<li><a href="troubleshooting.html#tagging">Troubleshooting: tags that look wrong or missing</a></li>
+</ul>
+</div>
+
+</body>
+</html>

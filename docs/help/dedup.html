@@ -1,0 +1,105 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>Deduplication</title>
+<link rel="stylesheet" type="text/css" href="help.css">
+</head>
+<body>
+
+<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; The workflow &rsaquo; Deduplication</p>
+
+<h1>Deduplication</h1>
+
+<p class="lead">A separate tool, not part of the tagging wizard: it scans a
+folder for images that look the same and lets you act on the groups it finds. It
+works on files, not on Daminion items.</p>
+
+<h2>Scanning</h2>
+
+<ol class="steps">
+<li>Give it a <span class="ui">Folder to scan</span> (with
+<span class="ui">Browse&hellip;</span> if you prefer). Subfolders are included
+automatically and the scan covers <span class="path">.jpg</span>,
+<span class="path">.jpeg</span>, <span class="path">.png</span>,
+<span class="path">.tif</span> and <span class="path">.tiff</span>.</li>
+<li>Choose an <span class="ui">algorithm</span> and a
+<span class="ui">Threshold</span>. The defaults are a good starting point.</li>
+<li>Press <span class="ui">Scan</span>. Progress is reported as files are hashed:
+<span class="ui">Hashed 240/1500&hellip;</span></li>
+<li>Read the summary: <span class="ui">1500 files scanned &mdash; 12 groups,
+18 duplicates</span>.</li>
+</ol>
+
+<h2>Algorithms and the threshold</h2>
+
+<p>Every algorithm reduces an image to a 64-bit perceptual fingerprint. Two
+images are "the same" when their fingerprints differ by no more than the
+threshold allows.</p>
+
+<table>
+<tr><th class="setting">Algorithm</th><th>Good at</th></tr>
+<tr><td>PHash</td><td>The general-purpose default. Tolerates re-encoding, resizing and mild retouching, and is the least likely to confuse two unrelated photos.</td></tr>
+<tr><td>DHash</td><td>Small images and subtle brightness differences; often picks up duplicates PHash misses in low-contrast sets.</td></tr>
+<tr><td>AHash</td><td>The simplest and fastest. Adequate for exact copies and resizes, and the most sensitive to brightness changes.</td></tr>
+<tr><td>ColorMoment</td><td>Colour and tone, ignoring structure. Useful for finding graded versions of the same shot, and the one most likely to group images that merely share a palette.</td></tr>
+</table>
+
+<table>
+<tr><th class="setting">Threshold</th><th>Effect</th></tr>
+<tr><td>0.90 (default)</td><td>Close matches only. Start here: it finds copies and re-encodes with few false groups.</td></tr>
+<tr><td>0.95 or higher</td><td>Near-identical. Good when you are hunting exact duplicates and want no noise at all.</td></tr>
+<tr><td>0.80 or lower</td><td>Loose: catches cropped or heavily edited versions, and starts grouping visually similar but different images. Expect to review the groups carefully.</td></tr>
+</table>
+
+<div class="tip">
+<p class="first">Scan a copy first if the stakes are high.</p>
+<p>Scan the folder, look at the groups, and only then decide on an action. The
+scan itself changes nothing: it reads files and hashes them.</p>
+</div>
+
+<h2>Acting on a group</h2>
+
+<p>Groups appear on the left, each listing the files it believes are the same.
+Select one, choose an action, press <span class="ui">Apply</span>.</p>
+
+<div class="warning">
+<p class="first">One file per group is kept, and it is the first one found.</p>
+<p>The action applies to every other file in the group. The kept file is chosen
+by the scan's own ordering, not by size, date or quality, so check the group list
+before applying anything. A group of two is easy to read; a group of nine is
+worth opening a couple of.</p>
+</div>
+
+<table>
+<tr><th class="setting">Action</th><th>What it actually does</th></tr>
+<tr><td><span class="ui">Delete</span></td><td>Deletes the duplicate files permanently. This is a real delete, not a move to the Recycle Bin, and there is no undo.</td></tr>
+<tr><td><span class="ui">Move</span></td><td>Moves the duplicates into a <span class="path">duplicates</span> subfolder beside each file. Nothing is destroyed, and the files stay in the same tree. If a file of the same name is already in that subfolder, that move fails and is reported in the log &mdash; the original is left where it is.</td></tr>
+<tr><td><span class="ui">Tag</span></td><td>Not implemented in this version. It records the intent in the log and changes nothing, so do not rely on it to mark duplicates. Use Move, or note them in your catalog by hand.</td></tr>
+</table>
+
+<p>After an action the group is removed from the list and the summary reports the
+result, for example <span class="ui">Move applied to group (4 duplicates)</span>.
+Anything that failed is in the log.</p>
+
+<h2>What this tool is not</h2>
+
+<ul>
+<li>It does not compare images in Daminion. Scan an exported folder instead.</li>
+<li>It does not find similar images by content or subject &mdash; only
+perceptually equal ones.</li>
+<li>It does not remember a scan between sessions, and it does not watch a folder.
+Each scan is a fresh pass.</li>
+</ul>
+
+<div class="seealso">
+<h2>See also</h2>
+<ul>
+<li><a href="step1-limits.html">How many items to process</a></li>
+<li><a href="metadata-written.html">What gets written to your images</a></li>
+<li><a href="admin-logs-support.html#logs">Logs, crashes and support</a> &mdash; where completed actions are recorded</li>
+</ul>
+</div>
+
+</body>
+</html>

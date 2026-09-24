@@ -1,0 +1,127 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>Deploying to many machines</title>
+<link rel="stylesheet" type="text/css" href="help.css">
+</head>
+<body>
+
+<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; Administrator guide &rsaquo; Deploying to many machines</p>
+
+<h1>Deploying to many machines</h1>
+
+<p class="lead">Four things have to be right on a target machine: the app, the
+inference server next to it, the .NET runtime, and the model &mdash; which is the
+only piece that normally needs the internet.</p>
+
+<h2>What a working machine has</h2>
+
+<table>
+<tr><th class="setting">Piece</th><th>Where it lives</th><th>How it gets there</th></tr>
+<tr><td>The application</td><td><span class="path">C:\Program Files\Synapic</span></td><td>The Windows installer, silently if you like: <a href="admin-install.html#silent">silent installation</a>.</td></tr>
+<tr><td>The inference server</td><td><span class="path">synapic-inference.exe</span> in the same folder</td><td>Ships inside the installer, and can be replaced on its own &mdash; see below.</td></tr>
+<tr><td>The .NET 10 Desktop Runtime</td><td>Machine-wide, standard Microsoft location</td><td>The installer supplies it (bundled or downloaded). Detect it in advance to avoid surprises in the field.</td></tr>
+<tr><td>The model</td><td><span class="path">%LOCALAPPDATA%\Synapic\models</span> &mdash; per user</td><td>Downloaded on first tag, or copied in for offline machines.</td></tr>
+<tr><td>A route to Daminion</td><td>Your own network</td><td>Nothing to install; just reachable, with credentials that may write.</td></tr>
+</table>
+
+<h2>Updating the inference server on its own</h2>
+
+<p>The standalone inference server is published as a release asset for each
+platform, so a site can move to a new server &mdash; or to CUDA &mdash; without
+reinstalling the app:</p>
+
+<table>
+<tr><th class="setting">Asset</th><th>Goes to</th></tr>
+<tr><td><code>synapic-inference-win-x64.exe</code></td><td>Rename to <span class="path">synapic-inference.exe</span> in the install folder.</td></tr>
+<tr><td><code>synapic-inference-win-x64-cuda.exe.part1</code> and <code>.part2</code></td><td>Reassemble with the bundled <span class="path">reassemble-...bat</span> helper, check the SHA-256 it prints, then rename and copy as above. The CUDA bundle is about 2.5 GB, which is why it ships in parts: GitHub rejects single release assets that large.</td></tr>
+<tr><td><code>synapic-inference-osx-arm64</code>, <code>synapic-inference-linux-x64</code></td><td>Same idea on those platforms, named <span class="path">synapic-inference</span>.</td></tr>
+</table>
+
+<p><code>SHA256SUMS.txt</code> covers every published asset, so an installer
+script can verify what it downloaded.</p>
+
+<h2>Offline machines</h2>
+
+<ol class="steps">
+<li>Install the app from a setup that has the .NET runtime bundled, so nothing is
+downloaded at the Ready step.</li>
+<li>Copy the inference server in, if the installer did not already carry the
+variant you want.</li>
+<li>Copy the model cache into each user's profile:
+<span class="path">%LOCALAPPDATA%\Synapic\models</span>. The model is per user,
+because that folder is per profile &mdash; on a shared machine, seed it at first
+logon rather than once machine-wide.</li>
+<li>Confirm the app starts with the status reading
+<span class="ui">Server running</span>, and run five images.</li>
+</ol>
+
+<div class="warning">
+<p class="first">The model cache is deleted on uninstall.</p>
+<p>An uninstall/reinstall cycle on a machine with no internet leaves the app
+unable to tag until the cache is copied back. Keep a copy of the folder with your
+deployment media. See <a href="admin-install.html#upgrade">Upgrading and
+uninstalling</a>.</p>
+</div>
+
+<div class="note">
+<p class="first">A diagnostic switch worth knowing.</p>
+<p>The inference server respects <code>SYNAPIC_DISABLE_AUTO_DOWNLOAD=1</code>,
+which stops it from fetching model weights. That is how the build pipeline smoke
+tests a freshly built server without downloading 860 MB; with no weights present,
+tagging naturally fails. It is not a supported way to lock down a normal install.
+</p>
+</div>
+
+<h2>Settings on a managed fleet</h2>
+
+<table>
+<tr><th class="setting">Setting</th><th>Can you pre-seed it?</th></tr>
+<tr><td>Step 1 and Step 2 settings (registry, <code>HKCU\Software\Synapic</code>)</td><td>Yes, per user, with a login script writing the values listed in <a href="admin-settings-files.html#registry">Files, folders and registry keys</a>.</td></tr>
+<tr><td>The Daminion password</td><td>No. It is encrypted with the user's own Windows credentials (DPAPI), so a value copied from another machine or account cannot be decrypted. Each user enters it once.</td></tr>
+<tr><td>Auto-launch of the inference server</td><td>Yes &mdash; <code>ui.autoLaunchSidecar</code> in <span class="path">%APPDATA%\Synapic\config.json</span>. It ships <code>true</code>.</td></tr>
+<tr><td>Usage counters</td><td>Yes &mdash; <code>ui.telemetryEnabled</code>, <code>false</code> unless a user opts in. They are local counters in the log folder, not telemetry to a service.</td></tr>
+</table>
+
+<h2>Security and endpoint protection</h2>
+
+<ul>
+<li><span class="term">No inbound ports.</span> The inference server listens on a
+loopback address and an operating-system-assigned port, and publishes that port
+in a small file in <span class="path">%TEMP%</span> so the app can find it. No
+firewall rule is needed for other machines to use Synapic.</li>
+<li><span class="term">Endpoint security may still object.</span> A bundled
+Python executable that spawns a local listener, and a temporary file containing a
+port number, are exactly the kind of behaviour heuristic tools flag. If a machine
+shows the server failing to start where others succeed, check the security
+product's log before suspecting the app.</li>
+<li><span class="term">No images leave the machine.</span> The only outbound
+traffic is to your Daminion server, plus Microsoft for the runtime and the model
+host for weights on first use.</li>
+<li><span class="term">The password is protected, not shared.</span> DPAPI means
+the stored Daminion password is readable only by that user on that machine. Plan
+for a per-user login, not a deployed secret.</li>
+</ul>
+
+<h2>Planning capacity</h2>
+
+<table>
+<tr><th class="setting">Machine</th><th>Reasonable expectation</th></tr>
+<tr><td>Standard desktop, CPU</td><td>Around ten seconds per image, four at a time. A thousand-image backlog is an hour or two of unattended work.</td></tr>
+<tr><td>Workstation with an NVIDIA GPU and the CUDA server</td><td>Several times faster, but not proportionally to the hardware &mdash; four parallel calls share one model. Benchmark on your own images.</td></tr>
+<tr><td>Shared machine, several users</td><td>Each user's app starts its own inference server, so memory use multiplies. Prefer one tagging machine over several users tagging at once on a modest box.</td></tr>
+</table>
+
+<div class="seealso">
+<h2>See also</h2>
+<ul>
+<li><a href="admin-install.html">Installing and upgrading</a></li>
+<li><a href="admin-settings-files.html">Files, folders and registry keys</a></li>
+<li><a href="admin-logs-support.html">Logs, crashes and support</a></li>
+<li><a href="first-run-sidecar.html">Build the inference server</a></li>
+</ul>
+</div>
+
+</body>
+</html>

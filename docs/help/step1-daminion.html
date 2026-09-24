@@ -1,0 +1,107 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>Connecting to Daminion</title>
+<link rel="stylesheet" type="text/css" href="help.css">
+</head>
+<body>
+
+<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; The workflow &rsaquo; Step 1 &rsaquo; Connecting to Daminion</p>
+
+<h1>Connecting to Daminion</h1>
+
+<p class="lead">One login does the whole run: it lists the catalog, counts
+matching items, downloads the images, and writes the tags back.</p>
+
+<h2>Connecting</h2>
+
+<ol class="steps">
+<li>In Step 1, choose <span class="ui">Daminion Server</span>.</li>
+<li>Fill in three fields:
+<ul>
+<li><span class="ui">Server URL</span> &mdash; the Daminion server address, for
+example <code>http://dam.local/daminion</code>. Include the scheme.</li>
+<li><span class="ui">Username</span> and <span class="ui">Password</span> &mdash;
+an account that may read the items and update their metadata.</li>
+</ul></li>
+<li>Press <span class="ui">Connect</span>. It is enabled only once all three
+fields have something in them.</li>
+<li>Wait for the confirmation. A successful connect reports the server and how
+many saved searches and collections it found, and the panel starts to fill
+itself in.</li>
+</ol>
+
+<div class="warning">
+<p class="first">Daminion permissions matter.</p>
+<p>An account that can read but not write will let a batch run and fail at the
+write. Check the account's rights in Daminion if Step 4 reports failures that all
+look alike.</p>
+</div>
+
+<h2>Which catalog am I in?</h2>
+
+<p>Daminion chooses the catalog from the server URL you logged in to, and has no
+API for listing a server's catalogs. So Synapic reports the one it landed on
+rather than offering a picklist:</p>
+
+<p><span class="ui">Active catalog: 0aa3fe82-&hellip;</span></p>
+
+<p>If that is not the catalog you expected, the URL is pointing at a different
+server or a different virtual directory &mdash; fix the URL rather than looking
+for a catalog selector.</p>
+
+<h2>After a successful connect</h2>
+
+<table>
+<tr><th class="setting">What fills in</th><th>Why</th></tr>
+<tr><td><span class="ui">Shared collection</span> and <span class="ui">Saved
+search</span> lists</td><td>Read from the server, so you pick by name instead of
+by id. If either list is empty, those scopes fall back to typing an id by hand.</td></tr>
+<tr><td>Your previous settings</td><td>Scope, search term, filters and limits are
+restored from the last successful connect, so a repeated run is one button
+press.</td></tr>
+<tr><td><span class="ui">Count matching items</span></td><td>Becomes usable once
+there is a connection to ask.</td></tr>
+</table>
+
+<div class="note">
+<p class="first">A failed login never overwrites a working set.</p>
+<p>Synapic saves the connection block only after the server accepts the login, so
+a typo in the password cannot destroy the details that worked yesterday. The
+stored password is protected with Windows DPAPI and can only be read by that
+Windows account on that machine.</p>
+</div>
+
+<h2>Disconnecting</h2>
+
+<p><span class="ui">Disconnect</span> appears once you are connected. It ends the
+session, clears the collection and saved-search lists, and disables counting. The
+saved connection stays in the registry, so reconnecting is one press of
+<span class="ui">Connect</span>.</p>
+
+<h2>When a connection fails</h2>
+
+<table>
+<tr><th class="setting">Message</th><th>Usual cause</th></tr>
+<tr><td>Connection failed: &hellip; (a timeout or a socket error)</td><td>The URL is wrong, the Daminion server is not running, or a firewall is in the way. Check the URL first: a missing scheme or a wrong virtual directory is the common case.</td></tr>
+<tr><td>Connection failed: &hellip; (a 401 or "unauthorised" style error)</td><td>Wrong username or password, or an account that may not use the API.</td></tr>
+<tr><td>Connected, but saved searches or collections are unavailable</td><td>The login worked but those endpoints did not answer. Tagging still works; the two pickers fall back to manual ids.</td></tr>
+<tr><td>Count failed</td><td>The count request was rejected or timed out. Filters still apply to the batch; the count is a preview, not a precondition.</td></tr>
+</table>
+
+<p>The log pane and <span class="path">logs\synapic.log</span> hold the full
+message for any of these.</p>
+
+<div class="seealso">
+<h2>See also</h2>
+<ul>
+<li><a href="step1-scope-filters.html">Scope and filters</a></li>
+<li><a href="step1-limits.html">How many items to process</a></li>
+<li><a href="troubleshooting.html#daminion">Troubleshooting: Daminion</a></li>
+<li><a href="admin-settings-files.html">Files, folders and registry keys</a> &mdash; where the saved connection lives</li>
+</ul>
+</div>
+
+</body>
+</html>

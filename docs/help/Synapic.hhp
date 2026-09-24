@@ -1,0 +1,60 @@
+; Synapic HTML Help project.
+;
+; Compile with build-chm.ps1 (which also runs check-help.py first) or by opening
+; this file in HTML Help Workshop. hhc.exe resolves the paths below relative to
+; this file, so run it from this folder.
+;
+; [FILES] is the complete list of what goes into Synapic.chm. A help topic that
+; is not listed here is compiled out; check-help.py fails the build when the
+; folder and this list disagree.
+
+[OPTIONS]
+Compatibility=1.1 or later
+Compiled file=Synapic.chm
+Contents file=Synapic.hhc
+Index file=Synapic.hhk
+Default topic=index.html
+Default Window=main
+Title=Synapic Help
+Display compile progress=Yes
+Full-text search=Yes
+Auto Index=No
+Binary Index=Yes
+Language=0x409 English (United States)
+
+; Window definition: name, TOC, index, default and home topic, then the window
+; options. 0x63520 is the standard "three-pane" help window with navigation and
+; full-text search; the size is in pixels.
+[WINDOWS]
+main="Synapic Help","Synapic.hhc","Synapic.hhk","index.html","index.html",,,,,0x63520,,0x104e,[80,80,860,640],0x0,0x0,,0
+
+[FILES]
+help.css
+index.html
+requirements.html
+getting-started.html
+first-run-sidecar.html
+window-overview.html
+workflow-overview.html
+metadata-written.html
+step1-datasource.html
+step1-daminion.html
+step1-scope-filters.html
+step1-limits.html
+step2-engine.html
+step2-tag-fields.html
+step2-prompts.html
+step2-settings.html
+step3-process.html
+step3-log.html
+step4-results.html
+dedup.html
+troubleshooting.html
+faq.html
+glossary.html
+admin-install.html
+admin-deploy.html
+admin-settings-files.html
+admin-logs-support.html
+
+[INFOTYPES]

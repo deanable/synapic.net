@@ -1,0 +1,101 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>Installing and upgrading</title>
+<link rel="stylesheet" type="text/css" href="help.css">
+</head>
+<body>
+
+<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; Administrator guide &rsaquo; Installing and upgrading</p>
+
+<h1>Installing and upgrading</h1>
+
+<p class="lead">The Windows installer is a standard Inno Setup package: one
+executable, machine-wide install, administrator rights, and a prerequisite check
+for the .NET runtime.</p>
+
+<h2>What the installer does</h2>
+
+<table>
+<tr><th class="setting">Item</th><th>Value</th></tr>
+<tr><td>Package</td><td><span class="path">Synapic-Setup-win-x64.exe</span></td></tr>
+<tr><td>Privileges</td><td>Administrator. The install is machine-wide.</td></tr>
+<tr><td>Install location</td><td><span class="path">C:\Program Files\Synapic</span> (overridable on the directory page or with <code>/DIR=</code>)</td></tr>
+<tr><td>Application id</td><td>A fixed identifier, <code>{{8A7C2C31-5E0D-4B21-9C4F-SYNAPICNET01}</code>. It names the Add/Remove Programs entry and is what makes an upgrade replace an existing install instead of adding a second one. Do not change it in a repackaged build.</td></tr>
+<tr><td>Shortcuts</td><td>A Start Menu group, plus an optional desktop icon (a task, unticked by default).</td></tr>
+<tr><td>Prerequisite</td><td>.NET 10 Desktop Runtime. Installed silently if missing, either from a copy bundled in the setup or by downloading the official installer at the Ready step.</td></tr>
+<tr><td>App layout</td><td>A framework-dependent publish: <span class="path">Synapic.exe</span> and its DLLs, the inference server as <span class="path">synapic-inference.exe</span> in the same folder, and the JSON files the runtime needs.</td></tr>
+</table>
+
+<div class="note">
+<p class="first">The inference server is a payload, not an optional component.</p>
+<p>It is copied into the install folder with the app, which is why a fresh
+install can tag immediately and why replacing that one file swaps the model
+runtime. See <a href="admin-deploy.html">Deploying to many machines</a>.</p>
+</div>
+
+<h2 id="silent">Silent and scripted installation</h2>
+
+<p>The package accepts the standard Inno Setup switches:</p>
+
+<table>
+<tr><th class="setting">Switch</th><th>Effect</th></tr>
+<tr><td><code>/VERYSILENT</code></td><td>No wizard, no progress window.</td></tr>
+<tr><td><code>/SUPPRESSMSGBOXES</code></td><td>Suppresses prompts. Use it with <code>/VERYSILENT</code> so a restart prompt cannot block a script.</td></tr>
+<tr><td><code>/NORESTART</code></td><td>Never restarts the machine.</td></tr>
+<tr><td><code>/DIR="D:\Apps\Synapic"</code></td><td>Installs somewhere other than the default folder.</td></tr>
+<tr><td><code>/TASKS="desktopicon"</code></td><td>Creates the desktop icon as part of the install.</td></tr>
+<tr><td><code>/LOG="C:\temp\synapic-install.log"</code></td><td>Writes the installer's own log, which is what you want when a deployment fails silently.</td></tr>
+</table>
+
+<p>For example:</p>
+
+<pre><code>Synapic-Setup-win-x64.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /TASKS="desktopicon" /LOG="C:\temp\synapic-install.log"</code></pre>
+
+<div class="warning">
+<p class="first">The runtime prerequisite still runs in a silent install.</p>
+<p>If .NET 10 is missing, the installer needs either the runtime payload bundled
+next to the setup (the release packages stage it) or an internet connection to
+download it. On an isolated network, use a build that bundles the runtime &mdash;
+otherwise the install can end with the prerequisite unresolved. The installer's
+log records exactly what happened.</p>
+</div>
+
+<h2 id="upgrade">Upgrading and uninstalling</h2>
+
+<table>
+<tr><th class="setting">Action</th><th>What survives</th></tr>
+<tr><td>Install a newer version over an existing one</td><td>Nothing is reset. Per-user settings (registry) and the model cache are outside the install folder and stay exactly as they were.</td></tr>
+<tr><td>Replace one file to change the inference server</td><td>The supported lightweight update: drop a new <span class="path">synapic-inference.exe</span> into the install folder and restart the app. Useful for moving a machine to the CUDA build.</td></tr>
+<tr><td>Uninstall</td><td>Removes the application and &mdash; importantly &mdash; deletes the per-user model cache at <span class="path">%LOCALAPPDATA%\Synapic\models</span>, so a reinstall downloads about 860 MB again. Settings in the registry are left alone.</td></tr>
+</table>
+
+<div class="tip">
+<p class="first">Before a reinstall, copy the model cache.</p>
+<p><span class="path">%LOCALAPPDATA%\Synapic\models</span> is pure download, so
+copying it out and back in saves the whole download. This is also how you seed a
+machine that has no internet access; see <a href="admin-deploy.html">Deploying to
+many machines</a>.</p>
+</div>
+
+<h2>Other platforms</h2>
+
+<table>
+<tr><th class="setting">Platform</th><th>State</th></tr>
+<tr><td>macOS (Apple silicon)</td><td>A signed and notarized disk image is produced by the same release pipeline.</td></tr>
+<tr><td>Linux</td><td>No installer yet. The released Linux inference server is intended to run beside a build of the app; AppImage packaging has not completed. See <span class="path">docs/packaging.md</span> in the repository.</td></tr>
+</table>
+
+<div class="seealso">
+<h2>See also</h2>
+<ul>
+<li><a href="admin-deploy.html">Deploying to many machines</a></li>
+<li><a href="admin-settings-files.html">Files, folders and registry keys</a></li>
+<li><a href="admin-logs-support.html">Logs, crashes and support</a></li>
+<li><a href="requirements.html">What you need</a></li>
+</ul>
+</div>
+
+</body>
+</html>
