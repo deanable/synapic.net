@@ -178,6 +178,20 @@ public sealed class InferenceSidecarService : IInferenceSidecar
     }
 
     /// <summary>
+    /// Where a sidecar for <paramref name="rid"/> belongs, i.e. where a download
+    /// must put it for detection to find it: artifacts/&lt;rid&gt; in a dev checkout
+    /// (the folder the build button writes to), next to the app otherwise.
+    /// </summary>
+    public static string SidecarInstallPath(string rid)
+    {
+        var repoRoot = FindRepoRoot();
+        var dir = repoRoot is null
+            ? AppContext.BaseDirectory
+            : Path.Combine(repoRoot, "artifacts", rid);
+        return Path.Combine(dir, ExeName);
+    }
+
+    /// <summary>
     /// Set while the launched exe is older than the sidecar source (dev
     /// checkouts only - installed apps have no source tree to compare against).
     /// Surfaced in the status bar so a stale binary is visible, not just logged.

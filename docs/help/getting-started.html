@@ -38,10 +38,12 @@ panel says <span class="ui">Inference sidecar required</span>. That is expected:
 nothing can be tagged until an inference server exists.</p>
 
 <ol class="steps">
-<li><span class="term">Build an inference server.</span> In the panel, press
-<span class="ui">Build sidecar</span> on the CPU row. The first build downloads a
-private Python and the packages the model needs, so expect minutes, not seconds.
-Full detail: <a href="first-run-sidecar.html">Build the inference server</a>.</li>
+<li><span class="term">Get an inference server.</span> In the panel, press
+<span class="ui">Download</span> on the CPU row to fetch the prebuilt
+executable, or <span class="ui">Build sidecar</span> to compile it from source
+&mdash; that first build downloads a private Python and the packages the model
+needs, so expect minutes, not seconds. Full detail:
+<a href="first-run-sidecar.html">Build the inference server</a>.</li>
 <li><span class="term">Let the server start.</span> Synapic launches the server
 as soon as one exists, and the status dot turns green with
 <span class="ui">Server running (port &hellip;)</span>. The very first launch is

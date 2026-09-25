@@ -143,6 +143,7 @@ huggingface_hub, pillow, tqdm, psutil, qwen-vl-utils, PyInstaller 6.18.0).
 | `EngineSettingsStore` | registry-backed Step 2 persistence |
 | `IInferenceSidecar` | `InferenceSidecarService` |
 | `ISidecarBuildService` | `SidecarBuildService` |
+| `ISidecarDownloadService` | `SidecarDownloadService` |
 | `MainWindowViewModel` | shell view model (constructs `WizardViewModel`) |
 | `MainWindow` | the window itself |
 
@@ -342,7 +343,7 @@ executables as their own release assets — see `packaging.md`.
 
 | Symptom / log line | Where to look |
 |--------------------|---------------|
-| `Server not detected` / `No inference server built` | `ISidecarBuildService.CanBuild`, `artifacts/<rid>/`; use the setup panel's Build button. |
+| `Server not detected` / `No inference server built` | `ISidecarBuildService.CanBuild`, `artifacts/<rid>/`; use the setup panel's Build button, or **Download** to fetch the prebuilt exe from the latest release (`ISidecarDownloadService`). |
 | `Sidecar executable not found - build it first` | `InferenceSidecarService.FindExecutable` — bundled exe or dev `artifacts/`. |
 | `Timed out waiting for the sidecar port file` | Sidecar failed to boot; check sidecar stdout in the log. |
 | `Sidecar did not become ready within 120s` | Model load/first import is slow; check `/health` status lines. |

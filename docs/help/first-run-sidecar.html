@@ -29,12 +29,13 @@ panel below it.</p>
 <h2>Building one</h2>
 
 <ol class="steps">
-<li>Look at the setup panel. Each row is a variant that can be built on this
+<li>Look at the setup panel. Each row is a variant you can get on this
 machine: <span class="ui">CPU</span> (runs anywhere) and, on Windows,
 <span class="ui">CUDA (NVIDIA GPU)</span> (much faster on a supported card). The
 small grey text next to the name is the variant's runtime identifier, for example
 <code>win-x64</code> or <code>win-x64-cuda</code>.</li>
-<li>Press <span class="ui">Build sidecar</span> on the row you want.</li>
+<li>Press <span class="ui">Build sidecar</span> on the row you want, or
+<span class="ui">Download</span> to skip the build entirely (see below).</li>
 <li>Watch the row. It shows a progress bar and the current stage, such as
 fetching Python, installing packages, or packaging. A first build also fetches a
 private copy of Python and the inference packages, which is why it is slow; a
@@ -43,6 +44,22 @@ rebuild reuses what it can.</li>
 start. Synapic starts it automatically; the status text moves to
 <span class="ui">Server running (port &hellip;)</span>.</li>
 </ol>
+
+<h2>Or download it instead</h2>
+
+<p>If this copy of Synapic has no Python toolchain &mdash; a packaged install,
+for instance &mdash; press <span class="ui">Download</span> on the row instead
+of <span class="ui">Build sidecar</span>. It fetches the executable the latest
+GitHub release already published: about 216 MB for <span class="ui">CPU</span>,
+and for <span class="ui">CUDA (NVIDIA GPU)</span> two large parts that Synapic
+joins for you. The file lands where the build button would have written it, the
+row shows the same progress bar and stage text, and nothing on the machine needs
+Python, the packages, or a source checkout.</p>
+
+<p>The two buttons produce the same thing: the release build is what the build
+button compiles, so a downloaded server behaves exactly like a built one.
+Download needs a network connection; building needs the repository and its
+toolchain, and works offline once its packages are cached.</p>
 
 <h2>Which variant should I build?</h2>
 
@@ -91,8 +108,9 @@ href="admin-deploy.html">Deploying to many machines</a>.</p>
 
 <table>
 <tr><th class="setting">What you see</th><th>What to do</th></tr>
-<tr><td><span class="ui">Server not detected</span> and no buildable rows</td><td>There is no source checkout or prebuilt server for this machine's platform. Install a release build that includes one.</td></tr>
+<tr><td><span class="ui">Server not detected</span> and no rows at all</td><td>There is no source checkout and the latest release has nothing for this machine's platform either. Install a release build that includes one.</td></tr>
 <tr><td>Build fails part-way</td><td>The log pane has the build's own output. A failed first build is usually the network (fetching Python or packages), and rebuilding after the network is back is the fix.</td></tr>
+<tr><td>Download fails</td><td>The log pane names the release, the asset and the HTTP status. The usual cause is a release without this platform's server, or no network; <span class="ui">Build sidecar</span> is the way round it when this checkout has the toolchain.</td></tr>
 <tr><td>Status stuck on <span class="ui">Server starting&hellip;</span></td><td>A cold start really can take up to two minutes. If it exceeds that, the log says why; see <a href="troubleshooting.html#sidecar">Troubleshooting: the inference server</a>.</td></tr>
 <tr><td><span class="ui">stale build, rebuild recommended</span></td><td>Developer checkouts only: the server executable is older than the inference source. Rebuild the variant from the panel.</td></tr>
 </table>

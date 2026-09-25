@@ -372,6 +372,13 @@ plus IPTC/EXIF fallbacks. `TagResult(Category, Keywords, Description)`. See
   0-100 percentage across the three bands (fetch Python → install deps →
   PyInstaller packaging, the last driven by bytes written versus the previous
   build's executable size). `SidecarBuildProgress(Percent, Stage)`.
+- **`SidecarDownloadService`** (`ISidecarDownloadService`) — the other way to
+  get a variant: reads the same `releases/latest` payload as
+  `UpdateCheckService`, picks the assets named `synapic-inference-<rid>` (never
+  its `-cuda` sibling, matched on the extension boundary), joins `.partN` in
+  part order, stages to `<destination>.download` and moves into place only once
+  complete. Progress is percent of the declared total; a failed or cancelled
+  pull deletes the staging file so detection never sees a half server.
 
 ---
 

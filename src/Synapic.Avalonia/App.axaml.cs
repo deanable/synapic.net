@@ -74,6 +74,7 @@ public partial class App : Application
         services.AddSingleton(new SystemPromptPresetStore());
         services.AddSingleton<IInferenceSidecar, InferenceSidecarService>();
         services.AddSingleton<ISidecarBuildService, SidecarBuildService>();
+        services.AddSingleton<ISidecarDownloadService, SidecarDownloadService>();
         services.AddSingleton<MainWindowViewModel>();
         services.AddSingleton<MainWindow>();
         Services = services.BuildServiceProvider();

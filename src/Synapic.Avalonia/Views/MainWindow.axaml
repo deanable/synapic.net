@@ -45,7 +45,7 @@
       <StackPanel Orientation="Vertical" Spacing="4">
         <TextBlock Text="Inference sidecar required" FontWeight="SemiBold" FontSize="14"
                    TextWrapping="Wrap" IsVisible="{Binding IsSidecarRequired}" />
-        <TextBlock Text="Synapic cannot tag images until a sidecar is built. Build the CPU version (runs anywhere) or the CUDA version (fastest on an NVIDIA GPU). The rest of the application stays disabled until one is ready."
+        <TextBlock Text="Synapic cannot tag images until a sidecar is ready. Download the prebuilt CPU version (runs anywhere) or the CUDA version (fastest on an NVIDIA GPU), or build it from source if this checkout has the toolchain. The rest of the application stays disabled until one is ready."
                    Opacity="0.75" TextWrapping="Wrap" Margin="0,0,0,4"
                    IsVisible="{Binding IsSidecarRequired}" />
         <TextBlock Text="Additional sidecar builds" FontWeight="SemiBold"
@@ -63,13 +63,16 @@
                              Opacity="0.8" />
                   <TextBlock Text="{Binding Rid}" VerticalAlignment="Center"
                              Opacity="0.45" FontSize="11" />
-                  <ProgressBar IsVisible="{Binding IsBuilding}"
+                  <ProgressBar IsVisible="{Binding IsBusy}"
                                IsIndeterminate="{Binding IsBuildIndeterminate}"
                                Value="{Binding BuildPercent}" Maximum="100"
                                Width="170" Height="6" VerticalAlignment="Center" />
                   <Button Content="Build sidecar" Command="{Binding BuildCommand}"
                           IsVisible="{Binding IsBuildButtonVisible}" />
-                  <TextBlock Text="{Binding BuildStage}" IsVisible="{Binding IsBuilding}"
+                  <Button Content="Download" Command="{Binding DownloadCommand}"
+                          IsVisible="{Binding IsDownloadButtonVisible}"
+                          ToolTip.Tip="Fetch the prebuilt executable from the latest GitHub release instead of compiling it" />
+                  <TextBlock Text="{Binding BuildStage}" IsVisible="{Binding IsBusy}"
                              VerticalAlignment="Center" Opacity="0.8" FontSize="11"
                              TextTrimming="CharacterEllipsis" />
                 </StackPanel>

@@ -7,28 +7,34 @@ using Synapic.Avalonia.Services;
 namespace Synapic.Avalonia.ViewModels;
 
 /// <summary>
-/// One buildable sidecar variant (CPU or CUDA) as shown in the startup setup
-/// panel: whether it exists on disk, where it lives, and a command to build it.
+/// One sidecar variant (CPU or CUDA) as shown in the startup setup panel:
+/// whether it exists on disk, where it lives, and how to get it - build it from
+/// source, or fetch the executable the GitHub release already published.
 /// The sidecar is the pivotal part of the app - nothing can be tagged without
 /// it - so the panel is the only interactive surface until one variant exists.
 /// </summary>
 public partial class SidecarVariantViewModel : ViewModelBase
 {
     private readonly Func<SidecarVariantViewModel, CancellationToken, Task> _buildAsync;
+    private readonly Func<SidecarVariantViewModel, CancellationToken, Task> _downloadAsync;
     private bool _canBuild;
+    private bool _canDownload = true;
 
     public SidecarVariantViewModel(
         string rid,
         string detail,
         bool canBuild,
-        Func<SidecarVariantViewModel, CancellationToken, Task> buildAsync)
+        Func<SidecarVariantViewModel, CancellationToken, Task> buildAsync,
+        Func<SidecarVariantViewModel, CancellationToken, Task> downloadAsync)
     {
         Rid = rid;
         DisplayName = InferenceSidecarService.VariantDisplayName(rid);
         Detail = detail;
         _canBuild = canBuild;
         _buildAsync = buildAsync;
+        _downloadAsync = downloadAsync;
         BuildCommand = new AsyncRelayCommand(ct => _buildAsync(this, ct), () => CanBuildNow);
+        DownloadCommand = new AsyncRelayCommand(ct => _downloadAsync(this, ct), () => CanDownloadNow);
     }
 
     public string Rid { get; }
@@ -40,8 +46,14 @@ public partial class SidecarVariantViewModel : ViewModelBase
 
     public AsyncRelayCommand BuildCommand { get; }
 
+    /// <summary>Fetches the prebuilt executable from the GitHub release instead of compiling it.</summary>
+    public AsyncRelayCommand DownloadCommand { get; }
+
     [ObservableProperty]
     private bool _isBuilt;
+
+    [ObservableProperty]
+    private bool _isDownloading;
 
     [ObservableProperty]
     private string _exePath = string.Empty;
@@ -76,11 +88,28 @@ public partial class SidecarVariantViewModel : ViewModelBase
         }
     }
 
+    /// <summary>False while another row is busy - only one operation runs at a time.</summary>
+    public bool CanDownload
+    {
+        get => _canDownload;
+        set
+        {
+            if (SetProperty(ref _canDownload, value)) NotifyCommands();
+        }
+    }
+
     /// <summary>Shown only for a variant that still needs building.</summary>
-    public bool IsBuildButtonVisible => CanBuild && !IsBuilt && !IsBuilding;
+    public bool IsBuildButtonVisible => CanBuild && !IsBuilt && !IsBuilding && !IsDownloading;
+
+    /// <summary>The alternative to building: fetch what the latest release already published.</summary>
+    public bool IsDownloadButtonVisible => CanDownload && !IsBuilt && !IsBuilding && !IsDownloading;
+
+    /// <summary>One progress bar serves both operations, so they must never overlap.</summary>
+    public bool IsBusy => IsBuilding || IsDownloading;
 
     public string StatusText => IsBuilt
         ? (SizeText.Length > 0 ? $"Built ({SizeText})" : "Built")
+        : IsDownloading ? "Downloading\u2026"
         : "Not built";
 
     /// <summary>Status dot: green once this variant exists on disk.</summary>
@@ -99,7 +128,10 @@ public partial class SidecarVariantViewModel : ViewModelBase
     public void NotifyCommands()
     {
         BuildCommand.NotifyCanExecuteChanged();
+        DownloadCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(IsBuildButtonVisible));
+        OnPropertyChanged(nameof(IsDownloadButtonVisible));
+        OnPropertyChanged(nameof(IsBusy));
         OnPropertyChanged(nameof(StatusText));
         OnPropertyChanged(nameof(StatusBrush));
     }
@@ -127,11 +159,15 @@ public partial class SidecarVariantViewModel : ViewModelBase
         else Dispatcher.UIThread.Post(Apply);
     }
 
-    private bool CanBuildNow => CanBuild && !IsBuilt && !IsBuilding;
+    private bool CanBuildNow => CanBuild && !IsBuilt && !IsBuilding && !IsDownloading;
+
+    private bool CanDownloadNow => CanDownload && !IsBuilt && !IsBuilding && !IsDownloading;
 
     partial void OnIsBuiltChanged(bool value) => NotifyCommands();
 
     partial void OnIsBuildingChanged(bool value) => NotifyCommands();
+
+    partial void OnIsDownloadingChanged(bool value) => NotifyCommands();
 
     partial void OnHasProgressChanged(bool value) => OnPropertyChanged(nameof(IsBuildIndeterminate));
 

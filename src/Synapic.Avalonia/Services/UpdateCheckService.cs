@@ -13,7 +13,11 @@ public sealed record UpdateCheckResult(bool UpdateAvailable, string? LatestVersi
 /// </summary>
 public sealed class UpdateCheckService
 {
-    private const string RepoApiUrl = "https://api.github.com/repos/deanable/Synapic.NET/releases/latest";
+    /// <summary>
+    /// The one release this check and <see cref="SidecarDownloadService"/> both
+    /// read, so "latest" means the same thing to each of them.
+    /// </summary>
+    public const string LatestReleaseApiUrl = "https://api.github.com/repos/deanable/Synapic.NET/releases/latest";
 
     private readonly HttpClient _http;
 
@@ -28,7 +32,7 @@ public sealed class UpdateCheckService
     {
         try
         {
-            var release = await _http.GetFromJsonAsync<GitHubRelease>(RepoApiUrl, ct).ConfigureAwait(false);
+            var release = await _http.GetFromJsonAsync<GitHubRelease>(LatestReleaseApiUrl, ct).ConfigureAwait(false);
             if (release?.TagName is null) return null;
 
             var latest = release.TagName.TrimStart('v', 'V');

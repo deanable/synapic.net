@@ -20,6 +20,7 @@ public enum ServerUiState
     Detecting,
     NotDetected,
     Building,
+    Downloading,
     Stopped,
     Starting,
     Running,
@@ -38,6 +39,7 @@ public partial class MainWindowViewModel : ViewModelBase
 {
     private readonly IInferenceSidecar _sidecar;
     private readonly ISidecarBuildService _build;
+    private readonly ISidecarDownloadService _download;
     private readonly Session _session;
     private readonly Func<string?> _findSidecarExecutable;
     private readonly Func<string, string?> _findSidecarVariant;
@@ -53,10 +55,12 @@ public partial class MainWindowViewModel : ViewModelBase
         DaminionConnectionStore? connectionStore = null,
         EngineSettingsStore? engineStore = null,
         Func<string, string?>? sidecarVariantLocator = null,
-        SystemPromptPresetStore? presetStore = null)
+        SystemPromptPresetStore? presetStore = null,
+        ISidecarDownloadService? download = null)
     {
         _sidecar = sidecar;
         _build = build;
+        _download = download ?? new SidecarDownloadService();
         _session = session;
         _findSidecarExecutable = sidecarExecutableLocator ?? InferenceSidecarService.FindExecutable;
         _findSidecarVariant = sidecarVariantLocator ?? InferenceSidecarService.FindExecutableForRid;
@@ -179,8 +183,13 @@ public partial class MainWindowViewModel : ViewModelBase
     /// <summary>True when nothing has been built yet - the blocking setup state.</summary>
     public bool IsSidecarRequired => !IsSidecarReady;
 
-    /// <summary>Shows the setup panel while any buildable variant is still missing.</summary>
-    public bool IsSidecarPanelVisible => _build.CanBuild && SidecarVariants.Any(v => !v.IsBuilt);
+    /// <summary>
+    /// Shows the setup panel while any variant is still missing. Deliberately
+    /// not gated on CanBuild: a prebuilt executable can now be fetched from the
+    /// GitHub release, so an installed app with no build scripts can still pick
+    /// up the variant it did not ship with (CUDA beside a CPU-only install).
+    /// </summary>
+    public bool IsSidecarPanelVisible => SidecarVariants.Any(v => !v.IsBuilt);
 
     /// <summary>
     /// The wizard (datasource, engine, processing, results) is inert without a
@@ -197,6 +206,7 @@ public partial class MainWindowViewModel : ViewModelBase
         ServerUiState.Error => Brushes.OrangeRed,
         ServerUiState.Stopped => Brushes.Red,
         ServerUiState.Building => Brushes.RoyalBlue,
+        ServerUiState.Downloading => Brushes.RoyalBlue,
         ServerUiState.Detecting => Brushes.Gray,
         _ => Brushes.Black,
     };
@@ -216,6 +226,7 @@ public partial class MainWindowViewModel : ViewModelBase
             ServerUiState.Detecting => "Detecting server\u2026",
             ServerUiState.NotDetected => "Server not detected",
             ServerUiState.Building => "Building server\u2026 (first build downloads Python + packages)",
+            ServerUiState.Downloading => "Downloading server\u2026",
             ServerUiState.Stopped => "Server stopped",
             ServerUiState.Starting => "Server starting\u2026 (first launch can take up to 2 minutes)",
             ServerUiState.Running => $"Server running (port {_sidecar.SidecarPort}){StaleServerSuffix}",
@@ -262,12 +273,14 @@ public partial class MainWindowViewModel : ViewModelBase
         if (SidecarVariants.Count == 0)
         {
             foreach (var rid in InferenceSidecarService.BuildableRids())
-                SidecarVariants.Add(new SidecarVariantViewModel(rid, DescribeVariant(rid), _build.CanBuild, BuildVariantAsync));
+                SidecarVariants.Add(new SidecarVariantViewModel(rid, DescribeVariant(rid), _build.CanBuild, BuildVariantAsync, DownloadVariantAsync));
         }
 
         foreach (var variant in SidecarVariants)
         {
             variant.CanBuild = _build.CanBuild;
+            // A finished (or never-started) refresh re-arms both ways of getting a variant.
+            variant.CanDownload = true;
             variant.ApplyBuildState(_findSidecarVariant(variant.Rid));
         }
 
@@ -283,7 +296,11 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         if (!variant.CanBuild || variant.IsBuilding) return;
 
-        foreach (var other in SidecarVariants) other.CanBuild = false;
+        foreach (var other in SidecarVariants)
+        {
+            other.CanBuild = false;
+            other.CanDownload = false;
+        }
         variant.IsBuilding = true;
         variant.ResetBuildProgress();
         IsBusy = true;
@@ -309,6 +326,51 @@ public partial class MainWindowViewModel : ViewModelBase
             IsBusy = false;
             // Re-detect: restores per-variant availability and, on success,
             // flips the server state out of Building and unlocks the wizard.
+            await DetectServerAsync();
+        }
+    }
+
+    /// <summary>
+    /// Fetches one variant from the GitHub release instead of compiling it -
+    /// the way out for a machine with no Python/PyInstaller toolchain, and for
+    /// an installed app that wants a variant it did not ship with. Mirrors
+    /// <see cref="BuildVariantAsync"/>: one operation at a time, then re-detect
+    /// so the workspace unlocks the moment the file lands.
+    /// </summary>
+    private async Task DownloadVariantAsync(SidecarVariantViewModel variant, CancellationToken ct)
+    {
+        if (variant.IsBuilt || variant.IsBuilding || variant.IsDownloading) return;
+
+        foreach (var other in SidecarVariants)
+        {
+            other.CanBuild = false;
+            other.CanDownload = false;
+        }
+        variant.IsDownloading = true;
+        variant.ResetBuildProgress();
+        IsBusy = true;
+        SetState(ServerUiState.Downloading);
+        try
+        {
+            var destination = InferenceSidecarService.SidecarInstallPath(variant.Rid);
+            var progress = new Progress<SidecarDownloadProgress>(
+                p => variant.ApplyProgress(new SidecarBuildProgress(p.Percent, p.Stage)));
+            await _download.DownloadAsync(variant.Rid, destination, progress, ct);
+            AppendLog($"[download] {variant.DisplayName} sidecar downloaded to {destination}.");
+        }
+        catch (OperationCanceledException)
+        {
+            AppendLog($"[download] {variant.DisplayName} download cancelled.");
+        }
+        catch (Exception e)
+        {
+            AppendLog($"[download] {variant.DisplayName} download failed: {e.Message}");
+        }
+        finally
+        {
+            variant.IsDownloading = false;
+            IsBusy = false;
+            // Re-detect: picks the new executable up and unlocks the wizard.
             await DetectServerAsync();
         }
     }
