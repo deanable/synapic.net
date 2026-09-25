@@ -1,0 +1,126 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Windows installer project (spec §7.2).
+
+    There is deliberately no code here. The installer is defined by
+    build/installer-windows.iss and compiled by Inno Setup 6 through
+    build/package-windows.ps1, which also runs the AppId guard
+    (build/check-installer-appid.py), stages the .NET 10 Desktop Runtime as an
+    offline prerequisite and signs the result when SIGNING_CERT_THUMBPRINT is
+    set. This project exists so that packaging - the .iss, the scripts that
+    drive it, the AppId record - is addressable from the solution and from one
+    command, instead of being reachable only by reading CI.
+
+    A plain build packages nothing: it checks that the installer definition is
+    where this project says it is and prints how to build the setup exe. Ask
+    for the installer explicitly:
+
+      dotnet build build/Synapic.Installer/Synapic.Installer.csproj -t:PackageInstaller
+
+    That publishes the app into artifacts/<rid> (framework-dependent, the way
+    the release is packaged; skip with -p:SkipPublishApp=true), requires the
+    sidecar to be staged next to it, and then runs Inno Setup. The sidecar
+    comes from build/build-server.ps1 -Rid win-x64, the app's Build Server
+    button, or a released server renamed to synapic-inference.exe - see
+    docs/packaging.md.
+  -->
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <EnableDefaultItems>false</EnableDefaultItems>
+    <!-- Code-free project: csc is handed no inputs, and Directory.Build.props
+         promotes warnings to errors solution-wide. -->
+    <NoWarn>$(NoWarn);CS2008</NoWarn>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- Same RID the release page uses (Synapic-Setup-win-x64.exe). -->
+    <InstallerRid Condition="'$(InstallerRid)' == ''">win-x64</InstallerRid>
+    <!-- -p:Version=1.2.3 stamps the app and the setup exe together; without it
+         both fall back to 1.0.0, the default package-windows.ps1 already uses. -->
+    <InstallerVersion Condition="'$(InstallerVersion)' == '' and '$(Version)' != ''">$(Version)</InstallerVersion>
+    <InstallerVersion Condition="'$(InstallerVersion)' == ''">1.0.0</InstallerVersion>
+    <SidecarExeName Condition="'$(SidecarExeName)' == ''">synapic-inference.exe</SidecarExeName>
+    <AppExeName Condition="'$(AppExeName)' == ''">Synapic.exe</AppExeName>
+    <!-- Native separators throughout: this file is evaluated by the Linux CI
+         build too (the project is part of the solution), where a backslash is
+         just a character in a file name. -->
+    <RepoRoot>$([MSBuild]::EnsureTrailingSlash($([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../../'))))</RepoRoot>
+    <!-- The directory the installer is compiled from and written to, native and
+         absolute. InstallerArtifactsDir is the public knob (-p:...), relative
+         paths in it mean "relative to the repo root" - both Exists() and Exec
+         resolve relative paths against different directories, so it is
+         normalised once here and only InstallerPayloadDir is used below. -->
+    <InstallerArtifactsDir Condition="'$(InstallerArtifactsDir)' == ''">$([System.IO.Path]::Combine('artifacts', '$(InstallerRid)'))</InstallerArtifactsDir>
+    <InstallerPayloadDir Condition="!$([System.IO.Path]::IsPathRooted('$(InstallerArtifactsDir)'))">$([System.IO.Path]::Combine($(RepoRoot), '$(InstallerArtifactsDir)'))</InstallerPayloadDir>
+    <InstallerPayloadDir Condition="'$(InstallerPayloadDir)' == ''">$([System.IO.Path]::GetFullPath('$(InstallerArtifactsDir)'))</InstallerPayloadDir>
+    <InstallerPayloadAppExe>$([System.IO.Path]::Combine($(InstallerPayloadDir), '$(AppExeName)'))</InstallerPayloadAppExe>
+    <InstallerPayloadSidecarExe>$([System.IO.Path]::Combine($(InstallerPayloadDir), '$(SidecarExeName)'))</InstallerPayloadSidecarExe>
+    <PackageWindowsScript>$([System.IO.Path]::Combine($(RepoRoot), 'build', 'package-windows.ps1'))</PackageWindowsScript>
+    <InstallerIssScript>$([System.IO.Path]::Combine($(RepoRoot), 'build', 'installer-windows.iss'))</InstallerIssScript>
+    <InstallerAppProject>$([System.IO.Path]::Combine($(RepoRoot), 'src', 'Synapic.Avalonia', 'Synapic.Avalonia.csproj'))</InstallerAppProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The packaging surface, so it is visible in the IDE next to the project
+         that owns it. None items: nothing here is compiled or copied. -->
+    <None Include="..\installer-windows.iss" />
+    <None Include="..\installer-appid.txt" />
+    <None Include="..\check-installer-appid.py" />
+    <None Include="..\package-windows.ps1" />
+    <None Include="..\package-linux.sh" />
+    <None Include="..\package-macos.sh" />
+    <None Include="..\macos-entitlements.plist" />
+    <None Include="..\split-release-asset.py" />
+  </ItemGroup>
+
+  <!-- Cheap and cross-platform: the files this project drives must exist, or
+       every target below would fail somewhere less obvious. Runs on Linux and
+       macOS too, so a solution-wide build cannot be broken by packaging. -->
+  <Target Name="ValidateInstallerDefinition">
+    <Error Condition="!Exists('$(InstallerIssScript)')"
+           Text="The installer definition is missing: $(InstallerIssScript). This project is a wrapper around it - see docs/packaging.md." />
+    <Error Condition="!Exists('$(PackageWindowsScript)')"
+           Text="The installer driver script is missing: $(PackageWindowsScript). See docs/packaging.md." />
+  </Target>
+
+  <Target Name="ValidateInstallerHost">
+    <Error Condition="'$(OS)' != 'Windows_NT'"
+           Text="The Windows installer compiles with Inno Setup, which only runs on Windows. Package the other platforms with build/package-linux.sh or build/package-macos.sh instead." />
+  </Target>
+
+  <!-- Mirrors the release workflow: the app is published framework-dependent on
+       Windows (the setup exe bundles the .NET Desktop Runtime as an offline
+       prerequisite), so self-contained is off and not a RID choice here. -->
+  <Target Name="PublishInstallerPayload" Condition="'$(SkipPublishApp)' != 'true'">
+    <Message Importance="high" Text="Publishing the app into $(InstallerPayloadDir) (version $(InstallerVersion), $(Configuration))..." />
+    <Exec WorkingDirectory="$(RepoRoot)"
+          Command="dotnet publish &quot;$(InstallerAppProject)&quot; -c $(Configuration) -r $(InstallerRid) --self-contained false -p:PublishSingleFile=false -o &quot;$(InstallerPayloadDir)&quot;" />
+  </Target>
+
+  <Target Name="ValidateInstallerPayload" DependsOnTargets="PublishInstallerPayload">
+    <Error Condition="!Exists('$(InstallerPayloadAppExe)')"
+           Text="$(InstallerPayloadDir) contains no $(AppExeName), so there is nothing to install. Run the PublishInstallerPayload target (the default) or publish manually with: dotnet publish &quot;$(InstallerAppProject)&quot; -c $(Configuration) -r $(InstallerRid) --self-contained false -o &quot;$(InstallerPayloadDir)&quot;" />
+    <Error Condition="!Exists('$(InstallerPayloadSidecarExe)')"
+           Text="The installer bundles the sidecar next to the app, but $(InstallerPayloadDir) contains no $(SidecarExeName). Build it with build/build-server.ps1 -Rid $(InstallerRid) (or the app's Build Server button), or drop a released synapic-inference.exe in that directory." />
+  </Target>
+
+  <!-- Inno Setup compiles the installer; everything before that (AppId guard,
+       runtime staging, signing) lives in package-windows.ps1 so CI and this
+       project cannot drift apart. -->
+  <Target Name="PackageInstaller"
+          DependsOnTargets="ValidateInstallerDefinition;ValidateInstallerHost;ValidateInstallerPayload">
+    <Message Importance="high" Text="Building Synapic-Setup-$(InstallerRid).exe (version $(InstallerVersion))..." />
+    <Exec WorkingDirectory="$(RepoRoot)"
+          Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(PackageWindowsScript)&quot; -Rid $(InstallerRid) -AppVersion $(InstallerVersion) -ArtifactsDir &quot;$(InstallerPayloadDir)&quot;" />
+  </Target>
+
+  <Target Name="DescribeInstallerProject" AfterTargets="Build"
+          DependsOnTargets="ValidateInstallerDefinition">
+    <Message Importance="high"
+             Text="Installer project: nothing to compile. Build the setup exe with 'dotnet build &quot;$(MSBuildProjectFullPath)&quot; -t:PackageInstaller' (Windows only; docs/packaging.md)." />
+  </Target>
+
+</Project>

@@ -30,6 +30,30 @@ build/package-macos.sh <rid>         # codesign + notarytool + create-dmg
 `build-server.ps1|.sh` chains the first three steps; the app's **Build Server**
 button and CI both call it.
 
+### Building the installer from the solution
+
+`build/Synapic.Installer/Synapic.Installer.csproj` is the installer project: a
+code-free packaging project that owns the `.iss`, the AppId record and the
+packaging scripts, and drives the same `package-windows.ps1` CI calls, so the
+two paths cannot drift apart.
+
+```bash
+dotnet build build/Synapic.Installer/Synapic.Installer.csproj -t:PackageInstaller
+```
+
+It publishes the app into `artifacts/win-x64` (framework-dependent, as the
+release does), refuses to continue unless `synapic-inference.exe` is staged
+next to it, and then runs Inno Setup. Knobs: `-p:Version=1.2.3` stamps the app
+and the setup exe together, `-p:InstallerRid=`, `-p:InstallerArtifactsDir=`
+(relative paths are repo-relative), `-p:SkipPublishApp=true`.
+
+Packaging is opt-in by design. A plain build of the project - and therefore the
+solution-wide build CI runs on Linux - only checks that the installer
+definition is where the project says it is and prints the command above;
+`-t:PackageInstaller` is the part that needs Windows and Inno Setup 6. CI still
+calls `package-windows.ps1` directly, so the project stays a convenience over
+that one script rather than a second implementation of it.
+
 ## Sidecar variants: CPU and CUDA
 
 CUDA is not a separate program. It is the same sidecar built against CUDA torch
@@ -71,9 +95,10 @@ after a 2.7 GB download.
   C#). UPX is **off** in `synapic-inference.spec` — compressing a 2.7 GB CUDA
   bundle is slow, AV-triggering, and pointless for a sidecar that starts once —
   so a future size push has to come from excluding packages, not packing.
-- **Lite vs full installers:** "full" bakes `LiquidAI/LFM2.5-VL-1.6B` weights
-  into the sidecar's model cache at build time (offline-first). "lite" ships
-  without weights; the app downloads on first run via `POST /models/download`.
+- **Lite vs full installers:** the shipped installer is lite - app plus CPU
+  server, no weights - and should stay that way. "Bundling the model" below has
+  the sizes, the 2 GiB release-asset ceiling, and the shape that serves offline
+  installs without growing everyone's download.
 - **Windows signing:** EV cert via `signtool` (set `SIGNING_CERT_THUMBPRINT`).
 - **macOS:** sign every `.dylib`/`.so` in the bundle before the app bundle,
   hardened runtime (`--options runtime`), notarize with `notarytool --wait`,
@@ -161,6 +186,60 @@ gh workflow run release.yml -f version=1.2.3 -f publish=true  # cut the release
 The dry run exercises every build, the smoke tests, the split and the checksum
 step, and leaves the assets on the run page for inspection — it only skips the
 `github-release` job.
+
+## Bundling the model: keep the installer lite
+
+The installer ships the app and the CPU server. It does not ship weights, and
+the alternatives are worse, because the pieces have very different sizes and
+only two of them are obligations:
+
+| Piece | Size | In the installer? |
+|-------|------|-------------------|
+| App + .NET Desktop Runtime prerequisite | bundled; Windows is framework-dependent | **yes** - nothing runs without them |
+| CPU sidecar | 216 MB standalone (226,782,812 bytes) | **yes** - building it is a developer-only path |
+| `LiquidAI/LFM2.5-VL-450M` weights (default) | ~860 MB download, incompressible | no - first run, in the background |
+| `LiquidAI/LFM2.5-VL-1.6B` weights (optional) | ~2 GB | no |
+
+`Synapic-Setup-win-x64.exe` as released in v0.1.0 is **286 MB**
+(299,709,667 bytes), and `Synapic-osx-arm64.dmg` is 171 MB. That is the
+payoff of publishing Windows framework-dependent and letting the sidecar fetch
+its own model.
+
+**"Barebones that builds the sidecar" is not a shipping option.** Building the
+sidecar needs a source checkout, `build/fetch-python.ps1`, ~2.5 GB of pinned
+torch wheels, PyInstaller and about 20 minutes of CPU. That is the developer
+path - `build-server.ps1`, the app's **Build Server** button, or **Update** on
+a built row - and it only works for someone who already has the repository.
+Someone who is handed an installer, or the standalone CPU server, never
+compiles anything.
+
+**Baking the default weights works, but should not be the default.** What it
+buys: a first run that needs no network, which is real value for an on-prem
+Daminion install that cannot reach huggingface.co. What it costs:
+
+- ~860 MB of weights in an installer everyone downloads, and safetensors do
+  not compress - LZMA2/max moves the setup exe from 286 MB to roughly 1.15 GB;
+- every release job re-downloads and re-freezes them, and each installer pins
+  one model revision, so a newer model means a new 1.15 GB installer instead of
+  a download inside the app;
+- a hard ceiling: a GitHub Release asset must be **under 2 GiB**. The 450M
+  variant still fits (~1.15 GB), but adding `LFM2.5-VL-1.6B` (~2 GB) does not -
+  that asset would need the split-and-reassemble treatment the CUDA server uses
+  (`<name>.part1/.part2` plus `reassemble-*.bat`), and Inno Setup cannot install
+  from split parts: the user has to run the `.bat` first, so it is no longer a
+  one-file installer.
+
+If offline installs become a requirement, the cheap shape is a second release
+asset rather than a second installer: publish the Hugging Face cache for the
+default model as `Synapic-models-lfm2.5-vl-450m.zip` and document unpacking it
+into `%LOCALAPPDATA%\Synapic\models` - the sidecar's `HF_HOME`, fixed by
+`InferenceSidecarService.ModelsRoot()` (`~/.cache/synapic/models` elsewhere) -
+on a machine with network access, then copying it to the offline one. One
+installer, a swappable model revision, no new packaging job. The next step up,
+if admins object to a second download, is an optional
+`Synapic-Setup-win-x64-full.exe` that drops those same files into
+`{localappdata}\Synapic\models` as `[Files]` - the directory the uninstaller
+already removes (`[UninstallDelete]`) - while the normal installer stays 286 MB.
 
 ## Manual test: upgrade path (same AppId)
 
