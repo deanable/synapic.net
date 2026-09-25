@@ -158,9 +158,15 @@ models short-circuit.
   `_model_build_lock` (double-checked).
 - `_construct_model` — downloads when missing, prefers the local snapshot
   path, applies the classification ⇄ image-to-text task swap, builds
-  `pipeline(resolved_task, device=…, dtype="auto",
+  `pipeline(resolved_task, device=…, dtype=_load_dtype(device),
   model_kwargs={"low_cpu_mem_usage": True})`, keeps **at most one** pipeline
   resident (clears the cache), and records the loaded model.
+- `_load_dtype(device)` — `float32` on CPU, `"auto"` on CUDA/MPS. The
+  checkpoint is bfloat16 and `"auto"` would keep it, but x86 CPUs without
+  AVX512-BF16/AMX (every mainstream 12th–14th gen Core part) have no native
+  bf16 GEMM: oneDNN emulates it roughly 1000× slower than the fp32 kernel.
+  On an i7-14700K that made the vision+prefill block cost 75 CPU-seconds per
+  448×288 image instead of 20, and 4.7 s per image instead of 2.0 s.
 - `unload_model()` drops the cache and sets `loading`.
 
 ### Scoring (tier ladder)

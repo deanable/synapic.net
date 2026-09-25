@@ -306,3 +306,51 @@ class TestConcurrentModelLoads:
         model_loader.load_model(self.MODEL, self.TASK, device="cpu")
 
         assert model_loader.get_state_snapshot()["status"] == "ready"
+
+
+class TestLoadDtype:
+    """The CPU load dtype is a performance cliff, not a detail.
+
+    ``dtype="auto"`` keeps the checkpoint's bfloat16 on CPU (transformers does
+    not upcast it). x86 parts without AVX512-BF16/AMX - every mainstream
+    12th-14th gen Core part - have no native bfloat16 GEMM, so oneDNN falls
+    back to an emulated path ~1000x slower than the fp32 kernel. LFM2.5-VL
+    ships bf16 weights, so the vision tower and prefill ran on that path:
+    4.7s per image instead of 2.0s, and 75 CPU-seconds of work on the fixed
+    block instead of 20. Pin the split so nobody simplifies it back.
+    """
+
+    MODEL = "org/model"
+    TASK = MODEL_TASK_IMAGE_TO_TEXT
+
+    def test_cpu_loads_float32(self):
+        import torch
+
+        assert model_loader._load_dtype("cpu") is torch.float32
+
+    def test_gpu_keeps_auto(self):
+        # bfloat16 is native on CUDA/MPS - "auto" lets the checkpoint pick it.
+        assert model_loader._load_dtype("cuda") == "auto"
+        assert model_loader._load_dtype("mps") == "auto"
+
+    def test_load_model_passes_the_resolved_dtype_to_the_pipeline(self, monkeypatch):
+        import torch
+
+        seen = {}
+
+        def construct(task, **kwargs):
+            seen.update(kwargs)
+            return object()
+
+        monkeypatch.setattr(model_loader, "_get_hf_pipeline", lambda: construct)
+        monkeypatch.setattr(model_loader, "is_model_downloaded", lambda *a, **k: False)
+        monkeypatch.setattr(model_loader, "download_model", lambda *a, **k: None)
+        monkeypatch.setattr(
+            model_loader, "_get_latest_snapshot_path", lambda *a, **k: None
+        )
+        model_loader._model_cache.clear()
+
+        model_loader.load_model(self.MODEL, self.TASK, device="cpu")
+
+        assert seen["dtype"] is torch.float32
+        assert seen["model_kwargs"] == {"low_cpu_mem_usage": True}

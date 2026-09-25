@@ -80,7 +80,16 @@ jobs:
           if [[ "${{ matrix.rid }}" == "win-x64" ]]; then PY="$PY/python.exe"; else PY="$PY/bin/python3"; fi
           "$PY" build/check-lfm2vl-tie.py
 
-      - name: Build sidecar (PyInstaller)
+      # Rebuild instruction: every tag rebuilds the inference server from
+      # `src/Synapic.Inference` at the tagged commit - never reuse a prebuilt exe
+      # from `artifacts/`, because the server's speed policy lives in source:
+      # `model_loader.py` loads float32 on CPU (`_load_dtype`), and a bundle packed
+      # before that change ships bf16, which oneDNN emulates on AVX2-only x86
+      # (measured 4.1 s -> 1.6 s per image at the app's 4-way fan-out). The
+      # packaging steps below bundle whatever this step built, so reusing an old
+      # exe would ship the slow server under a new version number.
+      # Local equivalent: ./build/build-sidecar.ps1 -Rid win-x64  (or .sh <rid>).
+      - name: Rebuild the sidecar (PyInstaller)
         shell: bash
         run: ./build/build-sidecar.sh ${{ matrix.rid }}
 
@@ -264,7 +273,7 @@ jobs:
       # build-sidecar.ps1 also asserts the packaged payload really is the CUDA
       # variant (build/check-sidecar-variant.py), so a wrong-wheels bundle cannot
       # reach the release below.
-      - name: Build sidecar (PyInstaller)
+      - name: Rebuild the CUDA sidecar (PyInstaller)
         run: ./build/build-sidecar.ps1 -Rid win-x64-cuda
 
       - name: Smoke test the bundle (boots and serves /health with no GPU)

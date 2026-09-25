@@ -262,6 +262,28 @@ def _torch_device_arg(device_str: str):
     return device_str  # 'cuda' or 'mps' accepted by transformers
 
 
+def _load_dtype(device_str: str):
+    """Dtype to construct the pipeline with.
+
+    ``dtype="auto"`` keeps the checkpoint's bfloat16 on CPU (transformers
+    does not upcast bf16 for CPU). That is pathological on x86 parts without
+    AVX512-BF16/AMX - which is every mainstream 12th-14th gen Core part - where
+    oneDNN has no native bfloat16 GEMM and falls back to an emulated path
+    roughly 1000x slower than the fp32 kernel on the same silicon. LFM2.5-VL
+    ships bf16 weights, so the vision tower and prefill ran on that emulated
+    path and dominated the per-image time (~75 CPU-seconds for one 448x288
+    image; fp32 needs well under one).
+
+    Load float32 on CPU. Keep "auto" on CUDA/MPS, where bfloat16 is native
+    and halves memory traffic.
+    """
+    if device_str == "cpu":
+        import torch
+
+        return torch.float32
+    return "auto"
+
+
 # ============================================================================
 # MODEL COMPATIBILITY
 # ============================================================================
@@ -674,13 +696,15 @@ def _construct_model(
                 except Exception:
                     pass
 
+        load_dtype = _load_dtype(device_str)
         logger.info(
-            f"Loading pipeline ({resolved_task}) for {model_id} on {device_str}"
+            f"Loading pipeline ({resolved_task}) for {model_id} on {device_str} "
+            f"(dtype={load_dtype})"
         )
         model = hf_pipeline(
             resolved_task,
             device=_torch_device_arg(device_str),
-            dtype="auto",
+            dtype=load_dtype,
             model_kwargs={"low_cpu_mem_usage": True},
             **kwargs,
         )
