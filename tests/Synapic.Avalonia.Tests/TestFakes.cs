@@ -86,3 +86,24 @@ internal sealed class FakeBuildService : ISidecarBuildService
 
     public void Cancel() { }
 }
+
+/// <summary>In-memory ISidecarDownloadService for view-model tests.</summary>
+internal sealed class FakeDownloadService : ISidecarDownloadService
+{
+    /// <summary>Every RID a download was requested for, in order.</summary>
+    public List<string> DownloadedRids { get; } = new();
+
+    /// <summary>Destinations the download was asked to write, in order.</summary>
+    public List<string> Destinations { get; } = new();
+
+    /// <summary>(rid, destination, progress, ct) — returns the task the fake awaits.</summary>
+    public Func<string, string, IProgress<SidecarDownloadProgress>, CancellationToken, Task>? OnDownload { get; set; }
+
+    public Task DownloadAsync(
+        string rid, string destinationPath, IProgress<SidecarDownloadProgress> progress, CancellationToken ct = default)
+    {
+        DownloadedRids.Add(rid);
+        Destinations.Add(destinationPath);
+        return OnDownload is { } callback ? callback(rid, destinationPath, progress, ct) : Task.CompletedTask;
+    }
+}

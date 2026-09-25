@@ -184,12 +184,15 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool IsSidecarRequired => !IsSidecarReady;
 
     /// <summary>
-    /// Shows the setup panel while any variant is still missing. Deliberately
-    /// not gated on CanBuild: a prebuilt executable can now be fetched from the
-    /// GitHub release, so an installed app with no build scripts can still pick
-    /// up the variant it did not ship with (CUDA beside a CPU-only install).
+    /// Shows the setup panel while any variant is still missing, or while a built
+    /// one trails the sidecar source - a stale executable is exactly when the
+    /// Update button is worth reaching for, so the panel must not hide itself
+    /// then. Deliberately not gated on CanBuild: a prebuilt executable can be
+    /// fetched from the GitHub release, so an installed app with no build scripts
+    /// can still pick up the variant it did not ship with (CUDA beside a CPU-only
+    /// install).
     /// </summary>
-    public bool IsSidecarPanelVisible => SidecarVariants.Any(v => !v.IsBuilt);
+    public bool IsSidecarPanelVisible => SidecarVariants.Any(v => !v.IsBuilt || v.IsStale);
 
     /// <summary>
     /// The wizard (datasource, engine, processing, results) is inert without a
@@ -273,15 +276,19 @@ public partial class MainWindowViewModel : ViewModelBase
         if (SidecarVariants.Count == 0)
         {
             foreach (var rid in InferenceSidecarService.BuildableRids())
-                SidecarVariants.Add(new SidecarVariantViewModel(rid, DescribeVariant(rid), _build.CanBuild, BuildVariantAsync, DownloadVariantAsync));
+                SidecarVariants.Add(new SidecarVariantViewModel(
+                    rid, DescribeVariant(rid), _build.CanBuild, BuildVariantAsync, DownloadVariantAsync, UpdateVariantAsync));
         }
 
+        var repoRoot = InferenceSidecarService.FindRepoRoot();
         foreach (var variant in SidecarVariants)
         {
             variant.CanBuild = _build.CanBuild;
-            // A finished (or never-started) refresh re-arms both ways of getting a variant.
+            // A finished (or never-started) refresh re-arms every way of getting a variant.
             variant.CanDownload = true;
-            variant.ApplyBuildState(_findSidecarVariant(variant.Rid));
+            variant.CanUpdate = true;
+            var exe = _findSidecarVariant(variant.Rid);
+            variant.ApplyBuildState(exe, exe is null ? null : InferenceSidecarService.DescribeStaleness(exe, repoRoot));
         }
 
         NotifySidecarSetupChanged();
@@ -292,7 +299,10 @@ public partial class MainWindowViewModel : ViewModelBase
     /// the first build lands. Only one build runs at a time: the pipeline
     /// shares a work directory and the build service rejects concurrent runs.
     /// </summary>
-    private async Task BuildVariantAsync(SidecarVariantViewModel variant, CancellationToken ct)
+    private Task BuildVariantAsync(SidecarVariantViewModel variant, CancellationToken ct) =>
+        BuildVariantCoreAsync(variant, ct);
+
+    private async Task BuildVariantCoreAsync(SidecarVariantViewModel variant, CancellationToken ct)
     {
         if (!variant.CanBuild || variant.IsBuilding) return;
 
@@ -300,6 +310,7 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             other.CanBuild = false;
             other.CanDownload = false;
+            other.CanUpdate = false;
         }
         variant.IsBuilding = true;
         variant.ResetBuildProgress();
@@ -337,14 +348,24 @@ public partial class MainWindowViewModel : ViewModelBase
     /// <see cref="BuildVariantAsync"/>: one operation at a time, then re-detect
     /// so the workspace unlocks the moment the file lands.
     /// </summary>
-    private async Task DownloadVariantAsync(SidecarVariantViewModel variant, CancellationToken ct)
+    private Task DownloadVariantAsync(SidecarVariantViewModel variant, CancellationToken ct) =>
+        DownloadVariantCoreAsync(variant, ct);
+
+    /// <summary>
+    /// The download half of an update: a variant that is already built is only
+    /// replaced on purpose (<paramref name="replaceExisting"/>), never as a side
+    /// effect of a refresh.
+    /// </summary>
+    private async Task DownloadVariantCoreAsync(SidecarVariantViewModel variant, CancellationToken ct, bool replaceExisting = false)
     {
-        if (variant.IsBuilt || variant.IsBuilding || variant.IsDownloading) return;
+        if (variant.IsBuilding || variant.IsDownloading) return;
+        if (variant.IsBuilt && !replaceExisting) return;
 
         foreach (var other in SidecarVariants)
         {
             other.CanBuild = false;
             other.CanDownload = false;
+            other.CanUpdate = false;
         }
         variant.IsDownloading = true;
         variant.ResetBuildProgress();
@@ -372,6 +393,49 @@ public partial class MainWindowViewModel : ViewModelBase
             IsBusy = false;
             // Re-detect: picks the new executable up and unlocks the wizard.
             await DetectServerAsync();
+        }
+    }
+
+    /// <summary>
+    /// Replaces an already-built variant with a fresh executable. Build and
+    /// Download both hide themselves once a variant exists, so without this a
+    /// newer sidecar had no way in at all - not rebuilt from source, not
+    /// re-fetched from the release. A source checkout rebuilds; a machine with no
+    /// toolchain (an installed app) takes what the latest release published.
+    /// A running server is stopped first - neither PyInstaller nor the file move
+    /// can overwrite a locked executable, and the replacement only takes effect
+    /// on the next launch anyway - then started again on the new bytes.
+    /// </summary>
+    private async Task UpdateVariantAsync(SidecarVariantViewModel variant, CancellationToken ct)
+    {
+        if (!variant.IsBuilt || variant.IsBusy || IsBusy) return;
+
+        var restart = ServerState is ServerUiState.Running or ServerUiState.Starting;
+        variant.IsUpdating = true;
+        IsBusy = true;
+        try
+        {
+            if (restart)
+            {
+                AppendLog($"[update] Stopping the running {variant.DisplayName} server before replacing its executable.");
+                await _sidecar.StopAsync();
+            }
+
+            if (_build.CanBuild) await BuildVariantCoreAsync(variant, ct);
+            else await DownloadVariantCoreAsync(variant, ct, replaceExisting: true);
+        }
+        finally
+        {
+            variant.IsUpdating = false;
+            IsBusy = false;
+        }
+
+        // Whether the replacement landed or failed, put the server back the way
+        // the user left it: on the new build, or on the one that still works.
+        if (restart && IsSidecarReady)
+        {
+            AppendLog($"[update] Restarting the server on the {variant.DisplayName} sidecar.");
+            await StartServerAsync(ct);
         }
     }
 

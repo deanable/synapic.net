@@ -72,12 +72,18 @@
                   <Button Content="Download" Command="{Binding DownloadCommand}"
                           IsVisible="{Binding IsDownloadButtonVisible}"
                           ToolTip.Tip="Fetch the prebuilt executable from the latest GitHub release instead of compiling it" />
+                  <Button Content="Update" Command="{Binding UpdateCommand}"
+                          IsVisible="{Binding IsUpdateButtonVisible}"
+                          ToolTip.Tip="Replace this server: rebuilds it from source, or re-fetches the prebuilt executable from the latest GitHub release when this machine has no toolchain. A running server is stopped and restarted." />
                   <TextBlock Text="{Binding BuildStage}" IsVisible="{Binding IsBusy}"
                              VerticalAlignment="Center" Opacity="0.8" FontSize="11"
                              TextTrimming="CharacterEllipsis" />
                 </StackPanel>
                 <TextBlock Text="{Binding Detail}" Opacity="0.6" FontSize="11"
                            TextWrapping="Wrap" Margin="18,2,0,0" />
+                <TextBlock Text="{Binding StaleText}" IsVisible="{Binding IsStale}"
+                           Foreground="Goldenrod" FontSize="11" TextWrapping="Wrap"
+                           Margin="18,2,0,0" />
               </StackPanel>
             </DataTemplate>
           </ItemsControl.ItemTemplate>

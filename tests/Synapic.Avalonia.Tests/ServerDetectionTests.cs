@@ -241,6 +241,119 @@ public class ServerDetectionTests
         }
     }
 
+    // ── Updating an already-built variant ───────────────────────────────────
+
+    [AvaloniaFact]
+    public async Task Built_variant_offers_update_instead_of_build_or_download()
+    {
+        var rid = InferenceSidecarService.PreferredRid();
+        var vm = new MainWindowViewModel(new FakeSidecar(), new FakeBuildService(), new Session(),
+            () => Exe, null, null, r => r == rid ? Exe : null);
+        await vm.DetectServerAsync();
+
+        var built = vm.SidecarVariants.Single(v => v.Rid == rid);
+
+        Assert.True(built.IsBuilt);
+        Assert.False(built.IsBuildButtonVisible);
+        Assert.False(built.IsDownloadButtonVisible);
+        Assert.True(built.IsUpdateButtonVisible);
+        Assert.True(built.UpdateCommand.CanExecute(null));
+    }
+
+    [AvaloniaFact]
+    public async Task Update_rebuilds_from_source_when_the_toolchain_is_available()
+    {
+        var rid = InferenceSidecarService.PreferredRid();
+        var build = new FakeBuildService();
+        var download = new FakeDownloadService();
+        var vm = new MainWindowViewModel(new FakeSidecar(), build, new Session(),
+            () => Exe, null, null, r => r == rid ? Exe : null, download: download);
+        await vm.DetectServerAsync();
+
+        await vm.SidecarVariants.Single(v => v.Rid == rid).UpdateCommand.ExecuteAsync(null);
+
+        Assert.Equal(new[] { rid }, build.BuiltRids);
+        Assert.Empty(download.DownloadedRids);
+    }
+
+    [AvaloniaFact]
+    public async Task Update_falls_back_to_the_release_when_this_machine_cannot_build()
+    {
+        var rid = InferenceSidecarService.PreferredRid();
+        var build = new FakeBuildService { CanBuild = false };
+        var download = new FakeDownloadService();
+        var vm = new MainWindowViewModel(new FakeSidecar(), build, new Session(),
+            () => Exe, null, null, r => r == rid ? Exe : null, download: download);
+        await vm.DetectServerAsync();
+
+        var built = vm.SidecarVariants.Single(v => v.Rid == rid);
+        await built.UpdateCommand.ExecuteAsync(null);
+
+        Assert.Equal(new[] { rid }, download.DownloadedRids);
+        Assert.Empty(build.BuiltRids);
+    }
+
+    [AvaloniaFact]
+    public async Task Update_stops_a_running_server_and_starts_it_again_on_the_new_build()
+    {
+        var rid = InferenceSidecarService.PreferredRid();
+        var sidecar = new FakeSidecar();
+        var build = new FakeBuildService();
+        var vm = new MainWindowViewModel(sidecar, build, new Session(),
+            () => Exe, null, null, r => r == rid ? Exe : null);
+        await vm.DetectServerAsync();
+        await vm.StartServerCommand.ExecuteAsync(null);
+        Assert.Equal(ServerUiState.Running, vm.ServerState);
+
+        await vm.SidecarVariants.Single(v => v.Rid == rid).UpdateCommand.ExecuteAsync(null);
+
+        // Windows will not let either the build or the file move overwrite a
+        // locked executable, and the replacement only counts once it is launched.
+        Assert.Equal(1, sidecar.StopCalls);
+        Assert.Equal(2, sidecar.StartCalls);
+        Assert.Equal(ServerUiState.Running, vm.ServerState);
+        Assert.Equal(new[] { rid }, build.BuiltRids);
+    }
+
+    [AvaloniaFact]
+    public async Task Stale_build_reopens_the_panel_and_flags_the_row()
+    {
+        var rid = InferenceSidecarService.PreferredRid();
+        var dir = Directory.CreateTempSubdirectory("synapic-stale-");
+        try
+        {
+            var exe = Path.Combine(dir.FullName, InferenceSidecarService.ExeName);
+            File.WriteAllText(exe, "stub");
+
+            // Every variant exists, so only staleness can hold the panel open.
+            var vm = new MainWindowViewModel(new FakeSidecar(), new FakeBuildService(), new Session(),
+                () => exe, null, null, _ => exe);
+
+            File.SetLastWriteTimeUtc(exe, DateTime.UtcNow.AddHours(1));
+            await vm.DetectServerAsync();
+            Assert.False(vm.IsSidecarPanelVisible);
+            Assert.All(vm.SidecarVariants, v => Assert.False(v.IsStale));
+            // Nothing is stale, but the button is still there: replacing a build is
+            // always legitimate, staleness only explains why it is worth doing.
+            Assert.All(vm.SidecarVariants, v => Assert.True(v.IsUpdateButtonVisible));
+
+            // Older than the sidecar source: an update exists, and the panel that
+            // offers it has to come back into view to say so.
+            File.SetLastWriteTimeUtc(exe, DateTime.UtcNow.AddYears(-1));
+            await vm.DetectServerAsync();
+
+            Assert.True(vm.IsSidecarPanelVisible);
+            var stale = vm.SidecarVariants.Single(v => v.Rid == rid);
+            Assert.True(stale.IsStale);
+            Assert.Contains("Update available", stale.StaleText);
+            Assert.True(stale.IsUpdateButtonVisible);
+        }
+        finally
+        {
+            try { dir.Delete(recursive: true); } catch { /* best effort */ }
+        }
+    }
+
     [AvaloniaFact]
     public async Task Build_in_progress_disables_the_other_variants_button()
     {

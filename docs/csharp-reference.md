@@ -65,7 +65,11 @@ The shell. Owns:
 - The sidecar setup panel: `SidecarVariants` (`SidecarVariantViewModel` per
   buildable RID), `IsSidecarReady`, `IsSidecarRequired`,
   `IsSidecarPanelVisible`, and `IsWorkspaceEnabled` (the whole wizard is inert
-  until a sidecar exists).
+  until a sidecar exists). `IsSidecarPanelVisible` also stays true while a
+  built variant is stale, so the panel that offers **Update** cannot hide
+  itself exactly when a newer sidecar exists. `UpdateVariantAsync` stops a
+  running server first (a locked exe can be neither rebuilt nor overwritten)
+  and starts it again on the replacement.
 - `ApplyDownloadStatus(HealthResponse)` — drives the model-download progress
   bar/text from the `/health` `download` field; also emits one log line per
   status transition.
@@ -93,9 +97,24 @@ Step 2 settings are persisted when leaving the engine step.
 
 ### `SidecarVariantViewModel`
 One buildable variant row (CPU / CUDA): `Rid`, `DisplayName`, `Detail`,
-`IsBuilt`, `ExePath`, `SizeText`, `IsBuilding`, `BuildPercent`, `BuildStage`,
-`HasProgress`, `StatusText`, `StatusBrush`, and a `BuildCommand`. Progress
-updates are marshalled to the UI thread.
+`IsBuilt`, `ExePath`, `SizeText`, `IsBuilding`, `IsDownloading`, `IsUpdating`,
+`BuildPercent`, `BuildStage`, `HasProgress`, `StatusText`, `StatusBrush`,
+`StaleNotice` / `IsStale` / `StaleText`, and three commands. Progress updates
+are marshalled to the UI thread.
+
+- `BuildCommand` — visible while the variant does not exist yet.
+- `DownloadCommand` — also while it does not exist yet: the prebuilt exe from
+  the latest release instead of a compile.
+- `UpdateCommand` — the only action left once `IsBuilt`, because a sidecar that
+  trails its source otherwise had no way back in. `MainWindowViewModel`
+  rebuilds from source when `ISidecarBuildService.CanBuild`, and falls back to
+  the release download when this machine has no toolchain.
+
+`IsBuildButtonVisible` / `IsDownloadButtonVisible` / `IsUpdateButtonVisible`
+are the visibility gates the axaml binds; exactly one is true per row.
+`ApplyBuildState(exePath, staleNotice)` applies detection, and `CanBuild` /
+`CanDownload` / `CanUpdate` are false for every row while any operation runs
+(one progress bar is shared by all three).
 
 ### `Steps/Step1DatasourceViewModel`
 - Datasource type (`local` / `daminion`) with settable radio bindings

@@ -344,12 +344,13 @@ executables as their own release assets — see `packaging.md`.
 | Symptom / log line | Where to look |
 |--------------------|---------------|
 | `Server not detected` / `No inference server built` | `ISidecarBuildService.CanBuild`, `artifacts/<rid>/`; use the setup panel's Build button, or **Download** to fetch the prebuilt exe from the latest release (`ISidecarDownloadService`). |
+| A built variant has no action left (`Built`, no Build/Download button) | **Update** replaces it: `MainWindowViewModel.UpdateVariantAsync` rebuilds from source when `ISidecarBuildService.CanBuild`, otherwise re-downloads the latest release. It stops a running server first, then starts it again on the new exe. |
 | `Sidecar executable not found - build it first` | `InferenceSidecarService.FindExecutable` — bundled exe or dev `artifacts/`. |
 | `Timed out waiting for the sidecar port file` | Sidecar failed to boot; check sidecar stdout in the log. |
 | `Sidecar did not become ready within 120s` | Model load/first import is slow; check `/health` status lines. |
 | `Sidecar process exited unexpectedly` | Liveness watcher; crash before `/shutdown`. |
 | `Model loading — retry shortly` (503) | Only after a load that outlasted the server's 240 s wait; a load already in flight is waited out instead, and the model is warmed up at boot (`service._warm_up_model`). The host still retries once after 3 s. |
-| `Stale server build: exe built … but the sidecar source changed …` | `InferenceSidecarService.DescribeStaleness` — the running exe predates `src/Synapic.Inference`; rebuild from the setup panel. The status bar shows "stale build, rebuild recommended" too. |
+| `Stale server build: exe built … but the sidecar source changed …` | `InferenceSidecarService.DescribeStaleness` — the running exe predates `src/Synapic.Inference`; press **Update** on that variant's row. The status bar shows "stale build, rebuild recommended" too, and the row itself shows "Update available — …" (which also keeps the setup panel visible). |
 | `Both max_new_tokens (...) and max_length (...) seem to have been set` | Fixed in `inference_engine._generation_kwargs` (clones the pipeline generation config, pins `max_new_tokens`, clears `max_length`). |
 | `Progress scoring unavailable: ...` | Expected when probability/candidate labels are used with a VLM (see §8). |
 | Only keywords reach Daminion (no category/description) | Not the model: the write step keeps only the fields ticked in Step 2 ("Tag fields"), which persist in `HKCU\Software\Synapic\Engine` as `TagKeywords`/`TagCategories`/`TagDescription`. The batch's first log line names them (`writing keywords only`); a `/tag` call always returns all three. |
