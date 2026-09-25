@@ -36,6 +36,13 @@ echo "Verifying the packaged sidecar matches $RID..."
 if [[ "$RID" == win-x64* ]]; then EXE="$OUT_DIR/synapic-inference.exe"; else EXE="$OUT_DIR/synapic-inference"; fi
 "$PY" build/check-sidecar-variant.py "$EXE" "$RID"
 
+# Guard: the packed CPU dtype policy is a performance cliff - dtype="auto"
+# ships bfloat16 to x86 CPUs that have no native bf16 GEMM (~1000x slower per
+# matmul), and nothing on the surface shows it. Assert what the bundle will
+# actually load with before anyone ships it.
+echo "Verifying the packaged sidecar loads float32 on CPU..."
+"$PY" build/check-load-dtype.py "$EXE"
+
 # Convenience copy without RID suffix (CI stages it next to the dotnet app).
 cp -v "$OUT_DIR/synapic-inference" "$OUT_DIR/synapic-inference" 2>/dev/null || true
 ls -lh "$OUT_DIR"

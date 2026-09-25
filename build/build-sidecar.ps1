@@ -40,6 +40,16 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "The packaged sidecar does not match RID '$Rid' - see build/check-sidecar-variant.py"
     }
+
+    # Guard: the packed CPU dtype policy is a performance cliff - dtype="auto"
+    # ships bfloat16 to x86 CPUs that have no native bf16 GEMM (~1000x slower
+    # per matmul), and nothing on the surface shows it. Assert what the bundle
+    # will actually load with before anyone ships it.
+    Write-Host "Verifying the packaged sidecar loads float32 on CPU..."
+    & $pythonExe "build/check-load-dtype.py" (Join-Path $OutputDir "synapic-inference.exe")
+    if ($LASTEXITCODE -ne 0) {
+        throw "The packaged sidecar does not load float32 on CPU - see build/check-load-dtype.py"
+    }
 }
 finally {
     Pop-Location

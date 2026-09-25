@@ -262,7 +262,7 @@ def _torch_device_arg(device_str: str):
     return device_str  # 'cuda' or 'mps' accepted by transformers
 
 
-def _load_dtype(device_str: str):
+def _load_dtype(device_str: str) -> str:
     """Dtype to construct the pipeline with.
 
     ``dtype="auto"`` keeps the checkpoint's bfloat16 on CPU (transformers
@@ -276,11 +276,15 @@ def _load_dtype(device_str: str):
 
     Load float32 on CPU. Keep "auto" on CUDA/MPS, where bfloat16 is native
     and halves memory traffic.
+
+    The policy comes back as a plain string on purpose. ``pipeline`` turns it
+    into a torch dtype with ``getattr(torch, dtype)``, so asking what a build
+    needs costs no torch import: the contract tests run with torch absent, and
+    ``build/check-load-dtype.py`` can read the answer straight out of a packed
+    bundle after PyInstaller and fail a release that would load bf16 on CPU.
     """
     if device_str == "cpu":
-        import torch
-
-        return torch.float32
+        return "float32"
     return "auto"
 
 

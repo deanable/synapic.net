@@ -324,9 +324,9 @@ class TestLoadDtype:
     TASK = MODEL_TASK_IMAGE_TO_TEXT
 
     def test_cpu_loads_float32(self):
-        import torch
-
-        assert model_loader._load_dtype("cpu") is torch.float32
+        # A string, not torch.float32: CI's contract tests run with no torch,
+        # and transformers turns the string back via getattr(torch, dtype).
+        assert model_loader._load_dtype("cpu") == "float32"
 
     def test_gpu_keeps_auto(self):
         # bfloat16 is native on CUDA/MPS - "auto" lets the checkpoint pick it.
@@ -334,8 +334,6 @@ class TestLoadDtype:
         assert model_loader._load_dtype("mps") == "auto"
 
     def test_load_model_passes_the_resolved_dtype_to_the_pipeline(self, monkeypatch):
-        import torch
-
         seen = {}
 
         def construct(task, **kwargs):
@@ -352,5 +350,5 @@ class TestLoadDtype:
 
         model_loader.load_model(self.MODEL, self.TASK, device="cpu")
 
-        assert seen["dtype"] is torch.float32
+        assert seen["dtype"] == "float32"
         assert seen["model_kwargs"] == {"low_cpu_mem_usage": True}

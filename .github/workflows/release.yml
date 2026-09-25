@@ -88,6 +88,9 @@ jobs:
       # (measured 4.1 s -> 1.6 s per image at the app's 4-way fan-out). The
       # packaging steps below bundle whatever this step built, so reusing an old
       # exe would ship the slow server under a new version number.
+      # The build script also runs `build/check-load-dtype.py` against the packed
+      # bundle straight after PyInstaller, so this step - and every other build -
+      # fails instead of shipping an exe whose _load_dtype would answer "auto".
       # Local equivalent: ./build/build-sidecar.ps1 -Rid win-x64  (or .sh <rid>).
       - name: Rebuild the sidecar (PyInstaller)
         shell: bash

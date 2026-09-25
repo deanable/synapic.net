@@ -167,6 +167,13 @@ models short-circuit.
   bf16 GEMM: oneDNN emulates it roughly 1000× slower than the fp32 kernel.
   On an i7-14700K that made the vision+prefill block cost 75 CPU-seconds per
   448×288 image instead of 20, and 4.7 s per image instead of 2.0 s.
+- The policy comes back as a *string* (`"float32"` / `"auto"`) rather than a
+  `torch.dtype`: `pipeline()` resolves it with `getattr(torch, dtype)`, so asking
+  what a build will do needs no torch import. That keeps the contract tests
+  runnable in CI's torch-less job, and lets `build/check-load-dtype.py` read the
+  packed `model_loader` back out of a PyInstaller bundle and fail a build whose
+  policy would load bf16 on CPU (`build/build-sidecar.*` runs it next to
+  `check-sidecar-variant.py`).
 - `unload_model()` drops the cache and sets `loading`.
 
 ### Scoring (tier ladder)
