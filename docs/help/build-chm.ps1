@@ -17,6 +17,13 @@
 .PARAMETER OutputDirectory
     Where to put the compiled Synapic.chm. Defaults to this folder.
 
+.PARAMETER AllowMissingCompiler
+    Warn and exit 0 instead of failing when hhc.exe is not installed. For a leg
+    that needs the help sources checked but may not carry HTML Help Workshop: the
+    app ships the HTML topics on every platform and opens those when there is no
+    .chm, so a missing compiler costs the Contents/Index/search panes and nothing
+    else.
+
 .EXAMPLE
     ./docs/help/build-chm.ps1
 
@@ -26,7 +33,8 @@
 [CmdletBinding()]
 param(
     [string] $HhcPath,
-    [string] $OutputDirectory
+    [string] $OutputDirectory,
+    [switch] $AllowMissingCompiler
 )
 
 Set-StrictMode -Version Latest
@@ -74,6 +82,11 @@ function Find-Hhc {
         }
     }
 
+    if ($AllowMissingCompiler) {
+        Write-Warning 'hhc.exe was not found - skipping the compiled .chm. The HTML topics still ship, and the app opens those.'
+        return $null
+    }
+
     throw @"
 hhc.exe was not found.
 
@@ -87,10 +100,9 @@ Install one of those, or point this script at an existing copy:
 "@
 }
 
-$hhc = Find-Hhc
-
-# Cheap first: catch dead links, topics missing from [FILES] and non-ASCII bytes
-# before handing anything to a compiler that would compile the mistake happily.
+# Sources first: dead links, topics missing from [FILES] and non-ASCII bytes are
+# always fatal, because hhc.exe would compile the mistake happily. The missing
+# compiler below is the one failure that can be tolerated, and only on request.
 $checker = Join-Path $projectDir 'check-help.py'
 if (Test-Path -LiteralPath $checker) {
     $python = Get-Command python -ErrorAction SilentlyContinue
@@ -104,6 +116,9 @@ if (Test-Path -LiteralPath $checker) {
         Write-Warning 'python was not found - skipping check-help.py. The .chm may contain dead links.'
     }
 }
+
+$hhc = Find-Hhc
+if (-not $hhc) { exit 0 }
 
 Write-Host "Compiling $projectFile with $hhc"
 $started = Get-Date

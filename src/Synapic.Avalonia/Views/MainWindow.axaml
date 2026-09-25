@@ -34,6 +34,8 @@
         </StackPanel>
         <TextBlock Text="Synapic — AI-powered image tagging for DAM" Opacity="0.55"
                    VerticalAlignment="Center" Margin="20,0,0,0" />
+        <Button Content="Help" Command="{Binding OpenHelpCommand}"
+                ToolTip.Tip="Open the Synapic help. F1 opens the topic for what you are looking at." />
       </StackPanel>
     </Border>
 
@@ -162,6 +164,12 @@
     </Border>
 
   </Grid>
+
+  <Window.KeyBindings>
+    <!-- F1 follows the user: the sidecar topic while that panel is what is
+         gating them, otherwise the wizard step on screen. -->
+    <KeyBinding Gesture="F1" Command="{Binding OpenContextHelpCommand}" />
+  </Window.KeyBindings>
 
   <Window.Styles>
     <Style Selector="Border.card">

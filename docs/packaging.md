@@ -9,8 +9,10 @@ self-contained; **Windows is framework-dependent** to keep the installer small
 
 ```
 artifacts/<rid>/
-├── Synapic(.exe)            # self-contained Avalonia publish
+├── Synapic(.exe)            # Avalonia publish (framework-dependent on Windows)
 ├── synapic-inference(.exe)  # PyInstaller sidecar
+├── help/*.html              # user help topics, every RID (from docs/help)
+├── Synapic.chm              # compiled Windows help, Windows RIDs only
 ├── *.dll                    # runtime deps
 └── installer output         # .exe / .AppImage / .dmg
 ```
@@ -99,6 +101,16 @@ after a 2.7 GB download.
   server, no weights - and should stay that way. "Bundling the model" below has
   the sizes, the 2 GiB release-asset ceiling, and the shape that serves offline
   installs without growing everyone's download.
+- **User help payload:** the app opens the help itself (toolbar **Help** and
+  <kbd>F1</kbd> — see `docs/help/README.md`), so the payload ships with every
+  bundle: `src/Synapic.Avalonia` copies `docs/help/*.html` into `help/` next to
+  the binary on every RID (macOS and Linux have no `.chm` viewer), and
+  `Synapic.chm` next to it on Windows RIDs when that file exists. The Windows
+  CI legs compile the `.chm` before publishing with
+  `build-chm.ps1 -AllowMissingCompiler`, so a runner without HTML Help Workshop
+  (`hhc.exe` arrives with Visual Studio's ATL/MFC component) publishes the HTML
+  topics and a `::warning::` instead of failing. `docs/help/check-help.py` runs
+  in the Linux test job, so a dead link fails a PR rather than shipping.
 - **Windows signing:** EV cert via `signtool` (set `SIGNING_CERT_THUMBPRINT`).
 - **macOS:** sign every `.dylib`/`.so` in the bundle before the app bundle,
   hardened runtime (`--options runtime`), notarize with `notarytool --wait`,

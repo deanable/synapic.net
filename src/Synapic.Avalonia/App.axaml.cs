@@ -75,6 +75,9 @@ public partial class App : Application
         services.AddSingleton<IInferenceSidecar, InferenceSidecarService>();
         services.AddSingleton<ISidecarBuildService, SidecarBuildService>();
         services.AddSingleton<ISidecarDownloadService, SidecarDownloadService>();
+        // Factory rather than the type: HelpService's constructor arguments are
+        // all optional (a container would have to guess at them).
+        services.AddSingleton<IHelpService>(_ => new HelpService());
         services.AddSingleton<MainWindowViewModel>();
         services.AddSingleton<MainWindow>();
         Services = services.BuildServiceProvider();

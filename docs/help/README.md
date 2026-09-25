@@ -3,9 +3,12 @@
 The end-user and administrator help, authored as plain HTML and compiled into a
 single **`Synapic.chm`** by Microsoft HTML Help Workshop (`hhc.exe`).
 
-Everything in this folder is help *source*: it is not part of the app build, no
-.NET project references it, and nothing here affects the shipped binaries until
-you compile the `.chm` and put it next to `Synapic.exe`.
+The topics are help *source*, and the app opens them itself (toolbar **Help**,
+or <kbd>F1</kbd> for the topic that matches what you are looking at).
+`src/Synapic.Avalonia` copies `*.html` and `help.css` into `help/` next to the
+binary on every RID, so macOS and Linux get help in the browser; Windows
+additionally uses the compiled `Synapic.chm` when it is there. See *How the app
+opens this help* below.
 
 ## Layout
 
@@ -30,6 +33,11 @@ you compile the `.chm` and put it next to `Synapic.exe`.
 
 # Check the sources without compiling (no hhc.exe needed)
 python docs/help/check-help.py
+
+# Check the sources and tolerate a machine with no compiler: warns, exits 0.
+# This is what the Windows CI legs run, so a runner image without HTML Help
+# Workshop ships the HTML topics and a warning rather than failing the build.
+./docs/help/build-chm.ps1 -AllowMissingCompiler
 ```
 
 `hhc.exe` ships with **Microsoft HTML Help Workshop** (the HTML Help 1.4 SDK) and
@@ -38,6 +46,34 @@ with the Windows SDK. `build-chm.ps1` looks in the usual places, honours
 nothing. It is a 32-bit tool; it runs fine on 64-bit Windows, and there is no
 supported way to run it on Linux or macOS, so the `.chm` is a build-on-Windows
 artifact.
+
+## How the app opens this help
+
+`HelpService` (`src/Synapic.Avalonia/Services/HelpService.cs`) finds and starts
+the topic. The order is deliberate, and every entry is tried in turn:
+
+| Order | What | Where it comes from |
+|-------|------|---------------------|
+| 1 | `Synapic.chm`, opened at the requested topic through `hh.exe` and the `ms-its:` moniker | Windows only, when the `.chm` is next to the app |
+| 2 | The same topic as HTML, in the default browser | `help/` next to the app (every RID), falling back to a checkout's `docs/help` |
+
+Two entry points use it: the toolbar **Help** button opens `index.html`, and
+<kbd>F1</kbd> opens the topic for what the user is looking at - the sidecar
+topics while the setup panel is what is gating them, otherwise the wizard step
+on screen (`HelpTopics.ForStepIndex`). Entry 2 is also the fallback when entry 1
+is present but will not start (no `hh.exe`, say), which is why the HTML ships on
+Windows as well.
+
+Payload, per build:
+
+| File | Who copies it |
+|------|---------------|
+| `help/*.html`, `help/help.css` | `Synapic.Avalonia.csproj`, from this folder, into every RID's publish output |
+| `Synapic.chm` | the same project, but only when it exists (it is not committed) and only for Windows RIDs |
+
+So the `.chm` is produced by CI on the Windows legs, before the app is
+published; `-AllowMissingCompiler` turns a runner without HTML Help Workshop
+into a warning, because the HTML topics still work there.
 
 ## Conventions that keep the `.chm` honest
 
@@ -90,11 +126,16 @@ or the sidecar panel:
   fault: right-click the `.chm` &rarr; Properties &rarr; tick *Unblock* (or ship
   it in the installer, which writes a local file). Worth knowing before
   believing a bug report about the help being empty.
-- **The app does not open this help yet.** There is no Help menu or <kbd>F1</kbd>
-  shortcut in `MainWindow.axaml`; users double-click `Synapic.chm`. If you wire
-  it up later, `helpers\HHActiveX`-based `HtmlHelp()` from `hhctrl.ocx` is the
-  usual route, and the shipped `.chm` needs a context map (`[MAP]`/`[ALIAS]` in
-  `Synapic.hhp`) if you want topic-level context sensitivity.
+- **Topic-level context sensitivity needs no `[MAP]`/`[ALIAS]`.** The app opens
+  a topic by name (`hh.exe ms-its:Synapic.chm::/step2-engine.html`) rather than
+  through `HtmlHelp()`'s numeric context ids, so `Synapic.hhp` stays as it is.
+  What it does need is for every name in `HelpTopics` to exist here *and* be
+  listed in `[FILES]`, which `HelpServiceTests` enforces.
+- **A stale `Synapic.chm` in a checkout wins over the HTML.** On Windows the
+  compiled help is preferred whenever it is present next to the app, so after
+  editing a topic you are still looking at the old page until you re-run
+  `build-chm.ps1` - or delete the `.chm` to compare against the HTML copy in
+  `help/`.
 - **`hhc.exe` returns 0 in some failure cases**, which is why `build-chm.ps1`
   also asserts that the `.chm` was written during this run and greps the tool's
   output for errors.

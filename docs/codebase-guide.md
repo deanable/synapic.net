@@ -215,6 +215,7 @@ duration, and the log auto-scrolls to the newest line.
 | Opt-in usage counters | `logs/synapic-usage.json` |
 | Model cache (sidecar `HF_HOME`) | Windows `%LOCALAPPDATA%\Synapic\models`; elsewhere `~/.cache/synapic/models` |
 | Sidecar port file | `%TEMP%/synapic_port_{hostpid}.txt` containing `port\npid\n` |
+| User help payload | `help/*.html` + `Synapic.chm` next to the executable (both copied by `src/Synapic.Avalonia/Synapic.Avalonia.csproj` from `docs/help`); a dev checkout falls back to `docs/help` itself |
 
 Notes:
 - `config.json` is written by `MainWindowViewModel.PersistConfig` when the user
@@ -357,6 +358,9 @@ executables as their own release assets — see `packaging.md`.
 | `Daminion returned the same ids as the previous page` | Infinite-loop guard in `FetchItemsAsync` (offset ignored server-side). |
 | `Count N matches total catalog size despite filters` | `GetFilteredItemCountAsync` sanity fallback. |
 | `[sidecar:err] ...` lines in the UI log | Sidecar stderr, forwarded verbatim through `LogReceived`. |
+| Help / <kbd>F1</kbd> does nothing | `HelpService` logs what it did: `Help: opened <target>` on success, and `Help is not available: no Synapic.chm and no help/ beside <app dir> …` when no payload was found. The payload is produced by the app project (`help/*.html` on every RID; `Synapic.chm` on Windows once `docs/help/build-chm.ps1` has compiled it), so a build that predates this change, or a payload deleted from the install directory, is the usual cause. |
+| Windows opens the HTML help instead of the compiled one | Expected when there is no `Synapic.chm` beside the app (CI ships it only on Windows legs and only when `hhc.exe` exists there), and the fallback when `hh.exe` will not start. Both are logged. |
+| The compiled help is stale next to a dev build | A `Synapic.chm` in the output directory (copied from `docs/help` at build time) always wins over `help/*.html` on Windows. Delete it, or re-run `build-chm.ps1`, to compare against the HTML topics. |
 
 ## 12. Known divergences / decisions worth remembering
 

@@ -51,6 +51,7 @@ python -m pytest tests/Synapic.Inference.Tests -q
 | `CrashReporterTests` | Crash capture → report file + session-log snapshot. |
 | `TelemetryServiceTests` | Opt-in counters and the disabled no-op path. |
 | `RuntimeCheckTests` | .NET runtime detection helpers. |
+| `HelpServiceTests` | Where help is found (compiled `.chm` on Windows, HTML topics elsewhere, a source checkout last), the `ms-its:` topic launch, falling through when a target will not start, topic-name normalisation, the `HelpTopics` → `Synapic.hhp` `[FILES]` drift gate, and the Help/<kbd>F1</kbd> commands. |
 | `TestFakes.cs` | `FixedTagSidecar`, fake inference sidecar, and shared stubs. |
 | `TestAppBuilder.cs`, `SynapicLogSerialCollection.cs` | Headless app bootstrap; serialises tests that mutate the global logger. |
 

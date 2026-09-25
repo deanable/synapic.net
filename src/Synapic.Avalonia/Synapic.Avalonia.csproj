@@ -48,4 +48,28 @@
     <InternalsVisibleTo Include="Synapic.Avalonia.Tests" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The user help (docs/help) ships with the app, not just with the
+         Windows .chm: F1 opens the topic for what the user is looking at, and
+         macOS/Linux have no .chm viewer at all, so the topics travel as HTML in
+         help/ next to the binary on every platform. The compiled .chm is added
+         on top when it has been built (docs/help/build-chm.ps1) - it is not
+         committed, so a clean checkout simply has no .chm and Windows falls back
+         to the same HTML. Windows-only file, so it is kept out of the other
+         RIDs' payloads. -->
+    <Content Include="..\..\docs\help\*.html"
+             Link="help\%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\docs\help\help.css"
+             Link="help\help.css"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\docs\help\Synapic.chm"
+             Link="Synapic.chm"
+             Condition="Exists('..\..\docs\help\Synapic.chm') and ('$(RuntimeIdentifier)' == '' or $(RuntimeIdentifier.StartsWith('win')))"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

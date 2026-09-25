@@ -22,6 +22,7 @@ bottom.</p>
 <tr><td><span class="ui">Start Server</span></td><td>Starts the inference server. Synapic already starts it for you when the app opens; this is for when you have stopped it deliberately.</td></tr>
 <tr><td><span class="ui">Stop Server</span></td><td>Shuts the inference server down, freeing its memory. Tagging is unavailable while it is stopped.</td></tr>
 <tr><td><span class="ui">Build Server</span></td><td>Appears only when no server executable exists at all, and opens the same build options as the setup panel below.</td></tr>
+<tr><td><span class="ui">Help</span></td><td>Opens this help at its contents. <kbd>F1</kbd> opens the topic for what you are looking at instead: the setup panel while no server exists, otherwise the step on screen.</td></tr>
 <tr><td>Status dot and text</td><td>The state of the inference server at a glance; the wording is listed below.</td></tr>
 <tr><td>Progress bar</td><td>Appears while a model is being downloaded, with the size and speed written next to it.</td></tr>
 </table>
@@ -54,6 +55,11 @@ a panel appears under the toolbar listing each variant with its state and a way
 to get it: <span class="ui">Build sidecar</span> when this checkout can build,
 and <span class="ui">Download</span> to fetch the prebuilt executable from the
 latest release.</p>
+
+<p>A variant that already reads <span class="ui">Built</span> offers
+<span class="ui">Update</span> instead: it replaces that executable with a fresh
+one &mdash; building from source when this copy can, re-downloading the latest
+release when it cannot &mdash; and restarts a running server on the new build.</p>
 
 <ul>
 <li>The wizard below stays <span class="term">disabled</span> until at least one
@@ -117,9 +123,11 @@ knowing.</p>
 <h2>Keyboard</h2>
 
 <ul>
-<li>There are no global shortcuts: no <kbd>F1</kbd> help, no
-<kbd>Ctrl</kbd>+<kbd>P</kbd>. The toolbar and the wizard buttons are the
-controls.</li>
+<li><kbd>F1</kbd> opens this help at the topic for what you are looking at: the
+setup panel while no server exists, otherwise the step on screen. The toolbar's
+<span class="ui">Help</span> button opens the contents instead.</li>
+<li>That is the only global shortcut: the rest of the controls are the toolbar
+and the wizard buttons, and there is no <kbd>Ctrl</kbd>+<kbd>P</kbd>.</li>
 <li>One key matters: <kbd>Delete</kbd> removes the highlighted entry from the
 saved system-prompt list in Step 2. See <a href="step2-prompts.html">Prompts</a>.</li>
 <li>In the log and the results grid, the usual navigation keys work

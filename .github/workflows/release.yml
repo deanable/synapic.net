@@ -96,6 +96,20 @@ jobs:
         shell: bash
         run: ./build/build-sidecar.sh ${{ matrix.rid }}
 
+      # The app project copies the help topics (docs/help) into every publish, so
+      # macOS and Linux ship help too and open it in the browser. Windows also
+      # gets the compiled .chm when hhc.exe is available - it is Windows-only,
+      # arrives with Visual Studio's ATL/MFC component, and a runner without it
+      # must not fail a release whose help still works as HTML.
+      - name: Compile the Windows help (.chm)
+        if: matrix.pkg == 'ps1'
+        shell: pwsh
+        run: |
+          ./docs/help/build-chm.ps1 -AllowMissingCompiler
+          if (-not (Test-Path docs/help/Synapic.chm)) {
+            Write-Host "::warning title=Help released without the compiled .chm::hhc.exe (HTML Help Workshop) is not installed on this runner, so this release's help opens the HTML topics instead of the compiled Windows help."
+          }
+
       - name: Publish Avalonia app
         run: >-
           dotnet publish src/Synapic.Avalonia -c Release -r ${{ matrix.rid }}

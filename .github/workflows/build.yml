@@ -10,6 +10,9 @@ on:
       - 'src/**'
       - 'tests/**'
       - 'build/**'
+      # The user help is part of the app payload now (help/ on every RID, and
+      # Synapic.chm on Windows), so a help-only change needs this workflow.
+      - 'docs/help/**'
       - '.github/workflows/**'
       - '*.sln'
       - 'global.json'
@@ -44,6 +47,14 @@ jobs:
       # two sides disagree on a request field set.
       - name: Verify sidecar protocol doc is up to date
         run: python build/generate-protocol-doc.py --check
+
+      # Same idea for the user help, which the app now opens (Help button / F1)
+      # and therefore ships: dead links, topics missing from the .hhp [FILES]
+      # list, unresolvable anchors and non-ASCII bytes. Needs nothing but
+      # Python, so it runs on the cheap Linux job rather than only where
+      # hhc.exe exists.
+      - name: Check the help sources
+        run: python docs/help/check-help.py
 
   dotnet-tests:
     name: .NET tests
@@ -107,6 +118,20 @@ jobs:
       - name: Build sidecar (PyInstaller)
         shell: bash
         run: ./build/build-sidecar.sh ${{ matrix.rid }}
+
+      # The app project copies the help topics into every publish; Windows also
+      # gets the compiled .chm (Contents/Index/full-text search) when hhc.exe is
+      # present. That compiler is Windows-only and arrives with Visual Studio's
+      # ATL/MFC component, so -AllowMissingCompiler keeps a runner image without
+      # it from failing a build whose help still works through the HTML topics.
+      - name: Compile the Windows help (.chm)
+        if: matrix.pkg == 'ps1'
+        shell: pwsh
+        run: |
+          ./docs/help/build-chm.ps1 -AllowMissingCompiler
+          if (-not (Test-Path docs/help/Synapic.chm)) {
+            Write-Host "::warning title=Help shipped without the compiled .chm::hhc.exe (HTML Help Workshop) is not installed on this runner, so this build's help opens the HTML topics instead of the compiled Windows help."
+          }
 
       - name: Publish Avalonia app
         run: >

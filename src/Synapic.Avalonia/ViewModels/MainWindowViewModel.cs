@@ -40,6 +40,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly IInferenceSidecar _sidecar;
     private readonly ISidecarBuildService _build;
     private readonly ISidecarDownloadService _download;
+    private readonly IHelpService _help;
     private readonly Session _session;
     private readonly Func<string?> _findSidecarExecutable;
     private readonly Func<string, string?> _findSidecarVariant;
@@ -56,11 +57,13 @@ public partial class MainWindowViewModel : ViewModelBase
         EngineSettingsStore? engineStore = null,
         Func<string, string?>? sidecarVariantLocator = null,
         SystemPromptPresetStore? presetStore = null,
-        ISidecarDownloadService? download = null)
+        ISidecarDownloadService? download = null,
+        IHelpService? help = null)
     {
         _sidecar = sidecar;
         _build = build;
         _download = download ?? new SidecarDownloadService();
+        _help = help ?? new HelpService();
         _session = session;
         _findSidecarExecutable = sidecarExecutableLocator ?? InferenceSidecarService.FindExecutable;
         _findSidecarVariant = sidecarVariantLocator ?? InferenceSidecarService.FindExecutableForRid;
@@ -76,6 +79,25 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     public WizardViewModel Wizard { get; }
+
+    // ── Help (docs/help; see HelpService) ──────────────────────────────────
+
+    /// <summary>The toolbar Help button: the help home page.</summary>
+    [RelayCommand]
+    private void OpenHelp() => _help.Open(HelpTopics.Home);
+
+    /// <summary>
+    /// F1: the topic for what the user is looking at right now - the sidecar
+    /// topic while that panel is what is gating them, otherwise the wizard step
+    /// on screen.
+    /// </summary>
+    [RelayCommand]
+    private void OpenContextHelp() => _help.Open(ContextHelpTopic);
+
+    /// <summary>The topic <see cref="OpenContextHelpCommand"/> resolves to for the current state.</summary>
+    public string ContextHelpTopic => IsSidecarRequired
+        ? HelpTopics.FirstRunSidecar
+        : HelpTopics.ForStepIndex(Wizard.CurrentStepIndex);
 
     /// <summary>Snapshot the current wizard+engine state to config.json (Session is the source of truth).</summary>
     public void PersistConfig()

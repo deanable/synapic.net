@@ -107,3 +107,21 @@ internal sealed class FakeDownloadService : ISidecarDownloadService
         return OnDownload is { } callback ? callback(rid, destinationPath, progress, ct) : Task.CompletedTask;
     }
 }
+
+/// <summary>In-memory IHelpService for view-model tests.</summary>
+internal sealed class FakeHelpService : IHelpService
+{
+    /// <summary>Every topic Open was asked for, in order (null = the home page).</summary>
+    public List<string?> OpenedTopics { get; } = new();
+
+    public bool IsAvailable { get; set; } = true;
+
+    /// <summary>What Open reports; false models a machine with no help payload.</summary>
+    public bool OpenResult { get; set; } = true;
+
+    public bool Open(string? topic = null)
+    {
+        OpenedTopics.Add(topic);
+        return OpenResult;
+    }
+}

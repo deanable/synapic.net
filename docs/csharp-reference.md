@@ -77,11 +77,16 @@ The shell. Owns:
 - `PersistConfig()` — snapshots `Session` into `config.json` (v2 shape).
 - `DetectServerAsync()` — locates the executable, refreshes variants, and sets
   the indicator. It never adopts a server from a previous run.
+- Help: `OpenHelpCommand` (the toolbar **Help** button) opens
+  `HelpTopics.Home`; `OpenContextHelpCommand` (<kbd>F1</kbd>, bound in
+  `MainWindow.axaml`) opens `ContextHelpTopic` — the sidecar topic while
+  `IsSidecarRequired`, otherwise the topic for `Wizard.CurrentStepIndex`.
 - `PollHealthAsync` — 2-second background poll while Starting/Running; feeds
   the download panel.
 
 Constructed with optional locator delegates (`sidecarExecutableLocator`,
-`sidecarVariantLocator`) so tests can inject fake filesystem state.
+`sidecarVariantLocator`) and an optional `IHelpService` so tests can inject fake
+filesystem state.
 
 ### `WizardViewModel`
 Linear navigation with validation gates. Holds the five step view models;
@@ -380,6 +385,26 @@ plus IPTC/EXIF fallbacks. `TagResult(Category, Keywords, Description)`. See
   (`%APPDATA%/Synapic/system-prompts.json`, shape `SystemPromptPresetFile`,
   newest first, capped at `MaxPresets`). History only: the live prompt stays in
   `Session`/registry, so pruning the list can never lose a run's configuration.
+
+### Help
+
+- **`HelpService`** (`IHelpService`) — opens the user help (`docs/help`, the HTML
+  the Windows `.chm` is compiled from). `ResolveTargets(topic)` returns what
+  this machine can actually offer, best first: on Windows the compiled
+  `Synapic.chm` next to the app opened through `hh.exe` with the
+  `ms-its:<chm>::/<topic>` moniker, then the same topic as HTML in `help/`
+  beside the app, then a source checkout's `docs/help`. The first target that
+  starts wins, so a missing `hh.exe` still shows help. `Open` logs the target it
+  opened, or why nothing could be (`Help is not available: …`) — those lines
+  appear in the in-app log.
+- **`HelpTopics`** — the only place topic file names exist (`Home`,
+  `FirstRunSidecar`, `Troubleshooting`, `ForStepIndex(stepIndex)`).
+  `NormalizeTopic` maps anything that is not a plain `.html` name to the home
+  page, so a bad value cannot reach outside the help folder.
+- Payload: `Synapic.Avalonia.csproj` copies `docs/help/*.html` and `help.css`
+  into `help/` next to the binary on **every** RID (macOS/Linux have no `.chm`
+  viewer), and `Synapic.chm` next to it on Windows RIDs when the file exists
+  (it is a build artifact, compiled by `docs/help/build-chm.ps1`).
 
 ### Build pipeline
 

@@ -78,12 +78,19 @@ one cannot break the other.</p>
 
 <h2>Updating or replacing the server</h2>
 
-<p>The server is one self-contained executable. To update it without
-reinstalling Synapic, put the new file next to <span
-class="path">Synapic.exe</span>, named <span
+<p>Press <span class="ui">Update</span> on the row. Synapic stops the server if
+it is running, replaces that variant's executable &mdash; building it from source
+when this copy has the Python toolchain, or fetching the newest released
+executable for that variant when it does not &mdash; and starts the server again
+on the replacement. A row whose executable is older than the inference source it
+was built from says so (<span class="ui">Update available</span>), which is the
+reminder that a fresh one exists.</p>
+
+<p>You can also do it by hand, which is the way to pin a specific release rather
+than the newest one. The server is one self-contained executable: put the new
+file next to <span class="path">Synapic.exe</span>, named <span
 class="path">synapic-inference.exe</span>, replacing the existing one, then
-restart Synapic. That is the supported way to move a machine onto a newer or
-different variant &mdash; for example switching a workstation to the CUDA build
+restart Synapic &mdash; for example switching a workstation to the CUDA build
 after buying a GPU.</p>
 
 <div class="warning">
@@ -112,7 +119,7 @@ href="admin-deploy.html">Deploying to many machines</a>.</p>
 <tr><td>Build fails part-way</td><td>The log pane has the build's own output. A failed first build is usually the network (fetching Python or packages), and rebuilding after the network is back is the fix.</td></tr>
 <tr><td>Download fails</td><td>The log pane names the release, the asset and the HTTP status. The usual cause is a release without this platform's server, or no network; <span class="ui">Build sidecar</span> is the way round it when this checkout has the toolchain.</td></tr>
 <tr><td>Status stuck on <span class="ui">Server starting&hellip;</span></td><td>A cold start really can take up to two minutes. If it exceeds that, the log says why; see <a href="troubleshooting.html#sidecar">Troubleshooting: the inference server</a>.</td></tr>
-<tr><td><span class="ui">stale build, rebuild recommended</span></td><td>Developer checkouts only: the server executable is older than the inference source. Rebuild the variant from the panel.</td></tr>
+<tr><td><span class="ui">stale build, rebuild recommended</span>, or <span class="ui">Update available</span> on a row</td><td>Developer checkouts only: the server executable is older than the inference source it was built from. Press <span class="ui">Update</span> on that row; a running server is stopped and started again on the new build.</td></tr>
 </table>
 
 <div class="seealso">
