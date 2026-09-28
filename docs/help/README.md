@@ -34,9 +34,10 @@ opens this help* below.
 # Check the sources without compiling (no hhc.exe needed)
 python docs/help/check-help.py
 
-# Check the sources and tolerate a machine with no compiler: warns, exits 0.
-# This is what the Windows CI legs run, so a runner image without HTML Help
-# Workshop ships the HTML topics and a warning rather than failing the build.
+# Check the sources and tolerate a machine that cannot compile: warns, exits 0.
+# That covers a missing hhc.exe *and* one that runs and writes nothing usable.
+# This is what the Windows CI legs run, so a runner image without a working
+# HTML Help Workshop ships the HTML topics and a warning rather than failing.
 ./docs/help/build-chm.ps1 -AllowMissingCompiler
 ```
 
@@ -136,9 +137,20 @@ or the sidecar panel:
   editing a topic you are still looking at the old page until you re-run
   `build-chm.ps1` - or delete the `.chm` to compare against the HTML copy in
   `help/`.
-- **`hhc.exe` returns 0 in some failure cases**, which is why `build-chm.ps1`
-  also asserts that the `.chm` was written during this run and greps the tool's
-  output for errors.
+- **`hhc.exe`'s exit code means nothing in either direction.** It returns 0
+  having compiled nothing, and 1 having compiled fine, which is why
+  `build-chm.ps1` proves the `.chm` was written during this run, greps the
+  tool's output for errors, and resets `$LASTEXITCODE` itself - GitHub's `pwsh`
+  wrapper ends every step with `exit $LASTEXITCODE`, so a stale 1 from hhc would
+  fail a build whose help compiled perfectly.
+- **A failed `hhc.exe` can leave a 0-byte `.chm` and say nothing.** Silent
+  failure looks exactly like success to an existence check, so the script also
+  refuses anything under 4 KB, deletes it and (with `-AllowMissingCompiler`)
+  warns instead. That matters more than it sounds: the app prefers a `.chm` next
+  to it over the HTML topics, so a stub would make Windows help open nothing
+  while the working fallback sat in `help/`. GitHub's windows-2022 image is
+  exactly this case - `hhc.exe` is installed and fails silently there - which is
+  why CI ships HTML help with a warning rather than a broken `.chm`.
 - **The `.chm` is not committed** (see the `docs/help/*.chm` line in
   `.gitignore`): it is a build artifact. "Sources + script" is the committed
   truth, so a help edit is reviewable as text.

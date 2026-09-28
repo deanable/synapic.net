@@ -5,10 +5,11 @@
 
 .DESCRIPTION
     HTML Help Workshop's hhc.exe is quiet about failure - it can exit 0 having
-    compiled nothing, and a stale .chm looks fine - so this script does three
+    compiled nothing, and a stale .chm looks fine - so this script does four
     things the raw tool does not: it checks the sources first (check-help.py),
-    greps hhc's own output for diagnostics, and then proves the .chm was
-    actually rewritten by this run.
+    greps hhc's own output for diagnostics, proves the .chm was actually
+    rewritten by this run, and refuses an output too small to be help at all.
+    It also leaves the caller a truthful exit code, because hhc's own one is not.
 
 .PARAMETER HhcPath
     Full path to hhc.exe. Defaults to $env:HHC, then to the usual install
@@ -18,11 +19,12 @@
     Where to put the compiled Synapic.chm. Defaults to this folder.
 
 .PARAMETER AllowMissingCompiler
-    Warn and exit 0 instead of failing when hhc.exe is not installed. For a leg
-    that needs the help sources checked but may not carry HTML Help Workshop: the
-    app ships the HTML topics on every platform and opens those when there is no
-    .chm, so a missing compiler costs the Contents/Index/search panes and nothing
-    else.
+    Warn and exit 0 instead of failing when this machine cannot produce a
+    compiled .chm: hhc.exe is not installed, or it ran and wrote nothing usable.
+    For a leg that needs the help sources checked but may not carry a working
+    HTML Help Workshop: the app ships the HTML topics on every platform and opens
+    those when there is no .chm, so losing the compiler costs the
+    Contents/Index/search panes and nothing else.
 
 .EXAMPLE
     ./docs/help/build-chm.ps1
@@ -150,13 +152,39 @@ if ($compiled.LastWriteTime -lt $started) {
     throw "$compiledName was not rewritten by this run (it predates the compile). hhc.exe failed without reporting it; the output above is the only clue."
 }
 
+# hhc.exe can also exit having written a stub - 0 bytes, or a handful - and say
+# nothing at all, which the checks above cannot tell from success. A .chm next
+# to the app wins over the HTML topics on Windows, so a stub is worse than no
+# .chm: Windows help would open nothing while the fallback that works sits in
+# help/. Not one topic fits in this much, so treat it as the failed compile it
+# is and take the file with it.
+$minimumChmBytes = 4KB
+if ($compiled.Length -lt $minimumChmBytes) {
+    $stubBytes = $compiled.Length
+    Remove-Item -LiteralPath $compiledPath -Force
+    $output | ForEach-Object { Write-Host $_ }
+    if (-not $AllowMissingCompiler) {
+        throw "hhc.exe wrote a $stubBytes-byte $compiledName - a failed compile, not help. Removed it; the HTML topics in help/ are what the app will open."
+    }
+    Write-Warning "hhc.exe wrote a $stubBytes-byte $compiledName (a failed compile) - removed it, so the app opens the HTML topics instead."
+    exit 0
+}
+
 $target = $compiled.FullName
 if ($OutputDirectory) {
     $destinationDir = (New-Item -ItemType Directory -Force -Path $OutputDirectory).FullName
     $target = Join-Path $destinationDir $compiledName
     Copy-Item -LiteralPath $compiledPath -Destination $target -Force
-}
-
-$sizeKb = [math]::Round($target.Length / 1KB)
+}# The file's own size, not the length of the path string it is named by - which
+# reported a healthy 13 KB .chm as "0 KB" and made a good compile look empty.
+$sizeKb = [math]::Round((Get-Item -LiteralPath $target).Length / 1KB)
 Write-Host "Compiled $target ($sizeKb KB)" -ForegroundColor Green
+
+# hhc.exe's exit code is not trustworthy in either direction: it reports failure
+# on compiles that worked, and a caller that trusts the leftover code - GitHub's
+# pwsh wrapper ends every step with `exit $LASTEXITCODE` - turns a good .chm into
+# a failed build. This run has proven its own output by now, so hand the caller a
+# clean code. Scoped global because a called script's own $LASTEXITCODE is local
+# to it, and the caller is the one that reads this.
+$global:LASTEXITCODE = 0
 Write-Host 'Open it to check the Contents/Index panes and a couple of topics before shipping it.'

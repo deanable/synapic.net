@@ -130,7 +130,7 @@ jobs:
         run: |
           ./docs/help/build-chm.ps1 -AllowMissingCompiler
           if (-not (Test-Path docs/help/Synapic.chm)) {
-            Write-Host "::warning title=Help shipped without the compiled .chm::hhc.exe (HTML Help Workshop) is not installed on this runner, so this build's help opens the HTML topics instead of the compiled Windows help."
+            Write-Host "::warning title=Help shipped without the compiled .chm::hhc.exe (HTML Help Workshop) is missing on this runner, or it produced nothing usable, so this build's help opens the HTML topics instead of the compiled Windows help."
           }
 
       - name: Publish Avalonia app

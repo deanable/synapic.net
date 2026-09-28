@@ -327,9 +327,12 @@ after a 2.7 GB download.
   the binary on every RID (macOS and Linux have no `.chm` viewer), and
   `Synapic.chm` next to it on Windows RIDs when that file exists. The Windows
   CI legs compile the `.chm` before publishing with
-  `build-chm.ps1 -AllowMissingCompiler`, so a runner without HTML Help Workshop
-  (`hhc.exe` arrives with Visual Studio's ATL/MFC component) publishes the HTML
-  topics and a `::warning::` instead of failing. `docs/help/check-help.py` runs
+  `build-chm.ps1 -AllowMissingCompiler`, so a runner that cannot produce one
+  publishes the HTML topics and a `::warning::` instead of failing: `hhc.exe`
+  arrives with Visual Studio's ATL/MFC component, and on GitHub's windows-2022
+  image it is present but fails silently - exit code 1, no diagnostics and a
+  0-byte `.chm`, which the script now detects, throws away and tolerates.
+  `docs/help/check-help.py` runs
   in the Linux test job, so a dead link fails a PR rather than shipping.
 - **Windows signing:** EV cert via `signtool` (set `SIGNING_CERT_THUMBPRINT`).
 - **macOS:** sign every `.dylib`/`.so` in the bundle before the app bundle,
