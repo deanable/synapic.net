@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The Synapic bundle: the installer users run.
+
+  It exists for one reason the MSI cannot satisfy on its own. The Windows payload
+  is published framework-dependent, so without a .NET runtime on the machine
+  there is nothing for the app to start on - and an MSI can only refuse. A Burn
+  bundle can install the runtime first and then hand the MSI to Windows
+  Installer, which is what the Inno installer does in PrepareToInstall, and it
+  needs no custom code to do it: the chain below is the whole mechanism, and the
+  runtime package is skipped outright when the machine already has the framework.
+
+  The runtime installer is embedded, not downloaded at install time, so the
+  bundle works on a machine with no network - the same choice the Inno installer
+  makes, and build/package-windows-msi.ps1 stages the identical file
+  (artifacts/<rid>/windowsdesktop-runtime-win-x64.exe) that package-windows.ps1
+  stages for Inno, so the two never disagree about which runtime ships or where
+  it came from.
+
+  Built by build/package-windows-msi.ps1. Synapic.Msi.wxs is the package itself.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:bal="http://wixtoolset.org/schemas/v4/wxs/bal"
+     xmlns:netfx="http://wixtoolset.org/schemas/v4/wxs/netfx">
+
+  <!-- All four are passed as absolute paths by the packaging script; the
+       defaults are what a bare `wix build` uses, and are relative to this file. -->
+  <?ifndef MsiPath?>
+  <?define MsiPath = "$(sys.SOURCEFILEDIR)..\..\artifacts\msi\Synapic-win-x64.msi"?>
+  <?endif?>
+  <?ifndef RuntimePath?>
+  <?define RuntimePath = "$(sys.SOURCEFILEDIR)..\..\artifacts\win-x64\windowsdesktop-runtime-win-x64.exe"?>
+  <?endif?>
+  <?ifndef AppVersion?>
+  <?define AppVersion = "1.0.0"?>
+  <?endif?>
+
+  <!--
+    The Windows Desktop Runtime is what Microsoft publishes as a redistributable
+    and what the Inno installer stages, so that is what gets chained. Detection
+    is on the *core* framework instead, because that is what the app's
+    runtimeconfig actually asks for and the desktop redistributable installs it
+    too - so requiring core never refuses a machine where the app would have run,
+    and a machine that already has a .NET 10 runtime for something else skips
+    this package entirely.
+
+    MajorVersion is the coarse filter Burn supports; the version the MSI is
+    checked against is passed by the packaging script, read from the payload.
+  -->
+  <?ifndef RuntimeType?>
+  <?define RuntimeType = "core"?>
+  <?endif?>
+  <?ifndef RuntimeVersion?>
+  <?define RuntimeVersion = "10.0.0"?>
+  <?endif?>
+  <?ifndef RuntimeMajor?>
+  <?define RuntimeMajor = "10"?>
+  <?endif?>
+
+  <!--
+    UpgradeCode comes from the shared identities file, and is separate from the
+    MSI's because the two are removed independently: a bundle can be upgraded
+    while the product it installed stays put. It is what Windows matches to
+    recognise the entry this leaves in Add/Remove Programs.
+  -->
+  <?include Synapic.Identities.wxi?>
+
+  <Bundle Name="Synapic"
+          Version="$(var.AppVersion)"
+          Manufacturer="Synapic Project"
+          UpgradeCode="$(var.BundleUpgradeCode)"
+          IconSourceFile="$(sys.SOURCEFILEDIR)..\..\assets\icons\Icon.ico"
+          Compressed="yes">
+
+    <!--
+      The stock bootstrapper application: progress, one button, and the failure
+      text. It brings the UI the MSI deliberately does not have - an MSI is for
+      administrators to deploy quietly, a bundle is for someone to double-click.
+      LicenseUrl is required by the hyperlink themes and is empty on purpose:
+      there is no licence agreement to link to, and empty hides the link.
+    -->
+    <BootstrapperApplication>
+      <bal:WixStandardBootstrapperApplication Theme="hyperlinkLicense"
+                                            LicenseUrl=""
+                                            LogoFile="$(sys.SOURCEFILEDIR)..\..\assets\icons\Icon.ico" />
+    </BootstrapperApplication>
+
+    <!--
+      Sets WIX_DOTNET_RUNTIME_VERSION to the newest matching framework on the
+      machine, or leaves it unset, and "unset" is what makes the condition below
+      read as "missing" - the same reasoning as the app's own startup check.
+    -->
+    <netfx:DotNetCoreSearch Id="DotNetSearch"
+                            Variable="WIX_DOTNET_RUNTIME_VERSION"
+                            RuntimeType="$(var.RuntimeType)"
+                            Platform="x64"
+                            MajorVersion="$(var.RuntimeMajor)" />
+
+    <Chain>
+      <!--
+        Permanent: the runtime is a shared, machine-wide component other
+        applications may depend on, so uninstalling Synapic leaves it alone, the
+        way the Inno installer does.
+      -->
+      <ExePackage Id="DotNetRuntime"
+                  DisplayName=".NET $(var.RuntimeVersion) Runtime"
+                  SourceFile="$(var.RuntimePath)"
+                  InstallArguments="/install /quiet /norestart"
+                  RepairArguments="/repair /quiet /norestart"
+                  DetectCondition="WIX_DOTNET_RUNTIME_VERSION"
+                  Vital="yes"
+                  PerMachine="yes"
+                  Permanent="yes"
+                  Cache="keep"
+                  Protocol="none">
+        <!-- 0 is success, 3010 is "installed, restart pending" and 1641 is
+             "installed, restart started". Burn fails the install on anything
+             that is not success by default, which would report a failure on a
+             machine where the runtime installed perfectly well. -->
+        <ExitCode Value="3010" Behavior="scheduleReboot" />
+        <ExitCode Value="1641" Behavior="scheduleReboot" />
+        <!-- 1638 is a newer version already installed - a race with Windows
+             Update, not an error. -->
+        <ExitCode Value="1638" Behavior="success" />
+      </ExePackage>
+
+      <!-- The product. It carries its own runtime check as a backstop for
+           administrators who deploy the MSI directly rather than through this
+           bundle, but by the time the chain reaches it the requirement above is
+           already satisfied. -->
+      <MsiPackage Id="SynapicMsi"
+                  SourceFile="$(var.MsiPath)"
+                  DisplayName="Synapic"
+                  Vital="yes"
+                  Compressed="yes" />
+    </Chain>
+  </Bundle>
+</Wix>

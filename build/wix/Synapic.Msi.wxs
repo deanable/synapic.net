@@ -1,0 +1,204 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The Synapic MSI.
+
+  Built by build/package-windows-msi.ps1, which passes PayloadDir and AppVersion.
+  Its companion is Synapic.Bundle.wxs: a bundle is what users run, and it installs
+  the .NET 10 Desktop Runtime before handing the MSI to Windows Installer. This
+  package is also valid on its own - administrators deploy MSIs directly through
+  group policy, Intune and SCCM - so it carries its own runtime check and refuses
+  to install without the runtime rather than leaving an app that cannot start.
+
+  Unlike the Visual Studio deployment project this replaces, the payload is
+  globbed rather than listed. That project could only carry a static file list, so
+  a dependency added to the app stayed invisible until someone regenerated the
+  project by hand; it is also why the old MSI was silently missing the 226 MB
+  inference sidecar that sits next to the app in the release payload. A wildcard
+  has neither problem.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:netfx="http://wixtoolset.org/schemas/v4/wxs/netfx">
+
+  <!--
+    Defaults for a build with no -d on the command line. $(sys.SOURCEFILEDIR) is
+    spelled out rather than a bare ..\..: a relative Include is resolved against
+    the source file, but a relative SourceFile is resolved against the *current
+    directory*, so the same "..\.." means two different places depending on which
+    attribute it lands in - and only one of them is found. The packaging script
+    passes these as absolute paths anyway.
+  -->
+  <?ifndef PayloadDir?>
+  <?define PayloadDir = "$(sys.SOURCEFILEDIR)..\..\artifacts\win-x64"?>
+  <?endif?>
+  <?ifndef AppVersion?>
+  <?define AppVersion = "1.0.0"?>
+  <?endif?>
+
+  <!--
+    The runtime the app asks for, read out of the payload's own
+    Synapic.runtimeconfig.json by the packaging script rather than typed here: a
+    hard-coded "10.0.0" is a fact about a framework version that quietly stops
+    being true the day the app moves to the next one. The defaults below are what
+    a bare `wix build` uses.
+
+    RuntimeType is the DotNetCompatibilityCheck enum: "core" is
+    Microsoft.NETCore.App and "desktop" is Microsoft.WindowsDesktop.App. An
+    Avalonia app references no desktop framework, so its runtimeconfig names the
+    former - and the Windows Desktop Runtime redistributable installs the core
+    framework too, so requiring core is satisfied by either redistributable and
+    never refuses a machine where the app would actually have run.
+  -->
+  <?ifndef RuntimeType?>
+  <?define RuntimeType = "core"?>
+  <?endif?>
+  <?ifndef RuntimeVersion?>
+  <?define RuntimeVersion = "10.0.0"?>
+  <?endif?>
+  <!--
+    Both UpgradeCodes live in one included file, and
+    build/check-installer-identities.py refuses to build unless they agree with
+    build/installer-identities.txt. An UpgradeCode is the product family: change
+    it and Windows stops recognising the installs this is meant to upgrade,
+    listing a second entry in Add/Remove Programs and leaving the old version's
+    files on disk.
+
+    ProductCode is deliberately absent below, and the same guard fails the build
+    if anyone pins one. It names this build alone, so it has to be new in every
+    version: reusing one tells Windows the second package is the same product as
+    the first, which turns an upgrade into a repair of whatever is already
+    installed - the old files stay and the version in Add/Remove Programs never
+    moves. WiX generates a fresh GUID per build while the attribute is left
+    alone, which is what MajorUpgrade expects.
+  -->
+  <?include Synapic.Identities.wxi?>
+
+  <Package Name="Synapic"
+           Manufacturer="Synapic Project"
+           Version="$(var.AppVersion)"
+           UpgradeCode="$(var.MsiUpgradeCode)"
+           Scope="perMachine"
+           Compressed="yes">
+
+    <SummaryInformation Description="Synapic - Daminion metadata tagging"
+                        Manufacturer="Synapic Project"
+                        Keywords="Installer" />
+
+    <!--
+      AllowSameVersionUpgrades: the version is 1.0.0 across releases until
+      someone bumps it, and without this a rebuild at the same version installs
+      *alongside* the previous one instead of over it.
+    -->
+    <MajorUpgrade AllowSameVersionUpgrades="yes"
+                  DowngradeErrorMessage="A newer version of Synapic is already installed." />
+
+    <!-- A single embedded cab keeps the MSI self-contained, which is what makes
+         it deployable on its own from a file share. -->
+    <MediaTemplate EmbedCab="yes" />
+
+    <Icon Id="SynapicIcon" SourceFile="$(sys.SOURCEFILEDIR)..\..\assets\icons\Icon.ico" />
+    <Property Id="ARPPRODUCTICON" Value="SynapicIcon" />
+
+    <!--
+      Repair is switched off in Add/Remove Programs because it would undo the
+      app's own Update: the inference sidecar is replaceable in place (the app
+      writes a newer synapic-inference.exe next to itself), and MSI repair
+      restores any installed file whose checksum no longer matches - so running
+      it would silently put the packaged sidecar back over the newer one the
+      user just fetched. The Inno installer has no repair at all, so this also
+      keeps the two paths behaving the same. `msiexec /f` still works on the
+      package for anyone who needs it.
+    -->
+    <Property Id="ARPNOREPAIR" Value="1" />
+
+    <!--
+      [ProgramFiles64Folder], not ProgramFilesFolder: the latter is advertised by
+      Windows as "Program Files (x86)" on a 64-bit machine, and the payload is a
+      win-x64 publish. The layout matches the Inno installer's {autopf}\Synapic,
+      so a machine that has had either installer ends up in the same place.
+    -->
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="Synapic" />
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="Synapic" />
+    </StandardDirectory>
+
+    <StandardDirectory Id="DesktopFolder" />
+
+    <!--
+      The whole win-x64 release payload: the Avalonia app, its native
+      dependencies, the 226 MB inference sidecar, and the help topics in help/.
+      Subdirectories in the include pattern become subdirectories of the install
+      folder, which is what puts the topics in <app>\help where
+      HelpService.TopicDirectories looks for them.
+
+      Exclusions are the Inno installer's, word for word ("*.pdb, runtime exe"):
+      the two installers must not disagree about what the payload is. The staged
+      runtime installer is a bundle input, not an app file.
+    -->
+    <ComponentGroup Id="ApplicationFiles" Directory="INSTALLFOLDER">
+      <Files Include="$(var.PayloadDir)\**">
+        <Exclude Files="$(var.PayloadDir)\**\*.pdb" />
+        <Exclude Files="$(var.PayloadDir)\windowsdesktop-runtime-win-x64.exe" />
+      </Files>
+    </ComponentGroup>
+
+    <!--
+      Shortcuts. Both components take an HKCU value as their KeyPath: a shortcut
+      cannot key its own component, and the conventional answer is a marker value
+      in the installing user's hive that Windows Installer can see is missing if
+      the shortcut is deleted.
+    -->
+    <ComponentGroup Id="Shortcuts">
+      <Component Id="ApplicationStartMenuShortcut" Directory="ApplicationProgramsFolder" Guid="3F1B9C4E-7A52-4F0C-9B31-5D8E6A2C7410">
+        <Shortcut Id="StartMenuShortcut"
+                  Name="Synapic"
+                  Description="Tag Daminion images with Synapic"
+                  Target="[INSTALLFOLDER]Synapic.exe"
+                  WorkingDirectory="INSTALLFOLDER" />
+        <!-- Removes the Synapic folder in the Start Menu once it is empty;
+             without it uninstall leaves an empty folder behind. -->
+        <RemoveFolder Id="RemoveApplicationProgramsFolder" Directory="ApplicationProgramsFolder" On="uninstall" />
+        <RegistryValue Root="HKCU" Key="Software\Synapic" Name="StartMenuShortcut" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+
+      <Component Id="ApplicationDesktopShortcut" Directory="DesktopFolder" Guid="B7C2E8D1-4A63-4E97-8F25-1C9D0B6A3E58">
+        <Shortcut Id="DesktopShortcut"
+                  Name="Synapic"
+                  Description="Tag Daminion images with Synapic"
+                  Target="[INSTALLFOLDER]Synapic.exe"
+                  WorkingDirectory="INSTALLFOLDER" />
+        <RegistryValue Root="HKCU" Key="Software\Synapic" Name="DesktopShortcut" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <Feature Id="Main" Title="Synapic" Level="1" AllowAbsent="no">
+      <ComponentGroupRef Id="ApplicationFiles" />
+      <ComponentGroupRef Id="Shortcuts" />
+    </Feature>
+
+    <!--
+      The runtime check. RollForward="major" accepts 11 and later, which is the
+      same test the Inno script makes with its "major < 10" comparison.
+      "Installed" keeps repair, upgrade and uninstall working on a machine whose
+      runtime was removed or moved out of range after the app was installed.
+    -->
+    <netfx:DotNetCompatibilityCheck Id="DotNetRuntimeCheck"
+                                    Property="SYNAPIC_DOTNET_RUNTIME"
+                                    RuntimeType="$(var.RuntimeType)"
+                                    Platform="x64"
+                                    Version="$(var.RuntimeVersion)"
+                                    RollForward="major" />
+
+    <!--
+      The message cannot carry a live link - Windows Installer launch conditions
+      are plain text - so the URL is spelled out. This is the line the old
+      Visual Studio launch condition could not produce: it was inert, and the
+      MSI installed happily on a machine with no runtime at all.
+    -->
+    <Launch Condition="Installed OR SYNAPIC_DOTNET_RUNTIME"
+            Message="Synapic needs the .NET $(var.RuntimeVersion) runtime, which is not installed. Download it from https://dotnet.microsoft.com/download/dotnet/10.0 and run this installer again." />
+
+  </Package>
+</Wix>

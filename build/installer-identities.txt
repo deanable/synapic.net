@@ -1,0 +1,33 @@
+# The WiX identities that have actually been handed to Windows.
+#
+# Windows Installer decides what a package *is* from two GUIDs that have opposite
+# rules, so the guard covers both:
+#
+#   UpgradeCode  the product family - the same in every version, so Windows
+#                recognises an upgrade instead of a second application.
+#   ProductCode  one particular build - new in every version, so Windows replaces
+#                whatever is installed instead of repairing it.
+#
+# Only the UpgradeCodes are recorded here, because only they have a fixed value to
+# record. A ProductCode entry would be recording the bug: build/check-installer-
+# identities.py checks the opposite rule for it - that build/wix/Synapic.Msi.wxs
+# has not pinned one - and refuses to build unless
+# build/wix/Synapic.Identities.wxi still agrees with the values below.
+#
+# This is deliberately not a "never changes" rule. Editing a value here alongside
+# the .wxi is how an intentional change is made, which puts the decision in the
+# diff where a reviewer sees it, and tells whoever is releasing that users of the
+# previous identity have to uninstall before they can upgrade. Neither mistake
+# fails a build, installs anything wrong, or shows up at all until someone who has
+# the previous version tries to move to this one - which is why the guard exists
+# rather than a comment.
+#
+# Braces and case are ignored when comparing, so either style reads correctly.
+#
+# msi - the package. Inherited from Setup Synapic.vdproj, the Visual Studio
+#       deployment project the WiX sources replace, so an MSI built from that
+#       project upgrades into this one.
+# bundle - the Burn bundle. New in this change; there was no bundle before it, so
+#       there is nothing older for it to match.
+msi = {20752828-B63F-44B7-ADD2-2E7CBD14E517}
+bundle = {1F7BD207-2EDC-44D6-92B9-D093AF908FBE}

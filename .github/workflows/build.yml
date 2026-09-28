@@ -390,3 +390,130 @@ jobs:
           }
           if (-not $found) { Write-Host "::error::'[runtime]' line not found in any app log"; exit 1 }
           Write-Host "App launched; runtime check logged ($hit)."
+
+      # The dialog is the app's own recovery path, and it can only be exercised
+      # on a machine that is missing the runtime while the app can still start:
+      # Microsoft.NETCore.App has to stay, because the payload is a
+      # framework-dependent publish. Only the desktop framework goes, and the
+      # check reads the runtime's own folder and `dotnet --list-runtimes`, so
+      # this removal is exactly what it sees.
+      - name: Remove only the desktop runtime (keep the framework the app needs)
+        shell: pwsh
+        run: |
+          $dcu = Get-ChildItem (Join-Path $env:RUNNER_TEMP 'dcu') -Recurse -Filter dotnet-core-uninstall.exe -ErrorAction SilentlyContinue |
+            Select-Object -First 1 -ExpandProperty FullName
+          if (-not $dcu) { Write-Host "::error::dotnet-core-uninstall.exe is unavailable (the strip step did not download it)"; exit 1 }
+
+          & $dcu remove --windows-desktop --all --force
+          Write-Host "dotnet-core-uninstall exit code: $LASTEXITCODE"
+          $run = dotnet --list-runtimes 2>$null
+          @($run) | ForEach-Object { Write-Host $_ }
+
+          if (@($run) -match 'Microsoft\.WindowsDesktop\.App 10\.') {
+            Write-Host "::error::the desktop runtime survived removal, so the dialog path cannot be exercised"
+            exit 1
+          }
+          if (-not (@($run) -match 'Microsoft\.NETCore\.App 10\.')) {
+            Write-Host "::error::Microsoft.NETCore.App 10.x went with it - a framework-dependent app cannot start without it, so no dialog can appear"
+            exit 1
+          }
+          Write-Host "Desktop runtime removed; the app itself can still start."
+
+      # Reading the dialog, not the log: a misspelled binding fails silently, so
+      # the assertion is the URL inside the dialog's own text box. Windows
+      # PowerShell 5.1 runs this step because UI Automation ships with the .NET
+      # Framework - it still works with the desktop runtime uninstalled.
+      #
+      # The silent install must not be allowed to quietly repair the machine: on
+      # a runner it would succeed and no dialog would ever appear. Two blocks,
+      # because this step has to fail loudly if the failure branch was not
+      # reached at all.
+      - name: Assert the dialog offers the download link
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
+
+          $url = 'https://dotnet.microsoft.com/download/dotnet/10.0'
+          $app = 'C:\Program Files\Synapic\Synapic.exe'
+          $logPaths = @('C:\Program Files\Synapic\logs\synapic.log',
+                        (Join-Path $env:LOCALAPPDATA 'Synapic\logs\synapic.log'))
+          $hosts = Join-Path $env:SystemRoot 'System32\drivers\etc\hosts'
+          $hostsBackup = Join-Path $env:RUNNER_TEMP 'hosts.synapic-backup'
+
+          # 1. A dead proxy blocks the app's own download even when the DNS
+          #    entry below cannot be written (no admin token). api.github.com is
+          #    exempt so the update check does not fail for an unrelated reason.
+          $env:HTTPS_PROXY = 'http://127.0.0.1:9'
+          $env:HTTP_PROXY = 'http://127.0.0.1:9'
+          $env:NO_PROXY = 'api.github.com'
+
+          # 2. The metadata host resolves to loopback, which fails instantly.
+          $hostsBlocked = $false
+          try {
+            Copy-Item $hosts $hostsBackup -Force
+            Add-Content -Path $hosts -Value "`n127.0.0.1 builds.dotnet.microsoft.com # synapic dialog smoke"
+            $ip = Resolve-DnsName builds.dotnet.microsoft.com -Type A -ErrorAction SilentlyContinue |
+              Where-Object { $_.Type -eq 'A' } | Select-Object -First 1 -ExpandProperty IPAddress
+            $hostsBlocked = ($ip -eq '127.0.0.1')
+            Write-Host "hosts block: $hostsBlocked (builds.dotnet.microsoft.com resolves to $ip)"
+          } catch {
+            Write-Host "hosts file not writable: $($_.Exception.Message)"
+          }
+          if (-not $hostsBlocked) { Write-Host "::warning::DNS block unavailable; relying on HTTPS_PROXY" }
+
+          $p = Start-Process $app -PassThru `
+            -RedirectStandardOutput app-dialog-stdout.txt -RedirectStandardError app-dialog-stderr.txt
+          $dialog = $null
+          $titles = @()
+          try {
+            $deadline = (Get-Date).AddSeconds(180)
+            while ((Get-Date) -lt $deadline -and -not $p.HasExited -and -not $dialog) {
+              $pidCondition = New-Object System.Windows.Automation.PropertyCondition(
+                [System.Windows.Automation.AutomationElement]::ProcessIdProperty, $p.Id)
+              $windows = [System.Windows.Automation.AutomationElement]::RootElement.FindAll(
+                [System.Windows.Automation.TreeScope]::Children, $pidCondition)
+              $titles = @()
+              foreach ($window in $windows) {
+                $title = $window.Current.Name
+                $titles += $title
+                if ($title -notlike '*runtime*') { continue }
+                $editCondition = New-Object System.Windows.Automation.PropertyCondition(
+                  [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+                  [System.Windows.Automation.ControlType]::Edit)
+                foreach ($edit in $window.FindAll([System.Windows.Automation.TreeScope]::Descendants, $editCondition)) {
+                  $value = $edit.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value
+                  Write-Host "dialog field: $value"
+                  if ($value -eq $url) { $dialog = $window; break }
+                }
+              }
+              if (-not $dialog) { Start-Sleep -Seconds 2 }
+            }
+          } finally {
+            Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+            if (Test-Path $hostsBackup) {
+              Copy-Item $hostsBackup $hosts -Force
+              Remove-Item $hostsBackup -Force
+              Write-Host 'hosts file restored'
+            }
+          }
+
+          if ($dialog) {
+            Write-Host "Dialog '$($dialog.Current.Name)' offers the download link: $url"
+            exit 0
+          }
+
+          # The log says which branch the check took: an install that succeeded
+          # means the block leaked, a missing line means the check never ran.
+          foreach ($cand in $logPaths) {
+            if (-not (Test-Path $cand)) { continue }
+            Write-Host "=== [runtime] lines from $cand ==="
+            Select-String -Path $cand -Pattern '\[runtime\]' | Select-Object -Last 15 | ForEach-Object { Write-Host $_.Line }
+          }
+          foreach ($stream in 'app-dialog-stdout.txt', 'app-dialog-stderr.txt') {
+            if ((Test-Path $stream) -and ((Get-Item $stream).Length -gt 0)) {
+              Write-Host "=== $stream ==="; Get-Content $stream | Select-Object -First 30 | ForEach-Object { Write-Host $_ }
+            }
+          }
+          Write-Host "::error::no runtime dialog offering $url appeared for pid $($p.Id); window titles seen: $($titles -join ' | ')"
+          exit 1

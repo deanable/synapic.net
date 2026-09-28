@@ -32,7 +32,15 @@ auto-scrolls the log list to the newest entry on every collection change.
 
 ### `Views/CrashDialogWindow.axaml(.cs)`
 Non-terminal crash dialog with a copy-diagnostics action. Static `Show(report)`
-posts on the UI thread.
+posts on the UI thread. The file also holds `ProcessExtensions`, the small
+shell helper (`OpenUrl`, `OpenDirectory`) the dialogs share.
+
+### `Views/RuntimeDialogWindow.axaml(.cs)`
+The other startup-failure dialog: it carries the official .NET 10 download page
+`DotNetRuntimeCheckService` handed over, with actions to open it in the default
+browser, copy it, or continue. Static `Show(result)` is posted on the UI thread
+by `App`'s `RuntimeUnavailable` subscription; a refused browser launch is
+logged, never thrown.
 
 ### `Views/Wizard/*.axaml(.cs)`
 One user control per step. Code-behind is intentionally thin:
@@ -375,7 +383,21 @@ plus IPTC/EXIF fallbacks. `TagResult(Category, Keywords, Description)`. See
   `UpdateCheckResult(UpdateAvailable, LatestVersion, DownloadUrl, Notes)`;
   never throws.
 - **`DotNetRuntimeCheckService`** — Windows-only: detects the .NET 10 Desktop
-  Runtime, downloads and silently installs it when missing; logs each step.
+  Runtime from the runtime's own folder (`shared/Microsoft.WindowsDesktop.App`,
+  plus `DOTNET_ROOT`) with `dotnet --list-runtimes` as the fallback — **not**
+  from `HKLM\…\InstalledVersions\x64\sharedhost`, which reports the *host*
+  version and disagrees with the framework's in both directions. It downloads
+  and silently installs the runtime when missing, and reports a
+  `RuntimeCheckResult` (`RuntimeCheckOutcome`: `RuntimePresent`, `Installed`,
+  `DownloadFailed`, `InstallFailed`, `NotApplicable`) instead of throwing.
+  A runtime older than `MinimumVersion` counts as missing. When the install
+  cannot be finished it logs the link and raises `RuntimeUnavailable` with
+  `DownloadPageUrl` - the official
+  `https://dotnet.microsoft.com/download/dotnet/10.0` page, derived from
+  `MinimumVersion` - which is how the user still gets a way forward: the
+  installers can refuse to run, but only the running app can offer a link.
+  The `HttpClient`, the version probe and the platform are injectable, so the
+  failure paths are tested without uninstalling a framework.
 - **`ProcessJob`** — Windows Job Object wrapper (`KILL_ON_JOB_CLOSE`) so child
   processes die with the app; `AssignChild(process)` is best-effort and never
   throws.

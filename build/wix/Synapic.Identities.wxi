@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The two identities the WiX installers hand to Windows, defined once and
+  included by both Synapic.Msi.wxs and Synapic.Bundle.wxs.
+
+  They are here rather than inline for the same reason build/installer-appid.txt
+  exists for Inno: an UpgradeCode is an identity, not a label. It is what makes
+  Windows treat this build as a later version of what is already installed rather
+  than as a different application. Change one and Windows lists a second entry in
+  Add/Remove Programs, leaves the previous version's files on disk, and offers no
+  upgrade path - and nothing in the toolchain objects, because a new GUID is
+  perfectly valid.
+
+  build/check-installer-identities.py refuses to build unless these agree with
+  build/installer-identities.txt, the record of what has shipped. The same guard
+  enforces the opposite rule for the product code, which must be generated per
+  build rather than pinned - see the comment on Package in Synapic.Msi.wxs.
+
+  Keep them literally side by side: two values, one file, one guard.
+-->
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+
+  <!--
+    The package's UpgradeCode. Not invented here: it is the value the Visual
+    Studio deployment project this replaces carried, so an MSI built from that
+    project is upgraded by this one instead of being installed beside it.
+    ProductCode is deliberately not written down anywhere - WiX generates a fresh
+    one per build, which is what MajorUpgrade expects.
+  -->
+  <?define MsiUpgradeCode = "20752828-B63F-44B7-ADD2-2E7CBD14E517"?>
+
+  <!--
+    The bundle's UpgradeCode, which is separate because the two are removed
+    independently: a bundle can be upgraded while the product it installed stays
+    put. New in this change - there was no Burn bundle before, so there is
+    nothing older for it to upgrade.
+  -->
+  <?define BundleUpgradeCode = "1F7BD207-2EDC-44D6-92B9-D093AF908FBE"?>
+
+</Include>

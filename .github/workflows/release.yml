@@ -258,6 +258,46 @@ jobs:
             artifacts/${{ matrix.rid }}/Synapic-*.dmg
           if-no-files-found: warn
 
+      # The MSI path comes after the upload above on purpose. That upload is what
+      # protects the release - the Inno setup exe is the installer that ships -
+      # and a failure in this newer path must not be able to cost it.
+      #
+      # Guarded, not fatal, for the same reason the AppImage leg is: no run has
+      # produced these artefacts yet, and a release missing its MSI is better than
+      # one that publishes nothing. continue-on-error keeps the job green while
+      # still failing the step, so it shows up in the run summary rather than
+      # passing silently. Drop the guard once a dry run produces both files.
+      - name: Package MSI + bundle (Windows)
+        if: matrix.pkg == 'ps1'
+        continue-on-error: true
+        shell: pwsh
+        env:
+          SIGNING_CERT_THUMBPRINT: ${{ secrets.SIGNING_CERT_THUMBPRINT }}
+        run: |
+          # WiX is a dotnet tool rather than a preinstalled application, and v7
+          # refuses to run until its Open Source Maintenance Fee EULA is
+          # accepted. build/package-windows-msi.ps1 passes -acceptEula wix7 on
+          # every invocation, so nothing here has to be interactive:
+          # https://wixtoolset.org/osmf/
+          $wix = Join-Path $env:USERPROFILE '.dotnet\tools\wix.exe'
+          if (-not (Test-Path $wix)) { dotnet tool install --global wix --version 7.0.0 }
+
+          # -SkipPublish: the publish earlier in this job is the payload, and
+          # reusing it is what keeps the MSI and the Inno setup exe carrying the
+          # same files. The runtime installer is already staged next to them by
+          # package-windows.ps1, so this downloads nothing.
+          ./build/package-windows-msi.ps1 -Rid ${{ matrix.rid }} -AppVersion ${{ steps.ver.outputs.version }} -SkipPublish
+
+      - name: Upload the MSI and bundle
+        if: matrix.pkg == 'ps1'
+        uses: actions/upload-artifact@v4
+        with:
+          name: msi-${{ matrix.rid }}
+          path: |
+            artifacts/msi/Synapic-${{ matrix.rid }}.msi
+            artifacts/msi/Synapic-Setup-${{ matrix.rid }}-msi.exe
+          if-no-files-found: warn
+
   # CUDA is a packaging variant, not a different program: the same sidecar built
   # against CUDA torch wheels. Bundling cu126 wheels needs no GPU, so a
   # GitHub-hosted runner can build it; what it cannot do is prove GPU inference
@@ -404,8 +444,18 @@ jobs:
             | | Windows | macOS (Apple silicon) | Linux |
             |---|---|---|---|
             | App + CPU server | `Synapic-Setup-win-x64.exe` | `Synapic-osx-arm64.dmg` | no installer yet |
+            | App + CPU server, MSI path | `Synapic-Setup-win-x64-msi.exe` | — | — |
+            | MSI on its own (GPO/Intune/SCCM) | `Synapic-win-x64.msi` | — | — |
             | Standalone CPU server | `synapic-inference-win-x64.exe` | `synapic-inference-osx-arm64` | `synapic-inference-linux-x64` |
             | Standalone NVIDIA/CUDA server | `synapic-inference-win-x64-cuda.exe.part1` + `.part2` | — | — |
+
+            Windows has a second installer for environments that cannot run the Inno
+            setup exe. `Synapic-Setup-win-x64-msi.exe` installs the .NET 10 desktop
+            runtime and then the package, and `Synapic-win-x64.msi` is that same
+            package on its own for deployment through group policy, Intune or SCCM.
+            The package refuses to install on a machine with no .NET 10 runtime; the
+            bundle is what installs it. Both carry the same application files as the
+            Inno setup exe, including the inference server.
 
             There is no Linux installer yet: the AppImage step has not completed
             (see `docs/packaging.md`). Linux users get the standalone inference

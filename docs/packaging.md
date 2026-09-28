@@ -25,6 +25,7 @@ build/install-python-deps.ps1|.sh <rid>   # pip install -r requirements.txt (CPU
 build/build-sidecar.ps1|.sh <rid>    # PyInstaller → synapic-inference(.exe) + variant guard
 dotnet publish src/Synapic.Avalonia -c Release -r <rid> --self-contained
 build/package-windows.ps1            # Inno Setup 6 → Synapic-Setup-x64.exe
+build/package-windows-msi.ps1        # WiX → Synapic-win-x64.msi + Synapic-Setup-win-x64-msi.exe
 build/package-linux.sh               # linuxdeploy → Synapic-x86_64.AppImage
 build/package-macos.sh <rid>         # codesign + notarytool + create-dmg
 ```
@@ -32,29 +33,233 @@ build/package-macos.sh <rid>         # codesign + notarytool + create-dmg
 `build-server.ps1|.sh` chains the first three steps; the app's **Build Server**
 button and CI both call it.
 
-### Building the installer from the solution
+### Building an installer
 
-`build/Synapic.Installer/Synapic.Installer.csproj` is the installer project: a
-code-free packaging project that owns the `.iss`, the AppId record and the
-packaging scripts, and drives the same `package-windows.ps1` CI calls, so the
-two paths cannot drift apart.
+Nothing in the solution packages by itself, and none of it is built by MSBuild:
+the installers are separate command-line steps. On Windows there are two
+installer definitions - three artefacts, because the MSI ships with a bundle
+that installs the .NET runtime for it - all fed by the same framework-dependent
+win-x64 publish:
 
-```bash
-dotnet build build/Synapic.Installer/Synapic.Installer.csproj -t:PackageInstaller
+| Installer | Definition | Produced by | Output |
+|-----------|-----------|-------------|--------|
+| Inno Setup (shipped) | `build/installer-windows.iss` | `build/package-windows.ps1` | `artifacts/win-x64/Synapic-Setup-win-x64.exe` |
+| MSI | `build/wix/Synapic.Msi.wxs` | `build/package-windows-msi.ps1` | `artifacts/msi/Synapic-win-x64.msi` |
+| Bundle | `build/wix/Synapic.Bundle.wxs` | `build/package-windows-msi.ps1` | `artifacts/msi/Synapic-Setup-win-x64-msi.exe` |
+
+`package-windows.ps1` is the path CI runs: it takes the win-x64 publish in
+`artifacts/<rid>`, runs the AppId guard, stages the .NET 10 desktop runtime next
+to the payload and compiles the `.iss`. It deliberately does not publish - the
+publish is a separate step in CI - so `artifacts/<rid>` has to be a real publish
+before either packaging script runs.
+
+### The MSI and the bundle
+
+`build/wix` holds two WiX Toolset sources and the identity file they share:
+
+| Source | What it is |
+|--------|-----------|
+| `Synapic.Msi.wxs` | the Windows Installer package |
+| `Synapic.Bundle.wxs` | a Burn bundle: the .NET runtime first, then the MSI |
+| `Synapic.Identities.wxi` | the two `UpgradeCode`s both sources include |
+
+One command builds both artefacts, from the repository root:
+
+```powershell
+build/package-windows-msi.ps1                  # publish, then MSI, then bundle
+build/package-windows-msi.ps1 -SkipPublish     # reuse the publish already in artifacts/win-x64
 ```
 
-It publishes the app into `artifacts/win-x64` (framework-dependent, as the
-release does), refuses to continue unless `synapic-inference.exe` is staged
-next to it, and then runs Inno Setup. Knobs: `-p:Version=1.2.3` stamps the app
-and the setup exe together, `-p:InstallerRid=`, `-p:InstallerArtifactsDir=`
-(relative paths are repo-relative), `-p:SkipPublishApp=true`.
+It publishes `artifacts/win-x64` with `-r win-x64 --self-contained false
+-p:PublishSingleFile=false` - the flags the release uses - then reads the runtime
+the payload asks for out of `Synapic.runtimeconfig.json`, stages the .NET runtime
+installer with the same `build/stage-dotnet-runtime.ps1` the Inno path uses, runs
+the installer identity guard, and compiles the MSI and then the bundle.
 
-Packaging is opt-in by design. A plain build of the project - and therefore the
-solution-wide build CI runs on Linux - only checks that the installer
-definition is where the project says it is and prints the command above;
-`-t:PackageInstaller` is the part that needs Windows and Inno Setup 6. CI still
-calls `package-windows.ps1` directly, so the project stays a convenience over
-that one script rather than a second implementation of it.
+**The payload is globbed, not listed.** `<Files Include="…\**">` replaces what
+used to be a hand-maintained static file list, so a dependency added to the app
+appears in the installer with no regeneration step. It also closed a hole: the
+Visual Studio project never listed the 226 MB inference sidecar, so the MSI it
+produced shipped an application with no inference engine and said nothing. The
+two exclusions are the Inno installer's, word for word - `*.pdb` and the staged
+runtime installer - because the two installers should not disagree about what the
+payload is. The packaging script also refuses to build if
+`synapic-inference.exe` is not in the payload, for the same reason; the Visual
+Studio path never had that.
+
+Requires the WiX Toolset as a dotnet tool:
+`dotnet tool install --global wix --version 7.0.0` - the same version the release
+workflow installs, so a dev box and CI produce the same package. WiX v7 will not run until its
+Open Source Maintenance Fee EULA is accepted, so the script passes
+`-acceptEula wix7` on every invocation: the acknowledgement lives in the
+repository, where it shows up in review, rather than in per-user state on
+whichever machine happened to run `wix eula accept` first. The two extensions the
+sources need are added to the global WiX cache by the script if they are missing.
+
+#### The two identities, and the guard that keeps them straight
+
+Windows Installer decides what a package *is* from two GUIDs with opposite
+rules, and this is the pair worth understanding before editing either:
+
+- `UpgradeCode` (in `Synapic.Identities.wxi`, recorded in
+  `build/installer-identities.txt`) is the product **family** and must be the same
+  in every version. It is what Windows matches a package against to decide
+  whether it is upgrading something or installing a second copy. Change it and
+  existing installs stop being recognised: a second entry in Add/Remove Programs,
+  the previous version's files left on disk, no upgrade path.
+- `ProductCode` must **not** be set at all. It names one particular build, so it
+  has to be new in every version, and WiX generates a fresh GUID per build while
+  the attribute is left alone. Pin one and Windows treats the new package as the
+  same product as the old, which turns the upgrade into a repair of what is
+  already there: the old files stay and the version never moves.
+
+Neither mistake fails a build, installs anything wrong, or shows up at all until
+someone who has the previous version tries to move to this one - which is why
+`build/check-installer-identities.py` refuses to compile anything unless
+`Synapic.Identities.wxi` still matches the recorded values **and**
+`Synapic.Msi.wxs` has not pinned a ProductCode. It also checks that each source
+uses the define the guard reads (`UpgradeCode="$(var.MsiUpgradeCode)"`), because
+a literal there would leave the guard validating a file the compiler ignores.
+
+Rebuilding twice from unchanged sources is the property each rule rests on, and
+it holds: the ProductCode changes (`{4A2A6366-…}` then `{D50BA417-…}`) and the
+UpgradeCode does not (`{20752828-…}`).
+
+#### x64
+
+`-arch x64` on both `wix build` commands is what makes the package 64-bit: it
+sets the template and marks the components so Windows Installer does not redirect
+them into `Program Files (x86)` and the 32-bit registry view. Leaving it off
+still produces a package that installs and looks right, which is why it is worth
+checking rather than trusting - without it `wix msi validate` reports
+`ICE80: This 32BitComponent … uses 64BitDirectory INSTALLFOLDER` for every one of
+the seventy-odd components.
+
+The application installs to `[ProgramFiles64Folder]\Synapic` - the same
+directory the Inno installer uses, so a machine that has had either ends up in
+the same place.
+
+#### The help subfolder
+
+Help topics have to land in `<app>\help` (`HelpService.TopicDirectories` checks
+there first). Subdirectories in the `Files` include pattern become subdirectories
+of the install folder, so nothing declares it and nothing can forget to: the MSI
+ends up with a `help` directory under `Synapic` holding the 27 topics. The old
+project file needed a hand-built child node with a particular type GUID and its
+own `Property` to get the same result.
+
+#### The .NET 10 runtime requirement
+
+The Windows payload is framework-dependent, so an installer that lands it on a
+machine with no .NET runtime leaves behind an application that cannot start. The
+two artefacts split that responsibility:
+
+- **The bundle installs it.** `Synapic.Bundle.wxs` chains the staged
+  `windowsdesktop-runtime-win-x64.exe` ahead of the MSI with `/install /quiet
+  /norestart`, the same arguments the Inno script runs, and maps exit codes 3010
+  and 1641 to a scheduled reboot and 1638 to success - all three mean the runtime
+  installed and only the exit code is not zero, so the default would report a
+  failure on a machine that is fine. `netfx:DotNetCoreSearch` sets the detection
+  variable, so a machine that already has the framework skips the package
+  entirely instead of reinstalling 60 MB of runtime. The package is
+  `Permanent="yes"`: .NET is shared with other applications, so uninstalling
+  Synapic leaves it alone, exactly as the Inno installer does.
+- **The MSI refuses without it.** Administrators deploy MSIs directly - group
+  policy, Intune, SCCM - and those deployments never see the bundle, so
+  `Synapic.Msi.wxs` carries a check of its own. `netfx:DotNetCompatibilityCheck`
+  runs a custom action before `LaunchConditions` in both the UI and execute
+  sequences, and a machine without the runtime stops with *"Synapic needs the
+  .NET 10.0.0 runtime, which is not installed. Download it from
+  https://dotnet.microsoft.com/download/dotnet/10.0 …"*. That message only
+  exists while the package can still run its own custom action, so the app
+  carries the same link for the cases the installer never sees - see *Notes &
+  mitigations* below.
+
+Neither artefact writes the requirement down: the packaging script reads the
+framework and version out of the payload's `Synapic.runtimeconfig.json` and
+passes them in as `-d RuntimeType=core -d RuntimeVersion=10.0.0`, so moving the
+app to a newer target framework moves the installer's requirement with it.
+
+`core` is `Microsoft.NETCore.App`, which is what an Avalonia app asks for - it
+references no desktop framework - and the Windows Desktop Runtime redistributable
+installs the core framework too. Requiring core therefore never refuses a machine
+where the app would actually have run, and it is what the bundle's detection
+variable tests as well. The Inno script's own test is looser still: any host
+reporting major version 10 or later, whatever runtime put it there.
+
+The app's own check asks a narrower question - is the **desktop** framework
+installed - and answers it from the runtime's layout on disk
+(`%ProgramFiles%\dotnet\shared\Microsoft.WindowsDesktop.App\<version>`, plus
+`DOTNET_ROOT`) with `dotnet --list-runtimes` as the fallback. It deliberately
+does **not** use the documented registry key
+`HKLM\SOFTWARE\dotnet\Setup\InstalledVersions\x64\sharedhost`: that value is the
+**host** version, and the two drift. A machine with the 10.0.12 desktop runtime
+and no 10 host reports `9.0.20` there, and the reverse - a 10.x host with the
+desktop framework removed - reports 10.x. The second case is the one that
+matters: trusting the key made the check announce *"no install needed"* on a
+machine that was missing exactly what the installers require, and the download
+link was never offered.
+
+#### Checking a package without installing it
+
+`wix msi validate` runs the standard ICE checks against the built package and is
+the quickest way to catch authoring mistakes - the missing `-arch x64` was found
+with it:
+
+```powershell
+wix msi validate artifacts/msi/Synapic-win-x64.msi
+```
+
+It reports one warning by design: `ICE61: This product should remove only older
+versions of itself`. That comes from `AllowSameVersionUpgrades` on
+`MajorUpgrade`, which is there because the product version stays at `1.0.0`
+between releases - without it a rebuild at the same version installs *beside*
+the existing copy rather than over it.
+
+For the contents, the Windows Installer COM API reads the MSI directly
+(PowerShell; keep the table and column names in backticks):
+
+```powershell
+$i = New-Object -ComObject WindowsInstaller.Installer
+$db = $i.OpenDatabase((Resolve-Path 'artifacts\msi\Synapic-win-x64.msi'), 0)
+$v = $db.OpenView('SELECT `Directory`,`Directory_Parent`,`DefaultDir` FROM `Directory`'); $v.Execute()
+while ($r = $v.Fetch()) { "$($r.StringData(1)) <- $($r.StringData(2)) [$($r.StringData(3))]" }
+```
+
+A healthy package has 75 `File` rows - 46 application files, 27 help topics,
+`synapic-inference.exe` and one stray `smoke.log` (see the limitations) - a
+`Synapic | help` directory under the `ProgramFiles64Folder` row, and two
+`LaunchCondition` rows: the runtime check above, plus WiX's own
+`NOT WIX_DOWNGRADE_DETECTED` from `MajorUpgrade`. Long file names appear in the
+`File` table in the `shortname|longname` form Windows Installer uses, so search
+for the long half.
+
+`wix burn extract` lists what a bundle actually carries:
+
+```powershell
+wix burn extract -o artifacts/msi/bundle artifacts/msi/Synapic-Setup-win-x64-msi.exe
+```
+
+Two payloads of about 60 MB and 232 MB: the runtime installer and the MSI, in
+that order.
+
+#### Limitations of the MSI path
+
+- **The release build of it has never succeeded.** The release workflow does
+  produce the MSI and the bundle - it installs the WiX tool and runs
+  `package-windows-msi.ps1` for the Windows leg - but it is wrapped in
+  `continue-on-error`, so a failure leaves the release without its MSI rather
+  than failing outright. Nothing has built them on a runner yet; the first
+  successful run is the point at which that guard can be dropped.
+- **`smoke.log` ships.** It is a leftover from a manual sidecar smoke run sitting
+  in `artifacts/win-x64` (uvicorn's startup output, not anything a script writes
+  there), and both installers glob that directory, so both carry it into the
+  install folder. Excluding it in one installer only would be worse - the two
+  would disagree about what the payload is - so it wants fixing where it lives.
+- **Nothing is signed.** The MSI and the bundle are produced unsigned unless
+  `SIGNING_CERT_THUMBPRINT` is set, so SmartScreen warns on first run. When it is
+  set, the script signs the MSI *before* the bundle is built, so the copy inside
+  the bundle is signed too.
 
 ## Sidecar variants: CPU and CUDA
 
@@ -91,7 +296,22 @@ after a 2.7 GB download.
   bundles it as an offline prerequisite. At install time a missing runtime is
   installed silently (`/install /quiet /norestart`); with no bundled copy the
   installer downloads it live. The app's own startup check
-  (`DotNetRuntimeCheckService`) is the second line of defense.
+  (`DotNetRuntimeCheckService`) is the second line of defense. The MSI path
+  covers the same ground from the other direction: the bundle installs the
+  runtime before the package runs, and the package itself refuses to install
+  without one - see *The MSI and the bundle* above.
+- **The app hands over the download link.** Neither installer can finish this
+  job from inside the app: the Inno prerequisite is handled before the app ever
+  starts, the MSI refuses with a message and stops, and once the app is running
+  on a machine whose runtime has since gone missing, neither installer is there
+  any more. So the startup check does the last step itself - when the silent
+  install cannot be completed (no network or a blocked proxy, a declined
+  elevation prompt, or a desktop framework that is absent or older than 10), it
+  writes
+  `https://dotnet.microsoft.com/download/dotnet/10.0` into the log and raises
+  `RuntimeUnavailable`, which shows a dialog offering that page. The URL and the
+  minimum version the installers enforce are derived from the same
+  `MinimumVersion`, so a target-framework bump moves all of them together.
 - **Bundle size:** the sidecar excludes `cv2`, `imagehash`, `faiss`,
   `sentence-transformers`, `customtkinter` (dedup and metadata writing moved to
   C#). UPX is **off** in `synapic-inference.spec` — compressing a 2.7 GB CUDA
@@ -136,6 +356,22 @@ after a 2.7 GB download.
   bundle boots with CUDA wheels installed — torch falls back to CPU — and can
   never prove GPU inference. It is skipped on PRs (add the `build-cuda` label to
   force it) because ~3 GB of wheels plus a ~2.7 GB artifact is real cost per run.
+- **The installer smoke test** (`installer-smoke`, windows-2022, main pushes
+  only) proves more than "the installer produces a working install". It strips
+  every runtime with `dotnet-core-uninstall`, runs
+  `Synapic-Setup-win-x64.exe` silently - which has to put the desktop runtime
+  back, because the setup bundles it - launches the installed app and greps its
+  log for `[runtime]`. Then it removes **only** the desktop framework, because
+  the payload is framework-dependent: `Microsoft.NETCore.App` has to stay or the
+  app cannot start at all and no dialog could ever appear. It blocks the app's
+  own repair (a hosts entry for `builds.dotnet.microsoft.com` plus a dead
+  `HTTPS_PROXY`), launches the app again and reads the URL out of the dialog's
+  text box with UI Automation, comparing it against
+  `https://dotnet.microsoft.com/download/dotnet/10.0`. That last assertion is
+  the point of the exercise: a log line would also be present if the dialog were
+  mis-bound or never shown at all. The dialog assertions have not run green yet -
+  the first successful run is what proves the recovery path on a machine that
+  really is missing the runtime.
 - **Size ceilings when publishing:** `actions/upload-artifact` accepts a 10 GB
   artifact, but a GitHub Release asset must be **under 2 GiB** (the *total* size
   of a release is not capped). The CPU sidecar (~216 MB) uploads as one file;
@@ -151,12 +387,21 @@ after a 2.7 GB download.
   plus the CUDA sidecar job, then `github-release` merges the artifacts and
   publishes them. Every released sidecar is boot-smoke-tested first, so a bundle
   that builds but does not serve `/health` never reaches the releases page.
+  The Windows leg also builds the MSI and the bundle, by installing the WiX
+  tool and running `package-windows-msi.ps1` with `-SkipPublish` - the step runs
+  *after* the Inno installer has been uploaded, and is wrapped in
+  `continue-on-error` so a failure in this newer path cannot cost a release the
+  installer that ships. It adds roughly 520 MB to a release: a 232 MB package
+  plus a 290 MB bundle that contains it, because the inference server is inside
+  both. Only the release workflow builds them; `build.yml` does not.
 
 ### What a release contains
 
 | Asset | Notes |
 |-------|-------|
 | `Synapic-Setup-win-x64.exe` | Windows installer, app + CPU sidecar |
+| `Synapic-Setup-win-x64-msi.exe` | Windows installer, MSI path: installs the .NET 10 runtime, then the package |
+| `Synapic-win-x64.msi` | that same package on its own, for GPO/Intune/SCCM |
 | `Synapic-osx-arm64.dmg` | macOS disk image, app + CPU sidecar |
 | ~~`Synapic-*.AppImage`~~ | **not built** — see the known gap below |
 | `synapic-inference-win-x64.exe` | standalone CPU server |

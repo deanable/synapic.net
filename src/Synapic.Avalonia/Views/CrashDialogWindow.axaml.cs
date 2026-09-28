@@ -111,6 +111,25 @@ public static class CrashReporterUi
 /// <summary>Tiny shell helper (kept separate for testability).</summary>
 public static class ProcessExtensions
 {
+    /// <summary>
+    /// Opens an http(s) URL in the default browser through the shell, the same
+    /// way the HTML help topics and the crash folder are opened. Refuses any
+    /// other scheme rather than handing an arbitrary string to the shell.
+    /// </summary>
+    public static void OpenUrl(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)
+            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            throw new ArgumentException($"Not an http(s) URL: {url}", nameof(url));
+        }
+
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(uri.AbsoluteUri)
+        {
+            UseShellExecute = true,
+        });
+    }
+
     public static void OpenDirectory(string path)
     {
         if (OperatingSystem.IsWindows())

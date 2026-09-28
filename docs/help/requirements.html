@@ -38,7 +38,10 @@ nothing: the app still works, but you re-enter the settings each time. See
 <li><span class="term">.NET 10 Desktop Runtime.</span> Required, and the
 Windows installer handles it: it either bundles a copy or downloads the official
 installer at the Ready step and runs it silently. You only meet this if you
-install by copying files.</li>
+install by copying files. If it is missing, Synapic says so on startup and
+points at <a href="https://dotnet.microsoft.com/download/dotnet/10.0">the
+official download page</a> &mdash; take the <span class="term">Desktop
+Runtime</span> for <span class="path">x64</span>, not the SDK.</li>
 <li><span class="term">Daminion Server</span> (only if you tag a catalog rather
 than a folder): the HTTP API reachable from the machine, plus an account that may
 read the items and update their metadata.</li>

@@ -118,7 +118,10 @@ huggingface_hub, pillow, tqdm, psutil, qwen-vl-utils, PyInstaller 6.18.0).
 3. Install `CrashReporterService` (global handlers → `logs/crashes/`), with a
    dialog for non-terminal crashes.
 4. Fire-and-forget `DotNetRuntimeCheckService.EnsureRuntimeAsync` (Windows:
-   silently installs the .NET 10 Desktop Runtime if missing).
+   silently installs the .NET 10 Desktop Runtime if missing). When the silent
+   install cannot finish - offline, or the elevation prompt declined - the check
+   raises `RuntimeUnavailable`, which shows `RuntimeDialogWindow` with the
+   official download link; the same link goes into the log.
 5. Initialise `TelemetryService.Shared` (opt-in, local counters only).
 6. Build the DI container (below) and construct `MainWindow` +
    `MainWindowViewModel`.

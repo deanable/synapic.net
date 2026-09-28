@@ -40,8 +40,14 @@ public partial class App : Application
         // .NET 10 Desktop Runtime self-heal: when the targeted runtime is
         // missing, silently download and install it, then continue startup.
         // Fire-and-forget: it must never block or crash the app launch, and
-        // every step logs its outcome for diagnosis.
-        _ = new DotNetRuntimeCheckService().EnsureRuntimeAsync(
+        // every step logs its outcome for diagnosis. When the silent install
+        // cannot fix it (offline, or the elevation prompt declined) the check
+        // hands over the official download link - the installer refuses before
+        // this app can run at all, so the app has to carry the link itself.
+        var runtimeCheck = new DotNetRuntimeCheckService();
+        runtimeCheck.RuntimeUnavailable += result =>
+            Dispatcher.UIThread.Post(() => Views.RuntimeDialogWindow.Show(result));
+        _ = runtimeCheck.EnsureRuntimeAsync(
             line => log.Information("[runtime] {RuntimeCheck}", line));
 
         log.Information("=== Synapic startup ===");
