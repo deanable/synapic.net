@@ -301,18 +301,50 @@ jobs:
 
       # The dev-box equivalent is blocked by SDK/VS dependents on the burn
       # engine; dotnet-core-uninstall bypasses that. Best effort: if it fails
-      # the run degrades to the runtime-present install path only.
+      # the run degrades to the runtime-present install path only, which the next
+      # step reports either way.
+      #
+      # It ships as a Windows .msi and macOS tarballs - never the .zip this used
+      # to look for, which is why the asset lookup came back empty and the strip
+      # silently stripped nothing. The release lookup is authenticated because an
+      # anonymous one is rate-limited, and the pinned URL is the fallback so a
+      # release rename cannot leave the job unstripped and untested again.
       - name: Strip .NET SDKs and runtimes (forces the prerequisite path)
         continue-on-error: true
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $tmp = Join-Path $env:RUNNER_TEMP 'dcu'
           New-Item -ItemType Directory -Force $tmp | Out-Null
-          $release = Invoke-RestMethod 'https://api.github.com/repos/dotnet/cli-lab/releases/latest'
-          $asset = $release.assets | Where-Object { $_.name -like 'dotnet-core-uninstall*.zip' } | Select-Object -First 1
-          Invoke-WebRequest $asset.browser_download_url -OutFile "$tmp\dcu.zip"
-          Expand-Archive "$tmp\dcu.zip" -DestinationPath $tmp
-          $exe = Get-ChildItem $tmp -Recurse -Filter dotnet-core-uninstall.exe | Select-Object -First 1 -ExpandProperty FullName
+          $msi = Join-Path $tmp 'dotnet-core-uninstall.msi'
+          $url = 'https://github.com/dotnet/cli-lab/releases/download/1.7.661902/dotnet-core-uninstall.msi'
+          try {
+            $release = Invoke-RestMethod 'https://api.github.com/repos/dotnet/cli-lab/releases/latest' `
+              -Headers @{ Authorization = "Bearer $env:GH_TOKEN" }
+            $asset = $release.assets | Where-Object { $_.name -like 'dotnet-core-uninstall*.msi' } | Select-Object -First 1
+            if ($asset) { $url = $asset.browser_download_url } else { Write-Host 'No .msi in the latest release; using the pinned download.' }
+          } catch {
+            Write-Host "Release lookup failed ($($_.Exception.Message)); using the pinned download."
+          }
+          Invoke-WebRequest $url -OutFile $msi
+          $install = Start-Process msiexec.exe -ArgumentList '/i', "`"$msi`"", '/qn', '/norestart' -Wait -PassThru
+          Write-Host "dotnet-core-uninstall.msi exit code: $($install.ExitCode)"
+          if ($install.ExitCode -notin 0, 3010) { exit 1 }
+
+          # The MSI's install folder is not ours to assume: look for its own
+          # directory under either Program Files root.
+          $exe = $null
+          foreach ($root in @($env:ProgramFiles, ${env:ProgramFiles(x86)})) {
+            $dir = Get-ChildItem -Path $root -Directory -Filter 'dotnet-core-uninstall*' -ErrorAction SilentlyContinue |
+              Select-Object -First 1
+            if (-not $dir) { continue }
+            $exe = Get-ChildItem -Path $dir.FullName -Filter 'dotnet-core-uninstall.exe' -Recurse -ErrorAction SilentlyContinue |
+              Select-Object -First 1 -ExpandProperty FullName
+            if ($exe) { break }
+          }
+          if (-not $exe) { Write-Host '::error::dotnet-core-uninstall.exe was installed but not found'; exit 1 }
+
           & $exe list
           & $exe remove --sdk --runtime --aspnet-runtime --windows-desktop --hosting-bundled --all --force
           exit $LASTEXITCODE
@@ -393,42 +425,27 @@ jobs:
 
       # The dialog is the app's own recovery path, and it can only be exercised
       # on a machine that is missing the runtime while the app can still start:
-      # Microsoft.NETCore.App has to stay, because the payload is a
-      # framework-dependent publish. Only the desktop framework goes, and the
-      # check reads the runtime's own folder and `dotnet --list-runtimes`, so
-      # this removal is exactly what it sees.
-      - name: Remove only the desktop runtime (keep the framework the app needs)
-        shell: pwsh
-        run: |
-          $dcu = Get-ChildItem (Join-Path $env:RUNNER_TEMP 'dcu') -Recurse -Filter dotnet-core-uninstall.exe -ErrorAction SilentlyContinue |
-            Select-Object -First 1 -ExpandProperty FullName
-          if (-not $dcu) { Write-Host "::error::dotnet-core-uninstall.exe is unavailable (the strip step did not download it)"; exit 1 }
-
-          & $dcu remove --windows-desktop --all --force
-          Write-Host "dotnet-core-uninstall exit code: $LASTEXITCODE"
-          $run = dotnet --list-runtimes 2>$null
-          @($run) | ForEach-Object { Write-Host $_ }
-
-          if (@($run) -match 'Microsoft\.WindowsDesktop\.App 10\.') {
-            Write-Host "::error::the desktop runtime survived removal, so the dialog path cannot be exercised"
-            exit 1
-          }
-          if (-not (@($run) -match 'Microsoft\.NETCore\.App 10\.')) {
-            Write-Host "::error::Microsoft.NETCore.App 10.x went with it - a framework-dependent app cannot start without it, so no dialog can appear"
-            exit 1
-          }
-          Write-Host "Desktop runtime removed; the app itself can still start."
-
-      # Reading the dialog, not the log: a misspelled binding fails silently, so
-      # the assertion is the URL inside the dialog's own text box. Windows
-      # PowerShell 5.1 runs this step because UI Automation ships with the .NET
-      # Framework - it still works with the desktop runtime uninstalled.
+      # the payload is a framework-dependent publish, so Microsoft.NETCore.App has
+      # to stay and only the desktop framework goes.
       #
-      # The silent install must not be allowed to quietly repair the machine: on
-      # a runner it would succeed and no dialog would ever appear. Two blocks,
-      # because this step has to fail loudly if the failure branch was not
-      # reached at all.
-      - name: Assert the dialog offers the download link
+      # That framework is taken away by moving its folder out of
+      # dotnet\shared, which is exactly what the check reads (and what a real
+      # removal leaves behind). Uninstalling it instead would mean downloading
+      # dotnet-core-uninstall, whose latest release no longer ships the .zip the
+      # strip step above looks for, and on a runner with Visual Studio installed
+      # it can refuse to remove a desktop runtime at all. Whatever happens below,
+      # the folder goes back.
+      #
+      # The silent install must not then quietly repair the machine: with network
+      # access it would succeed and no dialog would ever appear. Two independent
+      # blocks, because this step has to fail loudly when the failure branch was
+      # never reached.
+      #
+      # And the assertion is the dialog itself, not the log line: a misspelled
+      # binding fails silently. Windows PowerShell 5.1 runs this step because UI
+      # Automation ships with the .NET Framework, so reading the dialog still
+      # works with the desktop runtime out of the way.
+      - name: Assert the dialog offers the download link when the runtime is missing
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
@@ -436,37 +453,55 @@ jobs:
 
           $url = 'https://dotnet.microsoft.com/download/dotnet/10.0'
           $app = 'C:\Program Files\Synapic\Synapic.exe'
+          $framework = Join-Path $env:ProgramFiles 'dotnet\shared\Microsoft.WindowsDesktop.App'
+          $stash = "$framework.smoke-stash"
           $logPaths = @('C:\Program Files\Synapic\logs\synapic.log',
                         (Join-Path $env:LOCALAPPDATA 'Synapic\logs\synapic.log'))
           $hosts = Join-Path $env:SystemRoot 'System32\drivers\etc\hosts'
           $hostsBackup = Join-Path $env:RUNNER_TEMP 'hosts.synapic-backup'
 
-          # 1. A dead proxy blocks the app's own download even when the DNS
-          #    entry below cannot be written (no admin token). api.github.com is
-          #    exempt so the update check does not fail for an unrelated reason.
+          # A dead proxy blocks the app's own download even when the hosts entry
+          # below cannot be written. api.github.com is exempt so the update check
+          # does not fail for an unrelated reason.
           $env:HTTPS_PROXY = 'http://127.0.0.1:9'
           $env:HTTP_PROXY = 'http://127.0.0.1:9'
           $env:NO_PROXY = 'api.github.com'
 
-          # 2. The metadata host resolves to loopback, which fails instantly.
-          $hostsBlocked = $false
-          try {
-            Copy-Item $hosts $hostsBackup -Force
-            Add-Content -Path $hosts -Value "`n127.0.0.1 builds.dotnet.microsoft.com # synapic dialog smoke"
-            $ip = Resolve-DnsName builds.dotnet.microsoft.com -Type A -ErrorAction SilentlyContinue |
-              Where-Object { $_.Type -eq 'A' } | Select-Object -First 1 -ExpandProperty IPAddress
-            $hostsBlocked = ($ip -eq '127.0.0.1')
-            Write-Host "hosts block: $hostsBlocked (builds.dotnet.microsoft.com resolves to $ip)"
-          } catch {
-            Write-Host "hosts file not writable: $($_.Exception.Message)"
-          }
-          if (-not $hostsBlocked) { Write-Host "::warning::DNS block unavailable; relying on HTTPS_PROXY" }
-
-          $p = Start-Process $app -PassThru `
-            -RedirectStandardOutput app-dialog-stdout.txt -RedirectStandardError app-dialog-stderr.txt
           $dialog = $null
           $titles = @()
+          $p = $null
           try {
+            if (-not (Test-Path -LiteralPath $framework)) {
+              throw "no desktop framework at $framework - nothing to take away, so the dialog path cannot be exercised"
+            }
+            if (Test-Path -LiteralPath $stash) { Remove-Item -LiteralPath $stash -Recurse -Force }
+            Move-Item -LiteralPath $framework -Destination $stash
+            Write-Host "Desktop framework moved to $stash"
+
+            $run = dotnet --list-runtimes 2>$null
+            @($run) | ForEach-Object { Write-Host $_ }
+            if (@($run) -match 'Microsoft\.WindowsDesktop\.App 10\.') {
+              throw 'the check would still see a desktop runtime, so this run would prove nothing'
+            }
+            if (-not (@($run) -match 'Microsoft\.NETCore\.App 10\.')) {
+              throw 'Microsoft.NETCore.App 10.x is missing too - a framework-dependent app cannot start without it, so no dialog can appear'
+            }
+
+            $hostsBlocked = $false
+            try {
+              Copy-Item $hosts $hostsBackup -Force
+              Add-Content -Path $hosts -Value "`n127.0.0.1 builds.dotnet.microsoft.com # synapic dialog smoke"
+              $ip = Resolve-DnsName builds.dotnet.microsoft.com -Type A -ErrorAction SilentlyContinue |
+                Where-Object { $_.Type -eq 'A' } | Select-Object -First 1 -ExpandProperty IPAddress
+              $hostsBlocked = ($ip -eq '127.0.0.1')
+              Write-Host "hosts block: $hostsBlocked (builds.dotnet.microsoft.com resolves to $ip)"
+            } catch {
+              Write-Host "hosts file not writable: $($_.Exception.Message)"
+            }
+            if (-not $hostsBlocked) { Write-Host "::warning::DNS block unavailable; relying on HTTPS_PROXY" }
+
+            $p = Start-Process $app -PassThru `
+              -RedirectStandardOutput app-dialog-stdout.txt -RedirectStandardError app-dialog-stderr.txt
             $deadline = (Get-Date).AddSeconds(180)
             while ((Get-Date) -lt $deadline -and -not $p.HasExited -and -not $dialog) {
               $pidCondition = New-Object System.Windows.Automation.PropertyCondition(
@@ -490,11 +525,15 @@ jobs:
               if (-not $dialog) { Start-Sleep -Seconds 2 }
             }
           } finally {
-            Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
-            if (Test-Path $hostsBackup) {
+            if ($p -and -not $p.HasExited) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
+            if (Test-Path -LiteralPath $hostsBackup) {
               Copy-Item $hostsBackup $hosts -Force
               Remove-Item $hostsBackup -Force
               Write-Host 'hosts file restored'
+            }
+            if (Test-Path -LiteralPath $stash) {
+              Move-Item -LiteralPath $stash -Destination $framework
+              Write-Host 'desktop framework restored'
             }
           }
 
@@ -504,7 +543,8 @@ jobs:
           }
 
           # The log says which branch the check took: an install that succeeded
-          # means the block leaked, a missing line means the check never ran.
+          # means the block leaked, a line about the missing runtime means the
+          # window is what failed rather than the state.
           foreach ($cand in $logPaths) {
             if (-not (Test-Path $cand)) { continue }
             Write-Host "=== [runtime] lines from $cand ==="
