@@ -468,6 +468,7 @@ jobs:
           $env:NO_PROXY = 'api.github.com'
 
           $dialog = $null
+          $dialogTitle = ''
           $titles = @()
           $p = $null
           try {
@@ -519,7 +520,9 @@ jobs:
                 foreach ($edit in $window.FindAll([System.Windows.Automation.TreeScope]::Descendants, $editCondition)) {
                   $value = $edit.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value
                   Write-Host "dialog field: $value"
-                  if ($value -eq $url) { $dialog = $window; break }
+                  # The title is captured here, while the app is alive: reading it
+                  # back after the process is gone returns an empty name.
+                  if ($value -eq $url) { $dialog = $window; $dialogTitle = $title; break }
                 }
               }
               if (-not $dialog) { Start-Sleep -Seconds 2 }
@@ -538,7 +541,7 @@ jobs:
           }
 
           if ($dialog) {
-            Write-Host "Dialog '$($dialog.Current.Name)' offers the download link: $url"
+            Write-Host "Dialog '$dialogTitle' offers the download link: $url"
             exit 0
           }
 

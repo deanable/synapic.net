@@ -361,20 +361,33 @@ after a 2.7 GB download.
   force it) because ~3 GB of wheels plus a ~2.7 GB artifact is real cost per run.
 - **The installer smoke test** (`installer-smoke`, windows-2022, main pushes
   only) proves more than "the installer produces a working install". It strips
-  every runtime with `dotnet-core-uninstall`, runs
+  the machine's runtimes with `dotnet-core-uninstall`, runs
   `Synapic-Setup-win-x64.exe` silently - which has to put the desktop runtime
   back, because the setup bundles it - launches the installed app and greps its
-  log for `[runtime]`. Then it removes **only** the desktop framework, because
-  the payload is framework-dependent: `Microsoft.NETCore.App` has to stay or the
-  app cannot start at all and no dialog could ever appear. It blocks the app's
-  own repair (a hosts entry for `builds.dotnet.microsoft.com` plus a dead
-  `HTTPS_PROXY`), launches the app again and reads the URL out of the dialog's
-  text box with UI Automation, comparing it against
-  `https://dotnet.microsoft.com/download/dotnet/10.0`. That last assertion is
-  the point of the exercise: a log line would also be present if the dialog were
-  mis-bound or never shown at all. The dialog assertions have not run green yet -
-  the first successful run is what proves the recovery path on a machine that
-  really is missing the runtime.
+  log for `[runtime]`.
+
+  Then it exercises the app's own recovery path, which needs a machine that is
+  missing the runtime while the app can still start. The payload is
+  framework-dependent, so **only** the desktop framework goes: the step moves
+  `dotnet\shared\Microsoft.WindowsDesktop.App` aside - the folder the check
+  reads, and what a real removal leaves behind - and asserts both halves of that
+  state (no desktop 10.x, `Microsoft.NETCore.App 10.x` still there) before
+  launching the app. It blocks the app's own repair (a hosts entry for
+  `builds.dotnet.microsoft.com` plus a dead `HTTPS_PROXY`) and reads the URL out
+  of the dialog's own text box with UI Automation, comparing it against
+  `https://dotnet.microsoft.com/download/dotnet/10.0`. Reading the dialog rather
+  than the log is the point: a log line would also be there if the dialog were
+  mis-bound or never shown. Folder and hosts file are restored in a `finally`, so
+  the step leaves the runner as it found it.
+
+  Two things it does not prove, both reported in the run itself. The strip does
+  not actually remove the desktop runtime on this image - the copies it sees
+  belong to SDKs, so the next step prints *"Desktop runtime still present —
+  prerequisite path will NOT be exercised"* and the Inno prerequisite half stays
+  unproven (the `.msi` this step downloads is cli-lab's current asset; it used to
+  ask for a `.zip` that no longer exists, which is why the strip did nothing at
+  all). And a runner's session is assumed to let UI Automation see the app's
+  windows.
 - **Size ceilings when publishing:** `actions/upload-artifact` accepts a 10 GB
   artifact, but a GitHub Release asset must be **under 2 GiB** (the *total* size
   of a release is not capped). The CPU sidecar (~216 MB) uploads as one file;
