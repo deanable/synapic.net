@@ -14,8 +14,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Synapic.Integration.Tests",
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Synapic.Installer", "build\Synapic.Installer\Synapic.Installer.csproj", "{A1B2C3D4-0006-4000-9000-000000000006}"
 EndProject
-Project("{54435603-DBB4-11D2-8724-00A0C9A8B90C}") = "Synapic.Setup", "Synapic.Setup\Synapic.Setup.vdproj", "{0B91B833-F7F4-2477-53ED-530E35ED92AD}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -46,8 +44,6 @@ Global
 		{A1B2C3D4-0006-4000-9000-000000000006}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A1B2C3D4-0006-4000-9000-000000000006}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A1B2C3D4-0006-4000-9000-000000000006}.Release|Any CPU.Build.0 = Release|Any CPU
-		{0B91B833-F7F4-2477-53ED-530E35ED92AD}.Debug|Any CPU.ActiveCfg = Debug
-		{0B91B833-F7F4-2477-53ED-530E35ED92AD}.Release|Any CPU.ActiveCfg = Release
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
