@@ -1,0 +1,242 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>Setup guide</title>
+<link rel="stylesheet" type="text/css" href="help.css">
+</head>
+<body>
+
+<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; Getting started &rsaquo; Setup guide</p>
+
+<h1>Setup guide</h1>
+
+<p class="lead">Everything, in order: install, get an inference server, point
+Synapic at your images, tune the engine, run a batch and check the result.
+Each stage ends with a checkpoint, so you know it worked before moving on.
+The first pass takes about an hour; almost none of it is repeated later.</p>
+
+<p>Press <kbd>F1</kbd> anywhere in the app to open the help at what you are
+looking at. This guide is the map; the F1 topics are the detail.</p>
+
+<h2>Before you start</h2>
+
+<p>Synapic runs on Windows, macOS and Linux. It needs the .NET 10 desktop
+runtime (the Windows installer takes care of it) and about 4 GB of disk for
+the app, the model and the built server. An NVIDIA GPU makes tagging much
+faster but is not required: the CPU build runs anywhere. Full numbers in
+<a href="requirements.html">What you need</a>.</p>
+
+<div class="tip">
+<p class="first">Have a small test folder ready.</p>
+<p>Twelve or so images you can look at in your own viewer. Every stage below
+can be rehearsed on that folder before a Daminion catalog or a holiday's worth
+of photos is at stake.</p>
+</div>
+
+<h2>Stage 1 &mdash; Install Synapic</h2>
+
+<ol class="steps">
+<li>Run <span class="path">Synapic-Setup-win-x64.exe</span> and accept the
+administrator prompt (the app installs under
+<span class="path">C:\Program Files\Synapic</span>).</li>
+<li>Let the installer handle the .NET runtime if Windows complains about it
+&mdash; it installs silently and may ask for a restart.</li>
+<li>Finish the wizard; launching Synapic from it is fine.</li>
+</ol>
+
+<p>Unattended installs, other platforms and upgrades:
+<a href="admin-install.html">Installing and upgrading</a>.</p>
+
+<h2>Stage 2 &mdash; Get an inference server</h2>
+
+<p>The model runs in a separate program (the <span class="term">sidecar</span>).
+Nothing can be tagged until one exists, so the wizard is greyed out and a panel
+says <span class="ui">Inference sidecar required</span> until you fix that:</p>
+
+<ol class="steps">
+<li>In the panel, press <span class="ui">Download</span> on the CPU row to
+fetch the prebuilt executable &mdash; works on any machine, no toolchain
+needed. CUDA users: the CUDA row, if this machine has an NVIDIA GPU.</li>
+<li>No prebuilt fits? <span class="ui">Build sidecar</span> compiles from
+source; that first build downloads a private Python and the packages the model
+needs, so expect minutes.</li>
+<li>Wait for the status dot to turn green:
+<span class="ui">Server running (port &hellip;)</span>. The very first launch
+is slow &mdash; up to a couple of minutes &mdash; because the executable is
+unpacked and the model is loaded.</li>
+</ol>
+
+<div class="tip">
+<p class="first">Checkpoint: the wizard is no longer greyed out.</p>
+<p>Step 1's controls respond and the log shows the server's port. If the dot
+stays red, read <a href="first-run-sidecar.html">Build the inference
+server</a> and <a href="troubleshooting.html#sidecar">Troubleshooting: the
+inference server</a> before going further.</p>
+</div>
+
+<h2>Stage 3 &mdash; Choose your images</h2>
+
+<ol class="steps">
+<li>In <a href="step1-datasource.html">Step 1 &mdash; Datasource</a>, select
+<span class="ui">Local Folder</span>.</li>
+<li>Browse to your test folder. Leave <span class="ui">Include
+subfolders</span> off for the rehearsal.</li>
+<li>Daminion users: select <span class="ui">Daminion Server</span> instead and
+carry on with Stage 4.</li>
+</ol>
+
+<p>Synapic tags JPEG, PNG and TIFF files; RAW files are skipped. Details and
+edge cases: <a href="step1-datasource.html">Choosing a datasource</a>.</p>
+
+<h2>Stage 4 &mdash; Connect and scope Daminion</h2>
+
+<ol class="steps">
+<li>Enter the server URL, your username and password, then
+<span class="ui">Connect</span>. The password is stored encrypted for your
+Windows user only; it is never written to plain text. See
+<a href="step1-daminion.html">Connecting to Daminion</a>.</li>
+<li>Check the <span class="ui">Active catalog</span> line: the catalog follows
+the server URL, so a wrong URL lands in a different catalog.</li>
+<li>Pick a <span class="ui">Scope</span> &mdash; entire catalog, keyword
+search, shared collection or saved search &mdash; then the filters (status,
+"only items with untagged&hellip;"). Details:
+<a href="step1-scope-filters.html">Scope and filters</a>.</li>
+<li>Set the <span class="ui">Max items</span> ceiling for the first run
+(100 is the default) and press <span class="ui">Count matching items</span>
+to see what the scope selects before anything runs.</li>
+</ol>
+
+<p>Batch size and image scaling:
+<a href="step1-limits.html">How many items to process</a>.</p>
+
+<h2>Stage 5 &mdash; Configure the engine</h2>
+
+<ol class="steps">
+<li><span class="term">Model.</span> The default
+<code>LiquidAI/LFM2.5-VL-450M</code> is the right first choice. Use
+<span class="ui">Download model&hellip;</span> if the list shows it as not
+downloaded yet.</li>
+<li><span class="term">Device.</span> <span class="ui">CPU</span> everywhere;
+<span class="ui">CUDA</span> on an NVIDIA GPU; <span class="ui">MPS</span> on
+Apple silicon. See <a href="step2-engine.html">Step 2 &mdash; Tagging
+Engine</a>.</li>
+<li><span class="term">Tag fields.</span> Tick which of the three results get
+written. All three on is the default &mdash; and the single most common cause
+of "only keywords came out" is one of these boxes unticked. See
+<a href="step2-tag-fields.html">Tag fields: what gets written</a>.</li>
+<li><span class="term">Prompts (optional).</span> Leave both boxes blank for
+the first run: the built-in instruction already asks for category, keywords
+and description. Wording later: <a href="step2-prompts.html">Prompts</a>.</li>
+<li><span class="term">Scoring controls.</span> Leave the defaults
+(0.3 / Both / 0.5). They do not change what the local model produces. See
+<a href="settings-reference.html#scoring">Scoring settings</a>.</li>
+</ol>
+
+<div class="warning">
+<p class="first">Leaving Step 2 saves it.</p>
+<p>The form is written to the registry when you move on, and restored next
+launch &mdash; a setting changed once keeps applying. What is remembered and
+how to reset it: <a href="step2-settings.html">What Step 2 remembers</a>.</p>
+</div>
+
+<h2>Stage 6 &mdash; Run the batch</h2>
+
+<ol class="steps">
+<li>Go to <a href="step3-process.html">Step 3 &mdash; Process</a> and press
+<span class="ui">Start Processing</span>.</li>
+<li>Watch the log: one line per image reports the category, keyword count and
+the start of the description. Progress, ETA, pause and abort are explained in
+<a href="step3-process.html">Step 3</a>.</li>
+<li>The first image also triggers the model download (about 860 MB) if this
+machine has never used it. Timings that look alarming on the first batch are
+usually that, not a fault.</li>
+</ol>
+
+<div class="tip">
+<p class="first">Checkpoint: rows appear in Step 4 with status
+<span class="term">Ok</span>.</p>
+<p>If rows say failed, or the log shows errors, stop and read
+<a href="troubleshooting.html">Troubleshooting</a> &mdash; running a large
+batch against a broken setup only multiplies the cleanup.</p>
+</div>
+
+<h2>Stage 7 &mdash; Review and verify</h2>
+
+<ol class="steps">
+<li>Read <a href="step4-results.html">Step 4 &mdash; Results</a>: the summary
+line and the per-file rows.</li>
+<li>Open one of the files in your own image viewer or in Daminion and confirm
+the keywords, category and description are actually there. What lands where:
+<a href="metadata-written.html">What gets written to your images</a>.</li>
+<li>Daminion users: <span class="ui">Verify Daminion Writes</span> re-reads
+the catalog and confirms the writes without the manual spot check.</li>
+<li><span class="ui">Export CSV</span> keeps a record of the run if you need
+to argue with it later.</li>
+</ol>
+
+<h2>Stage 8 &mdash; Optional: deduplication</h2>
+
+<p>The <a href="dedup.html">Deduplication</a> tab finds near-identical images
+in a folder by perceptual hash and lets you tag, move or delete the extras.
+It is a separate tool with its own folder and threshold; it never touches the
+wizard's batch.</p>
+
+<h2>Stage 9 &mdash; Make the app yours</h2>
+
+<p>Two layers of settings, both optional:</p>
+
+<ul>
+<li><span class="term">In the app.</span> What you set in Steps 1 and 2 comes
+back next launch &mdash; connection, scope, filters, limits and all of Step 2
+&mdash; from the Windows registry (defaults each run on macOS and Linux). The
+local-folder box is the exception: reselect it each launch. Every field,
+default and storage location is listed in
+<a href="settings-reference.html">Settings reference</a>.</li>
+<li><span class="term">In the config file.</span>
+<span class="path">%APPDATA%\Synapic\config.json</span> holds the app-level
+preferences: <code>ui.autoLaunchSidecar</code> (start the server with the
+app), <code>ui.logLevel</code> (what the in-app log shows),
+<code>ui.telemetryEnabled</code> (local counters, off by default). Explained
+in <a href="settings-reference.html#application">Application settings</a>.</li>
+</ul>
+
+<p>Backups, registry paths and the rest:
+<a href="admin-settings-files.html">Files, folders and registry keys</a>.</p>
+
+<h2>The whole setup as a checklist</h2>
+
+<table>
+<tr><th class="setting">Done when&hellip;</th><th>Stage</th><th>Detail</th></tr>
+<tr><td>The installer finished and the app opens</td><td>1. Install</td><td><a href="getting-started.html">Install and first run</a></td></tr>
+<tr><td>The status dot is green and the wizard is enabled</td><td>2. Server</td><td><a href="first-run-sidecar.html">Build the inference server</a></td></tr>
+<tr><td>A folder or a Daminion connection is selected</td><td>3&ndash;4. Images</td><td><a href="step1-datasource.html">Step 1</a></td></tr>
+<tr><td>Count matching items reports a sensible number</td><td>4. Scope</td><td><a href="step1-scope-filters.html">Scope and filters</a></td></tr>
+<tr><td>Model, device and tag fields are as you want them</td><td>5. Engine</td><td><a href="step2-engine.html">Step 2</a></td></tr>
+<tr><td>The first batch finished with Ok rows</td><td>6. Run</td><td><a href="step3-process.html">Step 3</a></td></tr>
+<tr><td>You opened a file and saw the tags in it</td><td>7. Verify</td><td><a href="metadata-written.html">What gets written</a></td></tr>
+</table>
+
+<h2>Where to go next</h2>
+
+<table>
+<tr><th class="setting">If you want to&hellip;</th><th>Read</th></tr>
+<tr><td>Get more speed out of the machine you have</td><td><a href="tips.html">Tips and useful info</a></td></tr>
+<tr><td>Know exactly what a setting does before changing it</td><td><a href="settings-reference.html">Settings reference</a></td></tr>
+<tr><td>Fix something that went wrong</td><td><a href="troubleshooting.html">Troubleshooting</a></td></tr>
+<tr><td>Understand a term or an acronym</td><td><a href="glossary.html">Glossary</a></td></tr>
+<tr><td>Roll Synapic out to other machines</td><td><a href="admin-install.html">Administrator guide</a></td></tr>
+</table>
+
+<div class="seealso">
+<h2>See also</h2>
+<ul>
+<li><a href="getting-started.html">Install and first run</a> &mdash; the short version</li>
+<li><a href="workflow-overview.html">The five-step workflow</a></li>
+<li><a href="window-overview.html">The main window</a></li>
+<li><a href="faq.html">Frequently asked questions</a></li>
+</ul>
+</div>
+
+</body>
+</html>

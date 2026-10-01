@@ -25,6 +25,10 @@
 			<param name="Local" value="getting-started.html">
 			</OBJECT>
 		<LI> <OBJECT type="text/sitemap">
+			<param name="Name" value="Setup guide">
+			<param name="Local" value="setup-guide.html">
+			</OBJECT>
+		<LI> <OBJECT type="text/sitemap">
 			<param name="Name" value="Build the inference server">
 			<param name="Local" value="first-run-sidecar.html">
 			</OBJECT>
@@ -119,6 +123,19 @@
 		<param name="Name" value="Deduplication">
 		<param name="Local" value="dedup.html">
 		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="Settings and tips">
+		</OBJECT>
+	<UL>
+		<LI> <OBJECT type="text/sitemap">
+			<param name="Name" value="Settings reference">
+			<param name="Local" value="settings-reference.html">
+			</OBJECT>
+		<LI> <OBJECT type="text/sitemap">
+			<param name="Name" value="Tips and useful info">
+			<param name="Local" value="tips.html">
+			</OBJECT>
+	</UL>
 	<LI> <OBJECT type="text/sitemap">
 		<param name="Name" value="Troubleshooting">
 		</OBJECT>

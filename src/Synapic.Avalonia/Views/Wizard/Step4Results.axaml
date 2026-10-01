@@ -2,13 +2,15 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Synapic.Avalonia.ViewModels.Steps"
              xmlns:dg="clr-namespace:Avalonia.Controls;assembly=Avalonia.Controls.DataGrid"
+             xmlns:help="using:Synapic.Avalonia.Services"
              x:Class="Synapic.Avalonia.Views.Wizard.Step4Results"
              x:DataType="vm:Step4ResultsViewModel">
 
   <StackPanel Spacing="12">
     <TextBlock Text="Step 4 — Results" FontSize="22" FontWeight="Bold" />
 
-    <StackPanel Orientation="Horizontal" Spacing="12">
+    <StackPanel Orientation="Horizontal" Spacing="12"
+                help:HelpScope.Topic="step4-results.html">
       <Button Content="Export CSV" Command="{Binding ExportCsvCommand}" />
       <Button Content="Retry Failed" Command="{Binding RetryFailedCommand}" />
       <Button Content="Verify Daminion Writes" Command="{Binding VerifyDaminionCommand}" />
@@ -17,6 +19,7 @@
     </StackPanel>
 
     <dg:DataGrid ItemsSource="{Binding Results}" SelectedItem="{Binding SelectedResult}" x:Name="ResultsGrid"
+                 help:HelpScope.Topic="step4-results.html"
                  AutoGenerateColumns="False" CanUserSortColumns="True" Height="420"
                  GridLinesVisibility="Horizontal" IsReadOnly="True">
       <dg:DataGrid.Columns>

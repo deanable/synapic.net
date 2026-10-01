@@ -8,13 +8,24 @@ namespace Synapic.Avalonia.Services;
 /// a blank page, and HelpServiceTests checks every name below against the help
 /// sources: it has to exist in <c>docs/help</c> *and* be listed in
 /// <c>Synapic.hhp</c> [FILES], which is what decides whether it is inside the
-/// compiled <c>.chm</c> at all.
+/// compiled <c>.chm</c> at all. The views annotate controls with topics as
+/// well (<c>HelpScope.Topic</c> in the .axaml files), and HelpScopeTests
+/// checks those names - anchors included - the same way.
 /// </summary>
 public static class HelpTopics
 {
     public const string Home = "index.html";
     public const string FirstRunSidecar = "first-run-sidecar.html";
     public const string Troubleshooting = "troubleshooting.html";
+
+    /// <summary>The guided setup walkthrough: from install to a finished first batch.</summary>
+    public const string SetupGuide = "setup-guide.html";
+
+    /// <summary>Every setting: what it does, its default, and where it lives.</summary>
+    public const string SettingsReference = "settings-reference.html";
+
+    /// <summary>Tips and useful info for getting the most out of Synapic.</summary>
+    public const string Tips = "tips.html";
 
     /// <summary>
     /// The topic for a <c>WizardViewModel</c> step index: 0 = Step 1, 1 =
@@ -138,19 +149,28 @@ public sealed class HelpService : IHelpService
     public IReadOnlyList<HelpTarget> ResolveTargets(string? topic)
     {
         var page = NormalizeTopic(topic);
+        var hash = page.IndexOf('#');
+        var file = hash >= 0 ? page[..hash] : page;
+        var fragment = hash >= 0 ? page[(hash + 1)..] : string.Empty;
         var targets = new List<HelpTarget>();
 
         // Windows: the compiled help is the real thing - Contents, Index and
-        // full-text search - and ms-its: opens it straight at one topic.
+        // full-text search - and ms-its: opens it straight at one topic, at the
+        // requested #anchor when the topic carries one.
         if (_isWindows && CompiledChm is { } chm)
             targets.Add(new HelpTarget("hh.exe", $"\"ms-its:{chm}::/{page}\""));
 
-        // Everywhere: the same un-compiled topics, in the default browser.
+        // Everywhere: the same un-compiled topics, in the default browser. A
+        // fragment cannot ride along in a path - the shell would treat it as
+        // part of the file name - so an anchored topic opens as a file: URL.
         foreach (var directory in TopicDirectories)
         {
-            var file = Path.Combine(directory, page);
-            if (File.Exists(file))
-                targets.Add(new HelpTarget(file, ""));
+            var path = Path.Combine(directory, file);
+            if (!File.Exists(path)) continue;
+
+            targets.Add(new HelpTarget(
+                fragment.Length == 0 ? path : new Uri(path).AbsoluteUri + "#" + fragment,
+                ""));
         }
 
         return targets;
@@ -189,18 +209,26 @@ public sealed class HelpService : IHelpService
     }
 
     /// <summary>
-    /// A topic name the help folder can hold: a plain .html file name. Anything
-    /// else - null, a path, a value with a separator - is the home page, so a
-    /// bad name can never reach outside the help folder.
+    /// A topic name the help folder can hold: a plain .html file name, with an
+    /// optional #anchor into that page. Anything else - null, a path, a value
+    /// with a separator, a malformed fragment - is the home page, so a bad
+    /// name can never reach outside the help folder.
     /// </summary>
     internal static string NormalizeTopic(string? topic)
     {
         if (string.IsNullOrWhiteSpace(topic)) return HelpTopics.Home;
 
         var name = topic.Trim();
-        if (name.IndexOfAny(['/', '\\']) >= 0) return HelpTopics.Home;
-        if (!name.EndsWith(".html", StringComparison.OrdinalIgnoreCase)) return HelpTopics.Home;
-        return name;
+        var hash = name.IndexOf('#');
+        var file = hash >= 0 ? name[..hash] : name;
+        var fragment = hash >= 0 ? name[(hash + 1)..] : string.Empty;
+
+        if (file.IndexOfAny(['/', '\\']) >= 0) return HelpTopics.Home;
+        if (hash >= 0 && (fragment.Length == 0 || fragment.IndexOfAny(['/', '\\', '#']) >= 0))
+            return HelpTopics.Home;
+        if (!file.EndsWith(".html", StringComparison.OrdinalIgnoreCase)) return HelpTopics.Home;
+
+        return hash >= 0 ? $"{file}#{fragment}" : file;
     }
 
     private static void DefaultLaunch(ProcessStartInfo startInfo)

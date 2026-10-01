@@ -1,18 +1,23 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Synapic.Avalonia.ViewModels.Steps"
+             xmlns:help="using:Synapic.Avalonia.Services"
              x:Class="Synapic.Avalonia.Views.Wizard.StepDedup"
              x:DataType="vm:StepDedupViewModel">
 
   <StackPanel Spacing="12">
     <TextBlock Text="Deduplication Wizard" FontSize="22" FontWeight="Bold" />
 
-    <StackPanel Orientation="Horizontal" Spacing="12">
-      <TextBox Watermark="Folder to scan" Text="{Binding FolderPath}" Width="420" />
+    <StackPanel Orientation="Horizontal" Spacing="12"
+                help:HelpScope.Topic="dedup.html">
+      <TextBox Watermark="Folder to scan" Text="{Binding FolderPath}" Width="420"
+               help:HelpScope.Topic="settings-reference.html#dedup-folder" />
       <Button Content="Browse…" Click="OnBrowseFolder" />
-      <ComboBox SelectedIndex="{Binding SelectedAlgorithm}" ItemsSource="{Binding Algorithms}" MinWidth="130" />
+      <ComboBox SelectedIndex="{Binding SelectedAlgorithm}" ItemsSource="{Binding Algorithms}" MinWidth="130"
+                help:HelpScope.Topic="settings-reference.html#dedup-algorithm" />
       <TextBlock Text="Threshold:" VerticalAlignment="Center" />
-      <NumericUpDown Value="{Binding Threshold}" Minimum="0.5" Maximum="1" Increment="0.01" Width="100" />
+      <NumericUpDown Value="{Binding Threshold}" Minimum="0.5" Maximum="1" Increment="0.01" Width="100"
+                     help:HelpScope.Topic="settings-reference.html#dedup-threshold" />
       <Button Content="Scan" Command="{Binding ScanCommand}" Classes="accent" />
     </StackPanel>
 
@@ -40,7 +45,8 @@
 
       <StackPanel Grid.Column="1" Spacing="10">
         <TextBlock Text="Action for selected group" FontWeight="SemiBold" />
-        <ComboBox SelectedIndex="{Binding SelectedAction}" ItemsSource="{Binding Actions}" />
+        <ComboBox SelectedIndex="{Binding SelectedAction}" ItemsSource="{Binding Actions}"
+                  help:HelpScope.Topic="settings-reference.html#dedup-action" />
         <Button Content="Apply" Command="{Binding ApplyCommand}" Classes="accent" />
       </StackPanel>
     </Grid>

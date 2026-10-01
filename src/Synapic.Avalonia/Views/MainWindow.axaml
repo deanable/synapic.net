@@ -3,6 +3,7 @@
         xmlns:vm="using:Synapic.Avalonia.ViewModels"
         xmlns:vms="using:Synapic.Avalonia.ViewModels.Steps"
         xmlns:steps="using:Synapic.Avalonia.Views.Wizard"
+        xmlns:help="using:Synapic.Avalonia.Services"
         x:Class="Synapic.Avalonia.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="Synapic — AI Image Tagging"
@@ -13,7 +14,8 @@
   <Grid RowDefinitions="Auto,Auto,Auto,*,Auto">
 
     <!-- Toolbar: server controls + status indicator -->
-    <Border Grid.Row="0" Classes="card" Padding="10,8" Margin="8">
+    <Border Grid.Row="0" Classes="card" Padding="10,8" Margin="8"
+            help:HelpScope.Topic="first-run-sidecar.html">
       <StackPanel Orientation="Horizontal" Spacing="10">
         <Button Content="Start Server"
                 Command="{Binding StartServerCommand}" />
@@ -43,6 +45,7 @@
          it), so this panel lists every buildable variant and the workspace
          below stays disabled until at least one exists. -->
     <Border Grid.Row="1" Classes="card" Padding="12,10" Margin="8,0,8,8"
+            help:HelpScope.Topic="first-run-sidecar.html"
             IsVisible="{Binding IsSidecarPanelVisible}">
       <StackPanel Orientation="Vertical" Spacing="4">
         <TextBlock Text="Inference sidecar required" FontWeight="SemiBold" FontSize="14"
@@ -95,7 +98,8 @@
 
     <!-- Wizard nav bar -->
     <Border Grid.Row="2" Classes="card" Padding="10,8" Margin="8,0,8,8"
-            IsEnabled="{Binding IsWorkspaceEnabled}">
+            IsEnabled="{Binding IsWorkspaceEnabled}"
+            help:HelpScope.Topic="workflow-overview.html">
       <StackPanel Orientation="Vertical" Spacing="6">
         <StackPanel Orientation="Horizontal" Spacing="6">
           <Button Content="1 · Datasource" Command="{Binding Wizard.BackCommand}"
@@ -148,7 +152,8 @@
     </ScrollViewer>
 
     <!-- Live log -->
-    <Border Grid.Row="4" Classes="card" Height="160" Margin="8">
+    <Border Grid.Row="4" Classes="card" Height="160" Margin="8"
+            help:HelpScope.Topic="step3-log.html">
       <Grid RowDefinitions="Auto,*" Margin="8">
         <TextBlock Grid.Row="0" Text="Log" FontWeight="SemiBold" />
         <ListBox Grid.Row="1" ItemsSource="{Binding LogEntries}" x:Name="LogList"
@@ -164,12 +169,6 @@
     </Border>
 
   </Grid>
-
-  <Window.KeyBindings>
-    <!-- F1 follows the user: the sidecar topic while that panel is what is
-         gating them, otherwise the wizard step on screen. -->
-    <KeyBinding Gesture="F1" Command="{Binding OpenContextHelpCommand}" />
-  </Window.KeyBindings>
 
   <Window.Styles>
     <Style Selector="Border.card">

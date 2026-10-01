@@ -169,6 +169,12 @@ public class HelpServiceTests : IDisposable
     [InlineData("sub\\page.html", HelpTopics.Home)]
     [InlineData("notes.txt", HelpTopics.Home)]
     [InlineData("  step2-engine.html  ", "step2-engine.html")]
+    [InlineData("settings-reference.html#model-id", "settings-reference.html#model-id")]
+    [InlineData("  tips.html#speed  ", "tips.html#speed")]
+    [InlineData("tips.html#", HelpTopics.Home)]
+    [InlineData("tips.html#a#b", HelpTopics.Home)]
+    [InlineData("tips.html#sec/tion", HelpTopics.Home)]
+    [InlineData("tips.html#sub\\page", HelpTopics.Home)]
     public void Only_plain_topic_names_survive(string? topic, string expected)
         => Assert.Equal(expected, HelpService.NormalizeTopic(topic));
 
@@ -187,6 +193,44 @@ public class HelpServiceTests : IDisposable
                 $"{topic} is named by the app but is not in docs/help - a renamed topic needs HelpTopics updated.");
             Assert.Contains(topic, compiled);
         }
+    }
+
+    [Fact]
+    public void An_anchored_topic_carries_the_anchor_into_the_compiled_help()
+    {
+        var app = NewDirectory("app");
+        File.WriteAllText(Path.Combine(app, "Synapic.chm"), "compiled help");
+        WriteTopic(Path.Combine(app, HelpService.TopicsFolderName), "settings-reference.html");
+
+        var launched = new List<ProcessStartInfo>();
+        var help = new HelpService(app, repoRoot: "", launch: launched.Add, isWindows: true);
+
+        Assert.True(help.Open("settings-reference.html#model-id"));
+
+        var start = Assert.Single(launched);
+        Assert.Equal("hh.exe", start.FileName);
+        Assert.Equal($"\"ms-its:{Path.Combine(app, "Synapic.chm")}::/settings-reference.html#model-id\"",
+            start.Arguments);
+    }
+
+    [Fact]
+    public void An_anchored_topic_opens_the_html_copy_as_a_url_with_the_fragment()
+    {
+        // A fragment cannot be part of a path the shell opens as one file
+        // name, so the HTML fallback switches to a file: URL - and the file
+        // part of that URL must still be the real topic on disk.
+        var app = NewDirectory("app");
+        WriteTopic(Path.Combine(app, HelpService.TopicsFolderName), "settings-reference.html");
+
+        var launched = new List<ProcessStartInfo>();
+        var help = new HelpService(app, repoRoot: "", launch: launched.Add, isWindows: false);
+
+        Assert.True(help.Open("settings-reference.html#model-id"));
+
+        var start = Assert.Single(launched);
+        Assert.StartsWith("file:///", start.FileName);
+        Assert.EndsWith("#model-id", start.FileName);
+        Assert.True(File.Exists(new Uri(start.FileName).LocalPath));
     }
 
     // ── What the window opens ──────────────────────────────────────────────
@@ -289,6 +333,9 @@ public class HelpServiceTests : IDisposable
         yield return HelpTopics.Home;
         yield return HelpTopics.FirstRunSidecar;
         yield return HelpTopics.Troubleshooting;
+        yield return HelpTopics.SetupGuide;
+        yield return HelpTopics.SettingsReference;
+        yield return HelpTopics.Tips;
         for (var step = 0; step <= 4; step++) yield return HelpTopics.ForStepIndex(step);
     }
 

@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Synapic.Avalonia.ViewModels.Steps"
+             xmlns:help="using:Synapic.Avalonia.Services"
              x:Class="Synapic.Avalonia.Views.Wizard.Step1Datasource"
              x:DataType="vm:Step1DatasourceViewModel">
 
@@ -13,22 +14,25 @@
     </StackPanel>
 
     <!-- Local panel -->
-    <Border IsVisible="{Binding IsLocal}" Classes="card" Padding="14">
+    <Border IsVisible="{Binding IsLocal}" Classes="card" Padding="14"
+            help:HelpScope.Topic="step1-datasource.html">
       <StackPanel Spacing="8">
         <TextBlock Text="Folder containing images" FontWeight="SemiBold" />
-        <Grid ColumnDefinitions="*,Auto">
+        <Grid ColumnDefinitions="*,Auto" help:HelpScope.Topic="settings-reference.html#local-path">
           <TextBox Grid.Column="0" Watermark="C:\Pictures or /home/user/pictures"
                    Text="{Binding LocalPath}" />
           <Button Grid.Column="1" Content="Browse…" Click="OnBrowseFolder" />
         </Grid>
-        <CheckBox Content="Include subfolders (recursive scan)" IsChecked="{Binding LocalRecursive}" />
+        <CheckBox Content="Include subfolders (recursive scan)" IsChecked="{Binding LocalRecursive}"
+                  help:HelpScope.Topic="settings-reference.html#local-recursive" />
       </StackPanel>
     </Border>
 
     <!-- Daminion panel -->
-    <Border IsVisible="{Binding IsDaminion}" Classes="card" Padding="14">
+    <Border IsVisible="{Binding IsDaminion}" Classes="card" Padding="14"
+            help:HelpScope.Topic="step1-daminion.html">
       <StackPanel Spacing="8">
-        <Grid ColumnDefinitions="2*,1*,1*,Auto">
+        <Grid ColumnDefinitions="2*,1*,1*,Auto" help:HelpScope.Topic="settings-reference.html#server-url">
           <TextBox Grid.Column="0" Watermark="Server URL, e.g. http://dam.local/daminion"
                    Text="{Binding DaminionUrl}" />
           <TextBox Grid.Column="1" Watermark="Username" Text="{Binding DaminionUser}" />
@@ -59,9 +63,11 @@
 
         <Grid ColumnDefinitions="*,16,*">
           <!-- Scope column -->
-          <StackPanel Grid.Column="0" Spacing="8">
+          <StackPanel Grid.Column="0" Spacing="8"
+                      help:HelpScope.Topic="step1-scope-filters.html">
             <TextBlock Text="Scope" FontWeight="SemiBold" />
-            <ComboBox SelectedIndex="{Binding ScopeIndex}" ItemsSource="{Binding ScopeOptions}" MinWidth="190" />
+            <ComboBox SelectedIndex="{Binding ScopeIndex}" ItemsSource="{Binding ScopeOptions}"
+                      MinWidth="190" help:HelpScope.Topic="settings-reference.html#daminion-scope" />
             <TextBox Watermark="Search term"
                      IsVisible="{Binding IsSearchScope}"
                      Text="{Binding SearchTerm}" />
@@ -84,15 +90,17 @@
           </StackPanel>
 
           <!-- Filters column -->
-          <StackPanel Grid.Column="2" Spacing="8">
+          <StackPanel Grid.Column="2" Spacing="8"
+                      help:HelpScope.Topic="step1-scope-filters.html">
             <TextBlock Text="Filters" FontWeight="SemiBold" />
             <StackPanel Orientation="Horizontal" Spacing="8">
               <TextBlock Text="Status:" VerticalAlignment="Center" />
               <ComboBox SelectedIndex="{Binding StatusFilterIndex}"
-                        ItemsSource="{Binding StatusFilterOptions}" MinWidth="120" />
+                        ItemsSource="{Binding StatusFilterOptions}" MinWidth="120"
+                        help:HelpScope.Topic="settings-reference.html#status-filter" />
             </StackPanel>
             <TextBlock Text="Only items with untagged:" Opacity="0.8" />
-            <WrapPanel Orientation="Horizontal">
+            <WrapPanel Orientation="Horizontal" help:HelpScope.Topic="settings-reference.html#untagged-filters">
               <CheckBox Content="Keywords" IsChecked="{Binding UntaggedKeywords}" />
               <CheckBox Content="Categories" IsChecked="{Binding UntaggedCategories}" />
               <CheckBox Content="Description" IsChecked="{Binding UntaggedDescription}" />
@@ -105,18 +113,23 @@
         <Separator Margin="0,6" />
 
         <!-- Processing limits + count -->
-        <StackPanel Orientation="Horizontal" Spacing="16">
+        <StackPanel Orientation="Horizontal" Spacing="16"
+                    help:HelpScope.Topic="step1-limits.html">
           <TextBlock Text="Max items:" VerticalAlignment="Center" />
           <NumericUpDown Value="{Binding MaxItems}" Minimum="0" Maximum="1000000"
-                         Increment="50" Width="120" IsEnabled="{Binding !ProcessAll}" />
+                         Increment="50" Width="120" IsEnabled="{Binding !ProcessAll}"
+                         help:HelpScope.Topic="settings-reference.html#max-items" />
           <CheckBox Content="Process all (page until empty)"
                     IsChecked="{Binding ProcessAll}" VerticalAlignment="Center"
+                    help:HelpScope.Topic="settings-reference.html#process-all"
                     ToolTip.Tip="Ignore the max-items limit and keep requesting pages until the server returns no more results (use for catalogs larger than one API response)." />
           <TextBlock Text="AI image scale:" VerticalAlignment="Center" />
           <ComboBox SelectedIndex="{Binding ResizeScaleIndex}"
-                    ItemsSource="{Binding ResizeScaleOptions}" MinWidth="90" />
+                    ItemsSource="{Binding ResizeScaleOptions}" MinWidth="90"
+                    help:HelpScope.Topic="settings-reference.html#resize-scale" />
           <CheckBox Content="Use fixed 200px thumbnail (fast)"
-                    IsChecked="{Binding UseThumbnailOverride}" VerticalAlignment="Center" />
+                    IsChecked="{Binding UseThumbnailOverride}" VerticalAlignment="Center"
+                    help:HelpScope.Topic="settings-reference.html#thumbnail-override" />
           <Button Content="Count matching items" Command="{Binding CountCommand}" />
           <ProgressBar IsIndeterminate="True" Width="80" Height="6"
                        IsVisible="{Binding IsCounting}" />

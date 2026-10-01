@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Synapic.Avalonia.ViewModels.Steps"
+             xmlns:help="using:Synapic.Avalonia.Services"
              x:Class="Synapic.Avalonia.Views.Wizard.Step2Engine"
              x:DataType="vm:Step2EngineViewModel">
 
@@ -8,14 +9,16 @@
     <TextBlock Text="Step 2 — Tagging Engine (local Python sidecar)" FontSize="22" FontWeight="Bold" />
 
     <StackPanel Spacing="10">
-      <StackPanel Orientation="Horizontal" Spacing="8">
+      <StackPanel Orientation="Horizontal" Spacing="8"
+                  help:HelpScope.Topic="settings-reference.html#model-id">
         <Button Content="Refresh local models" Command="{Binding RefreshModelsCommand}" />
         <Button Content="Download model…" Command="{Binding DownloadSelectedCommand}" />
         <ProgressBar IsIndeterminate="true" Width="80" IsVisible="{Binding IsLoadingModels}" />
         <TextBlock Text="{Binding ModelsMessage}" VerticalAlignment="Center" Opacity="0.7" />
       </StackPanel>
 
-      <ListBox ItemsSource="{Binding LocalModels}" SelectedItem="{Binding SelectedModel}" Height="180">
+      <ListBox ItemsSource="{Binding LocalModels}" SelectedItem="{Binding SelectedModel}" Height="180"
+               help:HelpScope.Topic="settings-reference.html#model-id">
         <ListBox.ItemTemplate>
           <DataTemplate>
             <StackPanel Orientation="Horizontal" Spacing="8">
@@ -28,19 +31,23 @@
         </ListBox.ItemTemplate>
       </ListBox>
 
-      <TextBox Watermark="Model id (Hugging Face repo)" Text="{Binding ManualModelId}" />
+      <TextBox Watermark="Model id (Hugging Face repo)" Text="{Binding ManualModelId}"
+               help:HelpScope.Topic="settings-reference.html#model-id" />
 
-      <StackPanel Orientation="Horizontal" Spacing="16">
+      <StackPanel Orientation="Horizontal" Spacing="16"
+                  help:HelpScope.Topic="settings-reference.html#device">
         <TextBlock Text="Device:" VerticalAlignment="Center" />
         <ComboBox SelectedIndex="{Binding DeviceIndex}" ItemsSource="{Binding DeviceOptions}" MinWidth="100" />
         <TextBlock Text="Task:" VerticalAlignment="Center" />
         <TextBlock Text="Category + Keywords + Description (multimodal)"
-                   VerticalAlignment="Center" Opacity="0.7" />
+                   VerticalAlignment="Center" Opacity="0.7"
+                   help:HelpScope.Topic="settings-reference.html#task" />
       </StackPanel>
 
       <!-- Which returned fields to tag; the multimodal prompt always yields all
            three, so this selects the permutation that gets written. -->
-      <StackPanel Orientation="Horizontal" Spacing="16">
+      <StackPanel Orientation="Horizontal" Spacing="16"
+                  help:HelpScope.Topic="step2-tag-fields.html">
         <TextBlock Text="Tag fields:" VerticalAlignment="Center" />
         <CheckBox x:Name="TagKeywordsBox" Content="Keywords" IsChecked="{Binding TagKeywords}" />
         <CheckBox x:Name="TagCategoriesBox" Content="Categories" IsChecked="{Binding TagCategories}" />
@@ -55,22 +62,29 @@
                  IsVisible="{Binding HasPartialTagFieldSelection}"
                  Text="{Binding TagFieldWarning}" />
 
-      <StackPanel Orientation="Horizontal" Spacing="16">
+      <StackPanel Orientation="Horizontal" Spacing="16"
+                  help:HelpScope.Topic="settings-reference.html#scoring">
         <TextBlock Text="Confidence threshold:" VerticalAlignment="Center" />
-        <NumericUpDown Value="{Binding ConfidenceThreshold}" Minimum="0" Maximum="1" Increment="0.05" Width="110" />
+        <NumericUpDown Value="{Binding ConfidenceThreshold}" Minimum="0" Maximum="1" Increment="0.05" Width="110"
+                       help:HelpScope.Topic="settings-reference.html#confidence-threshold" />
         <TextBlock Text="Probability mode:" VerticalAlignment="Center" />
-        <ComboBox SelectedIndex="{Binding ProbabilityModeIndex}" ItemsSource="{Binding ProbabilityModeOptions}" MinWidth="130" />
+        <ComboBox SelectedIndex="{Binding ProbabilityModeIndex}" ItemsSource="{Binding ProbabilityModeOptions}" MinWidth="130"
+                  help:HelpScope.Topic="settings-reference.html#probability-mode" />
         <TextBlock Text="Prob. threshold:" VerticalAlignment="Center" />
-        <NumericUpDown Value="{Binding ProbabilityThreshold}" Minimum="0" Maximum="1" Increment="0.05" Width="110" />
+        <NumericUpDown Value="{Binding ProbabilityThreshold}" Minimum="0" Maximum="1" Increment="0.05" Width="110"
+                       help:HelpScope.Topic="settings-reference.html#probability-threshold" />
       </StackPanel>
 
       <TextBox Watermark="Candidate labels (comma-separated, for probability/zero-shot)"
-               Text="{Binding ProbabilityCandidates}" />
+               Text="{Binding ProbabilityCandidates}"
+               help:HelpScope.Topic="settings-reference.html#probability-candidates" />
       <TextBlock Text="System prompt (optional VLM context)"
-                 FontWeight="SemiBold" Margin="0,4,0,0" />
+                 FontWeight="SemiBold" Margin="0,4,0,0"
+                 help:HelpScope.Topic="step2-prompts.html" />
       <TextBlock TextWrapping="Wrap" Opacity="0.75"
                  Text="Every system prompt you commit is remembered below, so previous wording stays one click away." />
-      <StackPanel Orientation="Horizontal" Spacing="8">
+      <StackPanel Orientation="Horizontal" Spacing="8"
+                  help:HelpScope.Topic="step2-prompts.html">
         <ComboBox x:Name="SystemPromptPresetBox"
                   ItemsSource="{Binding SystemPromptPresets}"
                   SelectedItem="{Binding SelectedSystemPromptPreset}"
@@ -82,16 +96,19 @@
       <TextBox x:Name="SystemPromptBox"
                Watermark="Custom system prompt (VLM) - optional context, must not restate the output format"
                Text="{Binding SystemPrompt}"
-               AcceptsReturn="True" Height="60" />
+               AcceptsReturn="True" Height="60"
+               help:HelpScope.Topic="step2-prompts.html" />
       <TextBlock Text="{Binding SystemPromptMessage}" TextWrapping="Wrap" Opacity="0.75" />
 
       <TextBlock Text="Tag instruction (sent to the model for every image)"
-                 FontWeight="SemiBold" Margin="0,4,0,0" />
+                 FontWeight="SemiBold" Margin="0,4,0,0"
+                 help:HelpScope.Topic="step2-prompts.html" />
       <TextBlock TextWrapping="Wrap" Opacity="0.75"
                  Text="Leave blank to use the built-in instruction, which asks for a JSON object with description, category and keywords. A custom instruction must keep asking for that JSON shape - the app reads those three fields out of the reply, and anything else is stored as a plain-text description." />
       <TextBox x:Name="UserPromptBox" Text="{Binding UserPrompt}" AcceptsReturn="True" Height="110"
                TextWrapping="Wrap"
-               Watermark="Blank = built-in instruction" />
+               Watermark="Blank = built-in instruction"
+               help:HelpScope.Topic="settings-reference.html#tag-instruction" />
       <StackPanel Orientation="Horizontal" Spacing="8">
         <Button x:Name="UseBuiltInPromptButton" Content="Use built-in instruction"
                 Command="{Binding UseBuiltInPromptCommand}" />

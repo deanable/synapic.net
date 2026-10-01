@@ -84,15 +84,22 @@ public partial class MainWindowViewModel : ViewModelBase
 
     /// <summary>The toolbar Help button: the help home page.</summary>
     [RelayCommand]
-    private void OpenHelp() => _help.Open(HelpTopics.Home);
+    private void OpenHelp() => OpenTopic(HelpTopics.Home);
+
+    /// <summary>Opens one already-resolved topic; the Help button and F1 both funnel through here.</summary>
+    [RelayCommand]
+    private void OpenTopic(string? topic) => _help.Open(topic);
 
     /// <summary>
-    /// F1: the topic for what the user is looking at right now - the sidecar
-    /// topic while that panel is what is gating them, otherwise the wizard step
-    /// on screen.
+    /// F1 fallback: the topic for the state of the app - the sidecar topic while
+    /// that panel is what is gating them, otherwise the wizard step on screen.
+    /// The window's key handler asks <see cref="Synapic.Avalonia.Services.HelpScope"/>
+    /// first, so focus inside an annotated scope (a section, or one setting)
+    /// opens that scope's topic instead; this is what applies when focus sits
+    /// in nothing annotated.
     /// </summary>
     [RelayCommand]
-    private void OpenContextHelp() => _help.Open(ContextHelpTopic);
+    private void OpenContextHelp() => OpenTopic(ContextHelpTopic);
 
     /// <summary>The topic <see cref="OpenContextHelpCommand"/> resolves to for the current state.</summary>
     public string ContextHelpTopic => IsSidecarRequired

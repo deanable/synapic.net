@@ -158,6 +158,10 @@
 		<param name="Local" value="step2-tag-fields.html">
 		</OBJECT>
 	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="keyboard shortcuts">
+		<param name="Local" value="window-overview.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
 		<param name="Name" value="log file">
 		<param name="Local" value="admin-logs-support.html#logs">
 		</OBJECT>
@@ -176,6 +180,10 @@
 	<LI> <OBJECT type="text/sitemap">
 		<param name="Name" value="model, choosing">
 		<param name="Local" value="step2-engine.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="password, Daminion">
+		<param name="Local" value="settings-reference.html#password">
 		</OBJECT>
 	<LI> <OBJECT type="text/sitemap">
 		<param name="Name" value="pause">
@@ -230,6 +238,14 @@
 		<param name="Local" value="step1-scope-filters.html">
 		</OBJECT>
 	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="settings reference">
+		<param name="Local" value="settings-reference.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="setup guide">
+		<param name="Local" value="setup-guide.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
 		<param name="Name" value="sidecar">
 		<param name="Local" value="first-run-sidecar.html">
 		</OBJECT>
@@ -260,6 +276,10 @@
 	<LI> <OBJECT type="text/sitemap">
 		<param name="Name" value="thumbnail, 200 pixel">
 		<param name="Local" value="step1-limits.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="tips">
+		<param name="Local" value="tips.html">
 		</OBJECT>
 	<LI> <OBJECT type="text/sitemap">
 		<param name="Name" value="troubleshooting">

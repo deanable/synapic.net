@@ -1,0 +1,158 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>Tips and useful info</title>
+<link rel="stylesheet" type="text/css" href="help.css">
+</head>
+<body>
+
+<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; Tips and useful info</p>
+
+<h1>Tips and useful info</h1>
+
+<p class="lead">The things experienced users keep in their pocket: how to make
+a run faster, how to make the tags better, and how to avoid the two or three
+mistakes that cost an afternoon.</p>
+
+<h2>Speed</h2>
+
+<div class="tip">
+<p class="first">The first batch is always the slow one.</p>
+<p>It downloads the model (about 860 MB), unpacks the built server and loads
+the weights. Later batches start tagging in seconds. Timings that look
+alarming on run one are usually this, not a fault &mdash;
+<a href="troubleshooting.html#performance">Speed and timings</a> has the real
+numbers.</p>
+</div>
+
+<table>
+<tr><th class="setting">Lever</th><th>Effect</th><th>When to pull it</th></tr>
+<tr><td><a href="settings-reference.html#device">Device: CUDA or MPS</a></td><td>The single biggest win &mdash; an NVIDIA GPU turns minutes into seconds per batch.</td><td>Whenever the machine has a GPU; the CPU build still works everywhere.</td></tr>
+<tr><td><a href="settings-reference.html#resize-scale">AI image scale 50%</a></td><td>Roughly halves the work per image with little visible loss on ordinary photos.</td><td>Everyday runs on a CPU-only machine.</td></tr>
+<tr><td><a href="settings-reference.html#thumbnail-override">200px thumbnail</a></td><td>Asks Daminion for its thumbnail instead of the full file &mdash; the fastest pass over a huge catalog.</td><td>Triage passes; not for the run whose tags you will keep.</td></tr>
+<tr><td><a href="settings-reference.html#max-items">Max items + a saved-search scope</a></td><td>Small batches fail small: a bad setting is discovered after 50 images, not 50,000.</td><td>Whenever you change model, prompt or scale.</td></tr>
+</table>
+
+<p>Concurrency: the app tags images in parallel slots, so the last stretch of
+a batch can look uneven while slots drain. The progress bar counts finished
+items, not started ones. See
+<a href="step3-process.html">Step 3 &mdash; Process</a>.</p>
+
+<h2>Better tags</h2>
+
+<ul>
+<li><span class="term">Prompt small, test small.</span> Change one thing, run
+a dozen images, look at the result. The recipe:
+<a href="step2-prompts.html#experiment">Trying prompt changes without wasting
+a batch</a>.</li>
+<li><span class="term">The system prompt sets the scene; the tag instruction
+sets the contract.</span> Style and domain ("botanical plates, 19th century")
+belong in the system prompt; the output shape belongs to the built-in
+instruction. See <a href="step2-prompts.html">Prompts</a>.</li>
+<li><span class="term">Check the tag fields before blaming the model.</span>
+If a field is missing, the first suspect is the matching unticked box in
+Step 2, not the prompt:
+<a href="step2-tag-fields.html#diagnose">the diagnosis recipe</a>.</li>
+<li><span class="term">Candidate labels pin the vocabulary.</span> If the
+keywords drift into synonyms you did not want, give the scorer the exact list
+(<a href="settings-reference.html#probability-candidates">candidate
+labels</a>) instead of arguing with the model.</li>
+<li><span class="term">Raise the confidence threshold for precision, lower it
+for recall.</span> Too many marginal keywords? 0.3 &rarr; 0.4. Missing the
+obvious ones? Try 0.2:
+<a href="settings-reference.html#confidence-threshold">confidence
+threshold</a>.</li>
+<li><span class="term">Descriptions tell you what the model saw.</span> A vague
+generic description almost always means the image was scaled too far down
+(<a href="settings-reference.html#resize-scale">AI image scale</a>), not that
+the prompt is wrong.</li>
+</ul>
+
+<h2>Working safely</h2>
+
+<div class="warning">
+<p class="first">There is no undo.</p>
+<p>Writes go straight into the files or the catalog, and a re-run replaces the
+fields Synapic manages rather than merging. Keep a backup before the first
+large run, and rehearse on copies &mdash; see
+<a href="faq.html">the FAQ</a> and <a href="metadata-written.html">What gets
+written to your images</a>.</p>
+</div>
+
+<ul>
+<li><span class="term">Count before you run.</span>
+<span class="ui">Count matching items</span> answers "how much work is this?"
+in a second or two. So does the summary line in Step 4 afterwards.</li>
+<li><span class="term">Rough pass now, proper pass later.</span> A 200px
+thumbnail triage over the whole catalog, then a full-scale run over the saved
+search that matters, is a legitimate plan &mdash; the second run overwrites
+the first rather than adding to it.</li>
+<li><span class="term">Verify writes into Daminion.</span> The
+<span class="ui">Verify Daminion Writes</span> button re-reads what the server
+actually has, which settles "did it really save?" without opening the catalog
+by hand.</li>
+<li><span class="term">Failed rows are retryable.</span> Step 4's
+<span class="ui">Retry Failed</span> re-runs exactly the rows that broke
+(transient errors, a dropped connection) without touching the successes.</li>
+</ul>
+
+<h2>Catalog and workflow</h2>
+
+<ul>
+<li><span class="term">Let a saved search do the triage.</span> Scope is the
+steering wheel: build the "needs keywords" set as a saved search once, then
+every later pass selects it instead of re-filtering. See
+<a href="step1-scope-filters.html#deciding">Deciding what to process
+first</a>.</li>
+<li><span class="term">Untagged filters beat careful scoping.</span> The three
+<span class="ui">Only items with untagged&hellip;</span> boxes make a run
+idempotent in practice: re-running them skips everything already done. See
+<a href="settings-reference.html#untagged-filters">untagged filters</a>.</li>
+<li><span class="term">Process all, but count first.</span>
+<span class="ui">Process all</span> pages until the server runs dry &mdash;
+correct for big catalogs, surprising if the scope was wrong. Count, then
+commit: <a href="step1-limits.html">How many items to process</a>.</li>
+<li><span class="term">Status filter = who reviews the output.</span> Run
+<span class="ui">Unassigned</span> items first; leave approved material alone
+unless the taxonomy changed.</li>
+<li><span class="term">Duplicates waste the most time.</span> Dedup the folder
+before a first pass and you tag each photo once, not three times:
+<a href="dedup.html">Deduplication</a>.</li>
+</ul>
+
+<h2>Housekeeping</h2>
+
+<table>
+<tr><th class="setting">Thing</th><th>Good to know</th></tr>
+<tr><td>Saved prompt history</td><td>Highlight an entry in the Step 2 presets dropdown and press <kbd>Delete</kbd> to prune it &mdash; the list is its own file (<span class="path">%APPDATA%\Synapic\system-prompts.json</span>), never your current settings. See <a href="step2-prompts.html">Prompts</a>.</td></tr>
+<tr><td>Logs</td><td><span class="path">logs\synapic.log</span> next to the app; the previous ten runs are rotated into <span class="path">logs\archives\</span> and crash snapshots land in <span class="path">logs\crashes\</span>. Nothing is ever uploaded. See <a href="admin-logs-support.html">Logs, crashes and support</a>.</td></tr>
+<tr><td>Model cache</td><td><span class="path">%LOCALAPPDATA%\Synapic\models</span> (off Windows: <span class="path">~/.cache/synapic/models</span>) is shared by every Synapic install for your user. Deleting it re-downloads &mdash; it is disk, not configuration.</td></tr>
+<tr><td>Updating</td><td>Re-running the installer upgrades in place; settings survive because they live outside the install folder (registry + config.json). The sidecar has its own <span class="ui">Update</span> button. See <a href="admin-install.html">Installing and upgrading</a>.</td></tr>
+<tr><td>Support requests</td><td>The log, one crash file and the config.json say almost everything a helper needs &mdash; see <a href="troubleshooting.html#worked">Nothing else worked: what to collect</a>.</td></tr>
+</table>
+
+<h2>Quick reference</h2>
+
+<table>
+<tr><th class="setting">Shortcut / control</th><th>What it does</th></tr>
+<tr><td><kbd>F1</kbd></td><td>Opens this help at what you are looking at: a section's topic, or the exact row of the setting under the pointer. Press it once anywhere in the app.</td></tr>
+<tr><td>Toolbar <span class="ui">Help</span></td><td>Opens the help home page (contents, index and search are in the help window itself).</td></tr>
+<tr><td><kbd>Delete</kbd> in Step 2</td><td>Removes the highlighted entry from the saved system-prompt list.</td></tr>
+<tr><td><span class="ui">Count matching items</span></td><td>Size of the run, before the run.</td></tr>
+<tr><td><span class="ui">Pause / Abort</span> in Step 3</td><td>Pause finishes the items already handed out; Abort stops after the current ones and keeps what completed.</td></tr>
+<tr><td><span class="ui">Retry Failed</span> in Step 4</td><td>Re-runs only the rows that failed.</td></tr>
+</table>
+
+<div class="seealso">
+<h2>See also</h2>
+<ul>
+<li><a href="settings-reference.html">Settings reference</a></li>
+<li><a href="setup-guide.html">Setup guide</a></li>
+<li><a href="troubleshooting.html">Troubleshooting</a></li>
+<li><a href="faq.html">Frequently asked questions</a></li>
+</ul>
+</div>
+
+</body>
+</html>

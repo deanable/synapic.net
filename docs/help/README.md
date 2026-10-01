@@ -59,11 +59,13 @@ the topic. The order is deliberate, and every entry is tried in turn:
 | 2 | The same topic as HTML, in the default browser | `help/` next to the app (every RID), falling back to a checkout's `docs/help` |
 
 Two entry points use it: the toolbar **Help** button opens `index.html`, and
-<kbd>F1</kbd> opens the topic for what the user is looking at - the sidecar
-topics while the setup panel is what is gating them, otherwise the wizard step
-on screen (`HelpTopics.ForStepIndex`). Entry 2 is also the fallback when entry 1
-is present but will not start (no `hh.exe`, say), which is why the HTML ships on
-Windows as well.
+<kbd>F1</kbd> opens the topic for what the user is looking at - the nearest
+control annotated with `HelpScope.Topic` in the views (a section's topic, or
+one setting's `settings-reference.html#anchor` row), falling back to the
+sidecar topics while the setup panel is what is gating them, otherwise the
+wizard step on screen (`HelpTopics.ForStepIndex`). Entry 2 is also the fallback
+when entry 1 is present but will not start (no `hh.exe`, say), which is why the
+HTML ships on Windows as well.
 
 Payload, per build:
 
@@ -131,7 +133,9 @@ or the sidecar panel:
   a topic by name (`hh.exe ms-its:Synapic.chm::/step2-engine.html`) rather than
   through `HtmlHelp()`'s numeric context ids, so `Synapic.hhp` stays as it is.
   What it does need is for every name in `HelpTopics` to exist here *and* be
-  listed in `[FILES]`, which `HelpServiceTests` enforces.
+  listed in `[FILES]`, which `HelpServiceTests` enforces - and for every
+  `HelpScope.Topic` annotation in the views to resolve to a topic *and* anchor
+  that exist, which `HelpScopeTests` enforces.
 - **A stale `Synapic.chm` in a checkout wins over the HTML.** On Windows the
   compiled help is preferred whenever it is present next to the app, so after
   editing a topic you are still looking at the old page until you re-run

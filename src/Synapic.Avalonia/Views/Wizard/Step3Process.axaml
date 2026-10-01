@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Synapic.Avalonia.ViewModels.Steps"
+             xmlns:help="using:Synapic.Avalonia.Services"
              x:Class="Synapic.Avalonia.Views.Wizard.Step3Process"
              x:DataType="vm:Step3ProcessViewModel">
 
@@ -15,7 +16,8 @@
       <TextBlock Text="{Binding CurrentFile}" Opacity="0.7" />
     </StackPanel>
 
-    <StackPanel Orientation="Horizontal" Spacing="8">
+    <StackPanel Orientation="Horizontal" Spacing="8"
+                help:HelpScope.Topic="step3-process.html">
       <Button Content="Start Processing" Command="{Binding StartCommand}"
               Classes="accent" IsEnabled="{Binding IsIdle}" />
       <Button Content="Pause" Command="{Binding PauseCommand}" />
@@ -23,7 +25,8 @@
       <Button Content="Abort" Command="{Binding AbortCommand}" />
     </StackPanel>
 
-    <Border Classes="card" Height="320" Padding="8">
+    <Border Classes="card" Height="320" Padding="8"
+            help:HelpScope.Topic="step3-log.html">
       <ListBox ItemsSource="{Binding LogLines}" x:Name="LogList">
         <ListBox.ItemTemplate>
           <DataTemplate>

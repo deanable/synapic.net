@@ -33,6 +33,7 @@ help.css
 index.html
 requirements.html
 getting-started.html
+setup-guide.html
 first-run-sidecar.html
 window-overview.html
 workflow-overview.html
@@ -49,6 +50,8 @@ step3-process.html
 step3-log.html
 step4-results.html
 dedup.html
+settings-reference.html
+tips.html
 troubleshooting.html
 faq.html
 glossary.html

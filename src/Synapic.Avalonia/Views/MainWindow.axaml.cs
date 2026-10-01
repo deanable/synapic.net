@@ -1,5 +1,6 @@
 using System.Collections.Specialized;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Synapic.Avalonia.Services;
 using Synapic.Avalonia.ViewModels;
@@ -33,6 +34,27 @@ public partial class MainWindow : Window
 
     private void OnLogEntriesChanged(object? sender, NotifyCollectionChangedEventArgs e) =>
         ListAutoScroll.ToEnd(LogList);
+
+    /// <summary>
+    /// F1 follows the focus: the nearest <see cref="HelpScope"/> around whatever
+    /// has focus wins - a section, or one setting's anchored topic - and the
+    /// unscoped fallback (sidecar panel, or the step on screen) applies when
+    /// focus is inside nothing annotated. The shortcut used to be a
+    /// Window.KeyBinding; a key binding cannot see which control has focus, so
+    /// it cannot be context aware below the step.
+    /// </summary>
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        if (e.Key == Key.F1 && _vm is not null)
+        {
+            var topic = HelpScope.Resolve(e.Source) ?? _vm.ContextHelpTopic;
+            _vm.OpenTopicCommand.Execute(topic);
+            e.Handled = true;
+            return;
+        }
+
+        base.OnKeyDown(e);
+    }
 
     protected override void OnLoaded(RoutedEventArgs e)
     {
