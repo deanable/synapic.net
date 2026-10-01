@@ -8,16 +8,20 @@ namespace Synapic.Avalonia.Services.Daminion;
 /// exercised by the original ``daminion_api.py`` (Login, MediaItems/Get,
 /// MediaItems/GetByIds, ItemData/BatchChange, Thumbnail/Get, Preview/Get,
 /// Download/Get, Settings/GetVersion).
+/// Every method takes an optional <see cref="CancellationToken"/> as its last
+/// parameter (Refit sends it nowhere; it aborts the underlying HTTP call), so
+/// aborting a batch cannot leave a request running — some original-file
+/// downloads are minutes long.
 /// </summary>
 public interface IDaminionApi
 {
     // ── Auth (query params per Daminion convention) ─────────────────────────
     // The catalog is selected by the server URL, so no catalog id is sent.
     [Post("/api/UserManager/Login")]
-    Task<HttpResponseMessage> Login([Query] string userName, [Query] string password);
+    Task<HttpResponseMessage> Login([Query] string userName, [Query] string password, CancellationToken ct = default);
 
     [Post("/api/UserManager/Logout")]
-    Task<HttpResponseMessage> Logout();
+    Task<HttpResponseMessage> Logout(CancellationToken ct = default);
 
     // ── Media items ─────────────────────────────────────────────────────────
     [Get("/api/MediaItems/Get")]
@@ -29,48 +33,50 @@ public interface IDaminionApi
         [Query] string? queryLine = null,
         [Query] int? maxItemsCount = null,
         [Query] int? sortag = null,
-        [Query] string? asc = null);
+        [Query] string? asc = null,
+        CancellationToken ct = default);
 
     [Get("/api/MediaItems/GetByIds")]
-    Task<DaminionItemsResponse> GetItemsByIds([Query] string ids);
+    Task<DaminionItemsResponse> GetItemsByIds([Query] string ids, CancellationToken ct = default);
 
     [Get("/api/MediaItems/GetCount")]
     Task<DaminionCountResponse> GetCount(
         [Query] string? search = null,
         [Query] string? queryLine = null,
         [Query] string? f = null,
-        [Query] string? force = null);
+        [Query] string? force = null,
+        CancellationToken ct = default);
 
     [Get("/api/MediaItems/GetAbsolutePath/{id}")]
-    Task<string> GetAbsolutePath(int id);
+    Task<string> GetAbsolutePath(int id, CancellationToken ct = default);
 
     // ── Item data / metadata write ──────────────────────────────────────────
     [Get("/api/ItemData/GetAll/{id}")]
-    Task<JsonElement> GetItemDataAll(int id);
+    Task<JsonElement> GetItemDataAll(int id, CancellationToken ct = default);
 
     [Post("/api/ItemData/BatchChange")]
-    Task<JsonElement> BatchChange([Body] DaminionBatchChangeRequest request);
+    Task<JsonElement> BatchChange([Body] DaminionBatchChangeRequest request, CancellationToken ct = default);
 
     /// <summary>Wrapped layout payload (server 11.x nests entries under properties[].properties[]).</summary>
     [Get("/api/ItemData/GetDefaultLayout")]
-    Task<JsonElement> GetDefaultLayout();
+    Task<JsonElement> GetDefaultLayout(CancellationToken ct = default);
 
     // ── Thumbnails & originals (kept in Avalonia per spec §11 Q2) ───────────
     [Get("/api/Thumbnail/Get/{id}")]
-    Task<Stream> GetThumbnail(int id, [Query] int width, [Query] int height);
+    Task<Stream> GetThumbnail(int id, [Query] int width, [Query] int height, CancellationToken ct = default);
 
     [Get("/api/Preview/Get/{id}")]
-    Task<Stream> GetPreview(int id, [Query] int width, [Query] int height);
+    Task<Stream> GetPreview(int id, [Query] int width, [Query] int height, CancellationToken ct = default);
 
     [Get("/api/Download/Get/{id}")]
-    Task<Stream> GetOriginal(int id);
+    Task<Stream> GetOriginal(int id, CancellationToken ct = default);
 
     // ── Settings ────────────────────────────────────────────────────────────
     [Get("/api/Settings/GetVersion")]
-    Task<string> GetVersion();
+    Task<string> GetVersion(CancellationToken ct = default);
 
     [Get("/api/Settings/GetLoggedUser")]
-    Task<JsonElement> GetLoggedUser();
+    Task<JsonElement> GetLoggedUser(CancellationToken ct = default);
 
     /// <summary>
     /// GUID of the catalog this session is bound to (port of
@@ -80,11 +86,11 @@ public interface IDaminionApi
     /// actually landed on instead of offering a picklist.
     /// </summary>
     [Get("/api/Settings/GetCatalogGuid")]
-    Task<JsonElement> GetCatalogGuid();
+    Task<JsonElement> GetCatalogGuid(CancellationToken ct = default);
 
     // ── Tags / collections for Step 1 pickers ───────────────────────────────
     [Get("/api/Settings/GetTags")]
-    Task<JsonElement> GetAllTags();
+    Task<JsonElement> GetAllTags(CancellationToken ct = default);
 
     /// <summary>Values of an indexed tag (saved searches, keywords…) — daminion_api.get_tag_values port.</summary>
     /// <remarks>
@@ -101,7 +107,8 @@ public interface IDaminionApi
         [Query] int parentValueId = -2,
         [Query] string filter = "",
         [Query] int pageIndex = 0,
-        [Query] int pageSize = 500);
+        [Query] int pageSize = 500,
+        CancellationToken ct = default);
 
     /// <summary>Bare /api/IndexedTagValues route (daminion_api.py fallback for builds lacking the GetIndexedTagValues action).</summary>
     /// <remarks>Same full-parameter-set routing rule as <see cref="GetIndexedTagValues"/>.</remarks>
@@ -111,11 +118,12 @@ public interface IDaminionApi
         [Query] int parentValueId = -2,
         [Query] string filter = "",
         [Query] int pageIndex = 0,
-        [Query] int pageSize = 500);
+        [Query] int pageSize = 500,
+        CancellationToken ct = default);
 
     /// <summary>Shared collections list — daminion_api.collections.get_all port.</summary>
     [Get("/api/SharedCollection/GetCollections")]
-    Task<JsonElement> GetCollections([Query] int index = 0, [Query] int pageSize = 100);
+    Task<JsonElement> GetCollections([Query] int index = 0, [Query] int pageSize = 100, CancellationToken ct = default);
 
     /// <summary>
     /// Items of a shared collection — daminion_api.collections.get_items port.
@@ -123,5 +131,5 @@ public interface IDaminionApi
     /// /api/Collections/GetItems/{id} variant 404s on server 11.0.0.3906).
     /// </summary>
     [Get("/api/SharedCollection/GetItems")]
-    Task<DaminionItemsResponse> GetSharedCollectionItems([Query] int id, [Query] int index, [Query] int pageSize);
+    Task<DaminionItemsResponse> GetSharedCollectionItems([Query] int id, [Query] int index, [Query] int pageSize, CancellationToken ct = default);
 }

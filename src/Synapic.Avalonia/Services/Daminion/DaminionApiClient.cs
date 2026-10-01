@@ -41,27 +41,39 @@ public sealed class DaminionApiClient
     /// </summary>
     public const int SavedSearchesTagFallbackId = 40;
 
-    private readonly Func<IDaminionApi> _apiFactory;
     private readonly string _baseUrl;
     private readonly string _username;
     private readonly string _password;
-    private readonly SemaphoreSlim _rateLimit;
     private readonly Dictionary<string, string> _tagGuidMap = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, int> _tagIdMap = new(StringComparer.OrdinalIgnoreCase);
 
-    private IDaminionApi? _api;
+    private readonly IDaminionApi _api;
     private bool _authenticated;
+    private readonly object _stateLock = new();
 
     public DaminionApiClient(string baseUrl, string username, string password, double rateLimitSeconds = 0.1)
     {
         _baseUrl = NormalizeBaseUrl(baseUrl);
         _username = username;
         _password = password;
-        _rateLimit = new SemaphoreSlim(1, 1);
-        // Own handler with an explicit cookie container (session persistence)
-        // and a long timeout: original-file downloads over slow LAN links
-        // otherwise die at HttpClient's 100 s default ("A task was canceled").
-        _apiFactory = () => RestService.For<IDaminionApi>(CreateHttpClient(), BuildSettings());
+
+        // One owned client (the Refit proxy) for this object's lifetime. A
+        // throwaway per call would (a) leak an undisposed SocketsHttpHandler
+        // pool each time and (b) drop the login cookie, which is what replays
+        // the server session onto every call. The long timeout is deliberate:
+        // original-file downloads over slow LAN links otherwise die at
+        // HttpClient's 100 s default ("A task was canceled").
+        var handler = new SocketsHttpHandler
+        {
+            UseCookies = true,
+            CookieContainer = new CookieContainer(),
+            PooledConnectionLifetime = TimeSpan.FromMinutes(10),
+        };
+        _api = RestService.For<IDaminionApi>(new HttpClient(handler)
+        {
+            BaseAddress = new Uri(_baseUrl),
+            Timeout = TimeSpan.FromMinutes(15),
+        }, BuildSettings());
     }
 
     /// <summary>
@@ -87,21 +99,6 @@ public sealed class DaminionApiClient
         return trimmed.TrimEnd('/');
     }
 
-    private HttpClient CreateHttpClient()
-    {
-        var handler = new SocketsHttpHandler
-        {
-            UseCookies = true,
-            CookieContainer = new CookieContainer(),
-            PooledConnectionLifetime = TimeSpan.FromMinutes(10),
-        };
-        return new HttpClient(handler)
-        {
-            BaseAddress = new Uri(_baseUrl),
-            Timeout = TimeSpan.FromMinutes(15),
-        };
-    }
-
     private static RefitSettings BuildSettings() => new()
     {
         ContentSerializer = new SystemTextJsonContentSerializer(new JsonSerializerOptions(JsonSerializerDefaults.Web)),
@@ -109,7 +106,7 @@ public sealed class DaminionApiClient
 
     public bool IsAuthenticated
     {
-        get { lock (_tagGuidMap) return _authenticated; }
+        get { lock (_stateLock) return _authenticated; }
     }
 
     public string BaseUrl => _baseUrl;
@@ -127,7 +124,7 @@ public sealed class DaminionApiClient
         var api = GetApi();
         try
         {
-            using var resp = await api.Login(_username, _password).ConfigureAwait(false);
+            using var resp = await api.Login(_username, _password, ct).ConfigureAwait(false);
             if (resp.StatusCode == HttpStatusCode.Unauthorized || resp.StatusCode == HttpStatusCode.Forbidden)
                 throw new DaminionAuthenticationException($"Authentication failed for '{_username}'");
             if (resp.StatusCode == HttpStatusCode.TooManyRequests)
@@ -135,11 +132,7 @@ public sealed class DaminionApiClient
             if (!resp.IsSuccessStatusCode)
                 throw new DaminionNetworkException($"Login failed with HTTP {(int)resp.StatusCode}");
 
-            lock (_tagGuidMap)
-            {
-                _authenticated = true;
-                _api = api;
-            }
+            lock (_stateLock) _authenticated = true;
 
             await LoadTagSchemaAsync(ct).ConfigureAwait(false);
             SynapicLog.Info(nameof(DaminionApiClient), $"Successfully authenticated to {_baseUrl}");
@@ -158,20 +151,44 @@ public sealed class DaminionApiClient
         }
     }
 
-    private IDaminionApi GetApi()
+    /// <summary>The one owned Refit proxy; server-session state lives in its cookie container.</summary>
+    private IDaminionApi GetApi() => _api;
+
+    /// <summary>
+    /// Run one authenticated API call, recovering from an expired server
+    /// session: the cookie expires while a long batch runs, and a 401/403 used
+    /// to fail every remaining item. On one of those statuses, re-authenticate
+    /// once and replay the call against the refreshed session. Other failures
+    /// propagate untouched.
+    /// </summary>
+    private async Task<T> WithSessionRecoveryAsync<T>(Func<IDaminionApi, Task<T>> call, CancellationToken ct)
     {
-        lock (_tagGuidMap)
+        var api = GetApi();
+        try
         {
-            if (_api is not null && _authenticated) return _api;
+            return await call(api).ConfigureAwait(false);
         }
-        return _apiFactory();
+        catch (ApiException e) when ((int)e.StatusCode is 401 or 403)
+        {
+            SynapicLog.Warning(nameof(DaminionApiClient),
+                $"Daminion session expired (HTTP {(int)e.StatusCode}) — re-authenticating and retrying once");
+            await ReAuthenticateAsync(ct).ConfigureAwait(false);
+            return await call(GetApi()).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>Log out + log back in (LoadTagSchemaAsync refresh comes along).</summary>
+    private async Task ReAuthenticateAsync(CancellationToken ct)
+    {
+        lock (_stateLock) _authenticated = false;
+        await AuthenticateAsync(ct).ConfigureAwait(false);
     }
 
     private async Task LoadTagSchemaAsync(CancellationToken ct)
     {
         try
         {
-            var layout = await GetApi().GetDefaultLayout().ConfigureAwait(false);
+            var layout = await GetApi().GetDefaultLayout(ct).ConfigureAwait(false);
             lock (_tagGuidMap)
             {
                 _tagGuidMap.Clear();
@@ -188,7 +205,7 @@ public sealed class DaminionApiClient
         // Tag *ids* drive the saved-search scope and counts (Settings/GetTags).
         try
         {
-            var tags = await GetApi().GetAllTags().ConfigureAwait(false);
+            var tags = await GetApi().GetAllTags(ct).ConfigureAwait(false);
             var entries = UnwrapCollection(tags, "tags", "items", "data");
             lock (_tagIdMap)
             {
@@ -250,7 +267,7 @@ public sealed class DaminionApiClient
     /// Fallback 40 observed on Daminion Server 11.0.0.3906 (damserver.local);
     /// the previous 39 was stale for that build.
     /// </remarks>
-    private async Task<int> GetTagIdAsync(string tagName, int fallback)
+    private async Task<int> GetTagIdAsync(string tagName, int fallback, CancellationToken ct = default)
     {
         lock (_tagIdMap)
         {
@@ -259,7 +276,7 @@ public sealed class DaminionApiClient
         }
         try
         {
-            var tags = await GetApi().GetAllTags().ConfigureAwait(false);
+            var tags = await GetApi().GetAllTags(ct).ConfigureAwait(false);
             foreach (var element in UnwrapCollection(tags, "tags", "items", "data"))
             {
                 var name = element.TryGetProperty("name", out var n) ? n.GetString() : null;
@@ -336,9 +353,30 @@ public sealed class DaminionApiClient
     /// Retrieve one batch (≤ <see cref="PageSize"/>) of filtered items.
     /// Contract mirrors the original: at most one batch per call; callers
     /// advance <paramref name="startIndex"/> by the returned count until an
-    /// empty or partial batch signals the end.
+    /// empty or partial batch signals the end. Session-expiry recovery (one
+    /// re-auth + replay on 401/403) lives on the public path — the fetch is
+    /// the longest call in a batch, so a session that dies mid-run would
+    /// otherwise fail every remaining item.
     /// </summary>
     public async Task<DaminionItem[]> GetItemsFilteredAsync(
+        string scope = "all",
+        int? savedSearchId = null,
+        int? collectionId = null,
+        string? searchTerm = null,
+        string[]? untaggedFields = null,
+        string statusFilter = "all",
+        int maxItems = 500,
+        int startIndex = 0,
+        CancellationToken ct = default)
+        => await WithSessionRecoveryAsync(api => GetItemsFilteredCoreAsync(
+            api,
+            scope, savedSearchId, collectionId, searchTerm,
+            untaggedFields, statusFilter, maxItems, startIndex, ct),
+            ct).ConfigureAwait(false);
+
+    /// <summary>Core fetch; issue calls through GetItemsFilteredAsync for 401/403 recovery.</summary>
+    private async Task<DaminionItem[]> GetItemsFilteredCoreAsync(
+        IDaminionApi api,
         string scope = "all",
         int? savedSearchId = null,
         int? collectionId = null,
@@ -359,15 +397,15 @@ public sealed class DaminionApiClient
             {
                 case "search" when !string.IsNullOrWhiteSpace(searchTerm):
                 {
-                    var query = $"\"{searchTerm}\"";
+                    var query = QuoteSearchTerm(searchTerm!);
                     if (filters.Length > 0) query += " " + string.Join(" ", filters);
-                    items = (await GetApi().GetItems(startIndex, batch, f: null, search: query, maxItemsCount: 100000).ConfigureAwait(false)).EffectiveItems;
+                    items = (await api.GetItems(startIndex, batch, f: null, search: query, maxItemsCount: 100000, ct: ct).ConfigureAwait(false)).EffectiveItems;
                     break;
                 }
                 case "all":
                 {
                     var query = filters.Length > 0 ? string.Join(" ", filters) : "*";
-                    items = (await GetApi().GetItems(startIndex, batch, f: null, search: query, maxItemsCount: 100000).ConfigureAwait(false)).EffectiveItems;
+                    items = (await api.GetItems(startIndex, batch, f: null, search: query, maxItemsCount: 100000, ct: ct).ConfigureAwait(false)).EffectiveItems;
                     break;
                 }
                 case "collection" when collectionId is not null:
@@ -375,7 +413,7 @@ public sealed class DaminionApiClient
                     // Python parity: /api/SharedCollection/GetItems?id=… —
                     // the /api/Collections/GetItems/{id} variant 404s on
                     // server 11.0.0.3906 (damserver.local).
-                    items = (await GetApi().GetSharedCollectionItems(collectionId.Value, startIndex, batch).ConfigureAwait(false)).EffectiveItems;
+                    items = (await api.GetSharedCollectionItems(collectionId.Value, startIndex, batch, ct).ConfigureAwait(false)).EffectiveItems;
                     if (statusFilter != "all" || (untaggedFields?.Length ?? 0) > 0)
                         items = items.Where(i => PassesFilters(i, statusFilter, untaggedFields)).ToArray();
                     break;
@@ -384,9 +422,9 @@ public sealed class DaminionApiClient
                 {
                     // Structured query: "tagId,valueId" + "tagId,any" operators,
                     // mirroring the original saved-search lookup ("Saved Searches" tag).
-                    var tagId = await GetTagIdAsync("saved searches", fallback: 39).ConfigureAwait(false);
+                    var tagId = await GetTagIdAsync("saved searches", fallback: SavedSearchesTagFallbackId, ct).ConfigureAwait(false);
                     var f = new[] { $"{tagId},any" };
-                    items = (await GetApi().GetItems(startIndex, batch, f: f, queryLine: $"{tagId},{savedSearchId}", maxItemsCount: 100000).ConfigureAwait(false)).EffectiveItems;
+                    items = (await api.GetItems(startIndex, batch, f: f, queryLine: $"{tagId},{savedSearchId}", maxItemsCount: 100000, ct: ct).ConfigureAwait(false)).EffectiveItems;
                     if (statusFilter != "all" || (untaggedFields?.Length ?? 0) > 0)
                         items = items.Where(i => PassesFilters(i, statusFilter, untaggedFields)).ToArray();
                     break;
@@ -400,6 +438,10 @@ public sealed class DaminionApiClient
         catch (DaminionException)
         {
             throw;
+        }
+        catch (ApiException e) when ((int)e.StatusCode is 401 or 403)
+        {
+            throw; // session-expiry recovery lives in WithSessionRecoveryAsync
         }
         catch (Exception e)
         {
@@ -434,11 +476,21 @@ public sealed class DaminionApiClient
         _ => field,
     };
 
+    /// <summary>
+    /// Quote a search term for Daminion's phrase syntax, doubling embedded
+    /// double quotes so a term containing '"' stays a single phrase instead of
+    /// terminating the quoted query early.
+    /// </summary>
+    private static string QuoteSearchTerm(string term) => $"\"{term.Replace("\"", "\"\"")}\"";
+
     private static bool PassesFilters(DaminionItem item, string statusFilter, string[]? untaggedFields)
     {
         var sf = (statusFilter ?? "all").ToLowerInvariant();
-        if (sf != "all" && item.Flag is { } flag)
+        if (sf != "all")
         {
+            // A missing flag cannot be verified against the requested status —
+            // exclude rather than let the filter silently pass it.
+            if (item.Flag is not { } flag) return false;
             var fv = flag.ToString().ToLowerInvariant();
             if (sf == "approved" && fv is not ("1" or "approved" or "flagged")) return false;
             if (sf == "rejected" && fv is not ("2" or "rejected")) return false;
@@ -466,7 +518,7 @@ public sealed class DaminionApiClient
     // ── Image download (temp files; caller cleans up) ───────────────────────
 
     public async Task<string?> DownloadThumbnailAsync(int itemId, int width = 200, int height = 200, CancellationToken ct = default)
-        => await DownloadToTempAsync(itemId, $"thumb_{width}x{height}", () => GetApi().GetThumbnail(itemId, width, height), ct).ConfigureAwait(false);
+        => await DownloadToTempAsync(itemId, $"thumb_{width}x{height}", api => api.GetThumbnail(itemId, width, height, ct), ct).ConfigureAwait(false);
 
     public async Task<string?> DownloadPreviewAsync(int itemId, int width = 1000, int? height = null, CancellationToken ct = default)
     {
@@ -480,17 +532,20 @@ public sealed class DaminionApiClient
             var dims = await GetItemDimensionsAsync(itemId, ct).ConfigureAwait(false);
             targetH = dims is { } d && d.H > 0 ? (int)(d.H * (double)width / d.W) : width;
         }
-        return await DownloadToTempAsync(itemId, $"preview_{width}x{targetH}", () => GetApi().GetPreview(itemId, width, targetH), ct).ConfigureAwait(false);
+        return await DownloadToTempAsync(itemId, $"preview_{width}x{targetH}", api => api.GetPreview(itemId, width, targetH, ct), ct).ConfigureAwait(false);
     }
 
     public async Task<string?> DownloadOriginalAsync(int itemId, CancellationToken ct = default)
-        => await DownloadToTempAsync(itemId, "original", () => GetApi().GetOriginal(itemId), ct).ConfigureAwait(false);
+        => await DownloadToTempAsync(itemId, "original", api => api.GetOriginal(itemId, ct), ct).ConfigureAwait(false);
 
-    private async Task<string?> DownloadToTempAsync(int itemId, string kind, Func<Task<Stream>> fetch, CancellationToken ct)
+    private async Task<string?> DownloadToTempAsync(
+        int itemId, string kind, Func<IDaminionApi, Task<Stream>> fetch, CancellationToken ct)
     {
         try
         {
-            using var stream = await fetch().ConfigureAwait(false);
+            // Session-expiry recovery: a large download is exactly the call a
+            // late batch item trips with a stale session cookie.
+            using var stream = await WithSessionRecoveryAsync(fetch, ct).ConfigureAwait(false);
             if (stream is null) return null;
 
             var tempDir = Path.Combine(Path.GetTempPath(), "synapic_daminion");
@@ -513,7 +568,7 @@ public sealed class DaminionApiClient
         try
         {
             var ids = itemId.ToString();
-            var resp = await GetApi().GetItemsByIds(ids).ConfigureAwait(false);
+            var resp = await GetApi().GetItemsByIds(ids, ct).ConfigureAwait(false);
             var item = resp.EffectiveItems.FirstOrDefault();
             return item?.Dimensions;
         }
@@ -559,8 +614,8 @@ public sealed class DaminionApiClient
 
     private async Task<IReadOnlyList<DaminionSavedSearch>> GetSavedSearchesCoreAsync(CancellationToken ct)
     {
-        var tagId = await GetTagIdAsync("saved searches", fallback: SavedSearchesTagFallbackId).ConfigureAwait(false);
-        var json = await GetApi().GetIndexedTagValues(tagId).ConfigureAwait(false);
+        var tagId = await GetTagIdAsync("saved searches", fallback: SavedSearchesTagFallbackId, ct).ConfigureAwait(false);
+        var json = await GetApi().GetIndexedTagValues(tagId, ct: ct).ConfigureAwait(false);
         var result = new List<DaminionSavedSearch>();
         foreach (var value in UnwrapCollection(json, "values", "items", "data"))
         {
@@ -596,7 +651,8 @@ public sealed class DaminionApiClient
                 size: 1,
                 f: new[] { $"{tagId},any" },
                 queryLine: $"{tagId},{candidateId}",
-                maxItemsCount: 100000).ConfigureAwait(false);
+                maxItemsCount: 100000,
+                ct: ct).ConfigureAwait(false);
 
             var count = resp.TotalCount ?? resp.EffectiveItems.Length;
             if (count > 0)
@@ -611,7 +667,7 @@ public sealed class DaminionApiClient
     /// <summary>Shared collections list (daminion_client.get_shared_collections port).</summary>
     public async Task<IReadOnlyList<DaminionCollection>> GetSharedCollectionsAsync(CancellationToken ct = default)
     {
-        var json = await GetApi().GetCollections().ConfigureAwait(false);
+        var json = await GetApi().GetCollections(ct: ct).ConfigureAwait(false);
         var result = new List<DaminionCollection>();
         foreach (var coll in UnwrapCollection(json, "collections", "items", "data"))
         {
@@ -660,7 +716,7 @@ public sealed class DaminionApiClient
             var sf = (statusFilter ?? "all").ToLowerInvariant();
             if (sf != "all")
             {
-                var flagTagId = await GetTagIdAsync("flag", fallback: 41).ConfigureAwait(false);
+                var flagTagId = await GetTagIdAsync("flag", fallback: 41, ct).ConfigureAwait(false);
                 var flagValue = sf switch
                 {
                     "approved" => 2,
@@ -681,20 +737,20 @@ public sealed class DaminionApiClient
 
             // Keyword search term (quoted phrase).
             if (scope == "search" && !string.IsNullOrWhiteSpace(searchTerm))
-                searchParts.Add($"\"{searchTerm}\"");
+                searchParts.Add(QuoteSearchTerm(searchTerm!));
 
             var combinedSearch = searchParts.Count > 0 ? string.Join(" ", searchParts) : null;
 
             // Scope-specific structured clauses.
             if (scope == "saved_search" && savedSearchId is not null)
             {
-                var tagId = await GetTagIdAsync("saved searches", fallback: SavedSearchesTagFallbackId).ConfigureAwait(false);
+                var tagId = await GetTagIdAsync("saved searches", fallback: SavedSearchesTagFallbackId, ct).ConfigureAwait(false);
                 qParts.Add($"{tagId},{savedSearchId}");
                 fParts.Add($"{tagId},any");
             }
             else if (scope == "collection" && collectionId is not null)
             {
-                var tagId = await GetCollectionTagIdAsync().ConfigureAwait(false);
+                var tagId = await GetCollectionTagIdAsync(ct).ConfigureAwait(false);
                 qParts.Add($"{tagId},{collectionId}");
                 fParts.Add($"{tagId},any");
             }
@@ -706,7 +762,8 @@ public sealed class DaminionApiClient
                 search: combinedSearch,
                 queryLine: queryLine,
                 f: operators,
-                force: "false").ConfigureAwait(false)).EffectiveCount;
+                force: "false",
+                ct: ct).ConfigureAwait(false)).EffectiveCount;
 
             // Sanity check (Python parity): a count that matches the whole
             // catalog size despite active filters/scope is suspect — re-derive
@@ -714,7 +771,7 @@ public sealed class DaminionApiClient
             // accurately (up to maxItemsCount).
             if ((combinedSearch is not null || queryLine is not null) && count > 0)
             {
-                var totalCatalog = (await GetApi().GetCount().ConfigureAwait(false)).EffectiveCount;
+                var totalCatalog = (await GetApi().GetCount(ct: ct).ConfigureAwait(false)).EffectiveCount;
                 if (count >= totalCatalog)
                 {
                     SynapicLog.Warning(nameof(DaminionApiClient),
@@ -725,7 +782,8 @@ public sealed class DaminionApiClient
                         f: ParseQueryOperators(operators),
                         search: combinedSearch,
                         queryLine: queryLine,
-                        maxItemsCount: 100000).ConfigureAwait(false)).TotalCount ?? 0;
+                        maxItemsCount: 100000,
+                        ct: ct).ConfigureAwait(false)).TotalCount ?? 0;
                 }
             }
 
@@ -733,7 +791,7 @@ public sealed class DaminionApiClient
             // parity): match the keyword tag value id instead.
             if (count <= 0 && scope == "search" && !string.IsNullOrWhiteSpace(searchTerm))
             {
-                var kwId = await GetTagIdAsync("keywords", fallback: 0).ConfigureAwait(false);
+                var kwId = await GetTagIdAsync("keywords", fallback: 0, ct).ConfigureAwait(false);
                 if (kwId > 0)
                 {
                     var valueId = await FindTagValueIdAsync(kwId, searchTerm).ConfigureAwait(false);
@@ -741,7 +799,8 @@ public sealed class DaminionApiClient
                     {
                         count = (await GetApi().GetCount(
                             queryLine: $"{kwId},{vid}",
-                            f: $"{kwId},any").ConfigureAwait(false)).EffectiveCount;
+                            f: $"{kwId},any",
+                            ct: ct).ConfigureAwait(false)).EffectiveCount;
                     }
                 }
             }
@@ -758,11 +817,11 @@ public sealed class DaminionApiClient
     }
 
     /// <summary>Resolve the "shared collections" tag id (fallback 46, Python parity).</summary>
-    private async Task<int> GetCollectionTagIdAsync()
+    private async Task<int> GetCollectionTagIdAsync(CancellationToken ct = default)
     {
-        var id = await GetTagIdAsync("shared collections", fallback: 0).ConfigureAwait(false);
+        var id = await GetTagIdAsync("shared collections", fallback: 0, ct).ConfigureAwait(false);
         if (id > 0) return id;
-        id = await GetTagIdAsync("collections", fallback: 0).ConfigureAwait(false);
+        id = await GetTagIdAsync("collections", fallback: 0, ct).ConfigureAwait(false);
         return id > 0 ? id : 46;
     }
 
@@ -774,18 +833,18 @@ public sealed class DaminionApiClient
     /// Find a tag value's id by exact text (daminion_api.find_tag_values port,
     /// including the /api/IndexedTagValues fallback route some builds serve).
     /// </summary>
-    private async Task<int?> FindTagValueIdAsync(int tagId, string filterText)
+    private async Task<int?> FindTagValueIdAsync(int tagId, string filterText, CancellationToken ct = default)
     {
         JsonElement json;
         try
         {
-            json = await GetApi().GetIndexedTagValues(tagId, filter: filterText, pageSize: 100).ConfigureAwait(false);
+            json = await GetApi().GetIndexedTagValues(tagId, filter: filterText, pageSize: 100, ct: ct).ConfigureAwait(false);
         }
         catch (ApiException)
         {
             // Fallback route (daminion_api.py parity): some builds only expose
             // the bare /api/IndexedTagValues endpoint.
-            json = await GetApi().GetIndexedTagValuesFallback(tagId, filter: filterText, pageSize: 100).ConfigureAwait(false);
+            json = await GetApi().GetIndexedTagValuesFallback(tagId, filter: filterText, pageSize: 100, ct: ct).ConfigureAwait(false);
         }
 
         foreach (var value in UnwrapCollection(json, "values", "items", "data"))
@@ -845,12 +904,12 @@ public sealed class DaminionApiClient
 
         try
         {
-            await GetApi().BatchChange(new DaminionBatchChangeRequest
+            await WithSessionRecoveryAsync(api => api.BatchChange(new DaminionBatchChangeRequest
             {
                 Ids = new[] { itemId },
                 Data = operations.ToArray(),
                 Delete = false,
-            }).ConfigureAwait(false);
+            }, ct), ct).ConfigureAwait(false);
             SynapicLog.Info(nameof(DaminionApiClient), $"Updated metadata for item {itemId}");
             return true;
         }
@@ -873,12 +932,12 @@ public sealed class DaminionApiClient
 
         try
         {
-            await GetApi().BatchChange(new DaminionBatchChangeRequest
+            await WithSessionRecoveryAsync(api => api.BatchChange(new DaminionBatchChangeRequest
             {
                 Ids = new[] { itemId },
                 Data = keywords.Select(k => new DaminionTagOperation { Guid = guid, Value = k, Remove = true }).ToArray(),
                 Delete = false,
-            }).ConfigureAwait(false);
+            }, ct), ct).ConfigureAwait(false);
             SynapicLog.Info(nameof(DaminionApiClient), $"Removed keywords from item {itemId}");
             return true;
         }
@@ -904,7 +963,8 @@ public sealed class DaminionApiClient
     {
         try
         {
-            var payload = await GetApi().GetItemDataAll(itemId).ConfigureAwait(false);
+            var payload = await WithSessionRecoveryAsync(
+                api => api.GetItemDataAll(itemId, ct), ct).ConfigureAwait(false);
             var found = new List<(string Key, string Value)>();
             CollectKeyValuePairs(payload, found);
 
@@ -976,11 +1036,7 @@ public sealed class DaminionApiClient
         {
             // best-effort
         }
-        lock (_tagGuidMap)
-        {
-            _authenticated = false;
-            _api = null;
-        }
+        lock (_stateLock) _authenticated = false;
     }
 
     /// <summary>

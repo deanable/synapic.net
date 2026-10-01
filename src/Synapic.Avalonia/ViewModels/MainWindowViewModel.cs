@@ -99,15 +99,24 @@ public partial class MainWindowViewModel : ViewModelBase
         ? HelpTopics.FirstRunSidecar
         : HelpTopics.ForStepIndex(Wizard.CurrentStepIndex);
 
-    /// <summary>Snapshot the current wizard+engine state to config.json (Session is the source of truth).</summary>
-    public void PersistConfig()
+    /// <summary>
+    /// Snapshot the current wizard+engine state to config.json (Session is the
+    /// source of truth). Resolves the app's ConfigService; a DI override keeps
+    /// the behaviour directly testable.
+    /// </summary>
+    public void PersistConfig() => PersistConfig(
+        App.Services.GetService(typeof(Synapic.Avalonia.Services.ConfigService))
+            as Synapic.Avalonia.Services.ConfigService);
+
+    /// <summary>Core persistence; the DI path delegates here.</summary>
+    public void PersistConfig(ConfigService? config)
     {
+        if (config is null) return;
         try
         {
-            var config = App.Services.GetService(typeof(Synapic.Avalonia.Services.ConfigService)) as Synapic.Avalonia.Services.ConfigService;
-            if (config is null) return;
 
             var s = _session;
+            var persistedUi = config.Load().Ui;
             config.Save(new AppConfig
             {
                 Version = 2,
@@ -153,10 +162,12 @@ public partial class MainWindowViewModel : ViewModelBase
                 },
                 Ui = new UiSettings
                 {
-                    Theme = config.Load().Ui.Theme,
-                    LogLevel = config.Load().Ui.LogLevel,
-                    AutoLaunchSidecar = config.Load().Ui.AutoLaunchSidecar,
-                    TelemetryEnabled = config.Load().Ui.TelemetryEnabled,
+                    // The Ui block survives saves untouched (ConfigService merges
+                    // around it), so one Load carries the user's theme/log prefs.
+                    Theme = persistedUi.Theme,
+                    LogLevel = persistedUi.LogLevel,
+                    AutoLaunchSidecar = persistedUi.AutoLaunchSidecar,
+                    TelemetryEnabled = persistedUi.TelemetryEnabled,
                 },
             });
             SynapicLog.Info(nameof(MainWindowViewModel), "Persisted wizard+engine config to config.json");
@@ -622,9 +633,10 @@ public partial class MainWindowViewModel : ViewModelBase
             {
                 break;
             }
-            catch
+            catch (Exception e)
             {
-                // Server busy/restarting — keep polling.
+                // Server busy/restarting - keep polling, but record why.
+                SynapicLog.Debug(nameof(MainWindowViewModel), $"Health poll skipped: {e.Message}");
             }
             try
             {

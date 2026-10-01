@@ -59,3 +59,5 @@ Thumbs.db
 # Compiled HTML Help output. The sources are committed (docs/help/*.html plus
 # the .hhp/.hhc/.hhk); the .chm is a build artifact of docs/help/build-chm.ps1.
 docs/help/*.chm
+build/_*.log
+UpgradeLog*.htm

@@ -1,5 +1,6 @@
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -51,7 +52,12 @@ public sealed class SidecarDownloadService : ISidecarDownloadService
         IProgress<SidecarDownloadProgress> progress,
         CancellationToken ct = default)
     {
-        var assets = await ResolveAssetsAsync(rid, ct).ConfigureAwait(false);
+        // SHA256SUMS.txt ships with every release (release.yml generates it);
+        // every downloaded (part) asset below is verified against it before the
+        // move puts the executable where detection finds it. The file is not
+        // optional: HTTPS protects the pipe, not the bytes, and this download
+        // becomes code the app executes.
+        var (assets, shaSums) = await ResolveAssetsAsync(rid, ct).ConfigureAwait(false);
 
         var directory = Path.GetDirectoryName(destinationPath);
         if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
@@ -84,12 +90,14 @@ public sealed class SidecarDownloadService : ISidecarDownloadService
                             $"Downloading {asset.Name} failed: HTTP {(int)response.StatusCode}.");
                     }
 
+                    using var hasher = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
                     var lastPercent = -1;
                     await using var remote = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
                     int read;
                     while ((read = await remote.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
                     {
                         await staging.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
+                        hasher.AppendData(buffer, 0, read);
                         written += read;
 
                         // The progress bar posts one message per report, so only
@@ -101,6 +109,10 @@ public sealed class SidecarDownloadService : ISidecarDownloadService
                             progress.Report(new(percent, stage));
                         }
                     }
+
+                    // Fail before the move on any integrity problem: the
+                    // destination stays exactly as it was.
+                    VerifySha256Hex(shaSums, asset.Name!, hasher.GetHashAndReset());
                 }
             }
 
@@ -114,8 +126,8 @@ public sealed class SidecarDownloadService : ISidecarDownloadService
         }
     }
 
-    /// <summary>Assets of the latest release that belong to this RID, in join order.</summary>
-    private async Task<IReadOnlyList<GitHubAsset>> ResolveAssetsAsync(string rid, CancellationToken ct)
+    /// <summary>Assets of the latest release that belong to this RID (join order) plus the release manifest text.</summary>
+    private async Task<(IReadOnlyList<GitHubAsset> Assets, string ShaSums)> ResolveAssetsAsync(string rid, CancellationToken ct)
     {
         GitHubRelease? release;
         try
@@ -148,9 +160,53 @@ public sealed class SidecarDownloadService : ISidecarDownloadService
         // A release carries either one executable or its parts, never both; if it
         // ever carries both, the whole file wins over joining it to its parts.
         var whole = matches.FirstOrDefault(a => !IsPart(a.Name!));
-        return whole is not null
+        IReadOnlyList<GitHubAsset> assets = whole is not null
             ? new[] { whole }
             : matches.OrderBy(a => PartNumber(a.Name!)).ToList();
+
+        var shaAsset = (release?.Assets ?? Array.Empty<GitHubAsset>())
+            .FirstOrDefault(a => "SHA256SUMS.txt".Equals(a.Name, StringComparison.OrdinalIgnoreCase) && a.Url is not null);
+        if (shaAsset is null)
+            throw new InvalidOperationException(
+                $"The latest release ({release?.TagName ?? "an unknown tag"}) does not publish SHA256SUMS.txt — " +
+                "the download cannot be verified, so it is refused. Build the sidecar locally instead (Build Server), " +
+                "or pick a release that ships checksums.");
+
+        return (assets, await _http.GetStringAsync(shaAsset.Url!, ct).ConfigureAwait(false));
+    }
+
+    /// <summary>
+    /// Verify one downloaded asset's SHA-256 against the release manifest
+    /// (sha256sum format: "<hex>[ *]<name>"). Throws with the expectation and
+    /// actual values on mismatch, or a manifest-entry-missing message.
+    /// </summary>
+    internal static void VerifySha256Hex(string shaSums, string assetName, byte[] actualHash)
+    {
+        var expected = FindExpectedSha256(shaSums, assetName)
+            ?? throw new InvalidOperationException(
+                $"SHA256SUMS.txt has no entry for '{assetName}' — refusing to install an unverified sidecar.");
+        var actual = Convert.ToHexString(actualHash).ToLowerInvariant();
+        if (actual != expected)
+            throw new InvalidOperationException(
+                $"Checksum mismatch for {assetName}: expected {expected}, got {actual}. " +
+                "The download or the release is corrupted — retry, or rebuild the sidecar locally (Build Server).");
+    }
+
+    /// <summary>The expected lowercase hex SHA-256 of an asset from SHA256SUMS.txt; null when absent.</summary>
+    internal static string? FindExpectedSha256(string shaSums, string assetName)
+    {
+        foreach (var rawLine in shaSums.Split('\n'))
+        {
+            var line = rawLine.TrimEnd('\r').Trim();
+            var space = line.IndexOf(' ');
+            if (space <= 0) continue;
+            var hash = line[..space].Trim();
+            if (hash.Length != 64 || !hash.All(char.IsAsciiHexDigit)) continue;
+            var name = line[(space + 1)..].TrimStart('*').Trim();
+            if (name.Equals(assetName, StringComparison.OrdinalIgnoreCase))
+                return hash.ToLowerInvariant();
+        }
+        return null;
     }
 
     /// <summary>

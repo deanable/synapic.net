@@ -102,10 +102,12 @@ resets the download registry between tests.
 
 ## `tests/Synapic.Integration.Tests`
 
-Currently a placeholder project (references the Avalonia project, no test
-files). Real environment-dependent end-to-end coverage lives in
-`EndToEndRoundTripTests` inside the Avalonia suite, gated on the same
-environment variables.
+Socket-level contract tests for the real `InferenceApiClient` against a stub
+HTTP server (`SidecarHttpContractTests`): /health payload binding, the
+503-then-retry /tag semantics, error-detail surfacing, models/config
+round-trips, and shutdown. No Python or GPU needed. Real-environment
+end-to-end coverage (a genuinely built sidecar) lives in
+`EndToEndRoundTripTests` inside the Avalonia suite.
 
 ---
 

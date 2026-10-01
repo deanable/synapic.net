@@ -73,6 +73,10 @@ public partial class App : Application
         TelemetryService.Shared.RecordAppLaunch();
 
         var services = new ServiceCollection();
+        // ConfigService itself, not only the loaded AppConfig: MainWindowViewModel
+        // resolves it (service locator, injected session/config would need ctor
+        // churn) before merging config.json.
+        services.AddSingleton(configService);
         services.AddSingleton(config);
         services.AddSingleton<Session>();
         services.AddSingleton(new DaminionConnectionStore());

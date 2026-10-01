@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http;
 using System.Text;
+using System.Security.Cryptography;
 using System.Text.Json;
 using Synapic.Avalonia.Services;
 using Xunit;
@@ -141,6 +142,13 @@ public class SidecarDownloadServiceTests : IDisposable
         {
             _assets.Clear();
             foreach (var (name, bytes) in assets) _assets.Add((name, bytes, 200));
+
+            // release.yml publishes a manifest alongside the assets and the
+            // service refuses downloads without one; mirror that here so the
+            // tests exercise the verification path too.
+            var manifest = string.Join("\n", assets.Select(a =>
+                $"{Convert.ToHexString(SHA256.HashData(a.Bytes)).ToLowerInvariant()}  {a.Name}"));
+            _assets.Add(("SHA256SUMS.txt", Encoding.UTF8.GetBytes(manifest), 200));
         }
 
         public void FailOn(string name, int status)

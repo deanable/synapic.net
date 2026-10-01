@@ -37,6 +37,9 @@ public partial class WizardViewModel : ViewModelBase
         // Step 2's tag-field checkboxes gate navigation and the Step 3 Start
         // button; re-evaluate those commands whenever the selection changes.
         Step2.PropertyChanged += OnStep2PropertyChanged;
+        // Processing start/stop drives the wizard-wide navigation lock; the
+        // shell's buttons only redraw when NotifyCanExecuteChanged fires.
+        Step3.PropertyChanged += OnStep3PropertyChanged;
 
         CurrentStep = Step1;
     }
@@ -58,6 +61,12 @@ public partial class WizardViewModel : ViewModelBase
     {
         try { Step2.SaveToStore(); }
         catch { /* never let persistence failures break navigation */ }
+    }
+
+    private void OnStep3PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(Step3ProcessViewModel.IsRunning))
+            NotifyProcessingChanged();
     }
 
     public Step1DatasourceViewModel Step1 { get; }

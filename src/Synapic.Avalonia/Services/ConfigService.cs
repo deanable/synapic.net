@@ -99,8 +99,10 @@ public sealed class UiSettings
 }
 
 /// <summary>
-/// Loads/saves the JSON app config. Unknown fields survive round-trips by
-/// preserving the raw JSON object on load.
+/// Loads/saves the JSON app config. Save merges into the on-disk document:
+/// keys this app version does not model (hand edits, forward-compatible
+/// fields from a newer build) survive every save, and the write lands
+/// atomically (temp file + move) so a crash mid-save cannot corrupt it.
 /// </summary>
 public sealed class ConfigService
 {
@@ -141,12 +143,74 @@ public sealed class ConfigService
         {
             var dir = Path.GetDirectoryName(_filePath);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-            var json = JsonSerializer.Serialize(config, Options);
-            File.WriteAllText(_filePath, json);
+
+            // Merge into the on-disk document rather than replacing it, so
+            // unknown fields survive the round-trip (the typed model would
+            // otherwise silently drop them on every save).
+            var root = ReadRawRoot(_filePath);
+            ReplaceSection(root, nameof(AppConfig.Datasource), config.Datasource);
+            ReplaceSection(root, nameof(AppConfig.Engine), config.Engine);
+            ReplaceSection(root, nameof(AppConfig.Processing), config.Processing);
+            ReplaceSection(root, nameof(AppConfig.Ui), config.Ui);
+            root[nameof(AppConfig.Version)] = config.Version;
+
+            // Atomic write: a temp file in the same directory, then a single
+            // move. A crash mid-write leaves a stray .tmp, never a corrupt
+            // config, and readers never see a half-written file.
+            var tmpPath = _filePath + ".tmp";
+            try
+            {
+                File.WriteAllText(tmpPath, JsonSerializer.Serialize(root, Options));
+                File.Move(tmpPath, _filePath, overwrite: true);
+            }
+            finally
+            {
+                try { File.Delete(tmpPath); }
+                catch (IOException) { /* move already consumed it / best effort */ }
+            }
         }
         catch (Exception e)
         {
             SynapicLog.Error("ConfigService", $"Failed to save config: {e.Message}");
+        }
+    }
+
+    /// <summary>On-disk document of the config file as a JsonObject (empty when missing/unreadable).</summary>
+    private static JsonObject ReadRawRoot(string filePath)
+    {
+        try
+        {
+            if (!File.Exists(filePath)) return new JsonObject();
+            return JsonNode.Parse(File.ReadAllText(filePath)) as JsonObject ?? new JsonObject();
+        }
+        catch (JsonException)
+        {
+            return new JsonObject(); // nothing parseable: nothing to preserve
+        }
+    }
+
+    /// <summary>
+    /// Replace one known top-level section with its typed value, then copy
+    /// back any keys the typed model does not have (hand edits or fields a
+    /// newer app version added below a known section) so they survive.
+    /// </summary>
+    private static void ReplaceSection(JsonObject root, string name, object section)
+    {
+        var fresh = JsonSerializer.SerializeToNode(section, Options) is JsonObject freshObject
+            ? freshObject
+            : new JsonObject();
+        if (root[name] is JsonObject previous)
+            CopyUnknownKeys(previous, fresh);
+        root[name] = fresh;
+    }
+
+    /// <summary>Recursively copy object keys absent from <paramref name="fresh"/> out of <paramref name="previous"/>.</summary>
+    private static void CopyUnknownKeys(JsonObject previous, JsonObject fresh)
+    {
+        foreach (var (key, value) in previous)
+        {
+            if (fresh.ContainsKey(key)) continue;
+            fresh[key] = value?.DeepClone();
         }
     }
 }

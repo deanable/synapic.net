@@ -69,11 +69,18 @@ public sealed class InferenceSidecarService : IInferenceSidecar
 {
     private const string PortFileEnvVar = "SYNAPIC_PORT_FILE";
     private static readonly TimeSpan HealthTimeout = TimeSpan.FromSeconds(120);
-    private static readonly TimeSpan TagTimeout = TimeSpan.FromMinutes(5);
 
     private HttpClient _httpClient;
     private InferenceApiClient _api;
     private readonly object _gate = new();
+
+    /// <summary>
+    /// Snapshot of the API client read under the gate: ConfigurePort swaps the
+    /// client while requests may be in flight (the UI health poll runs during
+    /// the port discovery window), so reads are serialized rather than racing
+    /// the field swap.
+    /// </summary>
+    private InferenceApiClient Api { get { lock (_gate) return _api; } }
 
     private Process? _process;
     private SidecarStatus _status = SidecarStatus.Stopped;
@@ -372,7 +379,7 @@ public sealed class InferenceSidecarService : IInferenceSidecar
             _livenessCts = new CancellationTokenSource();
         }
 
-        _ = Task.Run(() => WatchProcessExit(process, _livenessCts!.Token));
+        _ = WatchProcessExitAsync(process, _livenessCts!.Token);
 
         SynapicLog.Info(nameof(InferenceSidecarService),
             $"Sidecar launched: pid {process.Id}, exe {sidecarPath}, args '{startInfo.Arguments}', port file {portFile}, HF_HOME {startInfo.EnvironmentVariables["HF_HOME"]}");
@@ -458,7 +465,10 @@ public sealed class InferenceSidecarService : IInferenceSidecar
     private static async Task<int> ReadPortFileAsync(string portFile, CancellationToken ct)
     {
         SynapicLog.Debug(nameof(InferenceSidecarService), $"Waiting for port file: {portFile}");
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(30);
+        // PyInstaller onefile unpack dominates cold starts (the 227 MB CPU bundle
+        // measured ~25 s to its port file; the CUDA one is 12x that), so this
+        // budget matches the /health poll's, not a spinner's patience.
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(HealthTimeout.TotalSeconds);
         var waitedMs = 0;
         while (DateTime.UtcNow < deadline)
         {
@@ -513,7 +523,7 @@ public sealed class InferenceSidecarService : IInferenceSidecar
             ct.ThrowIfCancellationRequested();
             try
             {
-                var health = await _api.GetHealthAsync(ct).ConfigureAwait(false);
+                var health = await Api.GetHealthAsync(ct).ConfigureAwait(false);
                 attempts++;
                 if (string.Equals(health.Status, "ready", StringComparison.OrdinalIgnoreCase))
                 {
@@ -542,11 +552,11 @@ public sealed class InferenceSidecarService : IInferenceSidecar
         throw new TimeoutException($"Sidecar did not become ready within {HealthTimeout.TotalSeconds}s");
     }
 
-    private void WatchProcessExit(Process process, CancellationToken ct)
+    private async Task WatchProcessExitAsync(Process process, CancellationToken ct)
     {
         try
         {
-            process.WaitForExitAsync(ct).GetAwaiter().GetResult();
+            await process.WaitForExitAsync(ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -609,7 +619,7 @@ public sealed class InferenceSidecarService : IInferenceSidecar
                 if (SidecarPort > 0)
                 {
                     using var shutdownCts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-                    await _api.ShutdownAsync(shutdownCts.Token).ConfigureAwait(false);
+                    await Api.ShutdownAsync(shutdownCts.Token).ConfigureAwait(false);
                 }
                 else
                 {
@@ -651,38 +661,48 @@ public sealed class InferenceSidecarService : IInferenceSidecar
 
     private void ConfigurePort(int port)
     {
-        lock (_gate) _port = port;
-
         // HttpClient forbids changing BaseAddress after its first request -
         // and the UI health poll during "Starting" marks the original
         // instance as started. Recreate the client (and API wrapper) bound
-        // to the port instead of mutating the existing one.
+        // to the port instead of mutating the existing one; the swap is
+        // serialized with readers under _gate so a request racing the rebind
+        // cannot take a half-swapped client pair.
         var newClient = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{port}/") };
-        _api = new InferenceApiClient(newClient);
-        _httpClient = newClient;
+        var newApi = new InferenceApiClient(newClient);
+        HttpClient oldClient;
+        lock (_gate)
+        {
+            _port = port;
+            oldClient = _httpClient;
+            _api = newApi;
+            _httpClient = newClient;
+        }
+        // The pre-rebind client has no BaseAddress, so it can only fail
+        // requests; disposing it just releases those resources early.
+        oldClient.Dispose();
         SynapicLog.Debug(nameof(InferenceSidecarService), $"API client bound to http://127.0.0.1:{port}/");
     }
 
-    public async Task<HealthResponse> GetHealthAsync(CancellationToken ct = default) => await _api.GetHealthAsync(ct).ConfigureAwait(false);
+    public async Task<HealthResponse> GetHealthAsync(CancellationToken ct = default) => await Api.GetHealthAsync(ct).ConfigureAwait(false);
 
     public async Task<TagResponse> TagAsync(TagRequest request, CancellationToken ct = default)
     {
-        return await _api.TagAsync(request, ct).ConfigureAwait(false);
+        return await Api.TagAsync(request, ct).ConfigureAwait(false);
     }
 
     public async Task<ModelInfo[]> ListModelsAsync(CancellationToken ct = default)
     {
-        return await _api.ListModelsAsync(ct).ConfigureAwait(false);
+        return await Api.ListModelsAsync(ct).ConfigureAwait(false);
     }
 
     public async Task<PromptDefaultsDto> GetPromptDefaultsAsync(CancellationToken ct = default)
     {
-        return await _api.GetPromptDefaultsAsync(ct).ConfigureAwait(false);
+        return await Api.GetPromptDefaultsAsync(ct).ConfigureAwait(false);
     }
 
     public async Task DownloadModelAsync(string modelId, CancellationToken ct = default)
     {
-        await _api.DownloadModelAsync(modelId, "main", ct).ConfigureAwait(false);
+        await Api.DownloadModelAsync(modelId, "main", ct).ConfigureAwait(false);
     }
 
     public async ValueTask DisposeAsync()
