@@ -410,23 +410,37 @@ plus IPTC/EXIF fallbacks. `TagResult(Category, Keywords, Description)`. See
 
 ### Help
 
-- **`HelpService`** (`IHelpService`) — opens the user help (`docs/help`, the HTML
-  the Windows `.chm` is compiled from). `ResolveTargets(topic)` returns what
-  this machine can actually offer, best first: on Windows the compiled
-  `Synapic.chm` next to the app opened through `hh.exe` with the
-  `ms-its:<chm>::/<topic>` moniker, then the same topic as HTML in `help/`
-  beside the app, then a source checkout's `docs/help`. The first target that
-  starts wins, so a missing `hh.exe` still shows help. `Open` logs the target it
-  opened, or why nothing could be (`Help is not available: …`) — those lines
-  appear in the in-app log.
+- **`HelpService`** (`IHelpService`) — opens the user help (`docs/help`, the
+  HTML the Windows `.chm` is compiled from). The two platforms have different
+  payloads and never share one:
+  - **Windows** — the compiled `Synapic.chm`, **embedded in the assembly** and
+    opened through `hh.exe` with the `ms-its:<chm>::/<topic>` moniker. The bytes
+    are checked against the SHA-256 that `build-chm.ps1` recorded in
+    `help-payload.json` (embedded beside them) and, if they match, unpacked to
+    `%LOCALAPPDATA%\Synapic\help\Synapic-<hash>.chm` for the viewer to read.
+    That unpacked copy is re-verified on every open. It is the only target
+    there is: help that fails its hash, or an `hh.exe` that will not start, is
+    logged and refused rather than quietly swapped for loose HTML.
+  - **macOS/Linux, and Windows builds with no compiled help yet** — the same
+    topics as HTML in `help/` beside the app, then a source checkout's
+    `docs/help`, in the default browser.
+  `Open` logs the target it opened, or why nothing could be
+  (`Help is not available: …`, `Help: the compiled Synapic.chm … does not match
+  the SHA-256 …`) — those lines appear in the in-app log.
+- **`EmbeddedHelp`** — the compiled help as the app carries it: the bytes, the
+  file name, and the SHA-256 they were compiled with. `HelpService.FromManifest`
+  turns the two embedded resources into one, or into `null` when either is
+  missing or unusable — a payload that cannot be checked is not opened.
 - **`HelpTopics`** — the only place topic file names exist (`Home`,
-  `FirstRunSidecar`, `Troubleshooting`, `ForStepIndex(stepIndex)`).
-  `NormalizeTopic` maps anything that is not a plain `.html` name to the home
-  page, so a bad value cannot reach outside the help folder.
-- Payload: `Synapic.Avalonia.csproj` copies `docs/help/*.html` and `help.css`
-  into `help/` next to the binary on **every** RID (macOS/Linux have no `.chm`
-  viewer), and `Synapic.chm` next to it on Windows RIDs when the file exists
-  (it is a build artifact, compiled by `docs/help/build-chm.ps1`).
+  `FirstRunSidecar`, `Troubleshooting`, `SetupGuide`, `SettingsReference`,
+  `Tips`, `ForStepIndex(stepIndex)`). `NormalizeTopic` maps anything that is
+  not a plain `.html` name with an optional `#anchor` to the home page, so a bad
+  value cannot reach outside the help.
+- Payload: `Synapic.Avalonia.csproj` embeds `docs/help/Synapic.chm` and
+  `help-payload.json` as `Synapic.Help.*` resources (when they exist — both are
+  artifacts of `docs/help/build-chm.ps1`), and copies `docs/help/*.html` and
+  `help.css` into `help/` for the **non-Windows** RIDs, which have no `.chm`
+  viewer.
 
 ### Build pipeline
 

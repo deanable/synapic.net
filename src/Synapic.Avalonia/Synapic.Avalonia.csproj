@@ -49,27 +49,38 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The user help (docs/help) ships with the app, not just with the
-         Windows .chm: F1 opens the topic for what the user is looking at, and
-         macOS/Linux have no .chm viewer at all, so the topics travel as HTML in
-         help/ next to the binary on every platform. The compiled .chm is added
-         on top when it has been built (docs/help/build-chm.ps1) - it is not
-         committed, so a clean checkout simply has no .chm and Windows falls back
-         to the same HTML. Windows-only file, so it is kept out of the other
-         RIDs' payloads. -->
+    <!-- The user help (docs/help).
+         Windows: the compiled Synapic.chm, and nothing else. It is embedded in
+         the assembly rather than copied beside the binary, so the payload is
+         thirty loose files smaller and cannot be deleted, half-copied or edited
+         one page at a time - the assembly either loads or it does not. The
+         SHA-256 build-chm.ps1 recorded with it rides along as help-payload.json,
+         and HelpService refuses to open help whose bytes do not match it.
+         macOS/Linux: no .chm viewer exists, so those RIDs get the same topics as
+         HTML in help/ instead. Neither is committed - both are artifacts of
+         docs/help/build-chm.ps1 - so a clean checkout builds with no help
+         payload and falls back to the source checkout's docs/help. -->
     <Content Include="..\..\docs\help\*.html"
              Link="help\%(Filename)%(Extension)"
+             Condition="'$(RuntimeIdentifier)' == '' or !$(RuntimeIdentifier.StartsWith('win'))"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\..\docs\help\help.css"
              Link="help\help.css"
+             Condition="'$(RuntimeIdentifier)' == '' or !$(RuntimeIdentifier.StartsWith('win'))"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="..\..\docs\help\Synapic.chm"
-             Link="Synapic.chm"
-             Condition="Exists('..\..\docs\help\Synapic.chm') and ('$(RuntimeIdentifier)' == '' or $(RuntimeIdentifier.StartsWith('win')))"
-             CopyToOutputDirectory="PreserveNewest"
-             CopyToPublishDirectory="PreserveNewest" />
+    <!-- LogicalName, not the default: HelpService reads these two by name, and
+         the default would be the assembly name plus the on-disk path. A .chm
+         built after the last build of the app is picked up by the next one
+         because MSBuild tracks the file's timestamp. -->
+    <EmbeddedResource Include="..\..\docs\help\Synapic.chm"
+                      LogicalName="Synapic.Help.Synapic.chm"
+                      Condition="Exists('..\..\docs\help\Synapic.chm')" />
+    <EmbeddedResource Include="..\..\docs\help\help-payload.json"
+                      LogicalName="Synapic.Help.help-payload.json"
+                      Condition="Exists('..\..\docs\help\help-payload.json')" />
   </ItemGroup>
+
 
 </Project>

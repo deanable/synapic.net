@@ -37,6 +37,10 @@ NOT_IN_CHM = {
     "README.md",
     "build-chm.ps1",
     "check-help.py",
+    # Written beside the compiled .chm by build-chm.ps1 and describing it, not
+    # a topic of its own. It only exists after a compile, so it is easy to
+    # forget that a folder holding it also holds a file that is not a source.
+    "help-payload.json",
     "Synapic.hhp",
     "Synapic.hhc",
     "Synapic.hhk",

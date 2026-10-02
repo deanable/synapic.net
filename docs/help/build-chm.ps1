@@ -11,6 +11,14 @@
     rewritten by this run, and refuses an output too small to be help at all.
     It also leaves the caller a truthful exit code, because hhc's own one is not.
 
+    On success it writes help-payload.json next to the .chm: the SHA-256 of the
+    bytes just compiled. The app project embeds that manifest into Synapic.dll
+    beside the compiled help, and HelpService checks the bytes against it before
+    opening them, so a damaged install is reported instead of showing help that
+    is not the help this build was made from. Every failure path here removes
+    the manifest along with the .chm - a hash left describing a file that is not
+    there is worse than no hash at all.
+
 .PARAMETER HhcPath
     Full path to hhc.exe. Defaults to $env:HHC, then to the usual install
     locations for HTML Help Workshop and the Windows SDK.
@@ -47,6 +55,17 @@ $projectFile = 'Synapic.hhp'
 $projectPath = Join-Path $projectDir $projectFile
 $compiledName = 'Synapic.chm'
 $compiledPath = Join-Path $projectDir $compiledName
+
+# Written only by a compile this script has proven, and removed by every one it
+# has not. Anything else lets a hash outlive the file it describes.
+$manifestName = 'help-payload.json'
+$manifestPath = Join-Path $projectDir $manifestName
+
+function Remove-StalePayload {
+    if (Test-Path -LiteralPath $manifestPath) {
+        Remove-Item -LiteralPath $manifestPath -Force
+    }
+}
 
 if (-not (Test-Path -LiteralPath $projectPath)) {
     throw "Help project not found: $projectPath"
@@ -85,6 +104,7 @@ function Find-Hhc {
     }
 
     if ($AllowMissingCompiler) {
+        Remove-StalePayload
         Write-Warning 'hhc.exe was not found - skipping the compiled .chm. The HTML topics still ship, and the app opens those.'
         return $null
     }
@@ -122,6 +142,7 @@ if (Test-Path -LiteralPath $checker) {
 $hhc = Find-Hhc
 if (-not $hhc) { exit 0 }
 
+Remove-StalePayload
 Write-Host "Compiling $projectFile with $hhc"
 $started = Get-Date
 
@@ -162,6 +183,7 @@ $minimumChmBytes = 4KB
 if ($compiled.Length -lt $minimumChmBytes) {
     $stubBytes = $compiled.Length
     Remove-Item -LiteralPath $compiledPath -Force
+    Remove-StalePayload
     $output | ForEach-Object { Write-Host $_ }
     if (-not $AllowMissingCompiler) {
         throw "hhc.exe wrote a $stubBytes-byte $compiledName - a failed compile, not help. Removed it; the HTML topics in help/ are what the app will open."
@@ -179,6 +201,31 @@ if ($OutputDirectory) {
 # reported a healthy 13 KB .chm as "0 KB" and made a good compile look empty.
 $sizeKb = [math]::Round((Get-Item -LiteralPath $target).Length / 1KB)
 Write-Host "Compiled $target ($sizeKb KB)" -ForegroundColor Green
+
+# The SHA-256 of the bytes this run produced, written beside the .chm it
+# describes. Synapic.Avalonia.csproj embeds this manifest into Synapic.dll
+# alongside the compiled help, and HelpService checks the bytes against it before
+# opening them: this is what makes the help tamper-evident rather than merely
+# compiled. No BOM - JsonDocument does not skip one, and Windows PowerShell's
+# Set-Content -Encoding UTF8 writes one.
+$hash = (Get-FileHash -LiteralPath $compiledPath -Algorithm SHA256).Hash.ToLowerInvariant()
+$manifestJson = [ordered]@{
+    chm    = $compiledName
+    sha256 = $hash
+    bytes  = $compiled.Length
+} | ConvertTo-Json
+
+[System.IO.File]::WriteAllText(
+    $manifestPath,
+    $manifestJson,
+    (New-Object System.Text.UTF8Encoding($false)))
+Write-Host "Recorded SHA-256 $hash in $manifestName"
+
+# -OutputDirectory is a copy of the .chm for someone publishing straight from
+# it, so the hash has to travel with it or the pair there is not usable.
+if ($OutputDirectory) {
+    Copy-Item -LiteralPath $manifestPath -Destination (Join-Path $destinationDir $manifestName) -Force
+}
 
 # hhc.exe's exit code is not trustworthy in either direction: it reports failure
 # on compiles that worked, and a caller that trusts the leftover code - GitHub's

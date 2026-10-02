@@ -64,7 +64,10 @@ artifacts/<rid>/             built sidecar + published app (dev output)
 
 The sidecar lives under `src/` for convenience but is built by
 `build/fetch-python.*`, `build/install-python-deps.*`, `build/build-sidecar.*`
-and packaged by PyInstaller; it is never compiled by MSBuild. Two guards run
+and packaged by PyInstaller; it is never compiled by MSBuild. Windows builds
+also run `build/install-html-help-workshop.ps1` (which installs `hhc.exe` from
+the hash-checked copy vendored in `build/vendor/`) and `docs/help/build-chm.ps1`
+before publishing, because the compiled `.chm` is the Windows help payload. Two guards run
 inside the build: `check-lfm2vl-tie.py` (transformers must tie the LFM2.5-VL
 weights) and `check-sidecar-variant.py` (the packaged payload must match the
 RID's CPU/CUDA torch wheels). `split-release-asset.py` is a packaging-time tool
@@ -218,7 +221,7 @@ duration, and the log auto-scrolls to the newest line.
 | Opt-in usage counters | `logs/synapic-usage.json` |
 | Model cache (sidecar `HF_HOME`) | Windows `%LOCALAPPDATA%\Synapic\models`; elsewhere `~/.cache/synapic/models` |
 | Sidecar port file | `%TEMP%/synapic_port_{hostpid}.txt` containing `port\npid\n` |
-| User help payload | `help/*.html` + `Synapic.chm` next to the executable (both copied by `src/Synapic.Avalonia/Synapic.Avalonia.csproj` from `docs/help`); a dev checkout falls back to `docs/help` itself |
+| User help payload | Windows: `Synapic.chm` + `help-payload.json` **embedded in `Synapic.dll`**, unpacked to `%LOCALAPPDATA%\Synapic\help\` after a SHA-256 check. Non-Windows: `help/*.html` beside the executable. Both from `docs/help`, wired by `src/Synapic.Avalonia/Synapic.Avalonia.csproj`; a dev checkout falls back to `docs/help` itself |
 
 Notes:
 - `config.json` is written by `MainWindowViewModel.PersistConfig` when the user
@@ -361,9 +364,10 @@ executables as their own release assets — see `packaging.md`.
 | `Daminion returned the same ids as the previous page` | Infinite-loop guard in `FetchItemsAsync` (offset ignored server-side). |
 | `Count N matches total catalog size despite filters` | `GetFilteredItemCountAsync` sanity fallback. |
 | `[sidecar:err] ...` lines in the UI log | Sidecar stderr, forwarded verbatim through `LogReceived`. |
-| Help / <kbd>F1</kbd> does nothing | `HelpService` logs what it did: `Help: opened <target>` on success, and `Help is not available: no Synapic.chm and no help/ beside <app dir> …` when no payload was found. The payload is produced by the app project (`help/*.html` on every RID; `Synapic.chm` on Windows once `docs/help/build-chm.ps1` has compiled it), so a build that predates this change, or a payload deleted from the install directory, is the usual cause. |
-| Windows opens the HTML help instead of the compiled one | Expected when there is no `Synapic.chm` beside the app (CI ships it only on Windows legs and only when `hhc.exe` exists there), and the fallback when `hh.exe` will not start. Both are logged. |
-| The compiled help is stale next to a dev build | A `Synapic.chm` in the output directory (copied from `docs/help` at build time) always wins over `help/*.html` on Windows. Delete it, or re-run `build-chm.ps1`, to compare against the HTML topics. |
+| Help / <kbd>F1</kbd> does nothing | `HelpService` logs what it did: `Help: opened <target>` on success, `Help: unpacked the compiled Synapic.chm to <path>` the first time, and `Help is not available: no compiled Synapic.chm inside the app …` when the build carries no payload. The payload is produced by the app project, so a build that predates the `.chm` being embedded, or a checkout that has not run `docs/help/build-chm.ps1`, is the usual cause. |
+| `Help: the compiled Synapic.chm inside this app does not match the SHA-256 …` | The install is damaged — the help is deliberately **not** opened, and it will not fall back to loose HTML either. Reinstall Synapic. If a developer hit this, re-run `docs/help/build-chm.ps1` and rebuild the app: MSBuild embeds the `.chm` and its manifest as of the build. |
+| Windows opens the HTML help instead of the compiled one | Only on a build with no compiled help embedded — a dev checkout that has not run `build-chm.ps1`, or macOS/Linux, which have no `.chm` viewer. A release build cannot reach this: CI installs HTML Help Workshop and fails the build rather than publish without a `.chm`. |
+| The compiled help is stale in a dev build | Delete `docs/help/Synapic.chm` and `help-payload.json` to get the HTML sources back, or re-run `build-chm.ps1` and rebuild. The `Content` copy in the output directory is for non-Windows RIDs only. |
 
 ## 12. Known divergences / decisions worth remembering
 

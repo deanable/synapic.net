@@ -11,8 +11,8 @@ self-contained; **Windows is framework-dependent** to keep the installer small
 artifacts/<rid>/
 ├── Synapic(.exe)            # Avalonia publish (framework-dependent on Windows)
 ├── synapic-inference(.exe)  # PyInstaller sidecar
-├── help/*.html              # user help topics, every RID (from docs/help)
-├── Synapic.chm              # compiled Windows help, Windows RIDs only
+├── help/*.html              # user help topics, non-Windows RIDs (from docs/help)
+│                           # Windows: Synapic.chm is inside Synapic.dll
 ├── *.dll                    # runtime deps
 └── installer output         # .exe / .AppImage / .dmg
 ```
@@ -23,6 +23,8 @@ artifacts/<rid>/
 build/fetch-python.ps1|.sh <rid>     # python-build-standalone 3.11.16 (pinned)
 build/install-python-deps.ps1|.sh <rid>   # pip install -r requirements.txt (CPU torch)
 build/build-sidecar.ps1|.sh <rid>    # PyInstaller → synapic-inference(.exe) + variant guard
+build/install-html-help-workshop.ps1 # Windows only: hhc.exe, from build/vendor (hash-checked)
+docs/help/build-chm.ps1              # Windows only: docs/help → Synapic.chm + SHA-256 manifest
 dotnet publish src/Synapic.Avalonia -c Release -r <rid> --self-contained
 build/package-windows.ps1            # Inno Setup 6 → Synapic-Setup-x64.exe
 build/package-windows-msi.ps1        # WiX → Synapic-win-x64.msi + Synapic-Setup-win-x64-msi.exe
@@ -323,15 +325,29 @@ after a 2.7 GB download.
   installs without growing everyone's download.
 - **User help payload:** the app opens the help itself (toolbar **Help** and
   <kbd>F1</kbd> — see `docs/help/README.md`), so the payload ships with every
-  bundle: `src/Synapic.Avalonia` copies `docs/help/*.html` into `help/` next to
-  the binary on every RID (macOS and Linux have no `.chm` viewer), and
-  `Synapic.chm` next to it on Windows RIDs when that file exists. The Windows
-  CI legs compile the `.chm` before publishing with
-  `build-chm.ps1 -AllowMissingCompiler`, so a runner that cannot produce one
-  publishes the HTML topics and a `::warning::` instead of failing: `hhc.exe`
-  arrives with Visual Studio's ATL/MFC component, and on GitHub's windows-2022
-  image it is present but fails silently - exit code 1, no diagnostics and a
-  0-byte `.chm`, which the script now detects, throws away and tolerates.
+  bundle, and it is different per platform.
+  - **Windows:** the compiled `Synapic.chm` and its `help-payload.json` SHA-256
+    manifest are **embedded resources** in `Synapic.dll` (`LogicalName`
+    `Synapic.Help.*`), not files beside the binary. Nothing in the install
+    directory can be deleted or half-copied to break the help, and
+    `HelpService` refuses to open the bytes if they do not match the recorded
+    hash — which is a damaged install to be reported, not substituted.
+  - **Linux and macOS:** `docs/help/*.html` and `help.css` copied into `help/`
+    next to the binary, opened in the default browser. There is no `.chm`
+    viewer on either platform, so the compiled file would be dead weight.
+  The Windows CI legs run `build/install-html-help-workshop.ps1` and then
+  `build-chm.ps1` **without** `-AllowMissingCompiler`, because the `.chm` is the
+  whole of the Windows help now: a Windows publish without one ships no help at
+  all, so it fails the build. The compiler has to be installed explicitly
+  because the `hhc.exe` in GitHub's windows-2022 Windows SDK exits 0 having
+  written nothing. It is installed from the installer **vendored in the
+  repository** (`build/vendor/html-help-workshop/htmlhelp.exe`, hash-checked
+  before it is run) rather than through chocolatey or a download, so the
+  release does not depend on a third-party package manager, or on the Internet
+  Archive still serving the only surviving copy of a tool Microsoft stopped
+  linking to in 2009. `build-chm.ps1` then proves its own output (written this
+  run, at least 4 KB, no `HHC****` diagnostics) and writes the manifest the app
+  checks against.
   `docs/help/check-help.py` runs
   in the Linux test job, so a dead link fails a PR rather than shipping.
 - **Windows signing:** EV cert via `signtool` (set `SIGNING_CERT_THUMBPRINT`).

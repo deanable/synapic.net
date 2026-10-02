@@ -57,7 +57,9 @@ Thumbs.db
 *.gguf
 
 # Compiled HTML Help output. The sources are committed (docs/help/*.html plus
-# the .hhp/.hhc/.hhk); the .chm is a build artifact of docs/help/build-chm.ps1.
+# the .hhp/.hhc/.hhk); the .chm and the SHA-256 manifest written beside it are
+# build artifacts of docs/help/build-chm.ps1, and the app embeds both.
 docs/help/*.chm
+docs/help/help-payload.json
 build/_*.log
 UpgradeLog*.htm

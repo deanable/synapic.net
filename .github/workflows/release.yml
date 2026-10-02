@@ -96,21 +96,38 @@ jobs:
         shell: bash
         run: ./build/build-sidecar.sh ${{ matrix.rid }}
 
-      # The app project copies the help topics (docs/help) into every publish, so
-      # macOS and Linux ship help too and open it in the browser. Windows also
-      # gets the compiled .chm when hhc.exe works - it is Windows-only, arrives
-      # with Visual Studio's ATL/MFC component, and a runner without a usable one
-      # must not fail a release whose help still works as HTML. That includes the
-      # case where hhc.exe runs and writes nothing usable: the script detects it,
-      # throws the stub away and, with -AllowMissingCompiler, exits 0.
+      # The compiled .chm is now the whole of the Windows help payload: it is
+      # embedded in the assembly and checked against a SHA-256 before it is
+      # opened (docs/help/README.md). A Windows build that ships without it has
+      # no help at all, so this step fails rather than warning.
+      #
+      # The compiler has to be installed first. windows-2022 has an hhc.exe in
+      # the Windows SDK that exits 0 having written nothing, which is why the
+      # old step tolerated a missing .chm.
+      #
+      # The installer is vendored in build/vendor/html-help-workshop and hash-
+      # checked by the script, rather than taken from chocolatey or downloaded:
+      # a release should not need a third-party package manager to produce its
+      # own payload, and Microsoft no longer links to the only copy of this tool
+      # that still works. See that directory's README for provenance.
+      - name: Install the HTML Help Workshop compiler
+        if: matrix.pkg == 'ps1'
+        shell: pwsh
+        run: ./build/install-html-help-workshop.ps1
+
       - name: Compile the Windows help (.chm)
         if: matrix.pkg == 'ps1'
         shell: pwsh
         run: |
-          ./docs/help/build-chm.ps1 -AllowMissingCompiler
+          # No -AllowMissingCompiler: this is the payload, not a nicety.
+          ./docs/help/build-chm.ps1
           if (-not (Test-Path docs/help/Synapic.chm)) {
-            Write-Host "::warning title=Help released without the compiled .chm::hhc.exe (HTML Help Workshop) is missing on this runner, or it produced nothing usable, so this release's help opens the HTML topics instead of the compiled Windows help."
+            throw "The help compiled to nothing. The app would ship with no help on Windows."
           }
+          if (-not (Test-Path docs/help/help-payload.json)) {
+            throw "The help compiled but no SHA-256 manifest was written, so the app would refuse to open it."
+          }
+          Write-Host "Help payload ready: $((Get-Item docs/help/Synapic.chm).Length) bytes"
 
       - name: Publish Avalonia app
         run: >-
