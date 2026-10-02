@@ -28,6 +28,7 @@ docs/help/build-chm.ps1              # Windows only: docs/help → Synapic.chm +
 dotnet publish src/Synapic.Avalonia -c Release -r <rid> --self-contained
 build/package-windows.ps1            # Inno Setup 6 → Synapic-Setup-x64.exe
 build/package-windows-msi.ps1        # WiX → Synapic-win-x64.msi + Synapic-Setup-win-x64-msi.exe
+build/wix/Synapic.Installer.wixproj  # that MSI as a solution project (built on its own)
 build/package-linux.sh               # linuxdeploy → Synapic-x86_64.AppImage
 build/package-macos.sh <rid>         # codesign + notarytool + create-dmg
 ```
@@ -37,8 +38,26 @@ button and CI both call it.
 
 ### Building an installer
 
-Nothing in the solution packages by itself, and none of it is built by MSBuild:
-the installers are separate command-line steps. On Windows there are two
+Nothing packages as part of a solution build: the installers are separate
+command-line steps. The solution does hold one installer project,
+`build/wix/Synapic.Installer.wixproj`, but it carries no `Build.0` entry in
+`Synapic.Net.sln`, so `dotnet build Synapic.Net.sln` skips it - the solution
+builds on the Linux CI leg, which has no `artifacts/win-x64` payload and no
+Windows Installer to validate against. It is for building the MSI on its own:
+
+```powershell
+dotnet build build/wix/Synapic.Installer.wixproj -c Release   # → artifacts/msi/Synapic-win-x64.msi
+```
+
+The project holds only what a bare `wix build` does not default to - `x64`, the
+released file name, the EULA acknowledgement and the one ICE warning this package
+is designed to trip - and compiles the same `Synapic.Msi.wxs`, so the payload
+glob, the UpgradeCodes and the runtime requirement cannot differ from the
+script's. What it does *not* run is `build/check-installer-identities.py`, which
+is why `package-windows-msi.ps1` stays the path that proves the identities before
+anything ships.
+
+On Windows there are two
 installer definitions - three artefacts, because the MSI ships with a bundle
 that installs the .NET runtime for it - all fed by the same framework-dependent
 win-x64 publish:
@@ -46,7 +65,7 @@ win-x64 publish:
 | Installer | Definition | Produced by | Output |
 |-----------|-----------|-------------|--------|
 | Inno Setup (shipped) | `build/installer-windows.iss` | `build/package-windows.ps1` | `artifacts/win-x64/Synapic-Setup-win-x64.exe` |
-| MSI | `build/wix/Synapic.Msi.wxs` | `build/package-windows-msi.ps1` | `artifacts/msi/Synapic-win-x64.msi` |
+| MSI | `build/wix/Synapic.Msi.wxs` | `build/package-windows-msi.ps1`, or `build/wix/Synapic.Installer.wixproj` | `artifacts/msi/Synapic-win-x64.msi` |
 | Bundle | `build/wix/Synapic.Bundle.wxs` | `build/package-windows-msi.ps1` | `artifacts/msi/Synapic-Setup-win-x64-msi.exe` |
 
 `package-windows.ps1` is the path CI runs: it takes the win-x64 publish in

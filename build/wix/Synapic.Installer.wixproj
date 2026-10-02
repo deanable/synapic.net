@@ -1,0 +1,105 @@
+<Project Sdk="WixToolset.Sdk/7.0.0">
+
+  <!--
+    The Windows MSI, as a project in the solution.
+
+    This compiles build/wix/Synapic.Msi.wxs - the same source
+    build/package-windows-msi.ps1 compiles - so the installer can be built from
+    the IDE or a plain `dotnet build` instead of only from the packaging script:
+
+      dotnet build build/wix/Synapic.Installer.wixproj -c Release
+      → artifacts/msi/Synapic-win-x64.msi
+
+    Everything that decides what the package *is* lives in the .wxs and the
+    files it includes, not here:
+      * the payload is globbed from artifacts/win-x64, so a dependency added to
+        the app reaches the installer with no project to regenerate;
+      * the UpgradeCode comes from Synapic.Identities.wxi, guarded against
+        build/installer-identities.txt by build/check-installer-identities.py;
+      * ProductCode is not pinned anywhere, so every build gets a fresh one.
+    This file therefore holds nothing but the options a bare `wix build` does
+    not default to - see the properties below.
+
+    build/package-windows-msi.ps1 stays the authoritative path: it is what CI
+    runs, it publishes the payload first, refuses to package without the
+    inference sidecar, stages the .NET runtime installer and builds the bundle
+    users actually double-click (Synapic.Bundle.wxs, which chains that runtime
+    ahead of this MSI).
+
+    This project is in Synapic.Net.sln but is deliberately not marked for
+    solution build (no `Build.0` entry), so `dotnet build Synapic.Net.sln`
+    leaves it alone. It cannot build anywhere without a payload: the solution
+    builds on the Linux CI leg, which has no artifacts/win-x64 and no Windows
+    Installer to validate against. Build it on its own, from the IDE or:
+
+      dotnet build build/wix/Synapic.Installer.wixproj -c Release
+
+    Also worth knowing: the packaging script runs
+    build/check-installer-identities.py first and this project does not, so the
+    script is still the path that proves the UpgradeCodes have not drifted -
+    see docs/packaging.md.
+  -->
+
+  <PropertyGroup>
+    <!--
+      The OSMF EULA, accepted per invocation rather than once into per-user
+      state: CheckLicenseAcceptance in wix.targets only looks for the acceptance
+      file when this is empty, and the value is handed to the build and
+      validation tasks as -acceptEula. Same acknowledgement, same wording and
+      same reason as the -acceptEula wix7 build/package-windows-msi.ps1 passes -
+      it lives here in the repository, where a reviewer sees it, instead of on
+      whichever machine happened to run `wix eula accept` first.
+    -->
+    <AcceptEula>wix7</AcceptEula>
+
+    <!--
+      x64, not WiX's default x86: the payload is a win-x64 publish. Leaving the
+      platform at the default still produces a package that installs and looks
+      right, but Windows Installer then redirects every component into Program
+      Files (x86) and the 32-bit registry view - wix msi validate reports it as
+      ICE80 on each of the seventy-odd components, which is the only place it
+      shows. Same flag the packaging script passes as -arch x64.
+    -->
+    <InstallerPlatform>x64</InstallerPlatform>
+
+    <!--
+      The released file name (docs/packaging.md, and what the bundle and the
+      release page expect), written next to the script-built artifacts rather
+      than into a bin/ folder of its own so there is one place a built MSI is.
+    -->
+    <OutputName>Synapic-win-x64</OutputName>
+    <OutputPath>$(MSBuildThisFileDirectory)..\..\artifacts\msi\</OutputPath>
+
+    <!--
+      The SDK runs the ICE checks as part of a build (they are what found the
+      missing -arch x64 once), and Directory.Build.props promotes warnings to
+      errors solution-wide - so the one ICE this package is designed to trip
+      would fail every build. ICE61 is AllowSameVersionUpgrades doing its job:
+      the product version stays 1.0.0 across releases, and without it a rebuild
+      at the same version installs beside the existing copy instead of over it.
+      Documented as expected in docs/packaging.md. Everything else the ICE
+      checks find still fails the build - suppressing the whole validation
+      (SuppressValidation) would throw away the check that matters.
+    -->
+    <SuppressIces>ICE61</SuppressIces>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Both package sources sit in this folder, and the SDK compiles every .wxs
+      it finds. The bundle is not this project's output: it needs the MSI
+      above and the staged .NET runtime installer, and a single wix build cannot
+      emit a package and a bundle at once. package-windows-msi.ps1 builds it.
+    -->
+    <Compile Remove="Synapic.Bundle.wxs" />
+
+    <!--
+      The netfx extension supplies DotNetCompatibilityCheck - the launch
+      condition that refuses to install on a machine with no .NET runtime.
+      Referenced the way the SDK expects, so restore brings down the same
+      version the packaging script adds to the global WiX cache.
+    -->
+    <PackageReference Include="WixToolset.Netfx.wixext" Version="7.0.0" />
+  </ItemGroup>
+
+</Project>

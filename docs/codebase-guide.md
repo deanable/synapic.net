@@ -33,7 +33,9 @@ the only engine and there are no API keys to store.
 ## 2. Repository layout
 
 ```
-Synapic.Net.sln              solution (3 src + 3 test projects)
+Synapic.Net.sln              solution (2 app + 3 test projects, plus the WiX
+                             installer project - which the solution build skips,
+                             see docs/packaging.md)
 Directory.Build.props        net10.0, C# 12, nullable, warnings-as-errors
 global.json                  .NET SDK pin (10.0.112, rollForward latestFeature)
 nuget.config

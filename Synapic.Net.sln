@@ -12,6 +12,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Synapic.Avalonia.Tests", "t
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Synapic.Integration.Tests", "tests\Synapic.Integration.Tests\Synapic.Integration.Tests.csproj", "{A1B2C3D4-0005-4000-9000-000000000005}"
 EndProject
+Project("{B7DD6F7E-DEF8-4E67-B5B7-07EF123DB6F0}") = "Synapic.Installer", "build\wix\Synapic.Installer.wixproj", "{C35F4074-5091-4AD2-9609-D3EBBA43FC49}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -38,6 +40,8 @@ Global
 		{A1B2C3D4-0005-4000-9000-000000000005}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A1B2C3D4-0005-4000-9000-000000000005}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A1B2C3D4-0005-4000-9000-000000000005}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C35F4074-5091-4AD2-9609-D3EBBA43FC49}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C35F4074-5091-4AD2-9609-D3EBBA43FC49}.Release|Any CPU.ActiveCfg = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
