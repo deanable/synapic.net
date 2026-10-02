@@ -124,8 +124,15 @@
                     help:HelpScope.Topic="settings-reference.html#process-all"
                     ToolTip.Tip="Ignore the max-items limit and keep requesting pages until the server returns no more results (use for catalogs larger than one API response)." />
           <TextBlock Text="AI image scale:" VerticalAlignment="Center" />
+          <!-- The fixed 200px thumbnail replaces the image outright, so the
+               scale has no effect while it is on. The chosen value is kept,
+               not reset: unchecking the box brings it back exactly as it was,
+               and ProcessingOrchestrator ignores ResizeScale when the
+               override is on anyway. -->
           <ComboBox SelectedIndex="{Binding ResizeScaleIndex}"
                     ItemsSource="{Binding ResizeScaleOptions}" MinWidth="90"
+                    IsEnabled="{Binding !UseThumbnailOverride}"
+                    ToolTip.Tip="Off while the fixed 200px thumbnail is on - the thumbnail replaces the scaled image. Untick it to choose a scale again."
                     help:HelpScope.Topic="settings-reference.html#resize-scale" />
           <CheckBox Content="Use fixed 200px thumbnail (fast)"
                     IsChecked="{Binding UseThumbnailOverride}" VerticalAlignment="Center"
