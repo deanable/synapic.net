@@ -63,6 +63,18 @@
     <InstallerPlatform>x64</InstallerPlatform>
 
     <!--
+      x64 is this project's *only* platform - a different statement from the
+      property above: this is the one Visual Studio's Configuration Manager
+      reads to enumerate the platforms it offers for the project. Without it
+      the WiX project system offers all three architectures WiX supports
+      (x86, x64, ARM64), and when a solution mapping goes stale VS falls back
+      to the first of them - x86 - which then looks like the project is being
+      built for the wrong architecture. The solution maps both configurations
+      to Debug|x64 / Release|x64 to match.
+    -->
+    <Platforms>x64</Platforms>
+
+    <!--
       The released file name (docs/packaging.md, and what the bundle and the
       release page expect), written next to the script-built artifacts rather
       than into a bin/ folder of its own so there is one place a built MSI is.

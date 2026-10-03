@@ -49,6 +49,13 @@ Windows Installer to validate against. It is for building the MSI on its own:
 dotnet build build/wix/Synapic.Installer.wixproj -c Release   # → artifacts/msi/Synapic-win-x64.msi
 ```
 
+Visual Studio loads that project only with FireGiant's free HeatWave
+extension installed (it registers the WiX project type; without it VS reports
+the project as "incompatible with this version of Visual Studio"). One
+Marketplace entry covers VS 2022 and VS 2026. If VS still refuses the project
+after installing it, delete the untracked `.vs` folder once - a stale solution
+cache can keep the old verdict.
+
 The project holds only what a bare `wix build` does not default to - `x64`, the
 released file name, the EULA acknowledgement and the one ICE warning this package
 is designed to trip - and compiles the same `Synapic.Msi.wxs`, so the payload
