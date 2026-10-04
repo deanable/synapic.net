@@ -220,6 +220,128 @@ public class StepDedupViewModelTests
         Assert.True(vm.ScanCommand.CanExecute(null));
     }
 
+    // ── Destructive-action gating ──────────────────────────────────────
+
+    /// <summary>One temp file that stays, one that the unchecked row targets.</summary>
+    private static (string dir, string dup) MakeDuplicatePair()
+    {
+        var dir = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), "synapic-dedup-" + Guid.NewGuid().ToString("n"));
+        System.IO.Directory.CreateDirectory(dir);
+        var dup = System.IO.Path.Combine(dir, "dup.jpg");
+        System.IO.File.WriteAllText(dup, "y");
+        return (dir, dup);
+    }
+
+    private static StepDedupViewModel VmTargeting(string dupPath, int action)
+    {
+        var vm = new StepDedupViewModel();
+        vm.Groups.Add(Group(
+            new DedupItemViewModel(System.IO.Path.Combine(
+                System.IO.Path.GetDirectoryName(dupPath)!, "keep.jpg"), "keep.jpg")
+            {
+                IsChecked = true,
+            },
+            new DedupItemViewModel(dupPath, "dup.jpg"))); // unchecked → action target
+        vm.SelectedAction = action;
+        return vm;
+    }
+
+    [Fact]
+    public async Task LocalDelete_WithoutConfirmHook_FailsClosed()
+    {
+        var (dir, dup) = MakeDuplicatePair();
+        try
+        {
+            var vm = VmTargeting(dup, action: 2); // Delete, ConfirmAction null
+            Assert.Null(vm.ConfirmAction);
+            Assert.True(vm.ApplyCommand.CanExecute(null));
+
+            await vm.ApplyCommand.ExecuteAsync(null);
+
+            Assert.True(System.IO.File.Exists(dup)); // nothing deleted
+            Assert.Equal("Delete cancelled", vm.ScanSummary);
+        }
+        finally
+        {
+            System.IO.Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task LocalDelete_Declined_KeepsFiles_Accepted_DeletesThem()
+    {
+        var (dir, dup) = MakeDuplicatePair();
+        try
+        {
+            var vm = VmTargeting(dup, action: 2);
+            var prompts = 0;
+            vm.ConfirmAction = message =>
+            {
+                prompts++;
+                Assert.Contains("Permanently delete", message);
+                Assert.Contains("cannot be undone", message);
+                return Task.FromResult(false);
+            };
+
+            await vm.ApplyCommand.ExecuteAsync(null);
+            Assert.Equal(1, prompts);
+            Assert.True(System.IO.File.Exists(dup)); // declined → untouched
+            Assert.Equal("Delete cancelled", vm.ScanSummary);
+            Assert.Single(vm.Groups); // declined keeps the review list intact
+
+            vm.ConfirmAction = _ => Task.FromResult(true);
+            await vm.ApplyCommand.ExecuteAsync(null);
+
+            Assert.False(System.IO.File.Exists(dup)); // accepted → gone
+            Assert.Empty(vm.Groups); // acted-on group left the list
+        }
+        finally
+        {
+            System.IO.Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task LocalTagAndMove_NeverPrompt()
+    {
+        var vm = new StepDedupViewModel();
+        var prompted = false;
+        vm.ConfirmAction = _ =>
+        {
+            prompted = true;
+            return Task.FromResult(true);
+        };
+
+        // Tag only logs — a nonexistent path is safe and side-effect free.
+        vm.Groups.Add(Group(Item("/nonexistent/a.jpg"), Item("/nonexistent/b.jpg")));
+        vm.SelectedAction = 0; // Tag
+        await vm.ApplyCommand.ExecuteAsync(null);
+        Assert.False(prompted);
+
+        // Move with a real file: reversible, so it must not prompt either.
+        var (dir, dup) = MakeDuplicatePair();
+        try
+        {
+            vm.Groups.Add(Group(
+                new DedupItemViewModel(System.IO.Path.Combine(dir, "keep.jpg"), "keep.jpg")
+                {
+                    IsChecked = true,
+                },
+                new DedupItemViewModel(dup, "dup.jpg")));
+            vm.SelectedAction = 1; // Move
+            await vm.ApplyCommand.ExecuteAsync(null);
+
+            Assert.False(prompted);
+            Assert.False(System.IO.File.Exists(dup)); // moved into duplicates/
+            Assert.True(System.IO.File.Exists(System.IO.Path.Combine(dir, "duplicates", "dup.jpg")));
+        }
+        finally
+        {
+            System.IO.Directory.Delete(dir, recursive: true);
+        }
+    }
+
     // ── View wiring ─────────────────────────────────────────────────────────
 
     [AvaloniaFact]

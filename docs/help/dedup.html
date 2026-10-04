@@ -99,7 +99,7 @@ group of two is easy to read; a group of nine is worth opening a couple of.</p>
 
 <table>
 <tr><th class="setting">Action</th><th>What it actually does</th></tr>
-<tr><td><span class="ui">Delete</span> (local source)</td><td>Deletes the unchecked files permanently. This is a real delete, not a move to the Recycle Bin, and there is no undo.</td></tr>
+<tr><td><span class="ui">Delete</span> (local source)</td><td>Deletes the unchecked files permanently. This is a real delete, not a move to the Recycle Bin, and there is no undo &mdash; so a confirmation prompt appears first, counting the files and saying so.</td></tr>
 <tr><td><span class="ui">Move</span> (local source)</td><td>Moves the unchecked files into a <span class="path">duplicates</span> subfolder beside each file. Nothing is destroyed, and the files stay in the same tree. If a file of the same name is already in that subfolder, that move fails and is reported in the log &mdash; the original is left where it is.</td></tr>
 <tr><td><span class="ui">Tag</span> (local source)</td><td>Not implemented in this version. It records the intent in the log and changes nothing, so do not rely on it to mark duplicates. Use Move, or note them in your catalog by hand.</td></tr>
 <tr><td><span class="ui">Delete from catalog</span> (Daminion source)</td><td>Removes the unchecked items from the Daminion catalog. The original files on the server are not touched, but the catalog entries are: a confirmation prompt appears first, and after that there is no undo. The scan itself changes nothing &mdash; only <span class="ui">Apply</span> does.</td></tr>

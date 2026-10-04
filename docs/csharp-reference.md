@@ -213,8 +213,9 @@ it and deletes it again (Daminion), producing `Groups` — a vertical list of
 switches recompute every group's checkboxes as the union of their picks
 (keep-first when none is active; unknown dates/sizes are never picked). Records
 a dedup telemetry count. `ApplyCommand` acts on the unchecked items:
-Tag/Move/Delete for a local source, or — after the `ConfirmAction` modal prompt
-(null = fail closed) — `DaminionApiClient.DeleteItemsAsync` for the catalog.
+Tag/Move/Delete for a local source (Delete gated by the same `ConfirmAction`
+prompt), or — after that modal (null = fail closed) —
+`DaminionApiClient.DeleteItemsAsync` for the catalog.
 
 ---
 

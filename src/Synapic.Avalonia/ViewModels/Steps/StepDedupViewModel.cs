@@ -151,7 +151,8 @@ public partial class StepDedupViewModel : ViewModelBase
     }
 
     /// <summary>Modal confirmation hook (message → confirmed?). Set by the view;
-    /// null cancels destructive Daminion actions.</summary>
+    /// null cancels every destructive action (Daminion catalog delete and local
+    /// file delete alike) — fail closed.</summary>
     public Func<string, Task<bool>>? ConfirmAction { get; set; }
 
     // ── Source (local vs Daminion — same radio pattern as Step 1) ───────────
@@ -537,6 +538,19 @@ public partial class StepDedupViewModel : ViewModelBase
         else
         {
             var action = (DedupAction)Math.Clamp(SelectedAction, 0, LocalActions.Length - 1);
+
+            // Local delete is as permanent as the catalog one (no Recycle Bin),
+            // so it gets the same fail-closed gate: no prompt wired = no delete.
+            // Tag and Move are reversible and never prompt.
+            if (action == DedupAction.Delete &&
+                (ConfirmAction is null ||
+                 !await ConfirmAction($"Permanently delete {targets.Count} duplicate file(s)? This cannot be undone.")))
+            {
+                ScanSummary = "Delete cancelled";
+                SynapicLog.Info(nameof(StepDedupViewModel), "Local duplicate delete cancelled");
+                return;
+            }
+
             ok = await _dedup.ApplyToPathsAsync(targets.Select(t => t.Key), action, ct);
             summary = ok
                 ? $"{action} applied to {targets.Count} duplicate(s)"
