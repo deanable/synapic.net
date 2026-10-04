@@ -76,9 +76,12 @@ scan itself changes nothing: it reads files and hashes them.</p>
 <h2>Reviewing the groups</h2>
 
 <p>Groups appear as cards in a vertical list. Each card shows how many images
-it holds and lists them as rows &mdash; name, capture date and file size &mdash;
-every row with its own checkbox. <strong>A checked item is kept</strong>; the
-action applies to the unchecked ones.</p>
+it holds and lists them as rows &mdash; a small preview thumbnail, name, capture
+date and file size &mdash; every row with its own checkbox. Previews are scaled
+down in memory as the list loads (for the catalog source they come straight
+from the server's thumbnail endpoint); nothing is saved to disk. A row whose
+image cannot be decoded simply shows no thumbnail. <strong>A checked item is
+kept</strong>; the action applies to the unchecked ones.</p>
 
 <p>Instead of ticking rows by hand, use the <span class="ui">Auto-select
 keep-set</span> switches above the list: <span class="ui">Oldest</span>,

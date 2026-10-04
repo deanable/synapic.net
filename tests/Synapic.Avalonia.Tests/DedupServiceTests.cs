@@ -6,6 +6,47 @@ namespace Synapic.Avalonia.Tests;
 
 public class DedupServiceTests
 {
+    /// <summary>The committed sample image, found by walking up from the test
+    /// bin directory (same approach as EndToEndRoundTripTests).</summary>
+    private static string? FindSampleImage()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        for (var i = 0; i < 6 && dir is not null; i++, dir = dir.Parent)
+        {
+            var candidate = Path.Combine(dir.FullName, "tests", "Synapic.Avalonia.Tests", "TestData", "sample.jpg");
+            if (File.Exists(candidate)) return candidate;
+        }
+        return null;
+    }
+
+    // ── Preview thumbnails ────────────────────────────────────────────
+
+    [Fact]
+    public void CreateThumbnail_ScalesToTheBoxAndReturnsAJpeg()
+    {
+        var sample = FindSampleImage();
+        if (sample is null) return; // repo checkout not reachable from the bin
+
+        var bytes = DedupService.CreateThumbnail(sample, maxSize: 128);
+
+        Assert.NotNull(bytes);
+        Assert.True(bytes!.Length > 0);
+        // JPEG magic — the buffer is what the row decodes straight into a bitmap.
+        Assert.Equal(0xFF, bytes[0]);
+        Assert.Equal(0xD8, bytes[1]);
+
+        using var decoded = NetVips.Image.NewFromBuffer(bytes, "")!;
+        Assert.True(decoded.Width <= 128, $"thumbnail is {decoded.Width}px wide");
+        Assert.True(decoded.Height <= 128, $"thumbnail is {decoded.Height}px tall");
+    }
+
+    [Fact]
+    public void CreateThumbnail_UnreadableFile_ReturnsNull()
+    {
+        // Not an image at all: the row just loses its preview, the scan continues.
+        Assert.Null(DedupService.CreateThumbnail(Path.Combine(Path.GetTempPath(), "synapic-no-such-file.jpg")));
+    }
+
     [Fact]
     public void HammingDistance_IdenticalHashes_IsZero()
     {

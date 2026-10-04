@@ -76,14 +76,19 @@
               <ItemsControl ItemsSource="{Binding Items}">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate x:DataType="vm:DedupItemViewModel">
-                    <Grid ColumnDefinitions="Auto,*,150,90" Margin="4,2">
+                    <!-- Auto thumb column: rows without a preview collapse it
+                         instead of showing an empty box. -->
+                    <Grid ColumnDefinitions="Auto,Auto,*,150,90" Margin="4,2">
                       <CheckBox Grid.Column="0" IsChecked="{Binding IsChecked}" VerticalAlignment="Center" />
-                      <TextBlock Grid.Column="1" Text="{Binding DisplayName}" Margin="8,0"
+                      <Image Grid.Column="1" Source="{Binding Thumb}" IsVisible="{Binding HasThumb}"
+                             Width="44" Height="44" Margin="8,0,0,0" Stretch="Uniform"
+                             VerticalAlignment="Center" />
+                      <TextBlock Grid.Column="2" Text="{Binding DisplayName}" Margin="8,0"
                                  TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
                                  ToolTip.Tip="{Binding DisplayName}" />
-                      <TextBlock Grid.Column="2" Text="{Binding DateText}" Opacity="0.75" FontSize="12"
+                      <TextBlock Grid.Column="3" Text="{Binding DateText}" Opacity="0.75" FontSize="12"
                                  VerticalAlignment="Center" />
-                      <TextBlock Grid.Column="3" Text="{Binding SizeText}" Opacity="0.75" FontSize="12"
+                      <TextBlock Grid.Column="4" Text="{Binding SizeText}" Opacity="0.75" FontSize="12"
                                  HorizontalAlignment="Right" VerticalAlignment="Center" Margin="8,0,0,0" />
                     </Grid>
                   </DataTemplate>

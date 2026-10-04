@@ -1,6 +1,10 @@
+using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Synapic.Avalonia.Models;
 using Synapic.Avalonia.Services;
+using Synapic.Avalonia.Services.Processing;
 using Synapic.Avalonia.ViewModels;
 using Synapic.Avalonia.ViewModels.Steps;
 using Synapic.Avalonia.Views.Wizard;
@@ -342,6 +346,89 @@ public class StepDedupViewModelTests
         }
     }
 
+    // ── Preview thumbnails ─────────────────────────────────────────────────
+
+    /// <summary>The committed sample image, found by walking up from the test
+    /// bin directory (same approach as EndToEndRoundTripTests).</summary>
+    private static string? FindSampleImage()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        for (var i = 0; i < 6 && dir is not null; i++, dir = dir.Parent)
+        {
+            var candidate = Path.Combine(dir.FullName, "tests", "Synapic.Avalonia.Tests", "TestData", "sample.jpg");
+            if (File.Exists(candidate)) return candidate;
+        }
+        return null;
+    }
+
+    /// <summary>Two byte-identical copies of the sample image — a duplicate
+    /// group at any threshold — plus the temp folder that holds them.</summary>
+    private static (string Dir, string[] Files) MakeDuplicateImages()
+    {
+        var sample = FindSampleImage() ?? throw new InvalidOperationException("TestData/sample.jpg not found");
+        var dir = Path.Combine(Path.GetTempPath(), $"synapic-thumbs-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(dir);
+        var files = new[] { "a.jpg", "b.jpg" };
+        foreach (var f in files) File.Copy(sample, Path.Combine(dir, f));
+        return (dir, files);
+    }
+
+    [AvaloniaFact]
+    public async Task LocalScan_LoadsAPreviewThumbnail_ForEveryGroupedRow()
+    {
+        var (dir, _) = MakeDuplicateImages();
+        try
+        {
+            var vm = new StepDedupViewModel { FolderPath = dir };
+
+            await vm.ScanCommand.ExecuteAsync(null);
+
+            Assert.NotEmpty(vm.Groups); // guards the harness: the pair must group
+            foreach (var item in vm.Groups.SelectMany(g => g.Items))
+            {
+                Assert.True(item.HasThumb, $"no preview for {item.DisplayName}");
+                Assert.NotNull(item.Thumb);
+            }
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    /// <summary>Previews are native bitmaps: a rescan must detach them from the
+    /// old rows (nulled before dispose, so no control keeps a dead source).</summary>
+    [AvaloniaFact]
+    public async Task Rescan_DetachesThePreviousPreviews()
+    {
+        var (dir, _) = MakeDuplicateImages();
+        var empty = Path.Combine(Path.GetTempPath(), $"synapic-empty-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(empty);
+        try
+        {
+            var vm = new StepDedupViewModel { FolderPath = dir };
+            await vm.ScanCommand.ExecuteAsync(null);
+            Assert.NotEmpty(vm.Groups);
+            var oldRows = vm.Groups.SelectMany(g => g.Items).ToList();
+            Assert.All(oldRows, r => Assert.NotNull(r.Thumb));
+
+            vm.FolderPath = empty;
+            await vm.ScanCommand.ExecuteAsync(null);
+
+            Assert.Empty(vm.Groups); // empty folder → nothing to review…
+            Assert.All(oldRows, r =>
+            {
+                Assert.Null(r.Thumb); // …and the old previews are gone, not leaked
+                Assert.False(r.HasThumb);
+            });
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+            Directory.Delete(empty, recursive: true);
+        }
+    }
+
     // ── View wiring ─────────────────────────────────────────────────────────
 
     [AvaloniaFact]
@@ -356,5 +443,43 @@ public class StepDedupViewModelTests
         // …and the wizard hands Step 1 in for the Daminion scope summary.
         Assert.NotEqual("No datasource step available", wizard.Dedup.DaminionScopeSummary);
         Assert.Contains("Step 1", wizard.Dedup.DaminionScopeSummary);
+    }
+
+    /// <summary>The image column binds through real compiled XAML: a row with a
+    /// preview shows it, a row without one collapses the column instead of
+    /// leaving an empty box (a mistyped binding would render neither).</summary>
+    [AvaloniaFact]
+    public void ItemRows_ShowThePreviewImage_OnlyWhenAThumbExists()
+    {
+        var sample = FindSampleImage();
+        if (sample is null) return; // repo checkout not reachable from the bin
+
+        var withThumb = Item("a.jpg");
+        using var bitmap = new global::Avalonia.Media.Imaging.Bitmap(
+            new MemoryStream(DedupService.CreateThumbnail(sample) ?? throw new InvalidOperationException("no preview bytes")));
+        withThumb.Thumb = bitmap;
+
+        var vm = new StepDedupViewModel();
+        vm.Groups.Add(Group(withThumb, Item("b.jpg")));
+
+        var view = new StepDedup { DataContext = vm };
+        var window = new Window { Content = view, Width = 1000, Height = 800 };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        try
+        {
+            var images = view.GetVisualDescendants().OfType<Image>().ToList();
+            Assert.Equal(2, images.Count);
+
+            Assert.True(images[0].IsVisible);
+            Assert.NotNull(images[0].Source);
+
+            Assert.False(images[1].IsVisible);
+            Assert.Null(images[1].Source);
+        }
+        finally
+        {
+            window.Close();
+        }
     }
 }

@@ -211,7 +211,12 @@ it and deletes it again (Daminion), producing `Groups` — a vertical list of
 `IsChecked` keep checkbox (checked = kept; unchecked = action target). The
 `SelectOldest`/`SelectNewest`/`SelectSmallest`/`SelectLargest` auto-select
 switches recompute every group's checkboxes as the union of their picks
-(keep-first when none is active; unknown dates/sizes are never picked). Records
+(keep-first when none is active; unknown dates/sizes are never picked).
+After grouping, `LoadThumbsAsync` decodes a preview bitmap per grouped item
+(local files via `DedupService.CreateThumbnail`, Daminion items via
+`DownloadThumbnailAsync` with the temp file deleted after reading — in-memory
+only, never cached) and hands them to the rows; previews are disposed when a
+rescan or an applied action removes their groups. Records
 a dedup telemetry count. `ApplyCommand` acts on the unchecked items:
 Tag/Move/Delete for a local source (Delete gated by the same `ConfirmAction`
 prompt), or — after that modal (null = fail closed) —
@@ -355,7 +360,9 @@ Union-Find grouping with a hamming-distance threshold, and
 `duplicates/` subfolder) / Tag. `ComputeHash` is public static (instance member
 on the interface too) and returns `null` for unreadable images;
 `GroupFromHashes` groups already-computed hashes — the Daminion scan's
-incremental path. `ReadImageDateUtc(path)` reads the EXIF capture date
+incremental path. `CreateThumbnail(path, maxSize = 128)` scales an image into
+an in-memory JPEG buffer for review previews (null for unreadable images,
+alpha flattened for JPEG). `ReadImageDateUtc(path)` reads the EXIF capture date
 (DateTimeOriginal, else IFD0 DateTime) for the auto-select rules, returning
 null when absent so callers fall back to file time.
 Types: `HashAlgorithm`, `DedupAction`, `DedupOptions`, `DedupProgress`,

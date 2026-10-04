@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Synapic.Avalonia.Services;
@@ -42,6 +43,37 @@ public partial class DedupItemViewModel : ObservableObject
     public string SizeText => SizeBytes is { } b ? FormatSize(b) : "—";
 
     public string DateText => DateTaken is { } d ? d.ToLocalTime().ToString("yyyy-MM-dd HH:mm") : "—";
+
+    private Bitmap? _thumb;
+
+    /// <summary>In-memory preview of the image, decoded once when the scan
+    /// finishes (local files are scaled with libvips, catalog items come from
+    /// the thumbnail API) — never written to a cache. Null when no preview
+    /// could be produced; the row simply hides its image column.</summary>
+    public Bitmap? Thumb
+    {
+        get => _thumb;
+        set
+        {
+            if (!SetProperty(ref _thumb, value)) return;
+            OnPropertyChanged(nameof(HasThumb));
+        }
+    }
+
+    /// <summary>Drives the image column's visibility so rows without a
+    /// preview collapse to text instead of showing an empty box.</summary>
+    public bool HasThumb => _thumb is not null;
+
+    /// <summary>Detach and dispose the preview (a fresh scan or an applied
+    /// action drops the rows that own it).</summary>
+    internal void DisposeThumb()
+    {
+        var old = _thumb;
+        if (old is null) return;
+        _thumb = null;
+        OnPropertyChanged(nameof(Thumb));
+        old.Dispose();
+    }
 
     public bool IsChecked
     {
@@ -96,6 +128,13 @@ public partial class DuplicateGroupViewModel : ObservableObject
     public string Header => $"{Items.Count} similar images";
 
     public string Summary => $"{Items.Count(i => !i.IsChecked)} selected for the action — {Items.Count(i => i.IsChecked)} kept";
+
+    /// <summary>Detach and dispose every row preview — the group is leaving
+    /// the list (fresh scan or applied action).</summary>
+    internal void DisposeThumbs()
+    {
+        foreach (var item in Items) item.DisposeThumb();
+    }
 
     private void OnItemSelectionChanged()
     {
@@ -345,6 +384,9 @@ public partial class StepDedupViewModel : ViewModelBase
     private async Task ScanAsync(CancellationToken ct)
     {
         IsScanning = true;
+        // Old previews are native bitmaps: detach them from their rows (so no
+        // control keeps a disposed source) and free them before the rescan.
+        foreach (var group in Groups) group.DisposeThumbs();
         Groups.Clear();
         ScanSummary = IsDaminion ? "Fetching items from Daminion…" : "Scanning…";
         try
@@ -358,7 +400,11 @@ public partial class StepDedupViewModel : ViewModelBase
                 ? await ScanDaminionAsync(opts, ct)
                 : await ScanLocalAsync(opts, ct);
 
-            AttachGroups(result);
+            // Preview thumbnails for the rows about to be shown — in-memory
+            // only, and best effort: a missing preview hides the image column,
+            // it never fails the scan.
+            var thumbs = await LoadThumbsAsync(result, ct);
+            AttachGroups(result, thumbs);
             var dupCount = Groups.Sum(g => g.Items.Count - 1);
             ScanSummary = $"{result.TotalFiles} files scanned — {Groups.Count} groups, {dupCount} duplicates";
             SynapicLog.Info(nameof(StepDedupViewModel), ScanSummary);
@@ -462,20 +508,136 @@ public partial class StepDedupViewModel : ViewModelBase
     /// <summary>Daminion item metadata keyed by "daminion:{id}" for the current scan.</summary>
     private Dictionary<string, DedupItemViewModel>? _pendingDaminionItems;
 
-    private void AttachGroups(DedupResult result)
+    /// <summary>Preview bitmaps for the keys about to be attached, decoded
+    /// once here and handed to the rows. Local files are scaled in memory with
+    /// libvips; catalog items pull the server's own thumbnail over the API and
+    /// the temp file is deleted as soon as its bytes are read — nothing is
+    /// written to a thumbnail cache. Failures are logged per item and leave a
+    /// row without its image; only cancellation propagates.</summary>
+    private async Task<Dictionary<string, Bitmap>> LoadThumbsAsync(DedupResult result, CancellationToken ct)
+    {
+        var keys = result.Groups.SelectMany(g => g.Items).Distinct().ToArray();
+        var thumbs = new Dictionary<string, Bitmap>(keys.Length);
+        if (keys.Length == 0) return thumbs;
+
+        try
+        {
+            if (IsDaminion)
+            {
+                var client = _step1?.ConnectedClient;
+                if (client is null) return thumbs;
+
+                var index = 0;
+                foreach (var key in keys)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    if (!key.StartsWith("daminion:", StringComparison.Ordinal) ||
+                        !int.TryParse(key.AsSpan("daminion:".Length), out var id))
+                        continue;
+
+                    index++;
+                    var name = _pendingDaminionItems?.GetValueOrDefault(key)?.DisplayName ?? key;
+                    ScanSummary = $"Fetching preview {index}/{keys.Length}: {name}";
+
+                    try
+                    {
+                        var temp = await client.DownloadThumbnailAsync(id, ThumbSize, ThumbSize, ct);
+                        if (string.IsNullOrEmpty(temp)) continue;
+                        try
+                        {
+                            var bytes = System.IO.File.ReadAllBytes(temp);
+                            if (DecodeThumb(bytes) is { } bitmap) thumbs[key] = bitmap;
+                        }
+                        finally
+                        {
+                            try { System.IO.File.Delete(temp); }
+                            catch { /* temp cleanup is best effort */ }
+                        }
+                    }
+                    catch (OperationCanceledException) { throw; }
+                    catch (Exception e)
+                    {
+                        SynapicLog.Warning(nameof(StepDedupViewModel), $"Preview unavailable for {name}: {e.Message}");
+                    }
+                }
+            }
+            else
+            {
+                ScanSummary = "Rendering previews…";
+                var decoded = await Task.Run(() =>
+                {
+                    var found = new Dictionary<string, Bitmap>(keys.Length);
+                    try
+                    {
+                        foreach (var key in keys)
+                        {
+                            ct.ThrowIfCancellationRequested();
+                            if (DedupService.CreateThumbnail(key, ThumbSize) is { } bytes &&
+                                DecodeThumb(bytes) is { } bitmap)
+                                found[key] = bitmap;
+                        }
+                        return found;
+                    }
+                    catch
+                    {
+                        // Cancelled mid-loop: the caller only disposes what it
+                        // received, so drop the partial set here.
+                        foreach (var bitmap in found.Values) bitmap.Dispose();
+                        throw;
+                    }
+                }, ct);
+
+                foreach (var pair in decoded) thumbs[pair.Key] = pair.Value;
+            }
+
+            return thumbs;
+        }
+        catch
+        {
+            // Cancelled mid-load: don't strand the bitmaps already decoded.
+            foreach (var bitmap in thumbs.Values) bitmap.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>JPEG bytes → bitmap; null (logged) when the bytes won't decode.</summary>
+    private static Bitmap? DecodeThumb(byte[] bytes)
+    {
+        try
+        {
+            return new Bitmap(new System.IO.MemoryStream(bytes));
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Warning(nameof(StepDedupViewModel), $"Preview decode failed: {e.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>Side length of the fetched/scaled previews — 2–3× the 48 px
+    /// row box so they stay sharp on high-DPI displays.</summary>
+    private const int ThumbSize = 128;
+
+    private void AttachGroups(DedupResult result, IReadOnlyDictionary<string, Bitmap> thumbs)
     {
         foreach (var g in result.Groups)
         {
             var items = g.Items.Select(key =>
             {
+                thumbs.TryGetValue(key, out var thumb);
+
                 if (_pendingDaminionItems is not null && _pendingDaminionItems.TryGetValue(key, out var vm))
+                {
+                    vm.Thumb = thumb;
                     return vm;
+                }
 
                 var info = new System.IO.FileInfo(key);
                 return new DedupItemViewModel(key, System.IO.Path.GetFileName(key))
                 {
                     SizeBytes = info.Exists ? info.Length : null,
                     DateTaken = info.Exists ? DedupService.ReadImageDateUtc(key) ?? info.CreationTimeUtc : null,
+                    Thumb = thumb,
                 };
             });
 
@@ -568,6 +730,7 @@ public partial class StepDedupViewModel : ViewModelBase
             {
                 group.SelectionChanged -= OnGroupSelectionChanged;
                 Groups.Remove(group);
+                group.DisposeThumbs();
             }
         }
         UpdateSummary();

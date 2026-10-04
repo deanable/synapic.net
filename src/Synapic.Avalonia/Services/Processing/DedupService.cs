@@ -249,6 +249,35 @@ public sealed class DedupService : IDedupService
         return null;
     }
 
+    /// <summary>Small JPEG preview of an image for review UIs (the dedup group
+    /// rows): libvips shrink-on-load down to <paramref name="maxSize"/> on the
+    /// longest edge, encoded into an in-memory buffer the caller decodes and
+    /// discards — nothing is ever written to a thumbnail cache. Returns null
+    /// for unreadable images, same contract as <see cref="ComputeHash(string, DedupOptions)"/>.</summary>
+    public static byte[]? CreateThumbnail(string path, int maxSize = 128)
+    {
+        try
+        {
+            // Both dimensions passed, so a portrait stays inside the box too;
+            // size: Down never upscales a source that is already small.
+            // Autorotate is on by default, so previews sit upright like the
+            // file does in any other viewer.
+            using var thumb = Image.Thumbnail(path, maxSize, maxSize, size: Enums.Size.Down);
+            if (thumb.HasAlpha())
+            {
+                // JPEG has no alpha channel — composite onto white first
+                // (transparent pixels would otherwise fail the save).
+                using var flat = thumb.Flatten();
+                return flat.JpegsaveBuffer(q: 85);
+            }
+            return thumb.JpegsaveBuffer(q: 85);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
     private static ulong ComputeAHash(Image gray)
     {
         using var small = gray.Resize(8.0 / gray.Width, vscale: 8.0 / gray.Height);
