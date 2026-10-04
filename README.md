@@ -983,6 +983,12 @@ public interface IDedupService
 
     Task<DedupResult> FindDuplicatesAsync(IEnumerable<string> imagePaths, DedupOptions opts, IProgress<DedupProgress> progress, CancellationToken ct);
 
+    ulong? ComputeHash(string path, DedupOptions opts);              // null when unreadable
+
+    DedupResult GroupFromHashes(IReadOnlyDictionary<string, ulong> hashes, DedupOptions opts);
+
+    Task<bool> ApplyToPathsAsync(IEnumerable<string> paths, DedupAction action, CancellationToken ct);
+
     Task<bool> ApplyActionsAsync(DedupResult result, DedupAction action, CancellationToken ct);
 
 }
@@ -1311,11 +1317,11 @@ jobs:
 
 ### Phase 4: Deduplication (Week 5–6)
 
-- [ ] Implement pHash/dHash in C# (NetVips or custom)
+- [x] Implement pHash/dHash in C# (NetVips or custom)
 
-- [ ] Build StepDedup UI (side-by-side comparison, auto-select, bulk actions)
+- [x] Build StepDedup UI (duplicate-group cards with per-item keep checkboxes, auto-select: oldest/newest/smallest/largest, bulk actions)
 
-- [ ] Integrate with Daminion (tag duplicates / delete from catalog)
+- [x] Integrate with Daminion (source = Step 1 scope/collection, delete from catalog after confirmation)
 
 - [ ] Performance test: 10k+ images
 

@@ -949,6 +949,34 @@ public sealed class DaminionApiClient
     }
 
     /// <summary>
+    /// Delete catalog items via /api/ItemData/BatchChange (delete:true) — used
+    /// by the dedup step's Daminion action. The files on the server's disk are
+    /// not touched; only the catalog entries are removed. Returns false when
+    /// the call fails (the caller has already confirmed with the user).
+    /// </summary>
+    public async Task<bool> DeleteItemsAsync(IReadOnlyCollection<int> itemIds, CancellationToken ct = default)
+    {
+        if (itemIds.Count == 0) return true;
+
+        try
+        {
+            await WithSessionRecoveryAsync(api => api.BatchChange(new DaminionBatchChangeRequest
+            {
+                Ids = itemIds.ToArray(),
+                Data = Array.Empty<DaminionTagOperation>(),
+                Delete = true,
+            }, ct), ct).ConfigureAwait(false);
+            SynapicLog.Info(nameof(DaminionApiClient), $"Deleted {itemIds.Count} item(s) from the catalog");
+            return true;
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Error(nameof(DaminionApiClient), $"Failed to delete {itemIds.Count} item(s): {e.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
     /// Re-read an item via /api/ItemData/GetAll/{id} and check the expected
     /// tags landed (Step 4 “Verify Daminion writes”). Field matching is
     /// tolerant: tag keys are located case-insensitively anywhere in the

@@ -51,7 +51,7 @@ One user control per step. Code-behind is intentionally thin:
 | `Step2Engine.axaml.cs` | bare `InitializeComponent` |
 | `Step3Process.axaml.cs` | auto-scrolls the log list to the last line |
 | `Step4Results.axaml.cs` | `Refresh` button + auto-scrolls the results grid to the newest row |
-| `StepDedup.axaml.cs` | `OnBrowseFolder` — folder picker writes `vm.FolderPath` |
+| `StepDedup.axaml.cs` | `OnBrowseFolder` — folder picker writes `vm.FolderPath`; wires `vm.ConfirmAction` to `ConfirmDialogWindow.ShowAsync` for the catalog delete |
 
 ---
 
@@ -201,10 +201,20 @@ through the UI dispatcher).
   `VerifyItemMetadataAsync`, marking rows `Verified` and logging mismatches.
 
 ### `Steps/StepDedupViewModel`
-Folder + algorithm (PHash/DHash/AHash/ColorMoment) + threshold, `ScanCommand`
-enumerates supported image extensions and calls `IDedupService`, `Groups`
-holds the duplicate groups, and `ApplyCommand` applies the selected
-Tag/Move/Delete action to the selected group. Records a dedup telemetry count.
+Algorithm (PHash/DHash/AHash/ColorMoment) + threshold over two sources — the
+same radio pattern as Step 1: `IsLocalSelected`/`IsDaminionSelected` pick a
+local `FolderPath` or the Step 1 Daminion scope (`DaminionScopeSummary`, fed by
+the injected `Step1DatasourceViewModel` + sidecar). `ScanCommand` enumerates
+supported extensions (local) or downloads each original to a temp file, hashes
+it and deletes it again (Daminion), producing `Groups` — a vertical list of
+`DuplicateGroupViewModel` cards, each holding `DedupItemViewModel` rows with an
+`IsChecked` keep checkbox (checked = kept; unchecked = action target). The
+`SelectOldest`/`SelectNewest`/`SelectSmallest`/`SelectLargest` auto-select
+switches recompute every group's checkboxes as the union of their picks
+(keep-first when none is active; unknown dates/sizes are never picked). Records
+a dedup telemetry count. `ApplyCommand` acts on the unchecked items:
+Tag/Move/Delete for a local source, or — after the `ConfirmAction` modal prompt
+(null = fail closed) — `DaminionApiClient.DeleteItemsAsync` for the catalog.
 
 ---
 
@@ -340,8 +350,13 @@ items wait; cancellation wins.
 **`DedupService`** (`IDedupService`) — NetVips-backed perceptual hashing
 (pHash via a 32×32 DCT, dHash, aHash; ColorMoment currently approximates aHash),
 Union-Find grouping with a hamming-distance threshold, and
-`ApplyActionsAsync` for Delete / Move (into a `duplicates/` subfolder) / Tag.
-`ComputeHash` is public static and returns `null` for unreadable images.
+`ApplyToPathsAsync` (also behind `ApplyActionsAsync`) for Delete / Move (into a
+`duplicates/` subfolder) / Tag. `ComputeHash` is public static (instance member
+on the interface too) and returns `null` for unreadable images;
+`GroupFromHashes` groups already-computed hashes — the Daminion scan's
+incremental path. `ReadImageDateUtc(path)` reads the EXIF capture date
+(DateTimeOriginal, else IFD0 DateTime) for the auto-select rules, returning
+null when absent so callers fall back to file time.
 Types: `HashAlgorithm`, `DedupAction`, `DedupOptions`, `DedupProgress`,
 `DuplicateGroup`, `DedupResult`.
 

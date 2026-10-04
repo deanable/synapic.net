@@ -8,47 +8,99 @@
   <StackPanel Spacing="12">
     <TextBlock Text="Deduplication Wizard" FontSize="22" FontWeight="Bold" />
 
+    <!-- Source: local folder vs the Step 1 Daminion scope (same radio pattern as Step 1). -->
     <StackPanel Orientation="Horizontal" Spacing="12"
                 help:HelpScope.Topic="dedup.html">
-      <TextBox Watermark="Folder to scan" Text="{Binding FolderPath}" Width="420"
-               help:HelpScope.Topic="settings-reference.html#dedup-folder" />
-      <Button Content="Browse…" Click="OnBrowseFolder" />
-      <ComboBox SelectedIndex="{Binding SelectedAlgorithm}" ItemsSource="{Binding Algorithms}" MinWidth="130"
-                help:HelpScope.Topic="settings-reference.html#dedup-algorithm" />
-      <TextBlock Text="Threshold:" VerticalAlignment="Center" />
-      <NumericUpDown Value="{Binding Threshold}" Minimum="0.5" Maximum="1" Increment="0.01" Width="100"
-                     help:HelpScope.Topic="settings-reference.html#dedup-threshold" />
-      <Button Content="Scan" Command="{Binding ScanCommand}" Classes="accent" />
+      <RadioButton Content="Local Folder" GroupName="dedupds" IsChecked="{Binding IsLocalSelected}" />
+      <RadioButton Content="Daminion Catalog" GroupName="dedupds" IsChecked="{Binding IsDaminionSelected}" />
     </StackPanel>
 
-    <TextBlock Text="{Binding ScanSummary}" Opacity="0.8" />
+    <!-- Local source: folder picker. -->
+    <Border IsVisible="{Binding IsLocal}" Classes="card" Padding="14">
+      <Grid ColumnDefinitions="*,Auto" help:HelpScope.Topic="settings-reference.html#dedup-folder">
+        <TextBox Watermark="Folder to scan" Text="{Binding FolderPath}" />
+        <Button Grid.Column="1" Content="Browse…" Click="OnBrowseFolder" />
+      </Grid>
+    </Border>
 
-    <Grid ColumnDefinitions="2*,*" Margin="0,12" Height="380">
-      <ListBox Grid.Column="0" ItemsSource="{Binding Groups}" SelectedItem="{Binding SelectedGroup}">
-        <ListBox.ItemTemplate>
-          <DataTemplate>
-            <StackPanel>
-              <TextBlock FontWeight="SemiBold">
-                <Run Text="{Binding Items.Length, Mode=OneWay}" /><Run Text=" similar images" />
-              </TextBlock>
+    <!-- Daminion source: the scope collection configured in Step 1, like tagging. -->
+    <Border IsVisible="{Binding IsDaminion}" Classes="card" Padding="14">
+      <StackPanel Spacing="4">
+        <TextBlock Text="{Binding DaminionScopeSummary}" FontWeight="SemiBold" TextWrapping="Wrap" />
+        <TextBlock Text="The catalog scope is chosen in Step 1 — originals are downloaded one at a time for hashing."
+                   Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
+      </StackPanel>
+    </Border>
+
+    <!-- Scan settings (apply to both sources). -->
+    <StackPanel Orientation="Horizontal" Spacing="12">
+      <TextBlock Text="Algorithm:" VerticalAlignment="Center"
+                 help:HelpScope.Topic="settings-reference.html#dedup-algorithm" />
+      <ComboBox SelectedIndex="{Binding SelectedAlgorithm}" ItemsSource="{Binding Algorithms}" MinWidth="130" />
+      <TextBlock Text="Threshold:" VerticalAlignment="Center"
+                 help:HelpScope.Topic="settings-reference.html#dedup-threshold" />
+      <NumericUpDown Value="{Binding Threshold}" Minimum="0.5" Maximum="1" Increment="0.01" Width="110" />
+      <Button Content="Scan" Command="{Binding ScanCommand}" Classes="accent" />
+      <ProgressBar IsIndeterminate="True" Width="90" Height="6" VerticalAlignment="Center"
+                   IsVisible="{Binding IsScanning}" />
+    </StackPanel>
+
+    <TextBlock Text="{Binding ScanSummary}" Opacity="0.8" TextWrapping="Wrap" />
+
+    <!-- Auto-select rules: tick these to drive every group's keep checkboxes.
+         Checked = kept; the unchecked duplicates are what Apply acts on. -->
+    <StackPanel Orientation="Horizontal" Spacing="14"
+                help:HelpScope.Topic="settings-reference.html#dedup-autoselect">
+      <TextBlock Text="Auto-select keep-set:" FontWeight="SemiBold" VerticalAlignment="Center" />
+      <CheckBox Content="Oldest" IsChecked="{Binding SelectOldest}" VerticalAlignment="Center" />
+      <CheckBox Content="Newest" IsChecked="{Binding SelectNewest}" VerticalAlignment="Center" />
+      <CheckBox Content="Smallest" IsChecked="{Binding SelectSmallest}" VerticalAlignment="Center" />
+      <CheckBox Content="Largest" IsChecked="{Binding SelectLargest}" VerticalAlignment="Center" />
+      <TextBlock Text="Checked items are kept; unchecked duplicates get the action."
+                 Opacity="0.65" FontSize="12" VerticalAlignment="Center" />
+    </StackPanel>
+
+    <TextBlock Text="{Binding SelectionSummary}" FontWeight="SemiBold" />
+
+    <!-- Vertical list of duplicate group cards, each item row with a checkbox. -->
+    <ListBox ItemsSource="{Binding Groups}" MaxHeight="380">
+      <ListBox.ItemTemplate>
+        <DataTemplate x:DataType="vm:DuplicateGroupViewModel">
+          <Border Classes="card" Padding="10" Margin="0,0,0,8">
+            <StackPanel Spacing="4">
+              <DockPanel>
+                <TextBlock Text="{Binding Summary}" FontSize="12" Opacity="0.75"
+                           DockPanel.Dock="Right" Margin="12,0,0,0" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding Header}" FontWeight="SemiBold" VerticalAlignment="Center" />
+              </DockPanel>
               <ItemsControl ItemsSource="{Binding Items}">
                 <ItemsControl.ItemTemplate>
-                  <DataTemplate>
-                    <TextBlock Text="{Binding}" FontSize="11" Opacity="0.75" Margin="12,0,0,0" />
+                  <DataTemplate x:DataType="vm:DedupItemViewModel">
+                    <Grid ColumnDefinitions="Auto,*,150,90" Margin="4,2">
+                      <CheckBox Grid.Column="0" IsChecked="{Binding IsChecked}" VerticalAlignment="Center" />
+                      <TextBlock Grid.Column="1" Text="{Binding DisplayName}" Margin="8,0"
+                                 TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                                 ToolTip.Tip="{Binding DisplayName}" />
+                      <TextBlock Grid.Column="2" Text="{Binding DateText}" Opacity="0.75" FontSize="12"
+                                 VerticalAlignment="Center" />
+                      <TextBlock Grid.Column="3" Text="{Binding SizeText}" Opacity="0.75" FontSize="12"
+                                 HorizontalAlignment="Right" VerticalAlignment="Center" Margin="8,0,0,0" />
+                    </Grid>
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
             </StackPanel>
-          </DataTemplate>
-        </ListBox.ItemTemplate>
-      </ListBox>
+          </Border>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
 
-      <StackPanel Grid.Column="1" Spacing="10">
-        <TextBlock Text="Action for selected group" FontWeight="SemiBold" />
-        <ComboBox SelectedIndex="{Binding SelectedAction}" ItemsSource="{Binding Actions}"
-                  help:HelpScope.Topic="settings-reference.html#dedup-action" />
-        <Button Content="Apply" Command="{Binding ApplyCommand}" Classes="accent" />
-      </StackPanel>
-    </Grid>
+    <!-- Action + apply (un-checked items across all groups). -->
+    <StackPanel Orientation="Horizontal" Spacing="12">
+      <TextBlock Text="Action for unchecked duplicates:" VerticalAlignment="Center"
+                 help:HelpScope.Topic="settings-reference.html#dedup-action" />
+      <ComboBox SelectedIndex="{Binding SelectedAction}" ItemsSource="{Binding Actions}" MinWidth="170" />
+      <Button Content="Apply" Command="{Binding ApplyCommand}" Classes="accent" />
+    </StackPanel>
   </StackPanel>
 </UserControl>

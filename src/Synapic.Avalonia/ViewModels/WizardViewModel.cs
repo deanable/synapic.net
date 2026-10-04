@@ -32,7 +32,7 @@ public partial class WizardViewModel : ViewModelBase
         Step2 = new Step2EngineViewModel(session, sidecar, engineStore, presetStore);
         Step3 = new Step3ProcessViewModel(session, sidecar, Step1);
         Step4 = new Step4ResultsViewModel(session, Step1, Step3);
-        Dedup = new StepDedupViewModel();
+        Dedup = new StepDedupViewModel(step1: Step1, sidecar: sidecar);
 
         // Step 2's tag-field checkboxes gate navigation and the Step 3 Start
         // button; re-evaluate those commands whenever the selection changes.

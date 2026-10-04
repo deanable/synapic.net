@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
+using MetadataExtractor.Formats.Exif;
 using NetVips;
 
 namespace Synapic.Avalonia.Services.Processing;
@@ -60,6 +61,18 @@ public interface IDedupService
         IProgress<DedupProgress>? progress = null,
         CancellationToken ct = default);
 
+    /// <summary>Perceptual hash of one image (null when unreadable). Exposed for
+    /// callers that hash incrementally — the Daminion dedup scan downloads
+    /// originals one at a time and must not keep them all on disk.</summary>
+    ulong? ComputeHash(string path, DedupOptions opts);
+
+    /// <summary>Group already-computed hashes (Daminion scan) instead of files (local scan).</summary>
+    DedupResult GroupFromHashes(IReadOnlyDictionary<string, ulong> hashes, DedupOptions opts);
+
+    /// <summary>Apply an action to an explicit set of file paths — the unchecked
+    /// (duplicate) items the user reviewed, across all groups.</summary>
+    Task<bool> ApplyToPathsAsync(IEnumerable<string> paths, DedupAction action, CancellationToken ct = default);
+
     Task<bool> ApplyActionsAsync(DedupResult result, DedupAction action, CancellationToken ct = default);
 }
 
@@ -97,46 +110,73 @@ public sealed class DedupService : IDedupService
         return result;
     }
 
+    ulong? IDedupService.ComputeHash(string path, DedupOptions opts) => ComputeHash(path, opts);
+
+    /// <summary>Group pre-computed hashes — used by the Daminion dedup scan,
+    /// whose images are downloaded to a temp file, hashed, and deleted again
+    /// one at a time.</summary>
+    public DedupResult GroupFromHashes(IReadOnlyDictionary<string, ulong> hashes, DedupOptions opts)
+    {
+        var result = new DedupResult
+        {
+            TotalFiles = hashes.Count,
+            Algorithm = opts.Algorithm.ToString().ToLowerInvariant(),
+            Threshold = opts.Threshold,
+        };
+        GroupDuplicates(hashes, opts, result.Groups);
+        return result;
+    }
+
+    public async Task<bool> ApplyToPathsAsync(IEnumerable<string> paths, DedupAction action, CancellationToken ct = default)
+    {
+        var ok = true;
+        foreach (var item in paths)
+        {
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                switch (action)
+                {
+                    case DedupAction.Delete:
+                        File.Delete(item);
+                        SynapicLog.Info(nameof(DedupService), $"Deleted duplicate: {item}");
+                        break;
+                    case DedupAction.Move:
+                    {
+                        var dupDir = Path.Combine(Path.GetDirectoryName(item) ?? ".", "duplicates");
+                        Directory.CreateDirectory(dupDir);
+                        var dest = Path.Combine(dupDir, Path.GetFileName(item));
+                        File.Move(item, dest, overwrite: false);
+                        SynapicLog.Info(nameof(DedupService), $"Moved duplicate: {item} → {dest}");
+                        break;
+                    }
+                    case DedupAction.Tag:
+                        // Tagging duplicates is a Daminion-integration concern;
+                        // handled by the orchestrator when a Daminion session is active.
+                        SynapicLog.Info(nameof(DedupService), $"Tagged duplicate (Daminion): {item}");
+                        break;
+                }
+            }
+            catch (Exception e)
+            {
+                ok = false;
+                SynapicLog.Error(nameof(DedupService), $"Failed to {action} duplicate {item}: {e.Message}");
+            }
+        }
+        await Task.CompletedTask.ConfigureAwait(false);
+        return ok;
+    }
+
     public async Task<bool> ApplyActionsAsync(DedupResult result, DedupAction action, CancellationToken ct = default)
     {
         var ok = true;
         foreach (var group in result.Groups)
         {
-            foreach (var item in group.Items.Where(i => !string.Equals(i, group.KeepItem, StringComparison.OrdinalIgnoreCase)))
-            {
-                ct.ThrowIfCancellationRequested();
-                try
-                {
-                    switch (action)
-                    {
-                        case DedupAction.Delete:
-                            File.Delete(item);
-                            SynapicLog.Info(nameof(DedupService), $"Deleted duplicate: {item}");
-                            break;
-                        case DedupAction.Move:
-                        {
-                            var dupDir = Path.Combine(Path.GetDirectoryName(item) ?? ".", "duplicates");
-                            Directory.CreateDirectory(dupDir);
-                            var dest = Path.Combine(dupDir, Path.GetFileName(item));
-                            File.Move(item, dest, overwrite: false);
-                            SynapicLog.Info(nameof(DedupService), $"Moved duplicate: {item} → {dest}");
-                            break;
-                        }
-                        case DedupAction.Tag:
-                            // Tagging duplicates is a Daminion-integration concern;
-                            // handled by the orchestrator when a Daminion session is active.
-                            SynapicLog.Info(nameof(DedupService), $"Tagged duplicate (Daminion): {item}");
-                            break;
-                    }
-                }
-                catch (Exception e)
-                {
-                    ok = false;
-                    SynapicLog.Error(nameof(DedupService), $"Failed to {action} duplicate {item}: {e.Message}");
-                }
-            }
+            var targets = group.Items
+                .Where(i => !string.Equals(i, group.KeepItem, StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+            ok &= await ApplyToPathsAsync(targets, action, ct).ConfigureAwait(false);
         }
-        await Task.CompletedTask.ConfigureAwait(false);
         return ok;
     }
 
@@ -166,6 +206,47 @@ public sealed class DedupService : IDedupService
         {
             return null;
         }
+    }
+
+    /// <summary>
+    /// Best-effort capture date for dedup ordering: EXIF DateTimeOriginal
+    /// (SubIFD), else IFD0 DateTime, else null (caller falls back to file time).
+    /// EXIF carries a bare wall clock with no zone, so it is interpreted as
+    /// local time and returned as UTC — that round-trips exactly when the UI
+    /// renders it back with <c>ToLocalTime()</c>.
+    /// </summary>
+    public static DateTime? ReadImageDateUtc(string path)
+    {
+        try
+        {
+            using var stream = File.OpenRead(path);
+            var directories = MetadataExtractor.ImageMetadataReader.ReadMetadata(stream);
+
+            var ticks = ReadExifDate(directories, ExifDirectoryBase.TagDateTimeOriginal)
+                ?? ReadExifDate(directories, ExifDirectoryBase.TagDateTime);
+            if (ticks is not { } value) return null;
+
+            return value.Kind switch
+            {
+                DateTimeKind.Utc => value,
+                DateTimeKind.Local => value.ToUniversalTime(),
+                _ => DateTime.SpecifyKind(value, DateTimeKind.Local).ToUniversalTime(),
+            };
+        }
+        catch (Exception)
+        {
+            return null; // unreadable / not an image / malformed EXIF
+        }
+    }
+
+    private static DateTime? ReadExifDate(IEnumerable<MetadataExtractor.Directory> directories, int tag)
+    {
+        // Extension method, invoked statically to keep `using MetadataExtractor`
+        // (and its `Directory` type) out of this file — System.IO.Directory wins here.
+        foreach (var dir in directories)
+            if (MetadataExtractor.DirectoryExtensions.TryGetDateTime(dir, tag, out var value))
+                return value;
+        return null;
     }
 
     private static ulong ComputeAHash(Image gray)
@@ -255,7 +336,7 @@ public sealed class DedupService : IDedupService
 
     // ── Grouping (Union-Find port of dedup_engine.py) ───────────────────────
 
-    private static void GroupDuplicates(Dictionary<string, ulong> hashes, DedupOptions opts, List<DuplicateGroup> groups)
+    private static void GroupDuplicates(IReadOnlyDictionary<string, ulong> hashes, DedupOptions opts, List<DuplicateGroup> groups)
     {
         var items = hashes.Keys.ToArray();
         var parent = new Dictionary<string, string>(items.Length);

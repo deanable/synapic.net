@@ -1,0 +1,19 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:v="using:Synapic.Avalonia.Views"
+        x:Class="Synapic.Avalonia.Views.ConfirmDialogWindow"
+        x:DataType="v:ConfirmDialogState"
+        Title="Confirm"
+        Icon="/Assets/Icon.ico"
+        Width="460" SizeToContent="Height"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner">
+
+  <StackPanel Margin="16" Spacing="14">
+    <TextBlock Text="{Binding Message}" TextWrapping="Wrap" />
+    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+      <Button Content="Cancel" Click="OnCancel" />
+      <Button Content="{Binding ConfirmLabel}" Classes="accent" Click="OnConfirm" />
+    </StackPanel>
+  </StackPanel>
+</Window>
