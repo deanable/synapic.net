@@ -3,6 +3,7 @@ using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Synapic.Avalonia.Services;
+using Synapic.Avalonia.Services.Daminion;
 using Synapic.Avalonia.Services.Processing;
 
 namespace Synapic.Avalonia.ViewModels.Steps;
@@ -396,9 +397,32 @@ public partial class StepDedupViewModel : ViewModelBase
                 Threshold,
                 MaxDimension: 512);
 
+            // Everything a failed scan needs to be diagnosed after the fact:
+            // which source, which algorithm/threshold, and which scope id.
+            SynapicLog.Info(nameof(StepDedupViewModel),
+                $"Scan starting — source={(IsDaminion ? $"Daminion catalog, {ScopeIdForLog()}" : $"local folder '{FolderPath}'")}, " +
+                $"algorithm={opts.Algorithm}, threshold={opts.Threshold:0.###}, maxDimension={opts.MaxDimension}");
+
+            // Before pulling whole originals, drop anything a previous crash
+            // left in the download folder — a scan is the only flow that can
+            // put megabytes per item there.
+            var (staleFiles, staleBytes) = DaminionApiClient.CleanupStaleDownloads();
+            if (staleFiles > 0)
+                SynapicLog.Info(nameof(StepDedupViewModel),
+                    $"Cleared {staleFiles} leftover download(s) ({staleBytes:N0} bytes) from {DaminionApiClient.DefaultTempDirectory}");
+
             var result = IsDaminion
                 ? await ScanDaminionAsync(opts, ct)
                 : await ScanLocalAsync(opts, ct);
+
+            SynapicLog.Info(nameof(StepDedupViewModel),
+                $"Hashing finished — {result.TotalFiles} file(s) hashed, {result.Groups.Count} duplicate group(s) at threshold {result.Threshold:0.###}");
+
+            // Nothing is cached, so this should read 0 files / 0 bytes after
+            // every scan; anything else is a leak worth seeing in the log.
+            var (leftFiles, leftBytes) = DaminionApiClient.TempDirectoryUsage();
+            SynapicLog.Info(nameof(StepDedupViewModel),
+                $"Download folder after the scan: {DaminionApiClient.DefaultTempDirectory} holds {leftFiles} file(s), {leftBytes:N0} bytes");
 
             // Preview thumbnails for the rows about to be shown — in-memory
             // only, and best effort: a missing preview hides the image column,
@@ -442,11 +466,27 @@ public partial class StepDedupViewModel : ViewModelBase
             })
             .ToArray();
 
+        // An empty folder looks exactly like "no duplicates found" in the UI,
+        // so say which one it was before the hashing starts.
+        SynapicLog.Info(nameof(StepDedupViewModel),
+            files.Length == 0
+                ? $"No .jpg/.jpeg/.png/.tif/.tiff files found under '{FolderPath}' (recursive) — nothing to compare"
+                : $"Enumerated {files.Length} image file(s) under '{FolderPath}' (recursive)");
+
         var progress = new Progress<DedupProgress>(p =>
             ScanSummary = $"Hashed {p.FilesHashed}/{p.TotalFiles}…");
 
         return await _dedup.FindDuplicatesAsync(files, opts, progress, ct);
     }
+
+    /// <summary>Scope id (saved search / collection / search term) for the scan's log line.</summary>
+    private string ScopeIdForLog() => _step1?.Scope switch
+    {
+        "saved_search" => $"saved search #{_step1.SavedSearchId}",
+        "collection" => $"collection #{_step1.CollectionId}",
+        "search" => $"term '{_step1.SearchTerm}'",
+        _ => "entire catalog",
+    };
 
     /// <summary>
     /// Daminion scan: fetch the Step 1 scope's items through the same orchestrator
@@ -463,10 +503,14 @@ public partial class StepDedupViewModel : ViewModelBase
         var ds = step1.ToSelectionForProcessing(client);
         var orchestrator = new ProcessingOrchestrator(_sidecar);
         var items = await orchestrator.FetchItemsAsync(ds, ct);
+        SynapicLog.Info(nameof(StepDedupViewModel),
+            $"Dedup fetch: {items.Count} item(s) in scope ({ScopeIdForLog()}) — downloading each original to hash it");
 
         var hashes = new Dictionary<string, ulong>(items.Count);
         _pendingDaminionItems = new Dictionary<string, DedupItemViewModel>(items.Count);
         var index = 0;
+        var downloadFailures = 0;
+        var hashFailures = 0;
 
         foreach (var item in items)
         {
@@ -476,13 +520,29 @@ public partial class StepDedupViewModel : ViewModelBase
             ScanSummary = $"Downloading {index}/{items.Count}: {item.FileName}";
 
             var temp = await client.DownloadOriginalAsync(id, ct);
-            if (string.IsNullOrEmpty(temp) || !System.IO.File.Exists(temp)) continue;
+            if (string.IsNullOrEmpty(temp) || !System.IO.File.Exists(temp))
+            {
+                // Used to be a bare `continue`: the scan then reported fewer
+                // files than the scope holds with nothing in the log saying why.
+                downloadFailures++;
+                SynapicLog.Warning(nameof(StepDedupViewModel),
+                    $"Dedup: no original downloaded for item {id} ({item.FileName}) — skipped " +
+                    $"(see any 'Failed to download original' line above)");
+                continue;
+            }
 
             try
             {
                 var info = new System.IO.FileInfo(temp);
                 var hash = await Task.Run(() => _dedup.ComputeHash(temp, opts), ct);
-                if (hash is null) continue;
+                if (hash is null)
+                {
+                    hashFailures++;
+                    SynapicLog.Warning(nameof(StepDedupViewModel),
+                        $"Dedup: could not hash item {id} ({item.FileName}, {info.Length:N0} bytes) — skipped; " +
+                        "see the 'Could not hash' line for the decode error");
+                    continue;
+                }
 
                 var key = $"daminion:{id}";
                 hashes[key] = hash.Value;
@@ -501,6 +561,10 @@ public partial class StepDedupViewModel : ViewModelBase
                 catch { /* temp cleanup is best effort */ }
             }
         }
+
+        SynapicLog.Info(nameof(StepDedupViewModel),
+            $"Dedup hashing done: {hashes.Count} of {items.Count} item(s) hashed " +
+            $"({downloadFailures} download failure(s), {hashFailures} unhashable file(s))");
 
         return _dedup.GroupFromHashes(hashes, opts);
     }
@@ -542,7 +606,12 @@ public partial class StepDedupViewModel : ViewModelBase
                     try
                     {
                         var temp = await client.DownloadThumbnailAsync(id, ThumbSize, ThumbSize, ct);
-                        if (string.IsNullOrEmpty(temp)) continue;
+                        if (string.IsNullOrEmpty(temp))
+                        {
+                            SynapicLog.Warning(nameof(StepDedupViewModel),
+                                $"No preview downloaded for {name} — the row shows without an image");
+                            continue;
+                        }
                         try
                         {
                             var bytes = System.IO.File.ReadAllBytes(temp);
@@ -674,6 +743,14 @@ public partial class StepDedupViewModel : ViewModelBase
             .ToList();
         if (targets.Count == 0) return;
 
+        // Say what is about to happen before any destructive call goes out —
+        // the summary line after Apply only reports what the call claimed.
+        SynapicLog.Info(nameof(StepDedupViewModel),
+            IsDaminion
+                ? $"Apply requested — remove {targets.Count} item(s) from the catalog: " +
+                  $"ids [{string.Join(", ", targets.Where(t => t.DaminionId is not null).Select(t => t.DaminionId))}]"
+                : $"Apply requested — {SelectedActionLabel()} on {targets.Count} duplicate file(s)");
+
         bool ok;
         string summary;
 
@@ -735,6 +812,10 @@ public partial class StepDedupViewModel : ViewModelBase
         }
         UpdateSummary();
     }
+
+    /// <summary>Human label of the local action for log lines (Tag/Move/Delete).</summary>
+    private string SelectedActionLabel() =>
+        LocalActions[Math.Clamp(SelectedAction, 0, LocalActions.Length - 1)];
 
     partial void OnFolderPathChanged(string value) => ScanCommand.NotifyCanExecuteChanged();
 

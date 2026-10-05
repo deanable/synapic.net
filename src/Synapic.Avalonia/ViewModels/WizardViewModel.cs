@@ -75,6 +75,73 @@ public partial class WizardViewModel : ViewModelBase
     public Step4ResultsViewModel Step4 { get; }
     public StepDedupViewModel Dedup { get; }
 
+    // ── Route split (the app opens on a chooser: Tagging vs Deduplication) ──
+
+    /// <summary>
+    /// True while the deduplication route owns the wizard: the shell offers only
+    /// Datasource → Deduplication, the tagging steps (Engine/Process/Results) are
+    /// hidden, and Next on Step 1 lands on the dedup step instead of Step 2.
+    /// False = the classic four-step tagging wizard.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isDedupRoute;
+
+    /// <summary>Enter the tagging route (start screen → Step 1 → … → Results).</summary>
+    public void EnterTaggingRoute()
+    {
+        IsDedupRoute = false;
+        ValidationError = null;
+        CurrentStep = Step1;
+    }
+
+    /// <summary>Enter the deduplication route (start screen → Step 1 → Deduplication).</summary>
+    public void EnterDedupRoute()
+    {
+        IsDedupRoute = true;
+        ValidationError = null;
+        CurrentStep = Step1;
+    }
+
+    /// <summary>Engine/Process/Results tabs only exist in the tagging route.</summary>
+    public bool ShowTaggingTabs => !IsDedupRoute;
+
+    /// <summary>
+    /// The Datasource tab reads as "step 1" of the tagging wizard (only once
+    /// you have left it) and as the first stop of the dedup route, where it is
+    /// always on screen — that is what makes the route look like Datasource →
+    /// Deduplication rather than one floating dedup tab.
+    /// </summary>
+    public bool ShowDatasourceTab => IsDedupRoute || CurrentStepIndex > 0;
+
+    /// <summary>
+    /// The dedup tab is reachable from Step 1 in the dedup route (that is the
+    /// whole point of the split) and from Results in the tagging route.
+    /// </summary>
+    public bool CanGoToDedupTab => IsDedupRoute || CurrentStepIndex >= 3;
+
+    partial void OnIsDedupRouteChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ShowTaggingTabs));
+        OnPropertyChanged(nameof(ShowDatasourceTab));
+        OnPropertyChanged(nameof(CanGoToDedupTab));
+        OnPropertyChanged(nameof(NextButtonText));
+        OnPropertyChanged(nameof(CurrentStepTitle));
+        GoToDedupCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>
+    /// Push the Step 1 source choice onto the dedup step so the route carries
+    /// what the user just picked: Daminion → catalog source, local → the folder
+    /// (an existing folder typed straight into the dedup step is never clobbered).
+    /// </summary>
+    private void PrefillDedupSource()
+    {
+        var daminion = string.Equals(_session.Datasource.Type, "daminion", StringComparison.OrdinalIgnoreCase);
+        Dedup.DatasourceType = daminion ? "daminion" : "local";
+        if (!daminion && !string.IsNullOrWhiteSpace(_session.Datasource.LocalPath))
+            Dedup.FolderPath = _session.Datasource.LocalPath;
+    }
+
     [ObservableProperty]
     private ObservableObject _currentStep;
 
@@ -91,10 +158,9 @@ public partial class WizardViewModel : ViewModelBase
     };
 
     /// <summary>Tab enablement: you can only jump forward to steps you've reached.</summary>
-    public bool CanGoToStep2Tab => CurrentStepIndex >= 1;
-    public bool CanGoToStep3Tab => CurrentStepIndex >= 2;
-    public bool CanGoToStep4Tab => CurrentStepIndex >= 3;
-    public bool CanGoToDedupTab => CurrentStepIndex >= 3;
+    public bool CanGoToStep2Tab => !IsDedupRoute && CurrentStepIndex >= 1;
+    public bool CanGoToStep3Tab => !IsDedupRoute && CurrentStepIndex >= 2;
+    public bool CanGoToStep4Tab => !IsDedupRoute && CurrentStepIndex >= 3;
     public bool CanStartOver => CurrentStepIndex > 0;
 
     /// <summary>Short hint under the nav bar (processing lock etc.).</summary>
@@ -104,7 +170,7 @@ public partial class WizardViewModel : ViewModelBase
     /// <summary>Label of the forward action for the current step (shell nav bar).</summary>
     public string NextButtonText => CurrentStepIndex switch
     {
-        0 => "Next: Engine \u2192",
+        0 => IsDedupRoute ? "Next: Deduplication \u2192" : "Next: Engine \u2192",
         1 => "Next: Process \u2192",
         2 => "Next: Results \u2192",
         _ => "Start Over",
@@ -119,6 +185,7 @@ public partial class WizardViewModel : ViewModelBase
         OnPropertyChanged(nameof(CanGoToStep3Tab));
         OnPropertyChanged(nameof(CanGoToStep4Tab));
         OnPropertyChanged(nameof(CanGoToDedupTab));
+        OnPropertyChanged(nameof(ShowDatasourceTab));
         OnPropertyChanged(nameof(CanStartOver));
         NextCommand.NotifyCanExecuteChanged();
         BackCommand.NotifyCanExecuteChanged();
@@ -181,6 +248,16 @@ public partial class WizardViewModel : ViewModelBase
             case 0:
                 var (valid2, error2) = _session.ValidateForStep2();
                 if (!valid2) { ValidationError = error2; return; }
+
+                if (IsDedupRoute)
+                {
+                    // Deduplication route: the datasource step exists purely to
+                    // feed the dedup scan, so Next skips Engine/Process/Results.
+                    PrefillDedupSource();
+                    await EnterStepAsync(Dedup);
+                    break;
+                }
+
                 PersistStep2IfLoaded();
                 await EnterStepAsync(Step2);
                 break;
@@ -248,7 +325,18 @@ public partial class WizardViewModel : ViewModelBase
     private void GoToStep4() => _ = EnterStepAsync(Step4);
 
     [RelayCommand(CanExecute = nameof(CanOpenDedup))]
-    private void GoToDedup() => _ = EnterStepAsync(Dedup);
+    private void GoToDedup()
+    {
+        if (IsDedupRoute)
+        {
+            // Same gate as Next on Step 1: the dedup step needs a source, and
+            // the scope it uses is the one chosen right here.
+            var (valid, error) = _session.ValidateForStep2();
+            if (!valid) { ValidationError = error; return; }
+            PrefillDedupSource();
+        }
+        _ = EnterStepAsync(Dedup);
+    }
 
     private bool CanOpenDedup() => !IsNavigationLocked;
 

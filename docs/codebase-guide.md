@@ -11,7 +11,14 @@ vision-language model (default `LiquidAI/LFM2.5-VL-450M`) and writes the
 results either into the image files' metadata or back into a **Daminion** DAM
 catalog.
 
-Wizard flow:
+Entry point: the app opens on a **start screen** with two routes &mdash;
+`Tagging` (the wizard below) and `Deduplication` (Datasource &rarr; Dedup, nothing
+else). `MainWindowViewModel.Route` holds `home` / `tagging` / `dedup` and owns
+`StartTaggingRouteCommand` / `StartDedupRouteCommand` / `GoHomeCommand`;
+`WizardViewModel.IsDedupRoute` is what hides Engine/Process/Results and sends
+Next from Datasource straight to the dedup step.
+
+Wizard flow (tagging route):
 
 1. **Datasource** — local folder (recursive or not) or a connected Daminion
    server with a scope (whole catalog / keyword search / shared collection /
@@ -25,7 +32,8 @@ Wizard flow:
 4. **Results** — grid of per-item outcomes, CSV export, retry of failed items,
    and verification of Daminion writes.
 5. **Deduplication** — separate tool: perceptual-hash duplicate scan with
-   Tag/Move/Delete actions.
+   Tag/Move/Delete actions. Reachable from the start screen as its own route,
+   or from this wizard's Deduplication tab once Results is reached.
 
 Cloud engines (OpenRouter/Groq) were removed from scope: the local sidecar is
 the only engine and there are no API keys to store.

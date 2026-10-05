@@ -25,8 +25,12 @@ window → detect/auto-launch the sidecar → stop it on shutdown. See the
 
 ### `Views/MainWindow.axaml(.cs)`
 Shell layout: toolbar (server indicator, Start/Stop Server, Build Server,
-download progress), a scrollable content area hosting the current wizard step
-via `ContentControl` data templates, navigation bar, and a live **Log** list.
+download progress), a **start screen** with two route cards (`Tagging` /
+`Deduplication`, bound to `StartTaggingRouteCommand` / `StartDedupRouteCommand`,
+visible while `IsHomeVisible`), a navigation bar whose tabs follow the active
+route (`Wizard.ShowTaggingTabs`, `Wizard.ShowDatasourceTab`, route title, `⌂
+Home` button), a scrollable content area hosting the current wizard step
+via `ContentControl` data templates, and a live **Log** list.
 The code-behind attaches the view model's sidecar log stream and
 auto-scrolls the log list to the newest entry on every collection change.
 
@@ -65,6 +69,12 @@ Empty base class (`ObservableObject`).
 ### `MainWindowViewModel` (singleton)
 The shell. Owns:
 
+- **Routes** — `Route` (`HomeRoute` / `TaggingRoute` / `DedupRoute`) with
+  `IsHomeVisible`, `IsWizardVisible`, `IsTaggingRoute`, `IsDedupRoute`,
+  `RouteTitle`, and the three commands `StartTaggingRouteCommand`,
+  `StartDedupRouteCommand`, `GoHomeCommand`. The app opens on `HomeRoute` (the
+  chooser); entering a route delegates to `Wizard.EnterTaggingRoute()` /
+  `EnterDedupRoute()` and logs the choice.
 - `ServerState` (`ServerUiState`: `Detecting`, `NotDetected`, `Building`,
   `Stopped`, `Starting`, `Running`, `Error`) and `ServerBrush` for the status
   dot; `StatusText` is derived from the state.
@@ -101,6 +111,15 @@ Linear navigation with validation gates. Holds the five step view models;
 `CurrentStep` drives `ContentControl`; `CurrentStepIndex`,
 `CurrentStepTitle`, `NextButtonText`, and tab-enablement properties are derived.
 `IsNavigationLocked` mirrors `Step3.IsRunning`.
+
+**Route split**: `IsDedupRoute` flips the wizard between the four-step tagging
+flow and the two-step deduplication flow. In the dedup route `ShowTaggingTabs`
+hides Engine/Process/Results, `ShowDatasourceTab` keeps step 1 on screen, `Next`
+from step 1 validates the datasource and lands on `Dedup` (after
+`PrefillDedupSource()` copies the Step 1 folder/scope onto the dedup step), and
+`GoToDedupCommand` applies the same gate — so the dedup tool is reachable from
+the onset instead of being the last tab of a wizard. In the tagging route
+`CanGoToDedupTab` still only opens at Results.
 
 Gates: `Session.ValidateForStep2()` (datasource usable) and
 `Session.ValidateForStep3(daminionConnected)` (model chosen, ≥1 tag field,
@@ -220,7 +239,11 @@ rescan or an applied action removes their groups. Records
 a dedup telemetry count. `ApplyCommand` acts on the unchecked items:
 Tag/Move/Delete for a local source (Delete gated by the same `ConfirmAction`
 prompt), or — after that modal (null = fail closed) —
-`DaminionApiClient.DeleteItemsAsync` for the catalog.
+`DaminionApiClient.DeleteItemsAsync` for the catalog. Scan and apply are fully
+instrumented for post-mortem debugging: one line per scan with source/scope,
+algorithm and threshold, one per skipped item (download failure, unhashable
+file) with the reason, a hashed/skipped tally, and one line per apply with the
+ids about to be removed plus the server's answer.
 
 ---
 
@@ -279,7 +302,7 @@ Errors surface as `InferenceApiException` (status + `detail`).
 ### Daminion (`Services/Daminion/`)
 
 **`IDaminionApi`** — Refit interface for the endpoints Synapic uses:
-`UserManager/Login|Logout`, `MediaItems/Get|GetByIds|GetCount|GetAbsolutePath`,
+`UserManager/Login|Logout`, `MediaItems/Get|GetByIds|GetCount|GetAbsolutePath|Remove`,
 `ItemData/GetAll|BatchChange|GetDefaultLayout`, `Thumbnail/Get`, `Preview/Get`,
 `Download/Get`, `Settings/GetVersion|GetLoggedUser|GetCatalogGuid|GetTags`,
 `IndexedTagValues` (+ fallback route), `SharedCollection/GetCollections|GetItems`.
@@ -304,16 +327,30 @@ parameter set (documented on the interface).
 - `GetSavedSearchesAsync` (enumeration + query-sweep discovery),
   `GetSharedCollectionsAsync`, `GetCatalogGuidAsync`.
 - `DownloadThumbnailAsync` / `DownloadPreviewAsync` / `DownloadOriginalAsync`
-  (temp files), `GetItemDimensionsAsync`.
+  (temp files), `GetItemDimensionsAsync`. Downloads stream into
+  `TempDirectory` (default `%TEMP%\synapic_daminion`, constructor-overridable —
+  there is no image cache anywhere) and a partial file is deleted on failure.
+  `CleanupStaleDownloads()` sweeps leftovers older than `StaleDownloadAge`
+  (1 h, deliberately above the 15-min HttpClient timeout so an in-flight
+  download is never removed) — called from `App` startup and from the dedup
+  scan, which then logs `TempDirectoryUsage()` so a leak is visible; both are
+  pinned by `DaminionTempDownloadTests`.
 - `UpdateItemMetadataAsync` (BatchChange), `RemoveKeywordsAsync`,
   `VerifyItemMetadataAsync` (re-read + compare → `DaminionVerifyResult`).
+- `DeleteItemsAsync(ids)` — POST `MediaItems/Remove` with
+  `{ids, delete:false}` (daminion_api.py `delete_items`), then **verifies** with
+  `GetByIds` (one 750 ms settle retry) and only reports success when the ids are
+  actually gone. It previously posted `delete:true` to `ItemData/BatchChange`,
+  which answers `success:true` without removing anything — the bug behind "dedup
+  delete did nothing". Logs the request ids and the response envelope.
 - `LogoutAsync`.
 
 **`DaminionModels`** — response wrappers tolerant of server-version key
 variation (`mediaItems` / `items` / `data`, `count` / `totalCount` / `data`),
 `DaminionItem` (+ `Dimensions`), `DaminionSavedSearch`, `DaminionCollection`,
 `DaminionVerifyResult`, `DaminionBatchChangeRequest`,
-`DaminionTagOperation`.
+`DaminionTagOperation`, `DaminionRemoveRequest` (ids + delete flag),
+`DaminionRemoveResponse` (per-id status map + success/errorCode envelope).
 
 **`DaminionConnectionStore`** — Windows-registry persistence of the Step 1
 form (`HKCU\Software\Synapic\Daminion`), with the password DPAPI-protected

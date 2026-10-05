@@ -17,6 +17,16 @@ list, and lets you decide which copies to keep before acting on the rest. The
 source is either a local folder or the Daminion catalog &mdash; the same choice
 Step 1 makes for tagging.</p>
 
+<div class="note">
+<p class="first">It has its own route.</p>
+<p>The start screen offers <span class="ui">Deduplication</span> beside
+<span class="ui">Tagging</span>, and that route is Datasource &rarr;
+Deduplication only: the Engine, Process and Results steps never appear. From the
+tagging route the same tool stays reachable through the
+<span class="ui">Deduplication</span> tab once you reach Results. See <a
+href="workflow-overview.html">Two routes at the start screen</a>.</p>
+</div>
+
 <h2>Choosing the source</h2>
 
 <ol class="steps">
@@ -33,6 +43,18 @@ catalog source, each original is downloaded to a temporary file, hashed and
 deleted again &mdash; one at a time, so a big collection never lands on disk
 whole.</li>
 </ol>
+
+<div class="note">
+<p class="first">Nothing is cached &mdash; and the temporary folder is swept.</p>
+<p>Synapic keeps no downloaded image between scans: previews are rendered in
+memory, and the originals it pulls sit in
+<span class="path">%TEMP%\synapic_daminion</span> only for the moment it takes
+to hash them. A download that dies half-way is deleted on the spot, and files a
+crash or a power cut left behind are swept at every launch and again before
+each scan (anything younger than an hour is kept, so a download that is still
+running is never touched). The log names the folder and, after every scan,
+reports what it still holds &mdash; which should read zero files.</p>
+</div>
 
 <h2>Scanning</h2>
 
@@ -105,12 +127,32 @@ group of two is easy to read; a group of nine is worth opening a couple of.</p>
 <tr><td><span class="ui">Delete</span> (local source)</td><td>Deletes the unchecked files permanently. This is a real delete, not a move to the Recycle Bin, and there is no undo &mdash; so a confirmation prompt appears first, counting the files and saying so.</td></tr>
 <tr><td><span class="ui">Move</span> (local source)</td><td>Moves the unchecked files into a <span class="path">duplicates</span> subfolder beside each file. Nothing is destroyed, and the files stay in the same tree. If a file of the same name is already in that subfolder, that move fails and is reported in the log &mdash; the original is left where it is.</td></tr>
 <tr><td><span class="ui">Tag</span> (local source)</td><td>Not implemented in this version. It records the intent in the log and changes nothing, so do not rely on it to mark duplicates. Use Move, or note them in your catalog by hand.</td></tr>
-<tr><td><span class="ui">Delete from catalog</span> (Daminion source)</td><td>Removes the unchecked items from the Daminion catalog. The original files on the server are not touched, but the catalog entries are: a confirmation prompt appears first, and after that there is no undo. The scan itself changes nothing &mdash; only <span class="ui">Apply</span> does.</td></tr>
+<tr><td><span class="ui">Delete from catalog</span> (Daminion source)</td><td>Removes the unchecked items from the Daminion catalog. The original files on the server are not touched, but the catalog entries are: a confirmation prompt appears first, and after that there is no undo. The items are asked for again straight after the delete, so the summary only reports success when the server really dropped them &mdash; otherwise you get <span class="ui">Catalog delete failed</span> and the reason in the log. The scan itself changes nothing &mdash; only <span class="ui">Apply</span> does.</td></tr>
 </table>
 
 <p>After an action the groups it touched are removed from the list and the
 summary reports the result, for example <span class="ui">Move applied to 4
 duplicate(s)</span>. Anything that failed is in the log.</p>
+
+<h2>When a scan does not do what you expected</h2>
+
+<p>Every stage of a scan writes to <span class="path">logs\synapic.log</span>
+beside the executable, so a scan that hashes fewer files than the scope holds, or
+an action that does not stick, can be read rather than guessed at:</p>
+
+<ul>
+<li><span class="term">One line at the start</span> names the source (folder, or
+scope and id), the algorithm, the threshold and the maximum dimension.</li>
+<li><span class="term">One line per skipped item</span>: an original that would
+not download, or a file whose hash could not be computed, is listed with the item
+id, the file name and the reason &mdash; items are never dropped silently.</li>
+<li><span class="term">One line when hashing finishes</span> with how many
+items were hashed and how many were skipped, then one with the number of
+groups found.</li>
+<li><span class="term">One line per action</span>: what is about to happen (the
+ids for a catalog delete), then the server's own answer, then whether the
+follow-up read confirms it.</li>
+</ul>
 
 <h2>What this tool is not</h2>
 

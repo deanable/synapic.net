@@ -12,8 +12,17 @@
 <h1>The main window</h1>
 
 <p class="lead">Everything happens in one window: a thin toolbar for the
-inference server at the top, the wizard in the middle, and a live log along the
-bottom.</p>
+inference server at the top, a start screen and wizard in the middle, and a live
+log along the bottom.</p>
+
+<h2>The start screen</h2>
+
+<p>The middle of the window begins with two cards &mdash;
+<span class="ui">Tagging</span> and <span class="ui">Deduplication</span> &mdash;
+and the one you pick decides which steps the window then offers. See <a
+href="workflow-overview.html">Two routes at the start screen</a>. While the
+chooser is up, the tab row and the Back/Next buttons are hidden; they come back
+as soon as a route is chosen.</p>
 
 <h2>The toolbar</h2>
 
@@ -75,7 +84,8 @@ runs anywhere, or that it needs an NVIDIA GPU.</li>
 
 <h2>The wizard</h2>
 
-<p>Five tabs select the step:</p>
+<p>Which tabs exist depends on the route you picked. The tagging route offers
+five:</p>
 
 <table>
 <tr><th class="setting">Tab</th><th>What you decide there</th></tr>
@@ -85,6 +95,13 @@ runs anywhere, or that it needs an NVIDIA GPU.</li>
 <tr><td>4 &middot; Results</td><td>What happened per image: export, retry, verify.</td></tr>
 <tr><td>Deduplication</td><td>A separate tool that finds near-duplicate images in a local folder or in the Daminion catalog scope.</td></tr>
 </table>
+
+<p>The deduplication route offers only two &mdash; <span class="ui">1 &middot;
+Datasource</span> and <span class="ui">Deduplication</span> &mdash; and the
+Engine, Process and Results tabs are not shown at all. The current route's name
+(<span class="ui">Tagging</span> or <span class="ui">Deduplication</span>) is
+written in the tab row, and the <span class="ui">Home</span> button at its right
+end goes back to the start screen.</p>
 
 <p>Below the tabs is one navigation row: a hint describing what the next step
 needs, a <span class="ui">Back</span> button, and a main button whose label

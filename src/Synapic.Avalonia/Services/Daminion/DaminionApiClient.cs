@@ -44,6 +44,7 @@ public sealed class DaminionApiClient
     private readonly string _baseUrl;
     private readonly string _username;
     private readonly string _password;
+    private readonly string _tempDirectory;
     private readonly Dictionary<string, string> _tagGuidMap = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, int> _tagIdMap = new(StringComparer.OrdinalIgnoreCase);
 
@@ -51,11 +52,13 @@ public sealed class DaminionApiClient
     private bool _authenticated;
     private readonly object _stateLock = new();
 
-    public DaminionApiClient(string baseUrl, string username, string password, double rateLimitSeconds = 0.1)
+    public DaminionApiClient(string baseUrl, string username, string password, double rateLimitSeconds = 0.1,
+        string? tempDirectory = null)
     {
         _baseUrl = NormalizeBaseUrl(baseUrl);
         _username = username;
         _password = password;
+        _tempDirectory = tempDirectory ?? DefaultTempDirectory;
 
         // One owned client (the Refit proxy) for this object's lifetime. A
         // throwaway per call would (a) leak an undisposed SocketsHttpHandler
@@ -103,6 +106,88 @@ public sealed class DaminionApiClient
     {
         ContentSerializer = new SystemTextJsonContentSerializer(new JsonSerializerOptions(JsonSerializerDefaults.Web)),
     };
+
+    // ── On-disk downloads (streamed, never cached) ────────────────────────
+
+    /// <summary>
+    /// Where originals, previews and thumbnails land while they are being
+    /// fetched: one file at a time, deleted by the caller as soon as it has
+    /// been hashed, read or rendered. This is <em>not</em> a cache — Synapic
+    /// keeps no downloaded image between scans, and previews are decoded
+    /// straight into memory.
+    /// </summary>
+    public static string DefaultTempDirectory => Path.Combine(Path.GetTempPath(), "synapic_daminion");
+
+    /// <summary>This client's download directory (overridable for tests).</summary>
+    public string TempDirectory => _tempDirectory;
+
+    /// <summary>Downloads older than this are considered leftovers of a crash
+    /// and are swept. The HTTP client times out after 15 minutes, so nothing
+    /// still being written can ever be this old — a second app instance's
+    /// in-flight download is safe.</summary>
+    public static readonly TimeSpan StaleDownloadAge = TimeSpan.FromHours(1);
+
+    /// <summary>
+    /// Delete downloads a crash or a power cut left behind. Called at startup
+    /// and before every dedup scan, because a scan is the one flow that pulls
+    /// whole originals (a leak there is megabytes per item, not kilobytes).
+    /// Returns how many files and how many bytes went away, for the log.
+    /// </summary>
+    public static (int Files, long Bytes) CleanupStaleDownloads(
+        TimeSpan? olderThan = null, string? directory = null)
+    {
+        var dir = directory ?? DefaultTempDirectory;
+        if (!Directory.Exists(dir)) return (0, 0);
+
+        var cutoff = DateTime.UtcNow - (olderThan ?? StaleDownloadAge);
+        var files = 0;
+        long bytes = 0;
+        try
+        {
+            foreach (var file in Directory.EnumerateFiles(dir))
+            {
+                try
+                {
+                    var info = new FileInfo(file);
+                    if (info.LastWriteTimeUtc > cutoff) continue; // still in use / fresh
+                    var length = info.Length;
+                    info.Delete();
+                    files++;
+                    bytes += length;
+                }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                {
+                    // Locked by a running scan — leave it for the next sweep.
+                    SynapicLog.Debug(nameof(DaminionApiClient), $"Stale download kept (in use): {file}");
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Warning(nameof(DaminionApiClient), $"Could not sweep '{dir}': {e.Message}");
+        }
+        return (files, bytes);
+    }
+
+    /// <summary>Current occupancy of the download directory — reported after a
+    /// scan so a non-zero value (a leak) is visible in the log.</summary>
+    public static (int Files, long Bytes) TempDirectoryUsage(string? directory = null)
+    {
+        var dir = directory ?? DefaultTempDirectory;
+        if (!Directory.Exists(dir)) return (0, 0);
+        var files = 0;
+        long bytes = 0;
+        try
+        {
+            foreach (var file in Directory.EnumerateFiles(dir))
+            {
+                try { var info = new FileInfo(file); files++; bytes += info.Length; }
+                catch (Exception) { /* racing delete */ }
+            }
+        }
+        catch (Exception) { /* directory vanished mid-sweep */ }
+        return (files, bytes);
+    }
 
     public bool IsAuthenticated
     {
@@ -541,23 +626,39 @@ public sealed class DaminionApiClient
     private async Task<string?> DownloadToTempAsync(
         int itemId, string kind, Func<IDaminionApi, Task<Stream>> fetch, CancellationToken ct)
     {
+        string? tempFile = null;
         try
         {
             // Session-expiry recovery: a large download is exactly the call a
             // late batch item trips with a stale session cookie.
             using var stream = await WithSessionRecoveryAsync(fetch, ct).ConfigureAwait(false);
-            if (stream is null) return null;
+            if (stream is null)
+            {
+                SynapicLog.Warning(nameof(DaminionApiClient),
+                    $"No response body for {kind} of item {itemId} — skipping");
+                return null;
+            }
 
-            var tempDir = Path.Combine(Path.GetTempPath(), "synapic_daminion");
-            Directory.CreateDirectory(tempDir);
-            var tempFile = Path.Combine(tempDir, $"{itemId}_{kind}");
+            Directory.CreateDirectory(_tempDirectory);
+            tempFile = Path.Combine(_tempDirectory, $"{itemId}_{kind}");
 
-            await using var fs = File.Create(tempFile);
-            await stream.CopyToAsync(fs, ct).ConfigureAwait(false);
+            await using (var fs = File.Create(tempFile))
+            {
+                await stream.CopyToAsync(fs, ct).ConfigureAwait(false);
+            }
+            SynapicLog.Debug(nameof(DaminionApiClient),
+                $"Downloaded {kind} for item {itemId} ({new FileInfo(tempFile).Length:N0} bytes) → {tempFile}");
             return tempFile;
         }
         catch (Exception e)
         {
+            // A truncated download would otherwise sit in the temp folder for
+            // ever: the caller only ever sees null and has no file to delete.
+            if (tempFile is not null)
+            {
+                try { File.Delete(tempFile); }
+                catch (Exception) { /* best effort — the sweep catches it later */ }
+            }
             SynapicLog.Error(nameof(DaminionApiClient), $"Failed to download {kind} for item {itemId}: {e.Message}");
             return null;
         }
@@ -949,31 +1050,92 @@ public sealed class DaminionApiClient
     }
 
     /// <summary>
-    /// Delete catalog items via /api/ItemData/BatchChange (delete:true) — used
-    /// by the dedup step's Daminion action. The files on the server's disk are
-    /// not touched; only the catalog entries are removed. Returns false when
-    /// the call fails (the caller has already confirmed with the user).
+    /// Remove catalog entries via POST /api/MediaItems/Remove — the call the
+    /// original Python client makes (<c>daminion_api.py delete_items</c>). The
+    /// files on the server's disk are not touched (delete:false), only the
+    /// catalog entries go.
+    ///
+    /// History: this used to post to /api/ItemData/BatchChange with delete:true.
+    /// That route only writes tag data — it answers <c>{success:true}</c> and
+    /// changes nothing, so dedup reported "Deleted N item(s)" while the very
+    /// next scan found the same duplicates. The response is therefore logged
+    /// and the ids are re-read with GetByIds before anything reports success.
+    /// Returns false when the server does not actually drop them.
     /// </summary>
     public async Task<bool> DeleteItemsAsync(IReadOnlyCollection<int> itemIds, CancellationToken ct = default)
     {
         if (itemIds.Count == 0) return true;
 
+        var ids = itemIds.ToArray();
         try
         {
-            await WithSessionRecoveryAsync(api => api.BatchChange(new DaminionBatchChangeRequest
+            var resp = await WithSessionRecoveryAsync(api => api.RemoveMediaItems(new DaminionRemoveRequest
             {
-                Ids = itemIds.ToArray(),
-                Data = Array.Empty<DaminionTagOperation>(),
-                Delete = true,
+                Ids = ids,
+                Delete = false, // catalog entry only — never the file on disk
             }, ct), ct).ConfigureAwait(false);
-            SynapicLog.Info(nameof(DaminionApiClient), $"Deleted {itemIds.Count} item(s) from the catalog");
-            return true;
+
+            SynapicLog.Info(nameof(DaminionApiClient),
+                $"POST /api/MediaItems/Remove ids=[{string.Join(",", ids)}] delete=false → " +
+                $"success={resp.Success} errorCode={resp.ErrorCode} data={TruncateJson(resp.Data)}" +
+                (string.IsNullOrEmpty(resp.Error) ? "" : $" error={resp.Error}"));
+
+            if (!resp.Success)
+            {
+                SynapicLog.Error(nameof(DaminionApiClient),
+                    $"MediaItems/Remove refused {ids.Length} id(s) (errorCode {resp.ErrorCode})");
+                return false;
+            }
+
+            // Belt and braces: a 200 from this server proves nothing on its own,
+            // so ask for the ids back and report honestly if they are still there.
+            var remaining = await CountItemsByIdsAsync(ids, ct).ConfigureAwait(false);
+            if (remaining == 0)
+            {
+                SynapicLog.Info(nameof(DaminionApiClient), $"Removed {ids.Length} item(s) from the catalog (verified: GetByIds returns none of them)");
+                return true;
+            }
+
+            // Servers that index asynchronously can answer GetByIds from a stale
+            // snapshot right after the write — settle, then ask once more.
+            await Task.Delay(750, ct).ConfigureAwait(false);
+            remaining = await CountItemsByIdsAsync(ids, ct).ConfigureAwait(false);
+            if (remaining == 0)
+            {
+                SynapicLog.Info(nameof(DaminionApiClient), $"Removed {ids.Length} item(s) from the catalog (verified after a 750 ms settle)");
+                return true;
+            }
+
+            SynapicLog.Warning(nameof(DaminionApiClient),
+                $"MediaItems/Remove left {remaining} of {ids.Length} item(s) in the catalog — " +
+                "the server accepted the call but did not drop them (permissions or server build?)");
+            return false;
         }
         catch (Exception e)
         {
-            SynapicLog.Error(nameof(DaminionApiClient), $"Failed to delete {itemIds.Count} item(s): {e.Message}");
+            SynapicLog.Error(nameof(DaminionApiClient), $"Failed to remove {ids.Length} item(s): {e.Message}");
             return false;
         }
+    }
+
+    /// <summary>How many of <paramref name="ids"/> the catalog still resolves —
+    /// the post-delete check behind <see cref="DeleteItemsAsync"/>.</summary>
+    private async Task<int> CountItemsByIdsAsync(int[] ids, CancellationToken ct)
+    {
+        if (ids.Length == 0) return 0;
+        // Session recovery like every other call: a stale cookie here would
+        // turn a successful delete into a reported failure.
+        var resp = await WithSessionRecoveryAsync(
+            api => api.GetItemsByIds(string.Join(",", ids), ct), ct).ConfigureAwait(false);
+        return resp.EffectiveItems.Length;
+    }
+
+    /// <summary>Compact, bounded rendering of a Remove response payload for the log.</summary>
+    private static string TruncateJson(JsonElement? data)
+    {
+        if (data is not { } element) return "null";
+        var text = element.ToString();
+        return text.Length <= 300 ? text : text[..300] + "…";
     }
 
     /// <summary>

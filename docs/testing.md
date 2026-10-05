@@ -23,6 +23,7 @@ python -m pytest tests/Synapic.Inference.Tests -q
 | `ContractsRoundTripTests` (Shared project) | DTO ↔ JSON field-name stability against the frozen wire protocol. |
 | `SessionTests` | `Session` stats/`ResetStats` and the `ValidateForStep2/3` gates. |
 | `WizardNavigationTests` | Forward/back navigation, validation errors, step-entry side effects. |
+| `RouteSplitTests` | The entry-point split: the app opens on the start-screen chooser, both route cards carry their commands through the real compiled window (a mistyped Avalonia binding is otherwise silent), the dedup route hides Engine/Process/Results and sends Next from Datasource straight to the dedup step with the source carried over, and Home returns to the chooser. |
 | `Step1DatasourceTests` | `ConnectCommand` enablement and `CanExecuteChanged` notifications as credentials change. |
 | `Step2EngineTests` | Engine view-model state → session propagation. |
 | `TagInstructionTests` | The editable tag instruction: blank means "the sidecar's built-in prompt" and stays null on the wire, "Use built-in instruction" loads the sidecar's own text (once, cached) and never overwrites the box with an empty answer, reset clears back to the default, and the value round-trips through the registry. |
@@ -44,6 +45,8 @@ python -m pytest tests/Synapic.Inference.Tests -q
 | `SidecarStalenessTests` | `InferenceSidecarService.DescribeStaleness` — flags an exe older than `src/Synapic.Inference`, ignores non-bundle files, reports "unknown" without a repo. |
 | `DaminionLayoutParsingTests` | Layout payload parsing / tag-GUID extraction. |
 | `DaminionIndexedTagValuesRequestTests` | The all-parameters-required routing rule for `GetIndexedTagValues`. |
+| `DaminionDeleteRequestTests` | The catalog delete posts to `/api/MediaItems/Remove` with `{ids, delete:false}` (never `ItemData/BatchChange`, which answers success without removing anything) and reports failure unless a follow-up `GetByIds` shows the ids gone. |
+| `DaminionTempDownloadTests` | The download folder never grows: a truncated download leaves no partial file, a successful one lands in the configured directory and is the caller's to delete, the stale sweep removes only files older than its cutoff (and the cutoff is longer than the HTTP timeout), and a missing directory is a no-op. |
 | `DaminionConnectionStoreTests` | Step 1 registry persistence incl. `ProcessAll` (Windows-only). |
 | `EngineSettingsStoreTests` | Step 2 registry persistence (Windows-only). |
 | `DaminionLiveSessionTests` | Opt-in live Daminion: login, filtered fetch, count, logout. |

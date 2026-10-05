@@ -15,6 +15,28 @@
 for tags, and writes the tags. The five steps are the decisions you get to make
 before and after that loop.</p>
 
+<h2>Two routes at the start screen</h2>
+
+<p>Every launch opens on a start screen with two cards, so the choice comes
+first instead of being buried at the end of a wizard:</p>
+
+<table>
+<tr><th class="setting">Route</th><th>What it is for</th><th>Steps it shows</th></tr>
+<tr><td><span class="ui">Tagging</span></td><td>Run the model over a datasource and write the tags</td><td>Datasource &rarr; Engine &rarr; Process &rarr; Results</td></tr>
+<tr><td><span class="ui">Deduplication</span></td><td>Find near-duplicate images and act on the extras</td><td>Datasource &rarr; Deduplication</td></tr>
+</table>
+
+<p>The deduplication route skips the tagging steps entirely: Step 1 exists only
+to pick the source (a folder, or the Daminion catalog scope), and
+<span class="ui">Next</span> goes straight to the deduplication step. In that
+route the nav bar shows just <span class="ui">1 &middot; Datasource</span> and
+<span class="ui">Deduplication</span>.</p>
+
+<p>The <span class="ui">Home</span> button in the nav bar returns to the start
+screen at any time; the route you were in is kept, so coming back and picking a
+card resumes where you left off. The tagging route still exposes deduplication
+from its own <span class="ui">Deduplication</span> tab once you reach Results.</p>
+
 <h2>The steps</h2>
 
 <table>

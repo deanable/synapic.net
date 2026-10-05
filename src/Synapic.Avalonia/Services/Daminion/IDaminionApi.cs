@@ -57,6 +57,14 @@ public interface IDaminionApi
     [Post("/api/ItemData/BatchChange")]
     Task<JsonElement> BatchChange([Body] DaminionBatchChangeRequest request, CancellationToken ct = default);
 
+    /// <summary>Remove catalog entries (daminion_api.py <c>delete_items</c>):
+    /// <c>{ids:[…], delete:false}</c> drops the catalog entry only, <c>delete:true</c>
+    /// also deletes the file on the server's disk. This is *not* BatchChange —
+    /// that route is tag-data only and answers <c>success:true</c> while changing
+    /// nothing, which is what made dedup's "Delete from catalog" a silent no-op.</summary>
+    [Post("/api/MediaItems/Remove")]
+    Task<DaminionRemoveResponse> RemoveMediaItems([Body] DaminionRemoveRequest request, CancellationToken ct = default);
+
     /// <summary>Wrapped layout payload (server 11.x nests entries under properties[].properties[]).</summary>
     [Get("/api/ItemData/GetDefaultLayout")]
     Task<JsonElement> GetDefaultLayout(CancellationToken ct = default);

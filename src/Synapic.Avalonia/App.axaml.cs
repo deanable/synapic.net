@@ -5,6 +5,7 @@ using Avalonia.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using Synapic.Avalonia.Models;
 using Synapic.Avalonia.Services;
+using Synapic.Avalonia.Services.Daminion;
 using Synapic.Avalonia.ViewModels;
 using Synapic.Avalonia.Views;
 
@@ -61,6 +62,17 @@ public partial class App : Application
         log.Information("Models root (HF_HOME for the sidecar): {ModelsRoot}", InferenceSidecarService.ModelsRoot());
         if (OperatingSystem.IsWindows())
             log.Information("Daminion connection params persist in registry: HKCU\\Software\\Synapic\\Daminion (password DPAPI-protected)");
+
+        // Downloads stream into %TEMP%\synapic_daminion and are deleted as
+        // soon as they are hashed or rendered — unless a crash or power cut
+        // caught one in flight. Sweep those before anything else can pull a
+        // new batch, and say so when there was anything to remove.
+        var (staleFiles, staleBytes) = DaminionApiClient.CleanupStaleDownloads();
+        if (staleFiles > 0)
+            log.Information("Cleared {StaleFiles} leftover Daminion download(s) ({StaleBytes:N0} bytes) from {TempDir}",
+                staleFiles, staleBytes, DaminionApiClient.DefaultTempDirectory);
+        else
+            log.Information("No leftover Daminion downloads in {TempDir}", DaminionApiClient.DefaultTempDirectory);
 
         // Usage telemetry (P6.1, spec §11 Q5): strictly opt-in via
         // ui.telemetryEnabled, local counters only — no network, ever.

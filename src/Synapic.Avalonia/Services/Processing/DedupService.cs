@@ -202,8 +202,11 @@ public sealed class DedupService : IDedupService
                 _ => ComputePHash(gray),
             };
         }
-        catch (Exception)
+        catch (Exception e)
         {
+            // Null means "this file took part in no group" — without the reason
+            // a scan that silently hashes 20 of 31 items is undiagnosable.
+            SynapicLog.Warning(nameof(DedupService), $"Could not hash '{path}': {e.Message}");
             return null;
         }
     }

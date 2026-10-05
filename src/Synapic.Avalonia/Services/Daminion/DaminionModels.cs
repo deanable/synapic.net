@@ -111,6 +111,41 @@ public sealed class DaminionBatchChangeRequest
     public int[]? ExcludeIds { get; init; }
 }
 
+/// <summary>
+/// Body of POST /api/MediaItems/Remove (daminion_api.py <c>delete_items</c>).
+/// <c>Delete</c> decides whether the <em>file on the server's disk</em> goes too:
+/// false removes the catalog entry only, which is what Synapic's dedup action
+/// promises ("the original files on the server are not touched").
+/// </summary>
+public sealed class DaminionRemoveRequest
+{
+    [JsonPropertyName("ids")]
+    public int[] Ids { get; init; } = Array.Empty<int>();
+
+    [JsonPropertyName("delete")]
+    public bool Delete { get; init; }
+}
+
+/// <summary>
+/// Envelope of POST /api/MediaItems/Remove. <c>Data</c> is a per-id status map
+/// (an id the server did not remove comes back as -1), so a 200 alone never
+/// proves the catalog entries are gone — the caller verifies with GetByIds.
+/// </summary>
+public sealed class DaminionRemoveResponse
+{
+    [JsonPropertyName("data")]
+    public JsonElement? Data { get; init; }
+
+    [JsonPropertyName("error")]
+    public string? Error { get; init; }
+
+    [JsonPropertyName("success")]
+    public bool Success { get; init; }
+
+    [JsonPropertyName("errorCode")]
+    public int ErrorCode { get; init; }
+}
+
 /// <summary>One tag operation: attach/remove a tag value by id or by raw value.</summary>
 public sealed class DaminionTagOperation
 {

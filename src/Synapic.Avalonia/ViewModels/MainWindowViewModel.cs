@@ -80,6 +80,67 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public WizardViewModel Wizard { get; }
 
+    // ── Routes: the app opens on a start screen with two clear entry points ──
+
+    public const string HomeRoute = "home";
+    public const string TaggingRoute = "tagging";
+    public const string DedupRoute = "dedup";
+
+    /// <summary>Which entry point is active: home (chooser), tagging or dedup.</summary>
+    [ObservableProperty]
+    private string _route = HomeRoute;
+
+    public bool IsHomeVisible => Route == HomeRoute;
+
+    public bool IsWizardVisible => Route != HomeRoute;
+
+    public bool IsTaggingRoute => Route == TaggingRoute;
+
+    public bool IsDedupRoute => Route == DedupRoute;
+
+    /// <summary>Route name shown in the nav bar so you always know which workflow you're in.</summary>
+    public string RouteTitle => Route switch
+    {
+        TaggingRoute => "Tagging",
+        DedupRoute => "Deduplication",
+        _ => "",
+    };
+
+    partial void OnRouteChanged(string value)
+    {
+        OnPropertyChanged(nameof(IsHomeVisible));
+        OnPropertyChanged(nameof(IsWizardVisible));
+        OnPropertyChanged(nameof(IsTaggingRoute));
+        OnPropertyChanged(nameof(IsDedupRoute));
+        OnPropertyChanged(nameof(RouteTitle));
+    }
+
+    /// <summary>Start screen → the four-step tagging wizard.</summary>
+    [RelayCommand]
+    private void StartTaggingRoute()
+    {
+        Route = TaggingRoute;
+        Wizard.EnterTaggingRoute();
+        SynapicLog.Info(nameof(MainWindowViewModel), "Route selected: Tagging");
+    }
+
+    /// <summary>Start screen → Datasource, then the deduplication step.</summary>
+    [RelayCommand]
+    private void StartDedupRoute()
+    {
+        Route = DedupRoute;
+        Wizard.EnterDedupRoute();
+        SynapicLog.Info(nameof(MainWindowViewModel), "Route selected: Deduplication");
+    }
+
+    /// <summary>Back to the start screen (route state is kept, so returning resumes).</summary>
+    [RelayCommand]
+    private void GoHome()
+    {
+        Route = HomeRoute;
+        SynapicLog.Info(nameof(MainWindowViewModel), "Returned to the start screen");
+    }
+
     // ── Help (docs/help; see HelpService) ──────────────────────────────────
 
     /// <summary>The toolbar Help button: the help home page.</summary>
