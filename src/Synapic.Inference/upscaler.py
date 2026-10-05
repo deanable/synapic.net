@@ -60,10 +60,20 @@ class Swin2SRUpscaler:
     """Thread-safe wrapper around Swin2SR super-resolution models."""
 
     def __init__(self) -> None:
-        import torch
+        # torch is only needed by the quality/balanced AI workflows. The fast
+        # workflow, the workflow/factor validation and the output-path helpers
+        # must run without it (the CI test job installs no torch).
+        try:
+            import torch
+        except ImportError:
+            torch = None
 
         self._torch = torch
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = (
+            torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            if torch is not None
+            else None
+        )
         self._lock = Lock()
         self._loaded: Dict[Tuple[str, int], Tuple[Any, Any]] = {}
 
@@ -93,6 +103,14 @@ class Swin2SRUpscaler:
         if factor not in workflow_models:
             raise ValueError(
                 f"Unsupported factor {factor}x for workflow '{workflow}'."
+            )
+
+        # Validation above must stay torch-free so a bad request is rejected
+        # the same way on machines without torch.
+        if self._torch is None:
+            raise RuntimeError(
+                "PyTorch is required for AI upscale workflows; "
+                "only the fast workflow runs without it."
             )
 
         with self._lock:

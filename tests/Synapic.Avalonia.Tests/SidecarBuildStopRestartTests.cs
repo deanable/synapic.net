@@ -88,8 +88,10 @@ public class SidecarBuildStopRestartTests
 
         // A synthetic RID: the lock can only ever be held by this test process
         // (which the pre-flight never kills), so the test can neither disturb a
-        // real sidecar nor depend on one existing.
-        var exe = Path.Combine(root!, "artifacts", "win-test", "synapic-inference.exe");
+        // real sidecar nor depend on one existing. The output name must match
+        // what the build service checks - it is only .exe on Windows.
+        var exeName = OperatingSystem.IsWindows() ? "synapic-inference.exe" : "synapic-inference";
+        var exe = Path.Combine(root!, "artifacts", "win-test", exeName);
         Directory.CreateDirectory(Path.GetDirectoryName(exe)!);
         if (!File.Exists(exe)) File.WriteAllBytes(exe, new byte[] { 1 });
 
@@ -102,7 +104,7 @@ public class SidecarBuildStopRestartTests
                 service.BuildAsync("win-test", _ => { }, new Progress<SidecarBuildProgress>(), CancellationToken.None));
 
             Assert.Contains("in use", ex.Message);
-            Assert.Contains("synapic-inference.exe", ex.Message);
+            Assert.Contains(exeName, ex.Message);
             Assert.False(service.IsBuilding);   // failed before a build ever started
         }
         finally

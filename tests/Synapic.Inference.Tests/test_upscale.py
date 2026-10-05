@@ -7,6 +7,7 @@ balanced resize/denoise blending, alpha handling, sharpening, save options —
 is exercised without touching the network.
 """
 
+import importlib.util
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -26,6 +27,15 @@ import upscaler  # noqa: E402
 def client():
     with TestClient(service.app) as c:
         yield c
+
+
+def _has_torch() -> bool:
+    """True when torch is importable (the CI test job installs none)."""
+
+    try:
+        return importlib.util.find_spec("torch") is not None
+    except ImportError:
+        return False
 
 
 def _make_image(path: Path, size=(16, 12), mode="RGB", color=(10, 120, 200)):
@@ -196,6 +206,11 @@ class TestUpscaleFastWorkflow:
         assert resp.status_code == 200, resp.text
 
 
+@pytest.mark.skipif(
+    not _has_torch(),
+    reason="the fake Swin2SR model still needs torch tensor math; "
+    "the CI test job runs without torch",
+)
 class TestUpscaleAiWorkflows:
     def test_quality_x2_uses_classical_model(self, client, tmp_path, fake_swin2sr):
         image = _make_image(tmp_path / "photo.png", size=(16, 12))
