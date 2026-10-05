@@ -392,16 +392,19 @@ after a 2.7 GB download.
   changes only — doc-only PRs skip CI) and **without** the installer smoke
   job, which costs extra Windows runner minutes.
 - **Nightly sidecar release** (`publish-nightly`, same workflow): on every
-  green push to `main` (and on manual dispatch) a follow-up job downloads the
-  three CPU bundles, stages them as `synapic-inference-<rid>` assets together
-  with a `SHA256SUMS.txt` manifest, and recreates a rolling prerelease tagged
-  `nightly` at that commit. This is the feed the app reads at startup
+  green push to `main` (and on manual dispatch) a follow-up job — gated on the
+  test jobs *and* the CUDA build — downloads the three CPU bundles plus the
+  CUDA bundle, stages them as `synapic-inference-<rid>` assets, splits the
+  ~2.5 GB CUDA executable into uploadable parts with
+  `build/split-release-asset.py` (GitHub rejects any asset of 2 GiB or more),
+  and writes one `SHA256SUMS.txt` manifest over everything before recreating a
+  rolling prerelease tagged `nightly` at that commit. This is the feed the app
+  reads at startup
   (`MainWindowViewModel.CheckForSidecarUpdatesAsync` →
   `SidecarDownloadService.CheckForUpdateAsync`), so users are always offered
-  the freshest sidecar as **Download instead of building**. Being a
-  prerelease, `nightly` never claims "Latest" on the releases page;
-  installers and the split CUDA sidecar stay assets of the versioned releases
-  (cut by `release.yml`) because they are too heavy to re-upload per push.
+  the freshest sidecar — CPU or CUDA — as **Download instead of building**.
+  Being a prerelease, `nightly` never claims "Latest" on the releases page;
+  installers stay assets of the versioned releases (cut by `release.yml`).
   Note that GitHub release assets never carry the unix executable bit — the
   download service restores it after installing on Linux/macOS.
 - **The CUDA job** (`sidecar-cuda`, windows-2022) builds `win-x64-cuda`: it

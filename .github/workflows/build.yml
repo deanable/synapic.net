@@ -584,39 +584,63 @@ jobs:
   # setup panel checks GitHub at startup and offers Download instead of a
   # local build (MainWindowViewModel.CheckForSidecarUpdatesAsync), so every
   # green main build refreshes a rolling `nightly` prerelease carrying the
-  # three CPU sidecars plus a SHA256SUMS.txt manifest - the download service
-  # refuses bytes it cannot verify. It is a prerelease, so it never displaces
-  # the newest versioned tag ("Latest") on the releases page; versioned
-  # releases (release.yml, on a `v*` tag) remain the source for installers
-  # and the split CUDA parts, which are too heavy to re-upload per push.
+  # three CPU sidecars, the split CUDA server, and a SHA256SUMS.txt manifest -
+  # the download service refuses bytes it cannot verify. GitHub rejects any
+  # asset of 2 GiB or more, so the ~2.5 GB CUDA bundle is split into parts the
+  # same way release.yml does for versioned releases. It is a prerelease, so
+  # it never displaces the newest versioned tag ("Latest") on the releases
+  # page; versioned releases (release.yml, on a `v*` tag) remain the source
+  # for the installers.
   publish-nightly:
     name: Publish nightly sidecar release
     runs-on: ubuntu-22.04
-    needs: [build]
+    needs: [build, sidecar-cuda]
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'push' && github.ref == 'refs/heads/main')
     permissions:
       contents: write
     steps:
+      # split-release-asset.py lives in the repo, so the sources come first.
+      - uses: actions/checkout@v4
+
       - name: Download the CPU sidecar bundles
         uses: actions/download-artifact@v4
         with:
           pattern: Synapic-{win-x64,linux-x64,osx-arm64}
           path: bundle
 
+      - name: Download the CUDA sidecar bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: Synapic-sidecar-win-x64-cuda
+          path: cuda
+
       # Asset names must match what the app looks for: synapic-inference-<rid>
       # (the .exe suffix on Windows) - see SidecarDownloadService.IsAssetFor.
-      - name: Stage the nightly assets with checksums
+      - name: Stage the nightly assets
         run: |
           mkdir nightly
           cp bundle/Synapic-win-x64/synapic-inference.exe  nightly/synapic-inference-win-x64.exe
           cp bundle/Synapic-linux-x64/synapic-inference     nightly/synapic-inference-linux-x64
           cp bundle/Synapic-osx-arm64/synapic-inference     nightly/synapic-inference-osx-arm64
+          cp cuda/synapic-inference.exe                     nightly/synapic-inference-win-x64-cuda.exe
+          ls -lh nightly
+
+      # GitHub rejects any release asset of 2 GiB or more and the CUDA bundle
+      # is ~2.5 GB, so it ships as parts plus a reassembly helper - the app
+      # joins the parts itself (SidecarDownloadService.ResolveAssetsAsync).
+      # The helper also removes the oversized original from the directory.
+      - name: Split the CUDA sidecar into uploadable parts
+        run: |
+          python3 build/split-release-asset.py nightly/synapic-inference-win-x64-cuda.exe --out-dir nightly
+          ls -lh nightly
+
+      - name: Checksum every asset
+        run: |
           cd nightly
-          sha256sum synapic-inference-win-x64.exe synapic-inference-linux-x64 synapic-inference-osx-arm64 > SHA256SUMS.txt
+          sha256sum $(ls | grep -v SHA256SUMS.txt) > SHA256SUMS.txt
           cat SHA256SUMS.txt
-          ls -lh
 
       # Recreate rather than edit: the rolling tag must move to this commit,
       # and a fresh release cannot accidentally claim "Latest" as a prerelease.
@@ -630,5 +654,5 @@ jobs:
             --prerelease \
             --target "$GITHUB_SHA" \
             --title "Nightly sidecar builds (main)" \
-            --notes "Rolling CPU inference sidecars from every green push to main. Synapic checks this release at startup and offers Download instead of building locally. Verify downloads against SHA256SUMS.txt. Installers and the CUDA server ship with the versioned releases."
+            --notes "Rolling inference sidecars from every green push to main: CPU builds for Windows, Linux and macOS plus the split NVIDIA/CUDA server. Synapic checks this release at startup and offers Download instead of building locally. Verify downloads against SHA256SUMS.txt; join the CUDA parts with the reassemble helper. Installers ship with the versioned releases."
           echo "Published nightly from $GITHUB_SHA"

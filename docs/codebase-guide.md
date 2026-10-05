@@ -379,13 +379,13 @@ CI (`.github/workflows/build.yml`) runs pytest + xUnit first, then a 3-RID
 matrix (win-x64, linux-x64, osx-arm64) that builds the sidecar, publishes the
 app, stages them together, publishes the Windows installer, and (on `main`
 pushes) runs an installer smoke test that also exercises the .NET runtime
-prerequisite path. Also on `main` pushes, `publish-nightly` recreates a
-rolling prerelease tagged `nightly` carrying the three CPU sidecars +
+prerequisite path. Also on `main` pushes, `publish-nightly` — after the
+tests and the CUDA build succeed — recreates a rolling prerelease tagged
+`nightly` carrying the three CPU sidecars, the split CUDA server parts, and
 `SHA256SUMS.txt` — the file the app's startup GitHub check offers as
 **Download instead of building**. `release.yml` handles `v*` tags (and manual
-dry runs) with
-signing/notarization, and publishes the standalone CPU **and** CUDA sidecar
-executables as their own release assets — see `packaging.md`.
+dry runs) with signing/notarization, and publishes installers plus the
+standalone CPU and CUDA sidecar executables — see `packaging.md`.
 
 ## 11. Troubleshooting index (log messages you will actually see)
 
