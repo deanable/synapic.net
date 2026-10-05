@@ -24,6 +24,9 @@ hiddenimports = [
     "huggingface_hub", "tokenizers", "sentencepiece",
     # Vision
     "PIL", "qwen_vl_utils",
+    # Swin2SR super-resolution (imported lazily by upscaler.py; PyInstaller's
+    # static analysis cannot see `from transformers import Swin2SR...`)
+    "transformers.models.swin2sr",
     # FastAPI stack
     "fastapi", "uvicorn", "pydantic", "pydantic_core",
     "anyio", "sniffio", "starlette", "click", "h11",

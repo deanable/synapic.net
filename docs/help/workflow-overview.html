@@ -15,27 +15,28 @@
 for tags, and writes the tags. The five steps are the decisions you get to make
 before and after that loop.</p>
 
-<h2>Two routes at the start screen</h2>
+<h2>Three routes at the start screen</h2>
 
-<p>Every launch opens on a start screen with two cards, so the choice comes
+<p>Every launch opens on a start screen with three cards, so the choice comes
 first instead of being buried at the end of a wizard:</p>
 
 <table>
 <tr><th class="setting">Route</th><th>What it is for</th><th>Steps it shows</th></tr>
 <tr><td><span class="ui">Tagging</span></td><td>Run the model over a datasource and write the tags</td><td>Datasource &rarr; Engine &rarr; Process &rarr; Results</td></tr>
 <tr><td><span class="ui">Deduplication</span></td><td>Find near-duplicate images and act on the extras</td><td>Datasource &rarr; Deduplication</td></tr>
+<tr><td><span class="ui">Upscaling</span></td><td>Enhance image resolution (the Daminion Feature enhancement utility)</td><td>Datasource &rarr; Upscaling</td></tr>
 </table>
 
-<p>The deduplication route skips the tagging steps entirely: Step 1 exists only
-to pick the source (a folder, or the Daminion catalog scope), and
-<span class="ui">Next</span> goes straight to the deduplication step. In that
-route the nav bar shows just <span class="ui">1 &middot; Datasource</span> and
-<span class="ui">Deduplication</span>.</p>
+<p>The deduplication and upscaling routes skip the tagging steps entirely:
+Step 1 exists only to pick the source (a folder, or the Daminion catalog
+scope), and <span class="ui">Next</span> goes straight to that route's step.
+In those routes the nav bar shows just <span class="ui">1 &middot;
+Datasource</span> and the route's own step.</p>
 
 <p>The <span class="ui">Home</span> button in the nav bar returns to the start
 screen at any time; the route you were in is kept, so coming back and picking a
-card resumes where you left off. The tagging route still exposes deduplication
-from its own <span class="ui">Deduplication</span> tab once you reach Results.</p>
+card resumes where you left off. The tagging route still exposes
+Deduplication and Upscaling from their own tabs once you reach Results.</p>
 
 <h2>The steps</h2>
 
@@ -46,6 +47,7 @@ from its own <span class="ui">Deduplication</span> tab once you reach Results.</
 <tr><td>3 &mdash; Process</td><td>Nothing &mdash; you watch, pause, resume or abort</td><td>&mdash;</td></tr>
 <tr><td>4 &mdash; Results</td><td>Review, export, retry failures, verify Daminion writes</td><td>&mdash;</td></tr>
 <tr><td>Deduplication</td><td>A separate scan for near-duplicate images &mdash; local folder or Daminion scope &mdash; with keep checkboxes and a bulk action</td><td>&mdash;</td></tr>
+<tr><td>Upscaling</td><td>Enhance resolution over the same source &mdash; AI (Swin2SR) or fast Lanczos &mdash; with the output settings you choose</td><td>&mdash;</td></tr>
 </table>
 
 <h2>What happens to each image</h2>
@@ -117,6 +119,8 @@ large first run.</li>
 <ul>
 <li><a href="step1-datasource.html">Step 1 &mdash; Datasource</a></li>
 <li><a href="step2-engine.html">Step 2 &mdash; Engine</a></li>
+<li><a href="dedup.html">Deduplication</a></li>
+<li><a href="upscale.html">Upscaling</a></li>
 <li><a href="metadata-written.html">What gets written to your images</a></li>
 <li><a href="window-overview.html">The main window</a></li>
 </ul>

@@ -7,6 +7,7 @@ Entry point for PyInstaller (spec §4). Implements the HTTP contract from
 - ``GET  /models/list``     → ModelInfo[] (local HF cache scan)
 - ``POST /models/download`` → DownloadRequest (202 if already downloading)
 - ``POST /tag``             → TagRequest → TagResponse
+- ``POST /upscale``         → UpscaleRequest → UpscaleResponse (Swin2SR/Lanczos)
 - ``GET/PUT /config``       → inference ConfigDto
 - ``GET  /prompt``          → the built-in tag instruction (PromptDefaultsDto)
 - ``POST /shutdown``        → graceful exit
@@ -48,7 +49,7 @@ from pydantic import BaseModel, Field
 
 # Flat absolute imports: required because service.py is the PyInstaller entry
 # script (no parent package) and keeps pytest imports identical.
-import config, inference_engine, model_loader  # noqa: E402
+import config, inference_engine, model_loader, upscaler  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,
@@ -84,6 +85,25 @@ class TagRequestModel(BaseModel):
 class DownloadRequestModel(BaseModel):
     model_id: str
     revision: str = "main"
+
+
+class UpscaleOptionsModel(BaseModel):
+    """Parameters of the upscale run — mirrors the original app's UpscaleOptions."""
+
+    workflow: str = Field(default="quality", pattern="^(quality|balanced|fast)$")
+    factor: int = Field(default=2, ge=2, le=8)
+    precision: str = Field(default="auto", pattern="^(auto|fp16|fp32)$")
+    denoise_strength: float = Field(default=1.0, ge=0.0, le=1.0)
+    sharpen_amount: float = Field(default=0.0, ge=0.0, le=2.0)
+    output_format: str = Field(default="keep", pattern="^(keep|JPEG|PNG|WEBP)$")
+    jpeg_quality: int = Field(default=95, ge=70, le=100)
+    overwrite_existing: bool = True
+
+
+class UpscaleRequestModel(BaseModel):
+    image_path: str
+    output_path: str | None = None
+    options: UpscaleOptionsModel | None = None
 
 
 class ConfigModel(BaseModel):
@@ -416,6 +436,131 @@ def tag(body: TagRequestModel) -> dict:
         raise HTTPException(status_code=500, detail=f"Inference failed: {e}") from e
 
     return response
+
+
+# ---------------------------------------------------------------------------
+# Upscaling (port of the original app's Swin2SR upscaler)
+# ---------------------------------------------------------------------------
+
+_upscaler_instance: "upscaler.Swin2SRUpscaler | None" = None
+_upscale_lock = threading.Lock()
+
+
+def _get_upscaler() -> "upscaler.Swin2SRUpscaler":
+    """Lazy singleton: constructing Swin2SRUpscaler imports torch, which must
+    stay off the import path of every test that only exercises /tag."""
+    global _upscaler_instance
+    if _upscaler_instance is None:
+        _upscaler_instance = upscaler.Swin2SRUpscaler()
+    return _upscaler_instance
+
+
+@app.post(
+    "/upscale",
+    responses={
+        200: {
+            "description": (
+                "Upscale outcome (UpscaleResponse): output_path, before/after "
+                "dimensions, workflow, factor, model_used, inference_ms."
+            )
+        },
+        404: {"description": "Image not found."},
+        422: {
+            "description": (
+                "Validation error (blank image_path, unsupported workflow/factor "
+                "combination, out-of-range option)."
+            )
+        },
+        500: {"description": "Upscale failed or produced no output."},
+    },
+)
+def upscale(body: UpscaleRequestModel) -> dict:
+    """Upscale one image with the original app's workflows (quality/balanced
+    Swin2SR models, fast Lanczos) and save the result next to the input.
+
+    Requests are serialized on purpose: the original app ran one upscale
+    worker thread, and two concurrent CPU inferences would double the model
+    resident set for no throughput gain.
+    """
+    from pathlib import Path
+
+    from PIL import Image
+
+    if not body.image_path:
+        raise HTTPException(status_code=422, detail="image_path is required")
+    if not os.path.isfile(body.image_path):
+        raise HTTPException(status_code=404, detail=f"Image not found: {body.image_path}")
+
+    raw = body.options or UpscaleOptionsModel()
+    resolved = upscaler.UpscaleOptions(
+        workflow=raw.workflow.strip().lower(),
+        precision=raw.precision.strip().lower(),
+        denoise_strength=float(raw.denoise_strength),
+        sharpen_amount=float(raw.sharpen_amount),
+        output_format=raw.output_format.strip(),
+        jpeg_quality=int(raw.jpeg_quality),
+        overwrite_existing=bool(raw.overwrite_existing),
+    )
+    factor = int(raw.factor)
+
+    input_path = Path(body.image_path)
+    try:
+        with Image.open(input_path) as source:
+            original_width, original_height = source.size
+    except Exception as e:
+        raise HTTPException(
+            status_code=422, detail=f"Not a readable image: {body.image_path} ({e})"
+        ) from e
+
+    output_target = Path(body.output_path) if body.output_path else None
+    started = time.monotonic()
+    try:
+        with _upscale_lock:
+            result_path = _get_upscaler().upscale(
+                input_path=input_path,
+                factor=factor,
+                output_path=output_target,
+                options=resolved,
+                status_callback=lambda message: logger.info("upscale: %s", message),
+            )
+    except ValueError as e:
+        # Unsupported workflow / factor combination — a client bug, not a failure.
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception as e:
+        logger.exception("Upscale failed")
+        raise HTTPException(status_code=500, detail=f"Upscale failed: {e}") from e
+    elapsed_ms = int((time.monotonic() - started) * 1000)
+
+    if not result_path.is_file() or result_path.stat().st_size <= 0:
+        raise HTTPException(
+            status_code=500, detail=f"Upscale produced no output at {result_path}"
+        )
+
+    with Image.open(result_path) as output_image:
+        width, height = output_image.size
+
+    model_used = None
+    if resolved.workflow != upscaler.WORKFLOW_FAST:
+        model_factor = (
+            4
+            if resolved.workflow == upscaler.WORKFLOW_BALANCED and factor == 2
+            else factor
+        )
+        model_used = upscaler._WORKFLOW_MODEL_IDS[resolved.workflow][model_factor]
+
+    return {
+        "output_path": str(result_path),
+        "width": width,
+        "height": height,
+        "original_width": original_width,
+        "original_height": original_height,
+        "workflow": resolved.workflow,
+        "factor": factor,
+        "model_used": model_used,
+        "inference_ms": elapsed_ms,
+    }
 
 
 @app.get(

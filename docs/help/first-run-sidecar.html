@@ -61,6 +61,15 @@ button compiles, so a downloaded server behaves exactly like a built one.
 Download needs a network connection; building needs the repository and its
 toolchain, and works offline once its packages are cached.</p>
 
+<p>Synapic also checks GitHub for a newer prebuilt server every time it starts.
+When the release page carries a fresher executable than the one on disk &mdash;
+or no executable exists yet &mdash; a gold note appears on the row naming the
+release (for example <span class="ui">nightly</span>) and pointing at
+<span class="ui">Download</span> or <span class="ui">Update</span> as the quick
+alternative to a local build. The check never blocks startup: if GitHub is
+unreachable it stays silent, and a local build that is newer than the release
+is not offered back to you.</p>
+
 <h2>Which variant should I build?</h2>
 
 <table>

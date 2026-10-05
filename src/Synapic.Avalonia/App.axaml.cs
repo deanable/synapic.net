@@ -116,7 +116,12 @@ public partial class App : Application
             // status indicator are correct at launch. This never adopts a
             // server left over from a previous run: the lifecycle is strictly
             // one server per app instance (started on launch, stopped on exit).
-            _ = ((MainWindowViewModel)mainWindow.DataContext).DetectServerAsync();
+            // Then the always-on GitHub check: once detection has created the
+            // variant rows, ask whether a newer prebuilt sidecar exists on the
+            // release page so the setup panel can offer Download instead of a
+            // local build. Advisory only - it must never delay or fail startup.
+            var shell = (MainWindowViewModel)mainWindow.DataContext;
+            _ = DetectThenCheckForUpdatesAsync(shell, log);
 
             // Server lifecycle (user requirement): the inference server starts
             // when the application launches. ui.autoLaunchSidecar (default
@@ -174,5 +179,29 @@ public partial class App : Application
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    /// <summary>Startup sequence: detection first (it creates the variant
+    /// rows), then the GitHub update check, both fully guarded - an unobserved
+    /// task exception or an offline machine must not affect the launch.</summary>
+    private static async Task DetectThenCheckForUpdatesAsync(MainWindowViewModel vm, Serilog.ILogger log)
+    {
+        try
+        {
+            await vm.DetectServerAsync();
+        }
+        catch (Exception e)
+        {
+            log.Error(e, "Sidecar detection failed at startup");
+        }
+
+        try
+        {
+            await vm.CheckForSidecarUpdatesAsync();
+        }
+        catch (Exception e)
+        {
+            log.Error(e, "GitHub sidecar update check failed at startup");
+        }
     }
 }

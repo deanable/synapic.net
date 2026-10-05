@@ -103,7 +103,7 @@ public partial class Step4ResultsViewModel : ViewModelBase
             var template = _step3.BuildTagRequest();
             var orchestrator = new ProcessingOrchestrator(_step3.Sidecar);
 
-            var items = await orchestrator.FetchItemsAsync(ds, ct);
+            var items = await WorkflowRunner.FetchItemsAsync(ds, ct);
             var subset = items.Where(i => failedFiles.Contains(i.FileName)).ToList();
 
             // Drop the old failed entries; the rerun appends fresh results.

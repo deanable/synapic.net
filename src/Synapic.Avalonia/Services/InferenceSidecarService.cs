@@ -45,6 +45,14 @@ public interface IInferenceSidecar : IAsyncDisposable
     Task StartAsync(CancellationToken ct = default);
     Task StopAsync(TimeSpan? gracefulTimeout = null);
     Task<TagResponse> TagAsync(TagRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// POST /upscale: the sidecar's Swin2SR/Lanczos upscale (the original app's
+    /// upscaler). Defaulted (error result) so the sidecar-only test fakes need
+    /// no change; the upscale route wires a real implementation.
+    /// </summary>
+    Task<UpscaleResponse> UpscaleAsync(UpscaleRequest request, CancellationToken ct = default)
+        => Task.FromException<UpscaleResponse>(new NotSupportedException("This sidecar fake does not implement /upscale."));
     Task<ModelInfo[]> ListModelsAsync(CancellationToken ct = default);
     Task DownloadModelAsync(string modelId, CancellationToken ct = default);
     Task<HealthResponse> GetHealthAsync(CancellationToken ct = default);
@@ -688,6 +696,11 @@ public sealed class InferenceSidecarService : IInferenceSidecar
     public async Task<TagResponse> TagAsync(TagRequest request, CancellationToken ct = default)
     {
         return await Api.TagAsync(request, ct).ConfigureAwait(false);
+    }
+
+    public async Task<UpscaleResponse> UpscaleAsync(UpscaleRequest request, CancellationToken ct = default)
+    {
+        return await Api.UpscaleAsync(request, ct).ConfigureAwait(false);
     }
 
     public async Task<ModelInfo[]> ListModelsAsync(CancellationToken ct = default)

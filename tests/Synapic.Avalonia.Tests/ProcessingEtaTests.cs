@@ -14,7 +14,7 @@ public class ProcessingEtaTests
     [Fact]
     public void NoEstimateBeforeFirstItemCompletes()
     {
-        var (eta, perItem) = ProcessingOrchestrator.EstimateProgress(TimeSpan.FromSeconds(5), 0, 10);
+        var (eta, perItem) = WorkflowRunner.EstimateProgress(TimeSpan.FromSeconds(5), 0, 10);
         Assert.Null(eta);
         Assert.Null(perItem);
     }
@@ -22,7 +22,7 @@ public class ProcessingEtaTests
     [Fact]
     public void EstimateMatchesPythonFormula()
     {
-        var (eta, perItem) = ProcessingOrchestrator.EstimateProgress(TimeSpan.FromSeconds(10), 2, 12);
+        var (eta, perItem) = WorkflowRunner.EstimateProgress(TimeSpan.FromSeconds(10), 2, 12);
         Assert.Equal(TimeSpan.FromSeconds(5), perItem);
         Assert.Equal(TimeSpan.FromSeconds(50), eta);
     }
@@ -30,7 +30,7 @@ public class ProcessingEtaTests
     [Fact]
     public void EstimateIsZeroOnceComplete()
     {
-        var (eta, perItem) = ProcessingOrchestrator.EstimateProgress(TimeSpan.FromSeconds(20), 4, 4);
+        var (eta, perItem) = WorkflowRunner.EstimateProgress(TimeSpan.FromSeconds(20), 4, 4);
         Assert.Equal(TimeSpan.Zero, eta);
         Assert.Equal(TimeSpan.FromSeconds(5), perItem);
     }

@@ -11,12 +11,18 @@ vision-language model (default `LiquidAI/LFM2.5-VL-450M`) and writes the
 results either into the image files' metadata or back into a **Daminion** DAM
 catalog.
 
-Entry point: the app opens on a **start screen** with two routes &mdash;
-`Tagging` (the wizard below) and `Deduplication` (Datasource &rarr; Dedup, nothing
-else). `MainWindowViewModel.Route` holds `home` / `tagging` / `dedup` and owns
-`StartTaggingRouteCommand` / `StartDedupRouteCommand` / `GoHomeCommand`;
-`WizardViewModel.IsDedupRoute` is what hides Engine/Process/Results and sends
-Next from Datasource straight to the dedup step.
+Entry point: the app opens on a **start screen** with three routes &mdash;
+`Tagging` (the wizard below), `Deduplication` (Datasource &rarr; Dedup, nothing
+else) and `Upscaling` (Datasource &rarr; Upscaling, the Daminion "Feature
+enhancement" utility). `MainWindowViewModel.Route` holds `home` / `tagging` /
+`dedup` / `upscale` and owns `StartTaggingRouteCommand` /
+`StartDedupRouteCommand` / `StartUpscaleRouteCommand` / `GoHomeCommand`;
+`WizardViewModel.IsDedupRoute` / `IsUpscaleRoute` are what hide
+Engine/Process/Results and send Next from Datasource straight to that route's
+step. All three routes run on one shared batch kernel
+(`Services/Processing/WorkflowRunner`): fetch &rarr; bounded per-item handler &rarr;
+progress/ETA &rarr; summary &mdash; only the parameters (`TagRequest`,
+`DedupOptions`, `UpscaleOptions`) and the per-item handler change.
 
 Wizard flow (tagging route):
 
@@ -34,6 +40,13 @@ Wizard flow (tagging route):
 5. **Deduplication** — separate tool: perceptual-hash duplicate scan with
    Tag/Move/Delete actions. Reachable from the start screen as its own route,
    or from this wizard's Deduplication tab once Results is reached.
+6. **Upscaling** — separate tool (the Daminion "Feature enhancement"
+   utility): Swin2SR (quality/balanced) or Lanczos (fast) enhancement of the
+   Step 1 source through the sidecar's `POST /upscale`, checked out →
+   downloaded → upscaled → checked back in for catalog items, and written as
+   `name_upscaled.ext` beside local originals. Reachable from the start
+   screen as its own route, or from this wizard's Upscaling tab once Results
+   is reached.
 
 Cloud engines (OpenRouter/Groq) were removed from scope: the local sidecar is
 the only engine and there are no API keys to store.
@@ -102,9 +115,9 @@ huggingface_hub, pillow, tqdm, psutil, qwen-vl-utils, PyInstaller 6.18.0).
 
 ```
 ┌─────────────────────────────── Synapic.exe (C#) ───────────────────────────────┐
-│  MainWindow ─ WizardViewModel ─ Step1..4 + Dedup                               │
+│  MainWindow ─ WizardViewModel ─ Step1..4 + Dedup + Upscale                     │
 │  InferenceSidecarService  ──spawn/stop/health──►  synapic-inference --port=0   │
-│  ProcessingOrchestrator   ──POST /tag──────────►  FastAPI (127.0.0.1:<port>)   │
+│  WorkflowRunner           ──POST /tag, /upscale►  FastAPI (127.0.0.1:<port>)   │
 │  DaminionApiClient / MetadataWriterService / DedupService (all in C#)          │
 └────────────────────────────────────────────────────────────────────────────────┘
                                         │
@@ -194,6 +207,16 @@ percent, ETA, per-item duration and the current file name. ETA is
 (matching the original Python app). Step 3 renders it plus a per-image
 duration, and the log auto-scrolls to the newest line.
 
+Every workflow goes through the same `WorkflowRunner` kernel: a
+`WorkflowDefinition` (key, title, parallelism, a parameter clause appended to
+the batch log line) plus an `IWorkflowItemHandler` that owns only the
+per-item operation — tagging (`ProcessingOrchestrator`'s handler: acquire →
+`/tag` → write metadata), the dedup scan (download → hash → record → temp
+cleanup), upscaling (`UpscaleItemHandler`: checkout → download → `/upscale` →
+check-in, or the sibling-file write for local folders). Fetching, throttling,
+pause/cancel, progress with ETA, error isolation and the run summary are
+implemented once, in the runner.
+
 ## 6. Concurrency model (important)
 
 - **Per-item work** (obtain image → `/tag` → write metadata) is bounded by a
@@ -217,7 +240,11 @@ duration, and the log auto-scrolls to the newest line.
   level and multiply VRAM. Consider 1–2 for GPU devices.
 - **Pause/abort**: `PauseToken` lets running items finish while queued items
   wait; `CancellationTokenSource` (Abort) always wins over pause. Navigation is
-  locked while a batch runs (`WizardViewModel.IsNavigationLocked`).
+  locked while a batch runs (`WizardViewModel.IsNavigationLocked`), including
+  an upscale run.
+- **Upscaling serializes** (`WorkflowDefinition.MaxDegreeOfParallelism = 1`),
+  like the original app's single worker thread: one CPU model in RAM, one
+  image in flight per run.
 
 ## 7. Persistence & paths
 
@@ -352,7 +379,11 @@ CI (`.github/workflows/build.yml`) runs pytest + xUnit first, then a 3-RID
 matrix (win-x64, linux-x64, osx-arm64) that builds the sidecar, publishes the
 app, stages them together, publishes the Windows installer, and (on `main`
 pushes) runs an installer smoke test that also exercises the .NET runtime
-prerequisite path. `release.yml` handles `v*` tags (and manual dry runs) with
+prerequisite path. Also on `main` pushes, `publish-nightly` recreates a
+rolling prerelease tagged `nightly` carrying the three CPU sidecars +
+`SHA256SUMS.txt` — the file the app's startup GitHub check offers as
+**Download instead of building**. `release.yml` handles `v*` tags (and manual
+dry runs) with
 signing/notarization, and publishes the standalone CPU **and** CUDA sidecar
 executables as their own release assets — see `packaging.md`.
 
@@ -368,6 +399,9 @@ executables as their own release assets — see `packaging.md`.
 | `Sidecar process exited unexpectedly` | Liveness watcher; crash before `/shutdown`. |
 | `Model loading — retry shortly` (503) | Only after a load that outlasted the server's 240 s wait; a load already in flight is waited out instead, and the model is warmed up at boot (`service._warm_up_model`). The host still retries once after 3 s. |
 | `Stale server build: exe built … but the sidecar source changed …` | `InferenceSidecarService.DescribeStaleness` — the running exe predates `src/Synapic.Inference`; press **Update** on that variant's row. The status bar shows "stale build, rebuild recommended" too, and the row itself shows "Update available — …" (which also keeps the setup panel visible). |
+| Build fails at the very end with `PermissionError: Access is denied … synapic-inference.exe` (or the app says `… is in use by another process`) | The output exe is held open by a running — possibly orphaned — sidecar. `SidecarBuildService.EnsureOutputUnlocked` now sweeps processes running from the build output before PyInstaller starts, and the Build/Update commands stop the managed server first (`MainWindowViewModel.WithServerStoppedForReplacementAsync`); kill a stray `synapic-inference.exe` from Task Manager if it survives. |
+| "The build failed — where is the output?" | Every build line is persisted to `logs/synapic.log` under the `SidecarBuildService` context at Debug (the UI panel's ring buffer evaporates on exit). |
+| Gold row note `Newer prebuilt sidecar on GitHub (nightly, …) — use Update instead of building` | The always-on startup check (`MainWindowViewModel.CheckForSidecarUpdatesAsync`) found a release newer than the exe on disk; **Download**/**Update** fetch it (verified against `SHA256SUMS.txt`) instead of compiling. |
 | `Both max_new_tokens (...) and max_length (...) seem to have been set` | Fixed in `inference_engine._generation_kwargs` (clones the pipeline generation config, pins `max_new_tokens`, clears `max_length`). |
 | `Progress scoring unavailable: ...` | Expected when probability/candidate labels are used with a VLM (see §8). |
 | Only keywords reach Daminion (no category/description) | Not the model: the write step keeps only the fields ticked in Step 2 ("Tag fields"), which persist in `HKCU\Software\Synapic\Engine` as `TagKeywords`/`TagCategories`/`TagDescription`. The batch's first log line names them (`writing keywords only`); a `/tag` call always returns all three. |
@@ -391,7 +425,11 @@ executables as their own release assets — see `packaging.md`.
   no API-key fields.
 - **Deduplication, metadata writing, and DaemonThreadPoolExecutor** were
   deliberately re-implemented in C# rather than ported to the sidecar.
-- **Deferred post-parity**: upscaler and vector embedder / semantic search.
+- **The upscaler runs in the sidecar** (`POST /upscale`, Swin2SR/Lanczos —
+  `src/Synapic.Inference/upscaler.py`, a verbatim port of the original app's
+  `core/upscaler.py`), keeping the algorithm next to its Python origin; only
+  checkout/download/check-in orchestration lives in C#.
+- **Deferred post-parity**: vector embedder / semantic search.
 - `Category` is stored as an XMP *Headline/Genre*, not as an EXIF/IPTC
   `Object Name`; Daminion continues to use its own `Categories` tag via the
   API.

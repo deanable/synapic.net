@@ -75,6 +75,16 @@ public sealed class SidecarBuildService : ISidecarBuildService
         if (!File.Exists(script))
             throw new InvalidOperationException($"Build script not found: {script}");
 
+        // PyInstaller rebuilds the output in place. On Windows a running
+        // sidecar holds the executable open, and the final EXE assembly step
+        // dies with PermissionError *after* minutes of packaging - the exact
+        // failure this pre-flight exists to prevent. Stop whatever runs from
+        // this output path (orphaned servers survive app crashes), or fail in
+        // seconds with a message that says what to do.
+        var outputExe = Path.Combine(root, "artifacts", rid,
+            OperatingSystem.IsWindows() ? "synapic-inference.exe" : "synapic-inference");
+        EnsureOutputUnlocked(outputExe, log);
+
         var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         lock (_gate)
         {
@@ -130,6 +140,12 @@ public sealed class SidecarBuildService : ISidecarBuildService
             void Handle(string? line)
             {
                 if (line is null) return;
+                // The UI panel receives the line directly (AppendLog) and is
+                // gone once the app closes; the file log gets a Debug copy so
+                // a failed build can be read back from logs/synapic.log.
+                // Debug never reaches the UI sink at the default level, so the
+                // panel does not see every line twice.
+                SynapicLog.Debug(nameof(SidecarBuildService), line);
                 log(line);
                 tracker.Observe(line);
                 Report();
@@ -181,6 +197,80 @@ public sealed class SidecarBuildService : ISidecarBuildService
         {
             lock (_gate) _activeCts = null;
         }
+    }
+
+    /// <summary>
+    /// Releases (or reports) a lock on the build output before PyInstaller is
+    /// allowed to start. Processes running from *this* path are killed - only
+    /// ever orphans, because the view model stops the managed server first -
+    /// and an unclaimable lock fails fast instead of after minutes of work.
+    /// </summary>
+    private static void EnsureOutputUnlocked(string exePath, Action<string> log)
+    {
+        if (!File.Exists(exePath)) return;
+        if (TryOpenExclusive(exePath)) return;
+
+        foreach (var process in ProcessesRunningFrom(exePath))
+        {
+            try
+            {
+                log($"[build] Stopping process {process.Id} - it runs from '{exePath}' and holds the build output locked.");
+                process.Kill(entireProcessTree: true);
+                process.WaitForExit(5000);
+            }
+            catch (Exception e)
+            {
+                log($"[build] Could not stop process {process.Id}: {e.Message}");
+            }
+            finally
+            {
+                process.Dispose();
+            }
+        }
+
+        if (TryOpenExclusive(exePath)) return;
+        throw new InvalidOperationException(
+            $"'{exePath}' is in use by another process, so the build cannot replace it. " +
+            "Stop the inference server (Stop Server in the app) and close anything else running that file, then build again.");
+    }
+
+    /// <summary>True when the file can be opened for writing by nobody else
+    /// (i.e. no other process holds it open).</summary>
+    private static bool TryOpenExclusive(string path)
+    {
+        try
+        {
+            using var _ = File.Open(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+            return true;
+        }
+        catch (IOException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
+    }
+
+    /// <summary>Processes whose executable image is exactly this path - the
+    /// current process is never a candidate (killing ourselves would take the
+    /// app down), and processes we may not inspect are skipped.</summary>
+    private static List<Process> ProcessesRunningFrom(string exePath)
+    {
+        var matches = new List<Process>();
+        foreach (var process in Process.GetProcesses())
+        {
+            var mine = false;
+            var imageMatches = false;
+            try
+            {
+                mine = process.Id == Environment.ProcessId;
+                imageMatches = string.Equals(process.MainModule?.FileName, exePath, StringComparison.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                // Kernel/system processes (or another user's) - MainModule is inaccessible.
+            }
+
+            if (imageMatches && !mine) matches.Add(process);
+            else process.Dispose();
+        }
+        return matches;
     }
 
     /// <summary>

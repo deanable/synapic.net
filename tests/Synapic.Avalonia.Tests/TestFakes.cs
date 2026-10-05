@@ -97,14 +97,28 @@ internal sealed class FakeDownloadService : ISidecarDownloadService
     public List<string> Destinations { get; } = new();
 
     /// <summary>(rid, destination, progress, ct) — returns the task the fake awaits.</summary>
-    public Func<string, string, IProgress<SidecarDownloadProgress>, CancellationToken, Task>? OnDownload { get; set; }
-
-    public Task DownloadAsync(
-        string rid, string destinationPath, IProgress<SidecarDownloadProgress> progress, CancellationToken ct = default)
+    public Func<string, string, IProgress<SidecarDownloadProgress>, CancellationToken, Task>? OnDownload { get; set; }    public Task DownloadAsync(
+        string rid,
+        string destinationPath,
+        IProgress<SidecarDownloadProgress> progress,
+        CancellationToken ct = default)
     {
         DownloadedRids.Add(rid);
         Destinations.Add(destinationPath);
         return OnDownload is { } callback ? callback(rid, destinationPath, progress, ct) : Task.CompletedTask;
+    }
+
+    /// <summary>What the startup GitHub check reports; null = nothing newer
+    /// (the default keeps every test hermetic and quiet).</summary>
+    public SidecarUpdateInfo? UpdateInfo { get; set; }
+
+    /// <summary>Every RID the update check asked about, in order.</summary>
+    public List<string> CheckedRids { get; } = new();
+
+    public Task<SidecarUpdateInfo?> CheckForUpdateAsync(string rid, string? localExePath, CancellationToken ct = default)
+    {
+        CheckedRids.Add(rid);
+        return Task.FromResult(UpdateInfo);
     }
 }
 

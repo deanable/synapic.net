@@ -124,6 +124,10 @@
 		<param name="Local" value="dedup.html">
 		</OBJECT>
 	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="Upscaling">
+		<param name="Local" value="upscale.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
 		<param name="Name" value="Settings and tips">
 		</OBJECT>
 	<UL>

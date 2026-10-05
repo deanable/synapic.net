@@ -1138,6 +1138,134 @@ public sealed class DaminionApiClient
         return text.Length <= 300 ? text : text[..300] + "…";
     }
 
+    // ── Version control (checkout → enhance → check in new file version) ────
+
+    /// <summary>
+    /// Check out items for editing — POST /api/VersionControl/CheckOut with
+    /// <c>{"Ids":[…]}</c> (daminion_api.py <c>VersionControlAPI.checkout</c>).
+    /// The upscale flow checks an item out before replacing its file, exactly
+    /// like the original app: a checkout the server refuses skips the item.
+    /// </summary>
+    public async Task<bool> CheckOutItemsAsync(IReadOnlyCollection<int> itemIds, CancellationToken ct = default)
+    {
+        if (itemIds.Count == 0) return true;
+        var ids = itemIds.ToArray();
+        try
+        {
+            using var resp = await WithSessionRecoveryAsync(api =>
+                api.CheckOutItems(new DaminionVersionIdsRequest { Ids = ids }, ct), ct).ConfigureAwait(false);
+            var body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            SynapicLog.Info(nameof(DaminionApiClient),
+                $"POST /api/VersionControl/CheckOut ids=[{string.Join(",", ids)}] → HTTP {(int)resp.StatusCode}" +
+                (resp.IsSuccessStatusCode ? "" : $" {TruncateText(body)}"));
+            return resp.IsSuccessStatusCode;
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Error(nameof(DaminionApiClient),
+                $"CheckOut failed for ids [{string.Join(",", ids)}]: {e.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Undo a checkout — POST /api/VersionControl/UndoCheckOut (daminion_api.py
+    /// <c>VersionControlAPI.undo_checkout</c>). Best-effort: used to roll an item
+    /// back when the new version could not be checked in, so a failed upscale
+    /// does not leave the item locked in the catalog.
+    /// </summary>
+    public async Task<bool> UndoCheckOutItemsAsync(IReadOnlyCollection<int> itemIds, CancellationToken ct = default)
+    {
+        if (itemIds.Count == 0) return true;
+        var ids = itemIds.ToArray();
+        try
+        {
+            using var resp = await WithSessionRecoveryAsync(api =>
+                api.UndoCheckOutItems(new DaminionVersionIdsRequest { Ids = ids }, ct), ct).ConfigureAwait(false);
+            var body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            SynapicLog.Info(nameof(DaminionApiClient),
+                $"POST /api/VersionControl/UndoCheckOut ids=[{string.Join(",", ids)}] → HTTP {(int)resp.StatusCode}" +
+                (resp.IsSuccessStatusCode ? "" : $" {TruncateText(body)}"));
+            return resp.IsSuccessStatusCode;
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Warning(nameof(DaminionApiClient),
+                $"UndoCheckOut failed for ids [{string.Join(",", ids)}]: {e.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Check in a new file version — multipart POST /api/VersionControl/CheckIn
+    /// with <c>id</c>, <c>file</c> and (first try) <c>comment</c>
+    /// (daminion_api.py <c>VersionControlAPI.checkin</c>). The original client
+    /// documents the comment field as unsupported on some server versions and
+    /// retries without it; the same fallback applies here. Returns false when
+    /// the server refuses the upload — the caller then undoes the checkout.
+    /// </summary>
+    public async Task<bool> CheckInItemAsync(int itemId, string filePath, string? message = null, CancellationToken ct = default)
+    {
+        if (!File.Exists(filePath))
+        {
+            SynapicLog.Error(nameof(DaminionApiClient), $"CheckIn: file not found: {filePath}");
+            return false;
+        }
+
+        try
+        {
+            // With comment first (the informative form), then without it.
+            if (!string.IsNullOrWhiteSpace(message))
+            {
+                using var withComment = await WithSessionRecoveryAsync(api =>
+                    SendCheckInAsync(api, itemId, filePath, message, ct), ct).ConfigureAwait(false);
+                if (withComment.IsSuccessStatusCode)
+                {
+                    SynapicLog.Info(nameof(DaminionApiClient),
+                        $"CheckIn item {itemId} (with comment, {new FileInfo(filePath).Length:N0} bytes) → HTTP 200");
+                    return true;
+                }
+                SynapicLog.Warning(nameof(DaminionApiClient),
+                    $"CheckIn with comment rejected for item {itemId} (HTTP {(int)withComment.StatusCode}) — retrying without comment");
+            }
+
+            using var resp = await WithSessionRecoveryAsync(api =>
+                SendCheckInAsync(api, itemId, filePath, null, ct), ct).ConfigureAwait(false);
+            if (resp.IsSuccessStatusCode)
+            {
+                SynapicLog.Info(nameof(DaminionApiClient),
+                    $"CheckIn item {itemId} ({new FileInfo(filePath).Length:N0} bytes) → HTTP 200");
+                return true;
+            }
+
+            var body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            SynapicLog.Error(nameof(DaminionApiClient),
+                $"CheckIn refused for item {itemId} (HTTP {(int)resp.StatusCode}) {TruncateText(body)}");
+            return false;
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Error(nameof(DaminionApiClient), $"CheckIn failed for item {itemId}: {e.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>One multipart send; the file stream is opened per attempt
+    /// because session recovery replays the whole lambda.</summary>
+    private static async Task<HttpResponseMessage> SendCheckInAsync(
+        IDaminionApi api, int itemId, string filePath, string? comment, CancellationToken ct)
+    {
+        await using var stream = File.OpenRead(filePath);
+        var file = new StreamPart(stream, Path.GetFileName(filePath), "application/octet-stream");
+        return comment is null
+            ? await api.CheckInItem(itemId, file, ct).ConfigureAwait(false)
+            : await api.CheckInItemWithComment(itemId, comment, file, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>Bound a raw response body for a log line.</summary>
+    private static string TruncateText(string text)
+        => text.Length <= 300 ? text : text[..300] + "…";
+
     /// <summary>
     /// Re-read an item via /api/ItemData/GetAll/{id} and check the expected
     /// tags landed (Step 4 “Verify Daminion writes”). Field matching is

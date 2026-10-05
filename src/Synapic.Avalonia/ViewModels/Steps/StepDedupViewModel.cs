@@ -159,24 +159,19 @@ public partial class StepDedupViewModel : ViewModelBase
 {
     private readonly IDedupService _dedup;
     private readonly Step1DatasourceViewModel? _step1;
-    private readonly IInferenceSidecar? _sidecar;
 
     /// <param name="dedup">Injectable dedup engine (tests).</param>
     /// <param name="step1">Step 1 provides the Daminion source (connection +
     /// scope collection), mirroring how tagging gets its datasource.</param>
-    /// <param name="sidecar">Needed only to build the fetch orchestrator for a
-    /// Daminion source; local scans never touch it.</param>
     /// <param name="confirm">Modal confirmation for the catalog delete; the dedup
     /// view wires the real dialog, tests inject answers. Null = cancel (fail closed).</param>
     public StepDedupViewModel(
         IDedupService? dedup = null,
         Step1DatasourceViewModel? step1 = null,
-        IInferenceSidecar? sidecar = null,
         Func<string, Task<bool>>? confirm = null)
     {
         _dedup = dedup ?? new DedupService();
         _step1 = step1;
-        _sidecar = sidecar;
         ConfirmAction = confirm;
 
         // Step 1 connects / re-scopes while the dedup tab may be showing:
@@ -239,13 +234,7 @@ public partial class StepDedupViewModel : ViewModelBase
     /// <summary>Which Step 1 scope collection feeds the Daminion scan (read-only mirror).</summary>
     public string DaminionScopeSummary => _step1 is null
         ? "No datasource step available"
-        : $"Source: {_step1.Scope switch
-        {
-            "collection" => $"Shared collection #{_step1.CollectionId}",
-            "saved_search" => $"Saved search #{_step1.SavedSearchId}",
-            "search" => $"Keyword search \"{_step1.SearchTerm}\"",
-            _ => "Entire catalog",
-        }} — configured in Step 1";
+        : $"Source: {_step1.ScopeDescription} — configured in Step 1";
 
     private bool DaminionReady => IsDaminion && _step1?.ConnectedClient is not null;
 
@@ -489,84 +478,51 @@ public partial class StepDedupViewModel : ViewModelBase
     };
 
     /// <summary>
-    /// Daminion scan: fetch the Step 1 scope's items through the same orchestrator
-    /// tagging uses, download each original to a temp file, hash it, record size +
-    /// EXIF/file date, and delete the temp again — one at a time so a large
-    /// collection never lands on disk whole.
+    /// Daminion scan: fetch the Step 1 scope's items through the shared
+    /// workflow kernel (same fetch, progress and per-item isolation as tagging
+    /// and upscaling), with this scan's per-item operation being
+    /// <see cref="DedupScanHandler"/> — download each original to a temp file,
+    /// hash it, record size + EXIF/file date, delete the temp again.
     /// </summary>
     private async Task<DedupResult> ScanDaminionAsync(DedupOptions opts, CancellationToken ct)
     {
         var step1 = _step1 ?? throw new InvalidOperationException("No datasource step available");
         var client = step1.ConnectedClient ?? throw new InvalidOperationException("Not connected to Daminion");
-        if (_sidecar is null) throw new InvalidOperationException("Inference sidecar unavailable");
 
         var ds = step1.ToSelectionForProcessing(client);
-        var orchestrator = new ProcessingOrchestrator(_sidecar);
-        var items = await orchestrator.FetchItemsAsync(ds, ct);
+        var items = await WorkflowRunner.FetchItemsAsync(ds, ct);
         SynapicLog.Info(nameof(StepDedupViewModel),
             $"Dedup fetch: {items.Count} item(s) in scope ({ScopeIdForLog()}) — downloading each original to hash it");
 
-        var hashes = new Dictionary<string, ulong>(items.Count);
-        _pendingDaminionItems = new Dictionary<string, DedupItemViewModel>(items.Count);
-        var index = 0;
-        var downloadFailures = 0;
-        var hashFailures = 0;
+        var handler = new DedupScanHandler(client, opts, _dedup);
+        var workflow = new WorkflowDefinition(
+            Key: "dedup",
+            Title: "Duplicate scan",
+            MaxDegreeOfParallelism: 1, // one download+hash at a time: a large scope never lands on disk whole
+            Description: $"hashing {opts.Algorithm} at threshold {opts.Threshold:0.###}");
 
-        foreach (var item in items)
-        {
-            ct.ThrowIfCancellationRequested();
-            if (item.DaminionId is not { } id) continue;
-            index++;
-            ScanSummary = $"Downloading {index}/{items.Count}: {item.FileName}";
+        // Live scan text — the same "Downloading i/N: file" line the hand-rolled
+        // loop showed: the runner reports at item start (count = done so far).
+        var progress = new Progress<ProcessProgress>(p =>
+            ScanSummary = $"Downloading {Math.Min(p.Processed + 1, Math.Max(p.Total, 1))}/{p.Total}: {p.CurrentFile}");
 
-            var temp = await client.DownloadOriginalAsync(id, ct);
-            if (string.IsNullOrEmpty(temp) || !System.IO.File.Exists(temp))
-            {
-                // Used to be a bare `continue`: the scan then reported fewer
-                // files than the scope holds with nothing in the log saying why.
-                downloadFailures++;
-                SynapicLog.Warning(nameof(StepDedupViewModel),
-                    $"Dedup: no original downloaded for item {id} ({item.FileName}) — skipped " +
-                    $"(see any 'Failed to download original' line above)");
-                continue;
-            }
-
-            try
-            {
-                var info = new System.IO.FileInfo(temp);
-                var hash = await Task.Run(() => _dedup.ComputeHash(temp, opts), ct);
-                if (hash is null)
-                {
-                    hashFailures++;
-                    SynapicLog.Warning(nameof(StepDedupViewModel),
-                        $"Dedup: could not hash item {id} ({item.FileName}, {info.Length:N0} bytes) — skipped; " +
-                        "see the 'Could not hash' line for the decode error");
-                    continue;
-                }
-
-                var key = $"daminion:{id}";
-                hashes[key] = hash.Value;
-                _pendingDaminionItems[key] = new DedupItemViewModel(key, item.FileName ?? $"Item {id}")
-                {
-                    SizeBytes = info.Length,
-                    // The temp file's own timestamps are download-time; the EXIF
-                    // date inside the original is the only meaningful one.
-                    DateTaken = DedupService.ReadImageDateUtc(temp) ?? info.CreationTimeUtc,
-                    DaminionId = id,
-                };
-            }
-            finally
-            {
-                try { System.IO.File.Delete(temp); }
-                catch { /* temp cleanup is best effort */ }
-            }
-        }
+        await new WorkflowRunner().RunItemsAsync(workflow, items, handler, progress, log: null, pause: null, ct);
 
         SynapicLog.Info(nameof(StepDedupViewModel),
-            $"Dedup hashing done: {hashes.Count} of {items.Count} item(s) hashed " +
-            $"({downloadFailures} download failure(s), {hashFailures} unhashable file(s))");
+            $"Dedup hashing done: {handler.Hashes.Count} of {items.Count} item(s) hashed " +
+            $"({handler.DownloadFailures} download failure(s), {handler.HashFailures} unhashable file(s))");
 
-        return _dedup.GroupFromHashes(hashes, opts);
+        // Row data for the review list, built from what the scan recorded.
+        _pendingDaminionItems = handler.Records.Values.ToDictionary(
+            r => r.Key,
+            r => new DedupItemViewModel(r.Key, r.FileName)
+            {
+                SizeBytes = r.SizeBytes,
+                DateTaken = r.DateTakenUtc,
+                DaminionId = r.DaminionId,
+            });
+
+        return _dedup.GroupFromHashes(handler.Hashes, opts);
     }
 
     /// <summary>Daminion item metadata keyed by "daminion:{id}" for the current scan.</summary>

@@ -579,3 +579,56 @@ jobs:
           }
           Write-Host "::error::no runtime dialog offering $url appeared for pid $($p.Id); window titles seen: $($titles -join ' | ')"
           exit 1
+
+  # Pushing to main should leave something *downloadable* behind. The app's
+  # setup panel checks GitHub at startup and offers Download instead of a
+  # local build (MainWindowViewModel.CheckForSidecarUpdatesAsync), so every
+  # green main build refreshes a rolling `nightly` prerelease carrying the
+  # three CPU sidecars plus a SHA256SUMS.txt manifest - the download service
+  # refuses bytes it cannot verify. It is a prerelease, so it never displaces
+  # the newest versioned tag ("Latest") on the releases page; versioned
+  # releases (release.yml, on a `v*` tag) remain the source for installers
+  # and the split CUDA parts, which are too heavy to re-upload per push.
+  publish-nightly:
+    name: Publish nightly sidecar release
+    runs-on: ubuntu-22.04
+    needs: [build]
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    permissions:
+      contents: write
+    steps:
+      - name: Download the CPU sidecar bundles
+        uses: actions/download-artifact@v4
+        with:
+          pattern: Synapic-{win-x64,linux-x64,osx-arm64}
+          path: bundle
+
+      # Asset names must match what the app looks for: synapic-inference-<rid>
+      # (the .exe suffix on Windows) - see SidecarDownloadService.IsAssetFor.
+      - name: Stage the nightly assets with checksums
+        run: |
+          mkdir nightly
+          cp bundle/Synapic-win-x64/synapic-inference.exe  nightly/synapic-inference-win-x64.exe
+          cp bundle/Synapic-linux-x64/synapic-inference     nightly/synapic-inference-linux-x64
+          cp bundle/Synapic-osx-arm64/synapic-inference     nightly/synapic-inference-osx-arm64
+          cd nightly
+          sha256sum synapic-inference-win-x64.exe synapic-inference-linux-x64 synapic-inference-osx-arm64 > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          ls -lh
+
+      # Recreate rather than edit: the rolling tag must move to this commit,
+      # and a fresh release cannot accidentally claim "Latest" as a prerelease.
+      - name: Publish the rolling nightly release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete nightly --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag 2>/dev/null || true
+          gh release create nightly nightly/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --prerelease \
+            --target "$GITHUB_SHA" \
+            --title "Nightly sidecar builds (main)" \
+            --notes "Rolling CPU inference sidecars from every green push to main. Synapic checks this release at startup and offers Download instead of building locally. Verify downloads against SHA256SUMS.txt. Installers and the CUDA server ship with the versioned releases."
+          echo "Published nightly from $GITHUB_SHA"

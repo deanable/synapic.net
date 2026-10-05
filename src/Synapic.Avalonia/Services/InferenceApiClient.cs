@@ -14,6 +14,13 @@ namespace Synapic.Avalonia.Services;
 public sealed class InferenceApiClient
 {
     private static readonly TimeSpan TagTimeout = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// First upscale also downloads the Swin2SR weights, and a large image on
+    /// CPU can run for minutes — the original app had no timeout at all, so the
+    /// bar sits far above /tag's 5 minutes and cancellation still comes from ct.
+    /// </summary>
+    private static readonly TimeSpan UpscaleTimeout = TimeSpan.FromMinutes(30);
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
         TypeInfoResolver = SynapicJsonContext.Default,
@@ -79,6 +86,26 @@ public sealed class InferenceApiClient
         }
         var detail = await ReadDetailAsync(resp, ct).ConfigureAwait(false);
         throw new InferenceApiException((int)resp.StatusCode, detail);
+    }
+
+    /// <summary>
+    /// POST /upscale: run the sidecar's Swin2SR/Lanczos upscale on one image.
+    /// No 503-retry: unlike /tag the sidecar loads the SR model inline, so a
+    /// slow first call is a long wait, not a transient rejection.
+    /// </summary>
+    public async Task<UpscaleResponse> UpscaleAsync(UpscaleRequest request, CancellationToken ct = default)
+    {
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeoutCts.CancelAfter(UpscaleTimeout);
+
+        using var resp = await _http.PostAsJsonAsync("upscale", request, SynapicJsonContext.Default.UpscaleRequest, timeoutCts.Token).ConfigureAwait(false);
+        if (resp.IsSuccessStatusCode)
+        {
+            var result = await resp.Content.ReadFromJsonAsync(SynapicJsonContext.Default.UpscaleResponse, ct).ConfigureAwait(false);
+            return result ?? new UpscaleResponse();
+        }
+        var error = await ReadDetailAsync(resp, ct).ConfigureAwait(false);
+        throw new InferenceApiException((int)resp.StatusCode, error);
     }
 
     /// <summary>

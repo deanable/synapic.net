@@ -56,6 +56,7 @@ One user control per step. Code-behind is intentionally thin:
 | `Step3Process.axaml.cs` | auto-scrolls the log list to the last line |
 | `Step4Results.axaml.cs` | `Refresh` button + auto-scrolls the results grid to the newest row |
 | `StepDedup.axaml.cs` | `OnBrowseFolder` — folder picker writes `vm.FolderPath`; wires `vm.ConfirmAction` to `ConfirmDialogWindow.ShowAsync` for the catalog delete |
+| `StepUpscale.axaml.cs` | auto-scrolls the run log list to the last line |
 
 ---
 
@@ -69,12 +70,15 @@ Empty base class (`ObservableObject`).
 ### `MainWindowViewModel` (singleton)
 The shell. Owns:
 
-- **Routes** — `Route` (`HomeRoute` / `TaggingRoute` / `DedupRoute`) with
+- **Routes** — `Route` (`HomeRoute` / `TaggingRoute` / `DedupRoute` /
+  `UpscaleRoute`) with
   `IsHomeVisible`, `IsWizardVisible`, `IsTaggingRoute`, `IsDedupRoute`,
-  `RouteTitle`, and the three commands `StartTaggingRouteCommand`,
-  `StartDedupRouteCommand`, `GoHomeCommand`. The app opens on `HomeRoute` (the
-  chooser); entering a route delegates to `Wizard.EnterTaggingRoute()` /
-  `EnterDedupRoute()` and logs the choice.
+  `IsUpscaleRoute`,
+  `RouteTitle`, and the four commands `StartTaggingRouteCommand`,
+  `StartDedupRouteCommand`, `StartUpscaleRouteCommand`, `GoHomeCommand`. The app
+  opens on `HomeRoute` (the chooser); entering a route delegates to
+  `Wizard.EnterTaggingRoute()` /
+  `EnterDedupRoute()` / `EnterUpscaleRoute()` and logs the choice.
 - `ServerState` (`ServerUiState`: `Detecting`, `NotDetected`, `Building`,
   `Stopped`, `Starting`, `Running`, `Error`) and `ServerBrush` for the status
   dot; `StatusText` is derived from the state.
@@ -95,6 +99,14 @@ The shell. Owns:
 - `PersistConfig()` — snapshots `Session` into `config.json` (v2 shape).
 - `DetectServerAsync()` — locates the executable, refreshes variants, and sets
   the indicator. It never adopts a server from a previous run.
+- `CheckForSidecarUpdatesAsync()` — the always-on GitHub check, run by `App`
+  right after detection: for every buildable variant, is there a prebuilt file
+  on GitHub newer than the executable on disk (or no executable at all)? Sets
+  the row's `GitHubUpdateText` / `IsGitHubUpdate` so the panel points at
+  Download/Update instead of a local build, logs one line per offer, and the
+  offer is cleared once the variant is built or downloaded. Advisory by
+  design: failures log and return, nothing blocks startup, and only the real
+  desktop launch reaches it (headless test sessions never do).
 - Help: `OpenHelpCommand` (the toolbar **Help** button) opens
   `HelpTopics.Home`; `OpenContextHelpCommand` (<kbd>F1</kbd>, bound in
   `MainWindow.axaml`) opens `ContextHelpTopic` — the sidecar topic while
@@ -107,19 +119,22 @@ Constructed with optional locator delegates (`sidecarExecutableLocator`,
 filesystem state.
 
 ### `WizardViewModel`
-Linear navigation with validation gates. Holds the five step view models;
+Linear navigation with validation gates. Holds the six step view models;
 `CurrentStep` drives `ContentControl`; `CurrentStepIndex`,
 `CurrentStepTitle`, `NextButtonText`, and tab-enablement properties are derived.
-`IsNavigationLocked` mirrors `Step3.IsRunning`.
+`IsNavigationLocked` mirrors `Step3.IsRunning || Upscale.IsRunning`.
 
-**Route split**: `IsDedupRoute` flips the wizard between the four-step tagging
-flow and the two-step deduplication flow. In the dedup route `ShowTaggingTabs`
-hides Engine/Process/Results, `ShowDatasourceTab` keeps step 1 on screen, `Next`
-from step 1 validates the datasource and lands on `Dedup` (after
-`PrefillDedupSource()` copies the Step 1 folder/scope onto the dedup step), and
-`GoToDedupCommand` applies the same gate — so the dedup tool is reachable from
-the onset instead of being the last tab of a wizard. In the tagging route
-`CanGoToDedupTab` still only opens at Results.
+**Route split**: `IsDedupRoute` / `IsUpscaleRoute` flip the wizard between the
+four-step tagging flow and the two two-step flows. In the dedup/upscale routes
+`ShowTaggingTabs` hides Engine/Process/Results, `ShowDatasourceTab` keeps step 1
+on screen, `Next` from step 1 validates the datasource and lands on `Dedup`
+(after `PrefillDedupSource()` copies the Step 1 folder/scope onto the dedup
+step) or on `Upscale` (which reads its source straight off Step 1), and
+`GoToDedupCommand` / `GoToUpscaleCommand` apply the same gate — so both tools
+are reachable from the onset instead of being the last tab of a wizard.
+`ShowDedupTab`/`ShowUpscaleTab` hide each other's tab while a route owns the
+wizard (both stay visible in the tagging route, where `CanGoToDedupTab` /
+`CanGoToUpscaleTab` only open at Results).
 
 Gates: `Session.ValidateForStep2()` (datasource usable) and
 `Session.ValidateForStep3(daminionConnected)` (model chosen, ≥1 tag field,
@@ -129,10 +144,11 @@ Step 2 settings are persisted when leaving the engine step.
 
 ### `SidecarVariantViewModel`
 One buildable variant row (CPU / CUDA): `Rid`, `DisplayName`, `Detail`,
-`IsBuilt`, `ExePath`, `SizeText`, `IsBuilding`, `IsDownloading`, `IsUpdating`,
-`BuildPercent`, `BuildStage`, `HasProgress`, `StatusText`, `StatusBrush`,
-`StaleNotice` / `IsStale` / `StaleText`, and three commands. Progress updates
-are marshalled to the UI thread.
+`IsBuilt`, `ExePath`, `SizeText`, `IsBuilding`, `IsDownloading`, `IsUpdating`,`BuildPercent`, `BuildStage`, `HasProgress`, `StatusText`, `StatusBrush`,
+`StaleNotice` / `IsStale` / `StaleText`, `GitHubUpdateText` / `IsGitHubUpdate`
+(the startup GitHub check's "Download instead of building" note), and three
+commands. Progress updates are
+marshalled to the UI thread.
 
 - `BuildCommand` — visible while the variant does not exist yet.
 - `DownloadCommand` — also while it does not exist yet: the prebuilt exe from
@@ -245,6 +261,26 @@ algorithm and threshold, one per skipped item (download failure, unhashable
 file) with the reason, a hashed/skipped tally, and one line per apply with the
 ids about to be removed plus the server's answer.
 
+### `Steps/StepUpscaleViewModel`
+The upscale step (port of `step_upscale.py`) — the Daminion "Feature
+enhancement" utility. Settings mirror the original app's dropdowns:
+`Workflows` (`quality`/`balanced`/`fast`), `Factors` (2x/4x), `Precisions`
+(auto/fp16/fp32), `OutputFormats` (keep/JPEG/PNG/WEBP), `JpegQuality` (default
+95), `DenoiseStrength` (0–1, `IsDenoiseEnabled` only for balanced),
+`SharpenAmount` (0–2), `OverwriteExisting`. `BuildOptions()` clamps every value
+to the sidecar contract's ranges and maps the dropdown indices to wire values
+(factor index → 2/4).
+
+The source is read back from Step 1 (`SourceReady` / `SourceSummary` via
+`ToSelectionForProcessing` + `ScopeDescription` — no prefill, unlike dedup), so
+both the Daminion scope and a local folder work. `StartCommand` echoes the
+original app's `Parameters:` log line, then runs the shared `WorkflowRunner`
+(key `upscale`, parallelism 1) with an `UpscaleItemHandler`; `StopCommand`
+cancels the token (in-flight request cancelled, no further items, the handler
+undoes a checkout so nothing is left locked). Progress/ETA reuse
+`ProcessProgress` + `ProcessProgress.FormatDuration`, and `AppendLog`
+marshals to the UI thread (runner callbacks arrive on thread-pool threads).
+
 ---
 
 ## Models (`Models/`)
@@ -293,11 +329,17 @@ Single source of truth for wizard state:
   `BaseAddress` cannot change after the first request.
 
 **`InferenceApiClient`** — typed HTTP calls (`health`, `models/list`,
-`models/download`, `tag`, `config` GET/PUT, `shutdown`), serializing with the
-source-generated `SynapicJsonContext`. `/tag` has a 5-minute timeout and
+`models/download`, `tag`, `upscale`, `config` GET/PUT, `shutdown`), serializing
+with
+the source-generated `SynapicJsonContext`. `/tag` has a 5-minute timeout and
 retries once after 3 s on HTTP 503 — which the server now reserves for a load
 that outlasted its 240 s wait (an in-flight load is waited out server-side).
-Errors surface as `InferenceApiException` (status + `detail`).
+`/upscale` has a 30-minute timeout and **no** 503 retry (the model loads
+inline, and replaying an upscale would double the work). `IInferenceSidecar`
+carries `UpscaleAsync` as a **default interface method** that throws
+`NotSupportedException`, so every existing fake stays source-compatible;
+`InferenceSidecarService` overrides it by delegating to the Api client. Errors
+surface as `InferenceApiException` (status + `detail`).
 
 ### Daminion (`Services/Daminion/`)
 
@@ -305,7 +347,11 @@ Errors surface as `InferenceApiException` (status + `detail`).
 `UserManager/Login|Logout`, `MediaItems/Get|GetByIds|GetCount|GetAbsolutePath|Remove`,
 `ItemData/GetAll|BatchChange|GetDefaultLayout`, `Thumbnail/Get`, `Preview/Get`,
 `Download/Get`, `Settings/GetVersion|GetLoggedUser|GetCatalogGuid|GetTags`,
-`IndexedTagValues` (+ fallback route), `SharedCollection/GetCollections|GetItems`.
+`IndexedTagValues` (+ fallback route), `SharedCollection/GetCollections|GetItems`,
+`VersionControl/CheckOut|UndoCheckOut|CheckIn` (port of `daminion_api.py`
+`VersionControlAPI`: CheckOut/UndoCheckOut take `{"Ids":[…]}`, CheckIn is
+multipart `id` + optional `comment` + `file`; `HttpResponseMessage` return
+types keep Refit from throwing on non-2xx so the caller decides).
 Query parameters are all explicitly supplied where the server routes on a full
 parameter set (documented on the interface).
 
@@ -343,6 +389,14 @@ parameter set (documented on the interface).
   actually gone. It previously posted `delete:true` to `ItemData/BatchChange`,
   which answers `success:true` without removing anything — the bug behind "dedup
   delete did nothing". Logs the request ids and the response envelope.
+- Version control for the upscale flow: `CheckOutItemsAsync(ids)` /
+  `UndoCheckOutItemsAsync(ids)` (POST `{"Ids":[…]}`, `false` when the server
+  refuses so the item is skipped/rolled back) and
+  `CheckInItemAsync(id, filePath, message)` — multipart with the comment first,
+  then one retry **without** the comment (some server versions reject the
+  field), reopening the file stream per attempt because session recovery
+  replays the whole send. Returns `false` when the upload is refused; the
+  caller then undoes the checkout so nothing is left locked.
 - `LogoutAsync`.
 
 **`DaminionModels`** — response wrappers tolerant of server-version key
@@ -361,12 +415,14 @@ carries every Step 1 field including `MaxItems`, `ResizeScale`,
 
 ### Processing (`Services/Processing/`)
 
-**`ProcessingOrchestrator`** — the batch pipeline.
-- `ProcessProgress(Processed, Failed, Total, Percent, Eta, CurrentFile, PerItem)`
-  and `EstimateProgress(elapsed, processed, total)` (public static, the ETA
-  math: per-item = elapsed/processed, ETA = per-item × remaining; `null` until
-  the first item completes).
-- `FetchItemsAsync(ds, ct)`:
+**`WorkflowRunner`** — the shared batch kernel every route runs on. The
+per-workflow parts are the `WorkflowDefinition(Key, Title,
+MaxDegreeOfParallelism, Description)` (the `Description` clause is appended to
+the batch-start log line, so each workflow states its own parameters in the
+same sentence) and the `IWorkflowItemHandler` implementation; the runner owns
+fetching, throttling, pause/cancel, progress with ETA, error isolation and the
+`WorkflowRunSummary(Total, Processed, Succeeded, Failed)`:
+- `FetchItemsAsync(ds, ct)` (static):
   - Local: recursive/shallow extension scan (`.jpg .jpeg .png .tif .tiff`).
   - Daminion: one batch per call via `GetItemsFilteredAsync`, advancing
     `startIndex`; stops on an empty batch, when `AutoPaginate` is off, or on a
@@ -374,17 +430,51 @@ carries every Step 1 field including `MaxItems`, `ResizeScale`,
     both the `MaxItems` ceiling and partial pages and keeps requesting until the
     server returns nothing, guarded by an identical-page-id infinite-loop
     check.
-- `RunAsync(ds, template, progress, log, ct, results, pause, tagFields)` —
-  fetch then `RunItemsAsync`.
-- `RunItemsAsync(...)` — `SemaphoreSlim`-bounded per-item tasks; reports
-  progress at item start and completion; per-item failures increment the
-  failed count and log without aborting the batch; cancellation propagates.
-- `ProcessSingleItemAsync` — obtains the image (local path, or Daminion
-  thumbnail/preview/original per settings, deleting temp files afterwards),
-  calls `/tag`, applies `TagFieldSelection`, and writes metadata
-  (`MetadataWriterService` or `UpdateItemMetadataAsync`).
+- `RunAsync(workflow, ds, handler, progress, log, pause, ct)` — fetch, report
+  the fetched total immediately (a cold model must not leave an empty bar),
+  then `RunItemsAsync`.
+- `RunItemsAsync(...)` — `SemaphoreSlim`-bounded per-item tasks (the bound is
+  `MaxDegreeOfParallelism`); reports progress at item start and completion;
+  thrown exceptions and `WorkflowItemOutcome.Fail` outcomes increment the
+  failed count and log without aborting the batch; cancellation propagates as
+  `OperationCanceledException`.
+- `EstimateProgress(elapsed, processed, total)` (static) — the ETA math:
+  per-item = elapsed/processed, ETA = per-item × remaining; `null` until the
+  first item completes.
+- Handlers in this folder: the tagging handler (nested in
+  `ProcessingOrchestrator`), `DedupScanHandler` and `UpscaleItemHandler`.
+
+**`ProcessingOrchestrator`** — the tagging workflow over that kernel.
+- `RunAsync(ds, template, progress, log, ct, results, pause, tagFields)` /
+  `RunItemsAsync(...)` (Step 4's retry uses the second) build the private
+  `TaggingItemHandler` and a `WorkflowDefinition("tagging", …, parallelism, …)`
+  — parallelism comes from the constructor (default 4; Step 3 hard-codes 4).
+- The handler's per-item pipeline (port of `ProcessingManager`):
+  obtain the image (local path, or Daminion thumbnail/preview/original per
+  settings, deleting temp files afterwards), call `/tag`, apply
+  `TagFieldSelection`, write metadata (`MetadataWriterService` or
+  `UpdateItemMetadataAsync`) and append a `ProcessItemResult` to
+  `Session.Results` (lock-guarded); ordinary failures are reported as outcomes,
+  not thrown.
 - Supporting types: `ProcessItemResult` (+ `KeywordsCsv`), `ScoringResultDto`,
-  `TagFieldSelection`, `DatasourceSelection`, `ProcessWorkItem`.
+  `TagFieldSelection`, `DatasourceSelection`, `ProcessWorkItem`,
+  `ProcessProgress(...)` (+ `FormatDuration`, the shared ETA-line formatter).
+
+**`DedupScanHandler`** — the Daminion dedup scan's per-item operation:
+download original → hash → record (`DedupScanRecord`) → delete the temp file,
+with `DownloadFailures`/`HashFailures` counters and the `Hashes`/`Records`
+dictionaries the step builds its groups from. Runs one item at a time so a
+large scope never lands on disk whole. The local scan stays a direct
+`DedupService` call (no downloads involved).
+
+**`UpscaleItemHandler`** — the upscale workflow's per-item operation (port of
+`step_upscale._process_single_item`): for Daminion items check out
+(`CheckOutItemsAsync` — a refused checkout skips the item) → download the
+original → `POST /upscale` → check in with the
+`Upscaled using {workflow} {factor}x (…)` comment → flush the `{id}_original*`
+temp variants; on check-in failure or cancellation the checkout is undone so
+nothing stays locked. Local items skip the version dance and the output lands
+beside the original as `{name}_upscaled{ext}`.
 
 **`PauseToken` / `PauseTokenSource`** — cooperative pause. Items call
 `WaitWhilePausedAsync(ct)` between work units; running items finish, queued
@@ -508,17 +598,34 @@ plus IPTC/EXIF fallbacks. `TagResult(Category, Keywords, Description)`. See
   `build/build-server.ps1|sh <rid>` with streamed output, de-duplicated
   progress reporting, cancellation (kills the whole process tree), and
   `CanBuild` (repo root + build script present). Rejects malformed RIDs.
+  Every output line also lands in `logs/synapic.log` at Debug (the UI ring
+  buffer is gone once the app closes — a failed build must stay readable),
+  and a lock pre-flight runs before the script: PyInstaller cannot replace an
+  executable Windows still holds open (the build would die with
+  `PermissionError` only after minutes of packaging), so processes running
+  from *this* output path are killed (orphans; the view model stops the
+  managed server first) or the build fails in seconds with a message that says
+  what to stop.
 - **`SidecarBuildProgressTracker`** — maps raw build output to a stage +
   0-100 percentage across the three bands (fetch Python → install deps →
   PyInstaller packaging, the last driven by bytes written versus the previous
   build's executable size). `SidecarBuildProgress(Percent, Stage)`.
 - **`SidecarDownloadService`** (`ISidecarDownloadService`) — the other way to
-  get a variant: reads the same `releases/latest` payload as
-  `UpdateCheckService`, picks the assets named `synapic-inference-<rid>` (never
-  its `-cuda` sibling, matched on the extension boundary), joins `.partN` in
-  part order, stages to `<destination>.download` and moves into place only once
-  complete. Progress is percent of the declared total; a failed or cancelled
-  pull deletes the staging file so detection never sees a half server.
+  get a variant: reads the recent-releases list (`/releases?per_page=20`, the
+  same feed the startup check reads) and picks the newest release that ships a
+  `SHA256SUMS.txt` manifest *and* assets for this RID — CI's rolling `nightly`
+  prerelease and the versioned tags are peers, so a push to main offers bytes
+  fresher than the last tag. It picks the assets named
+  `synapic-inference-<rid>` (never its `-cuda` sibling, matched on the
+  extension boundary), joins `.partN` in part order, stages to
+  `<destination>.download`, moves into place only once complete, then restores
+  the unix executable bit (release assets never carry it). Progress is percent
+  of the declared total; a failed or cancelled pull deletes the staging file
+  so detection never sees a half server. `CheckForUpdateAsync(rid,
+  localExePath)` is the advisory startup check: returns
+  `SidecarUpdateInfo?(TagName, PublishedAt, TotalBytes, LocalMissing)` or null
+  (nothing newer than the local file — `published_at` vs mtime — or GitHub
+  unreachable) and never throws.
 
 ---
 
@@ -527,7 +634,8 @@ plus IPTC/EXIF fallbacks. `TagResult(Category, Keywords, Description)`. See
 `Contracts/Contracts.cs` — records matching the sidecar protocol exactly
 (snake_case via explicit `[JsonPropertyName]`): `HealthResponse` (+
 `ModelDownloadProgress`), `ModelInfo`, `DownloadRequest`, `TagRequest` /
-`TagOptions`, `TagResponse`, `ScoringResult` / `ScoredKeyword`, `ConfigDto`.
+`TagOptions`, `TagResponse`, `ScoringResult` / `ScoredKeyword`, `ConfigDto`,
+`UpscaleRequest` / `UpscaleOptions`, `UpscaleResponse`.
 
 `JsonSerializerContext.cs` — `SynapicJsonContext`, a source-generated
 `JsonSerializerContext` for every DTO above (camelCase policy, null-ignoring,

@@ -118,6 +118,10 @@
 		<param name="Local" value="admin-settings-files.html">
 		</OBJECT>
 	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="feature enhancement">
+		<param name="Local" value="upscale.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
 		<param name="Name" value="filters, Daminion">
 		<param name="Local" value="step1-scope-filters.html">
 		</OBJECT>
@@ -266,6 +270,10 @@
 		<param name="Local" value="step1-scope-filters.html">
 		</OBJECT>
 	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="super-resolution">
+		<param name="Local" value="upscale.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
 		<param name="Name" value="system prompt">
 		<param name="Local" value="step2-prompts.html">
 		</OBJECT>
@@ -292,6 +300,10 @@
 	<LI> <OBJECT type="text/sitemap">
 		<param name="Name" value="untagged filters">
 		<param name="Local" value="step1-scope-filters.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="upscale, upscaling">
+		<param name="Local" value="upscale.html">
 		</OBJECT>
 	<LI> <OBJECT type="text/sitemap">
 		<param name="Name" value="upgrade">

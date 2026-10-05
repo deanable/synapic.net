@@ -193,6 +193,86 @@ public record PromptDefaultsDto
     public string DefaultUserPrompt { get; init; } = "";
 }
 
+/// <summary>Inference options inside UpscaleRequest (UpscaleRequest.options schema).</summary>
+public record UpscaleOptions
+{
+    /// <summary>quality | balanced | fast — the original app's three workflows.</summary>
+    [JsonPropertyName("workflow")]
+    public string Workflow { get; init; } = "quality";
+
+    /// <summary>2 or 4 (quality); 2 or 4 (balanced, runs 4x then resizes); any &gt;= 2 for fast.</summary>
+    [JsonPropertyName("factor")]
+    public int Factor { get; init; } = 2;
+
+    /// <summary>auto | fp16 | fp32 (quality/balanced on CUDA).</summary>
+    [JsonPropertyName("precision")]
+    public string Precision { get; init; } = "auto";
+
+    /// <summary>0.0–1.0 blend toward Lanczos (balanced only; 1.0 = pure AI output).</summary>
+    [JsonPropertyName("denoise_strength")]
+    public double DenoiseStrength { get; init; } = 1.0;
+
+    /// <summary>Unsharp mask amount, 0.0 = off (0.0–2.0).</summary>
+    [JsonPropertyName("sharpen_amount")]
+    public double SharpenAmount { get; init; }
+
+    /// <summary>keep | JPEG | PNG | WEBP.</summary>
+    [JsonPropertyName("output_format")]
+    public string OutputFormat { get; init; } = "keep";
+
+    [JsonPropertyName("jpeg_quality")]
+    public int JpegQuality { get; init; } = 95;
+
+    [JsonPropertyName("overwrite_existing")]
+    public bool OverwriteExisting { get; init; } = true;
+}
+
+/// <summary>POST /upscale request (UpscaleRequest schema).</summary>
+public record UpscaleRequest
+{
+    [JsonPropertyName("image_path")]
+    public string ImagePath { get; init; } = "";
+
+    /// <summary>Optional explicit target; null writes <c>{stem}_upscaled{ext}</c> beside the input.</summary>
+    [JsonPropertyName("output_path")]
+    public string? OutputPath { get; init; }
+
+    [JsonPropertyName("options")]
+    public UpscaleOptions? Options { get; init; }
+}
+
+/// <summary>POST /upscale response (UpscaleResponse schema).</summary>
+public record UpscaleResponse
+{
+    [JsonPropertyName("output_path")]
+    public string OutputPath { get; init; } = "";
+
+    [JsonPropertyName("width")]
+    public int Width { get; init; }
+
+    [JsonPropertyName("height")]
+    public int Height { get; init; }
+
+    [JsonPropertyName("original_width")]
+    public int OriginalWidth { get; init; }
+
+    [JsonPropertyName("original_height")]
+    public int OriginalHeight { get; init; }
+
+    [JsonPropertyName("workflow")]
+    public string Workflow { get; init; } = "quality";
+
+    [JsonPropertyName("factor")]
+    public int Factor { get; init; }
+
+    /// <summary>Hugging Face model id used; null for the fast (Lanczos) workflow.</summary>
+    [JsonPropertyName("model_used")]
+    public string? ModelUsed { get; init; }
+
+    [JsonPropertyName("inference_ms")]
+    public long InferenceMs { get; init; }
+}
+
 /// <summary>GET /config response and PUT /config body (ConfigDto).</summary>
 public record ConfigDto
 {

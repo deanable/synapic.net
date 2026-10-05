@@ -93,6 +93,16 @@ public partial class SidecarVariantViewModel : ViewModelBase
 
     public string StaleText => StaleNotice is null ? string.Empty : $"Update available \u2014 {StaleNotice}";
 
+    /// <summary>
+    /// Set by the startup GitHub check: a newer prebuilt exists on the release
+    /// page for this RID. The row then points at the existing Download/Update
+    /// button - the alternative to spending minutes on a local build.
+    /// </summary>
+    [ObservableProperty]
+    private string? _gitHubUpdateText;
+
+    public bool IsGitHubUpdate => GitHubUpdateText is not null;
+
     /// <summary>Live build completion, 0-100, driven by the real pipeline.</summary>
     [ObservableProperty]
     private double _buildPercent;
@@ -228,6 +238,8 @@ public partial class SidecarVariantViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsStale));
         OnPropertyChanged(nameof(StaleText));
     }
+
+    partial void OnGitHubUpdateTextChanged(string? value) => OnPropertyChanged(nameof(IsGitHubUpdate));
 
     partial void OnHasProgressChanged(bool value) => OnPropertyChanged(nameof(IsBuildIndeterminate));
 

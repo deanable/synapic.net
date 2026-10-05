@@ -78,6 +78,12 @@ public interface IDedupService
 
 public sealed class DedupService : IDedupService
 {
+    /// <summary>
+    /// Local scan: hash every path, then group. The per-file loop is the
+    /// shared <see cref="WorkflowRunner"/> (sequential, like every dedup
+    /// scan), so hashing, progress and error isolation behave exactly as they
+    /// do on the Daminion scan and the other routes.
+    /// </summary>
     public async Task<DedupResult> FindDuplicatesAsync(
         IEnumerable<string> imagePaths,
         DedupOptions opts,
@@ -88,26 +94,54 @@ public sealed class DedupService : IDedupService
         var hashes = new Dictionary<string, ulong>(paths.Length);
         var algo = opts.Algorithm.ToString().ToLowerInvariant();
 
-        for (var i = 0; i < paths.Length; i++)
-        {
-            ct.ThrowIfCancellationRequested();
-            try
-            {
-                var hash = await Task.Run(() => ComputeHash(paths[i], opts), ct).ConfigureAwait(false);
-                if (hash.HasValue) hashes[paths[i]] = hash.Value;
-            }
-            catch (Exception e)
-            {
-                SynapicLog.Warning(nameof(DedupService), $"Failed to hash {paths[i]}: {e.Message}");
-            }
-            progress?.Report(new DedupProgress(i + 1, paths.Length, 0));
-        }
+        var items = paths
+            .Select(p => new ProcessWorkItem { LocalPath = p, FileName = Path.GetFileName(p) })
+            .ToArray();
+        var workflow = new WorkflowDefinition(
+            Key: "dedup",
+            Title: "Duplicate scan",
+            MaxDegreeOfParallelism: 1,
+            Description: $"hashing {algo} at threshold {opts.Threshold:0.###}");
+
+        // The runner reports at item start and completion; only the completion
+        // count moves the DedupProgress the UI renders (same as the old loop's
+        // per-file report — the duplicate start-line values are harmless).
+        var runnerProgress = progress is null
+            ? null
+            : new Progress<ProcessProgress>(p => progress.Report(new DedupProgress(p.Processed, p.Total, 0)));
+
+        await new WorkflowRunner().RunItemsAsync(
+            workflow, items, new LocalHashHandler(opts, hashes), runnerProgress, log: null, pause: null, ct).ConfigureAwait(false);
 
         var result = new DedupResult { TotalFiles = paths.Length, Algorithm = algo, Threshold = opts.Threshold };
         GroupDuplicates(hashes, opts, result.Groups);
 
         progress?.Report(new DedupProgress(paths.Length, paths.Length, result.Groups.Count));
         return result;
+    }
+
+    /// <summary>The local dedup scan's per-item operation: hash one file into the shared map.</summary>
+    private sealed class LocalHashHandler : IWorkflowItemHandler
+    {
+        private readonly DedupOptions _opts;
+        private readonly Dictionary<string, ulong> _hashes;
+
+        public LocalHashHandler(DedupOptions opts, Dictionary<string, ulong> hashes)
+        {
+            _opts = opts;
+            _hashes = hashes;
+        }
+
+        public Task<WorkflowItemOutcome> ProcessAsync(ProcessWorkItem item, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            var path = item.LocalPath ?? throw new InvalidOperationException("Work item has no image path");
+            var hash = ComputeHash(path, _opts); // null + log line = unhashable file, skipped
+            if (hash is null)
+                return Task.FromResult(WorkflowItemOutcome.Fail("unhashable file"));
+            lock (_hashes) _hashes[path] = hash.Value;
+            return Task.FromResult(WorkflowItemOutcome.Ok);
+        }
     }
 
     ulong? IDedupService.ComputeHash(string path, DedupOptions opts) => ComputeHash(path, opts);

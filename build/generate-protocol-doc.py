@@ -50,6 +50,8 @@ import service  # noqa: E402  (flat import: matches the PyInstaller entry point)
 REQUEST_CHECKS = [
     ("TagRequestModel", "TagRequest", "POST /tag body"),
     ("TagOptionsModel", "TagOptions", "POST /tag options"),
+    ("UpscaleRequestModel", "UpscaleRequest", "POST /upscale body"),
+    ("UpscaleOptionsModel", "UpscaleOptions", "POST /upscale options"),
     ("DownloadRequestModel", "DownloadRequest", "POST /models/download body"),
     ("ConfigModel", "ConfigDto", "PUT /config body"),
 ]
@@ -62,6 +64,7 @@ RESPONSE_DTOS = {
     ("put", "/config"): "ConfigDto",
     ("get", "/prompt"): "PromptDefaultsDto",
     ("post", "/tag"): "TagResponse",
+    ("post", "/upscale"): "UpscaleResponse",
 }
 
 # Endpoints whose response has no C# DTO (the host only inspects the body
@@ -84,6 +87,7 @@ ROUTE_DESCRIPTIONS = {
     ("get", "/models/list"): "Models present in the HF cache (`HF_HOME`).",
     ("post", "/models/download"): "Start a background model download.",
     ("post", "/tag"): "Run inference on one image and return its tags.",
+    ("post", "/upscale"): "Upscale one image with Swin2SR (quality/balanced) or Lanczos (fast) and save the result.",
     ("get", "/prompt"): "The tag instruction built into this sidecar, which `/tag` uses when the request has no `user_prompt`.",
     ("get", "/config"): "Read the session inference config.",
     ("put", "/config"): "Update the session inference config (a changed `model_id` unloads the model).",

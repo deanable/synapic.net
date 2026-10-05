@@ -199,6 +199,39 @@ Run inference on one image and return its tags.
 | `inference_ms` | integer | no |
 | `model_used` | string | yes |
 
+### `POST /upscale`
+
+Upscale one image with Swin2SR (quality/balanced) or Lanczos (fast) and save the result.
+
+**Request** (`application/json`, required) — `UpscaleRequestModel`
+
+| field | type | required | constraints |
+|-------|------|----------|-------------|
+| `image_path` | string | yes | — |
+| `output_path` | string (nullable) | no | — |
+| `options` | UpscaleOptionsModel (nullable) | no | — |
+
+**Responses**
+
+- `200` — Upscale outcome (UpscaleResponse): output_path, before/after dimensions, workflow, factor, model_used, inference_ms.
+- `404` — Image not found.
+- `422` — Validation error (blank image_path, unsupported workflow/factor combination, out-of-range option).
+- `500` — Upscale failed or produced no output.
+
+**`200` body** — `UpscaleResponse` (C# `Synapic.Shared.Contracts.UpscaleResponse`)
+
+| field | type | optional |
+|-------|------|----------|
+| `output_path` | string | no |
+| `width` | integer | no |
+| `height` | integer | no |
+| `original_width` | integer | no |
+| `original_height` | integer | no |
+| `workflow` | string | no |
+| `factor` | integer | no |
+| `model_used` | string | yes |
+| `inference_ms` | integer | no |
+
 ## Schemas
 
 Wire shapes of every DTO used above (nested DTOs included).
@@ -282,6 +315,20 @@ Wire shapes of every DTO used above (nested DTOs included).
 | `match_type` | string | no |
 | `note` | string | yes |
 
+### `UpscaleResponse`
+
+| field | type | optional |
+|-------|------|----------|
+| `output_path` | string | no |
+| `width` | integer | no |
+| `height` | integer | no |
+| `original_width` | integer | no |
+| `original_height` | integer | no |
+| `workflow` | string | no |
+| `factor` | integer | no |
+| `model_used` | string | yes |
+| `inference_ms` | integer | no |
+
 ### `TagRequest`
 
 | field | type | optional |
@@ -303,6 +350,27 @@ Wire shapes of every DTO used above (nested DTOs included).
 | `user_prompt` | string | yes |
 | `max_new_tokens` | integer | no |
 
+### `UpscaleRequest`
+
+| field | type | optional |
+|-------|------|----------|
+| `image_path` | string | no |
+| `output_path` | string | yes |
+| `options` | UpscaleOptions | yes |
+
+### `UpscaleOptions`
+
+| field | type | optional |
+|-------|------|----------|
+| `workflow` | string | no |
+| `factor` | integer | no |
+| `precision` | string | no |
+| `denoise_strength` | number | no |
+| `sharpen_amount` | number | no |
+| `output_format` | string | no |
+| `jpeg_quality` | integer | no |
+| `overwrite_existing` | boolean | no |
+
 ### `DownloadRequest`
 
 | field | type | optional |
@@ -317,6 +385,8 @@ Wire shapes of every DTO used above (nested DTOs included).
 - a request DTO differs between the FastAPI model and the C# record:
   - `TagRequestModel` ↔ `TagRequest` (POST /tag body)
   - `TagOptionsModel` ↔ `TagOptions` (POST /tag options)
+  - `UpscaleRequestModel` ↔ `UpscaleRequest` (POST /upscale body)
+  - `UpscaleOptionsModel` ↔ `UpscaleOptions` (POST /upscale options)
   - `DownloadRequestModel` ↔ `DownloadRequest` (POST /models/download body)
   - `ConfigModel` ↔ `ConfigDto` (PUT /config body)
 - a response DTO referenced here is missing from `Contracts.cs`;

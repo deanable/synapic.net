@@ -89,6 +89,9 @@
                 <TextBlock Text="{Binding StaleText}" IsVisible="{Binding IsStale}"
                            Foreground="Goldenrod" FontSize="11" TextWrapping="Wrap"
                            Margin="18,2,0,0" />
+                <TextBlock Text="{Binding GitHubUpdateText}" IsVisible="{Binding IsGitHubUpdate}"
+                           Foreground="Goldenrod" FontSize="11" TextWrapping="Wrap"
+                           Margin="18,2,0,0" />
               </StackPanel>
             </DataTemplate>
           </ItemsControl.ItemTemplate>
@@ -116,15 +119,20 @@
                   IsEnabled="{Binding Wizard.CanGoToStep4Tab}"
                   IsVisible="{Binding Wizard.ShowTaggingTabs}" Classes="stepTab" />
           <Button Content="🧹 Deduplication" Command="{Binding Wizard.GoToDedupCommand}"
-                  IsEnabled="{Binding Wizard.CanGoToDedupTab}" Classes="stepTab"
+                  IsEnabled="{Binding Wizard.CanGoToDedupTab}"
+                  IsVisible="{Binding Wizard.ShowDedupTab}" Classes="stepTab"
                   ToolTip.Tip="Scan for duplicates and act on them (local folder or the Step 1 catalog scope)" />
+          <Button Content="✨ Upscaling" Command="{Binding Wizard.GoToUpscaleCommand}"
+                  IsEnabled="{Binding Wizard.CanGoToUpscaleTab}"
+                  IsVisible="{Binding Wizard.ShowUpscaleTab}" Classes="stepTab"
+                  ToolTip.Tip="Enhance images with AI upscaling (Swin2SR/Lanczos over the Step 1 source)" />
           <Button Content="↺ Start Over" Command="{Binding Wizard.StartOverCommand}"
                   IsVisible="{Binding Wizard.CanStartOver}" />
           <TextBlock Text="{Binding RouteTitle}" VerticalAlignment="Center" Opacity="0.6"
                      Margin="8,0,0,0" FontStyle="Italic" />
           <Button Content="⌂ Home" Command="{Binding GoHomeCommand}"
                   Margin="8,0,0,0"
-                  ToolTip.Tip="Back to the start screen (Tagging / Deduplication)" />
+                  ToolTip.Tip="Back to the start screen (Tagging / Deduplication / Upscaling)" />
         </StackPanel>
         <TextBlock Classes="validationError" IsVisible="{Binding Wizard.ValidationError}"
                    Text="{Binding Wizard.ValidationError}" TextWrapping="Wrap" />
@@ -146,13 +154,13 @@
         <StackPanel Grid.Row="0" HorizontalAlignment="Center" Margin="0,28,0,0" Spacing="6">
           <TextBlock Text="What do you want to do?" FontSize="22" FontWeight="SemiBold"
                      HorizontalAlignment="Center" />
-          <TextBlock Text="Synapic has two workflows. Pick one — the other one stays out of your way."
+          <TextBlock Text="Synapic has three workflows. Pick one — the others stay out of your way."
                      Opacity="0.7" HorizontalAlignment="Center" />
         </StackPanel>
 
-        <UniformGrid Grid.Row="2" Columns="2" VerticalAlignment="Center" Margin="0,0,0,40">
+        <UniformGrid Grid.Row="2" Columns="3" VerticalAlignment="Center" Margin="0,0,0,40">
           <Button Classes="routeCard" Command="{Binding StartTaggingRouteCommand}"
-                  Margin="0,0,6,0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
+                  Margin="3" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
             <StackPanel Spacing="6" Margin="6">
               <TextBlock Text="🏷  Tagging" FontSize="18" FontWeight="SemiBold" />
               <TextBlock Text="Run the AI model over a datasource: choose the source, the engine and the fields, process the batch, then review what was written."
@@ -161,12 +169,21 @@
             </StackPanel>
           </Button>
           <Button Classes="routeCard" Command="{Binding StartDedupRouteCommand}"
-                  Margin="6,0,0,0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
+                  Margin="3" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
             <StackPanel Spacing="6" Margin="6">
               <TextBlock Text="🧹  Deduplication" FontSize="18" FontWeight="SemiBold" />
               <TextBlock Text="Find duplicate images in a local folder or in the Daminion catalog scope, review the groups, then tag, move or delete the extras."
                          TextWrapping="Wrap" Opacity="0.85" />
               <TextBlock Text="Datasource → Deduplication" Opacity="0.55" />
+            </StackPanel>
+          </Button>
+          <Button Classes="routeCard" Command="{Binding StartUpscaleRouteCommand}"
+                  Margin="3" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
+            <StackPanel Spacing="6" Margin="6">
+              <TextBlock Text="✨  Upscaling" FontSize="18" FontWeight="SemiBold" />
+              <TextBlock Text="Enhance image resolution — the Daminion Feature enhancement utility: AI (Swin2SR) or fast Lanczos upscaling over the chosen source."
+                         TextWrapping="Wrap" Opacity="0.85" />
+              <TextBlock Text="Datasource → Upscaling" Opacity="0.55" />
             </StackPanel>
           </Button>
         </UniformGrid>
@@ -190,6 +207,9 @@
             </DataTemplate>
             <DataTemplate DataType="vms:StepDedupViewModel">
               <steps:StepDedup />
+            </DataTemplate>
+            <DataTemplate DataType="vms:StepUpscaleViewModel">
+              <steps:StepUpscale />
             </DataTemplate>
           </ContentControl.DataTemplates>
         </ContentControl>

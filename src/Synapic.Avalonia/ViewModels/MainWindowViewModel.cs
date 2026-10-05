@@ -80,13 +80,14 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public WizardViewModel Wizard { get; }
 
-    // ── Routes: the app opens on a start screen with two clear entry points ──
+    // ── Routes: the app opens on a start screen with three entry points ──
 
     public const string HomeRoute = "home";
     public const string TaggingRoute = "tagging";
     public const string DedupRoute = "dedup";
+    public const string UpscaleRoute = "upscale";
 
-    /// <summary>Which entry point is active: home (chooser), tagging or dedup.</summary>
+    /// <summary>Which entry point is active: home (chooser), tagging, dedup or upscale.</summary>
     [ObservableProperty]
     private string _route = HomeRoute;
 
@@ -98,11 +99,14 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public bool IsDedupRoute => Route == DedupRoute;
 
+    public bool IsUpscaleRoute => Route == UpscaleRoute;
+
     /// <summary>Route name shown in the nav bar so you always know which workflow you're in.</summary>
     public string RouteTitle => Route switch
     {
         TaggingRoute => "Tagging",
         DedupRoute => "Deduplication",
+        UpscaleRoute => "Upscaling",
         _ => "",
     };
 
@@ -112,6 +116,7 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsWizardVisible));
         OnPropertyChanged(nameof(IsTaggingRoute));
         OnPropertyChanged(nameof(IsDedupRoute));
+        OnPropertyChanged(nameof(IsUpscaleRoute));
         OnPropertyChanged(nameof(RouteTitle));
     }
 
@@ -131,6 +136,15 @@ public partial class MainWindowViewModel : ViewModelBase
         Route = DedupRoute;
         Wizard.EnterDedupRoute();
         SynapicLog.Info(nameof(MainWindowViewModel), "Route selected: Deduplication");
+    }
+
+    /// <summary>Start screen → Datasource, then the upscaling step (Feature enhancement).</summary>
+    [RelayCommand]
+    private void StartUpscaleRoute()
+    {
+        Route = UpscaleRoute;
+        Wizard.EnterUpscaleRoute();
+        SynapicLog.Info(nameof(MainWindowViewModel), "Route selected: Upscaling");
     }
 
     /// <summary>Back to the start screen (route state is kept, so returning resumes).</summary>
@@ -399,9 +413,48 @@ public partial class MainWindowViewModel : ViewModelBase
     /// Builds one variant, then re-detects so the workspace unlocks as soon as
     /// the first build lands. Only one build runs at a time: the pipeline
     /// shares a work directory and the build service rejects concurrent runs.
+    /// A running server is stopped first: PyInstaller cannot replace an
+    /// executable the OS still holds open (the build would die with
+    /// PermissionError only after minutes of packaging).
     /// </summary>
-    private Task BuildVariantAsync(SidecarVariantViewModel variant, CancellationToken ct) =>
-        BuildVariantCoreAsync(variant, ct);
+    private async Task BuildVariantAsync(SidecarVariantViewModel variant, CancellationToken ct)
+    {
+        if (!variant.CanBuild || variant.IsBuilding) return;
+        await WithServerStoppedForReplacementAsync(
+            () => BuildVariantCoreAsync(variant, ct), ct, "build");
+    }
+
+    /// <summary>
+    /// Stop the managed server around a replacement of its executable, then
+    /// put it back the way the user left it (started again on the new bytes).
+    /// Shared by the direct Build command and Update, so both paths get the
+    /// same lock-avoidance; orphans that outlived a previous run are swept by
+    /// the build service's own pre-flight.
+    /// </summary>
+    private async Task WithServerStoppedForReplacementAsync(Func<Task> replace, CancellationToken ct, string initiator)
+    {
+        var restart = ServerState is ServerUiState.Running or ServerUiState.Starting;
+        if (restart)
+        {
+            AppendLog($"[{initiator}] Stopping the running server before replacing its executable.");
+            await _sidecar.StopAsync();
+        }
+
+        try
+        {
+            await replace();
+        }
+        finally
+        {
+            // Whether the replacement landed or failed, put the server back the
+            // way the user left it: on the new build, or on the one that works.
+            if (restart && IsSidecarReady)
+            {
+                AppendLog($"[{initiator}] Restarting the server on the replaced sidecar.");
+                await StartServerAsync(ct);
+            }
+        }
+    }
 
     private async Task BuildVariantCoreAsync(SidecarVariantViewModel variant, CancellationToken ct)
     {
@@ -423,6 +476,7 @@ public partial class MainWindowViewModel : ViewModelBase
             var progress = new Progress<SidecarBuildProgress>(variant.ApplyProgress);
             await _build.BuildAsync(variant.Rid, AppendLog, progress, ct);
             AppendLog($"[build] {variant.DisplayName} sidecar built.");
+            variant.GitHubUpdateText = null;   // fresh bytes beat whatever GitHub offers
         }
         catch (OperationCanceledException)
         {
@@ -479,6 +533,7 @@ public partial class MainWindowViewModel : ViewModelBase
                 p => variant.ApplyProgress(new SidecarBuildProgress(p.Percent, p.Stage)));
             await _download.DownloadAsync(variant.Rid, destination, progress, ct);
             AppendLog($"[download] {variant.DisplayName} sidecar downloaded to {destination}.");
+            variant.GitHubUpdateText = null;   // just fetched what GitHub offered
         }
         catch (OperationCanceledException)
         {
@@ -511,32 +566,66 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         if (!variant.IsBuilt || variant.IsBusy || IsBusy) return;
 
-        var restart = ServerState is ServerUiState.Running or ServerUiState.Starting;
         variant.IsUpdating = true;
         IsBusy = true;
         try
         {
-            if (restart)
-            {
-                AppendLog($"[update] Stopping the running {variant.DisplayName} server before replacing its executable.");
-                await _sidecar.StopAsync();
-            }
-
-            if (_build.CanBuild) await BuildVariantCoreAsync(variant, ct);
-            else await DownloadVariantCoreAsync(variant, ct, replaceExisting: true);
+            await WithServerStoppedForReplacementAsync(
+                () => _build.CanBuild
+                    ? BuildVariantCoreAsync(variant, ct)
+                    : DownloadVariantCoreAsync(variant, ct, replaceExisting: true),
+                ct, "update");
         }
         finally
         {
             variant.IsUpdating = false;
             IsBusy = false;
         }
+    }
 
-        // Whether the replacement landed or failed, put the server back the way
-        // the user left it: on the new build, or on the one that still works.
-        if (restart && IsSidecarReady)
+    /// <summary>
+    /// The always-on GitHub check (run once at startup, after detection has
+    /// created the variant rows): for every buildable variant, is there a
+    /// prebuilt file on GitHub newer than the executable on disk - or no
+    /// executable at all? When yes, the row says so, so the user downloads
+    /// instead of building. Advisory by design: any failure logs and returns,
+    /// because an unreachable GitHub must never affect startup.
+    /// </summary>
+    public async Task CheckForSidecarUpdatesAsync(CancellationToken ct = default)
+    {
+        foreach (var variant in SidecarVariants)
         {
-            AppendLog($"[update] Restarting the server on the {variant.DisplayName} sidecar.");
-            await StartServerAsync(ct);
+            try
+            {
+                var info = await _download.CheckForUpdateAsync(
+                    variant.Rid,
+                    string.IsNullOrEmpty(variant.ExePath) ? null : variant.ExePath,
+                    ct);
+
+                if (info is null)
+                {
+                    variant.GitHubUpdateText = null;
+                    continue;
+                }
+
+                var published = DateTime.TryParse(
+                    info.PublishedAt, null, System.Globalization.DateTimeStyles.AdjustToUniversal, out var at)
+                    ? $", published {at.ToLocalTime():yyyy-MM-dd}"
+                    : "";
+                variant.GitHubUpdateText = info.LocalMissing
+                    ? $"Prebuilt sidecar available on GitHub ({info.TagName}{published}) \u2014 use Download instead of building."
+                    : $"Newer prebuilt sidecar on GitHub ({info.TagName}{published}) \u2014 use Update instead of building.";
+                AppendLog($"[update] GitHub offers a newer prebuilt {variant.DisplayName} sidecar ({info.TagName}{published}); " +
+                          "use Download/Update instead of building.");
+                SynapicLog.Info(nameof(MainWindowViewModel),
+                    $"Sidecar update available for {variant.Rid}: {info.TagName}, " +
+                    $"published {info.PublishedAt ?? "unknown"}, {info.TotalBytes:N0} bytes, localMissing={info.LocalMissing}");
+            }
+            catch (Exception e)
+            {
+                SynapicLog.Warning(nameof(MainWindowViewModel),
+                    $"Sidecar update check failed for {variant.Rid}: {e.Message}");
+            }
         }
     }
 

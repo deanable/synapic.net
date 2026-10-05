@@ -1,0 +1,85 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Synapic.Avalonia.ViewModels.Steps"
+             xmlns:help="using:Synapic.Avalonia.Services"
+             x:Class="Synapic.Avalonia.Views.Wizard.StepUpscale"
+             x:DataType="vm:StepUpscaleViewModel">
+
+  <StackPanel Spacing="12">
+    <TextBlock Text="Upscaling — Feature enhancement" FontSize="22" FontWeight="Bold" />
+    <TextBlock Text="{Binding SourceSummary}" Opacity="0.75" TextWrapping="Wrap" />
+
+    <!-- Upscale settings: the parameters that differ from the other workflows
+         (port of step_upscale.py's settings frame). -->
+    <Border Classes="card" Padding="12"
+            help:HelpScope.Topic="upscale.html">
+      <Grid ColumnDefinitions="Auto,*,Auto,*,Auto,*" RowDefinitions="Auto,Auto,Auto">
+        <TextBlock Grid.Row="0" Grid.Column="0" Text="Workflow:" VerticalAlignment="Center"
+                   Margin="0,0,6,8" />
+        <ComboBox Grid.Row="0" Grid.Column="1" SelectedIndex="{Binding SelectedWorkflow}"
+                  ItemsSource="{Binding Workflows}" MinWidth="120" Margin="0,0,16,8"
+                  ToolTip.Tip="quality: classical Swin2SR model. balanced: real-world model with denoise blending. fast: Lanczos, no model." />
+        <TextBlock Grid.Row="0" Grid.Column="2" Text="Factor:" VerticalAlignment="Center"
+                   Margin="0,0,6,8" />
+        <ComboBox Grid.Row="0" Grid.Column="3" SelectedIndex="{Binding SelectedFactor}"
+                  ItemsSource="{Binding Factors}" MinWidth="80" Margin="0,0,16,8" />
+        <TextBlock Grid.Row="0" Grid.Column="4" Text="Precision:" VerticalAlignment="Center"
+                   Margin="0,0,6,8" />
+        <ComboBox Grid.Row="0" Grid.Column="5" SelectedIndex="{Binding SelectedPrecision}"
+                  ItemsSource="{Binding Precisions}" MinWidth="90" Margin="0,0,0,8"
+                  IsEnabled="{Binding IsPrecisionEnabled}" />
+
+        <TextBlock Grid.Row="1" Grid.Column="0" Text="Output:" VerticalAlignment="Center"
+                   Margin="0,0,6,8" />
+        <ComboBox Grid.Row="1" Grid.Column="1" SelectedIndex="{Binding SelectedOutputFormat}"
+                  ItemsSource="{Binding OutputFormats}" MinWidth="120" Margin="0,0,16,8" />
+        <TextBlock Grid.Row="1" Grid.Column="2" Text="Quality:" VerticalAlignment="Center"
+                   Margin="0,0,6,8" />
+        <NumericUpDown Grid.Row="1" Grid.Column="3" Value="{Binding JpegQuality}"
+                        Minimum="70" Maximum="100" Increment="1" Width="110"
+                        Margin="0,0,16,8" FormatString="0" />
+        <TextBlock Grid.Row="1" Grid.Column="4" Text="Denoise:" VerticalAlignment="Center"
+                   Margin="0,0,6,8" />
+        <Slider Grid.Row="1" Grid.Column="5" Minimum="0" Maximum="1"
+                Value="{Binding DenoiseStrength}" Margin="0,0,0,8"
+                IsEnabled="{Binding IsDenoiseEnabled}"
+                ToolTip.Tip="Blend the AI result toward plain interpolation (balanced workflow only)." />
+
+        <TextBlock Grid.Row="2" Grid.Column="0" Text="Sharpen:" VerticalAlignment="Center"
+                   Margin="0,0,6,0" />
+        <Slider Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="3" Minimum="0" Maximum="2"
+                Value="{Binding SharpenAmount}" Margin="0,0,16,0"
+                ToolTip.Tip="Unsharp mask after upscaling; 0 = off." />
+        <CheckBox Grid.Row="2" Grid.Column="4" Grid.ColumnSpan="2"
+                  Content="Overwrite existing output" IsChecked="{Binding OverwriteExisting}"
+                  VerticalAlignment="Center" />
+      </Grid>
+    </Border>
+
+    <ProgressBar Value="{Binding ProgressPercent}" Maximum="100" Height="18" />
+
+    <StackPanel Orientation="Horizontal" Spacing="16">
+      <TextBlock Text="{Binding ProgressText}" FontWeight="SemiBold" />
+      <TextBlock Text="{Binding EtaText}" Opacity="0.7" />
+      <TextBlock Text="{Binding CurrentFile}" Opacity="0.7" />
+    </StackPanel>
+
+    <StackPanel Orientation="Horizontal" Spacing="8">
+      <Button Content="Run Upscale Batch" Command="{Binding StartCommand}"
+              Classes="accent" />
+      <Button Content="Stop" Command="{Binding StopCommand}" />
+    </StackPanel>
+
+    <Border Classes="card" Height="300" Padding="8"
+            help:HelpScope.Topic="step3-log.html">
+      <ListBox ItemsSource="{Binding LogLines}" x:Name="LogList">
+        <ListBox.ItemTemplate>
+          <DataTemplate>
+            <TextBlock Text="{Binding}" FontFamily="Consolas,monospace" FontSize="12"
+                       TextWrapping="Wrap" />
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </Border>
+  </StackPanel>
+</UserControl>

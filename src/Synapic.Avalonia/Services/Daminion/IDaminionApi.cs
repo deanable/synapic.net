@@ -69,6 +69,39 @@ public interface IDaminionApi
     [Get("/api/ItemData/GetDefaultLayout")]
     Task<JsonElement> GetDefaultLayout(CancellationToken ct = default);
 
+    // ── Version control (checkout → new file version → check-in) ───────────
+    // Port of daminion_api.py VersionControlAPI: CheckOut/UndoCheckOut take
+    // {"Ids":[…]}; CheckIn is multipart (id + optional comment + file). The
+    // upscale flow checks an item out, uploads the enhanced file as the new
+    // version, and undoes the checkout when the upload fails. HttpResponseMessage
+    // return types keep Refit from throwing on non-2xx so the caller decides —
+    // same convention as Login.
+
+    [Post("/api/VersionControl/CheckOut")]
+    Task<HttpResponseMessage> CheckOutItems([Body] DaminionVersionIdsRequest request, CancellationToken ct = default);
+
+    [Post("/api/VersionControl/UndoCheckOut")]
+    Task<HttpResponseMessage> UndoCheckOutItems([Body] DaminionVersionIdsRequest request, CancellationToken ct = default);
+
+    /// <summary>Check in a new file version without a comment (fallback for
+    /// servers that reject the comment field — the original client tries the
+    /// commented form first, then drops it and retries).</summary>
+    [Multipart]
+    [Post("/api/VersionControl/CheckIn")]
+    Task<HttpResponseMessage> CheckInItem(
+        [AliasAs("id")] int itemId,
+        [AliasAs("file")] StreamPart file,
+        CancellationToken ct = default);
+
+    /// <summary>Check in a new file version with a check-in comment.</summary>
+    [Multipart]
+    [Post("/api/VersionControl/CheckIn")]
+    Task<HttpResponseMessage> CheckInItemWithComment(
+        [AliasAs("id")] int itemId,
+        [AliasAs("comment")] string comment,
+        [AliasAs("file")] StreamPart file,
+        CancellationToken ct = default);
+
     // ── Thumbnails & originals (kept in Avalonia per spec §11 Q2) ───────────
     [Get("/api/Thumbnail/Get/{id}")]
     Task<Stream> GetThumbnail(int id, [Query] int width, [Query] int height, CancellationToken ct = default);

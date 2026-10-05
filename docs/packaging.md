@@ -391,6 +391,19 @@ after a 2.7 GB download.
   x86_64 macOS wheels after 2.2.2, so the sidecar cannot build there. PRs run the same but with a path filter (code/build
   changes only — doc-only PRs skip CI) and **without** the installer smoke
   job, which costs extra Windows runner minutes.
+- **Nightly sidecar release** (`publish-nightly`, same workflow): on every
+  green push to `main` (and on manual dispatch) a follow-up job downloads the
+  three CPU bundles, stages them as `synapic-inference-<rid>` assets together
+  with a `SHA256SUMS.txt` manifest, and recreates a rolling prerelease tagged
+  `nightly` at that commit. This is the feed the app reads at startup
+  (`MainWindowViewModel.CheckForSidecarUpdatesAsync` →
+  `SidecarDownloadService.CheckForUpdateAsync`), so users are always offered
+  the freshest sidecar as **Download instead of building**. Being a
+  prerelease, `nightly` never claims "Latest" on the releases page;
+  installers and the split CUDA sidecar stay assets of the versioned releases
+  (cut by `release.yml`) because they are too heavy to re-upload per push.
+  Note that GitHub release assets never carry the unix executable bit — the
+  download service restores it after installing on Linux/macOS.
 - **The CUDA job** (`sidecar-cuda`, windows-2022) builds `win-x64-cuda`: it
   asserts the *installed* torch is a CUDA 12.x build (a cheap 30-second check
   that runs before the ~20-minute PyInstaller pass), lets `build-sidecar.ps1`

@@ -17,6 +17,13 @@ public sealed record SidecarDownloadProgress(double Percent, string Stage);
 /// button would have produced, and an installed app can pick up the variant it
 /// did not ship with.
 /// </summary>
+/// <summary>What the startup update check found on GitHub for one RID.</summary>
+/// <param name="TagName">Release that carries the asset (e.g. <c>nightly</c> or <c>v0.2.1</c>).</param>
+/// <param name="PublishedAt">The release's <c>published_at</c> (ISO-8601), when known.</param>
+/// <param name="TotalBytes">Combined size of the asset (or its parts).</param>
+/// <param name="LocalMissing">True when this machine has no executable for the RID at all.</param>
+public sealed record SidecarUpdateInfo(string TagName, string? PublishedAt, long TotalBytes, bool LocalMissing);
+
 public interface ISidecarDownloadService
 {
     /// <summary>
@@ -30,12 +37,30 @@ public interface ISidecarDownloadService
         string destinationPath,
         IProgress<SidecarDownloadProgress> progress,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// The always-on startup check: is there a prebuilt file on GitHub for this
+    /// RID that is newer than the executable on disk? Returns null when there
+    /// is nothing to offer (no asset, nothing newer, or GitHub unreachable) and
+    /// never throws - it is an offer, not an operation.
+    /// </summary>
+    Task<SidecarUpdateInfo?> CheckForUpdateAsync(string rid, string? localExePath, CancellationToken ct = default);
 }
 
 public sealed class SidecarDownloadService : ISidecarDownloadService
 {
     private const string AssetPrefix = "synapic-inference-";
     private const int BufferSize = 81920;
+
+    /// <summary>
+    /// Every recent release in one request: the download path and the startup
+    /// update check both read it, and it lets the rolling `nightly` release
+    /// (a prerelease, so it never displaces "Latest" on the releases page) be
+    /// chosen whenever it is newer than the newest versioned tag - which is
+    /// what makes "push to main, then download instead of building" work.
+    /// </summary>
+    private const string ReleasesApiUrl =
+        "https://api.github.com/repos/deanable/Synapic.NET/releases?per_page=20";
 
     private readonly HttpClient _http;
 
@@ -118,6 +143,16 @@ public sealed class SidecarDownloadService : ISidecarDownloadService
 
             progress.Report(new(100, "Installing"));
             File.Move(stagingPath, destinationPath, overwrite: true);
+
+            // Release assets are plain bytes: the download never carries the
+            // unix executable bit, and without it the sidecar cannot launch on
+            // Linux/macOS (this was equally true of the versioned releases).
+            if (!OperatingSystem.IsWindows())
+            {
+                File.SetUnixFileMode(destinationPath,
+                    File.GetUnixFileMode(destinationPath) |
+                    UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute);
+            }
         }
         catch
         {
@@ -126,23 +161,15 @@ public sealed class SidecarDownloadService : ISidecarDownloadService
         }
     }
 
-    /// <summary>Assets of the latest release that belong to this RID (join order) plus the release manifest text.</summary>
+    /// <summary>Assets of the release this RID should read (join order) plus the release manifest text.</summary>
     private async Task<(IReadOnlyList<GitHubAsset> Assets, string ShaSums)> ResolveAssetsAsync(string rid, CancellationToken ct)
     {
-        GitHubRelease? release;
-        try
+        var release = await FetchNewestManifestReleaseAsync(rid, ct).ConfigureAwait(false);
+        if (release is null)
         {
-            release = await _http
-                .GetFromJsonAsync<GitHubRelease>(UpdateCheckService.LatestReleaseApiUrl, ct)
-                .ConfigureAwait(false);
-        }
-        catch (HttpRequestException e)
-        {
-            throw new InvalidOperationException($"Could not read the latest release from GitHub: {e.Message}", e);
-        }
-        catch (JsonException e)
-        {
-            throw new InvalidOperationException($"The GitHub release response was not readable: {e.Message}", e);
+            throw new InvalidOperationException(
+                "GitHub publishes no release with a SHA256SUMS.txt manifest — " +
+                "the download cannot be verified, so it is refused. Build the sidecar locally instead (Build Server).");
         }
 
         var wanted = AssetPrefix + rid;
@@ -173,6 +200,81 @@ public sealed class SidecarDownloadService : ISidecarDownloadService
                 "or pick a release that ships checksums.");
 
         return (assets, await _http.GetStringAsync(shaAsset.Url!, ct).ConfigureAwait(false));
+    }
+
+    /// <summary>
+    /// The release this machine should read: among the published releases that
+    /// ship a SHA256SUMS.txt manifest, the most recent one that carries assets
+    /// for <paramref name="rid"/> (falling back to the newest manifest release
+    /// so callers can still name it in an error). CI's rolling `nightly` and
+    /// the versioned tags are peers - whichever is newer wins.
+    /// </summary>
+    private async Task<GitHubRelease?> FetchNewestManifestReleaseAsync(string? rid, CancellationToken ct)
+    {
+        GitHubRelease[]? releases;
+        try
+        {
+            releases = await _http.GetFromJsonAsync<GitHubRelease[]>(ReleasesApiUrl, ct).ConfigureAwait(false);
+        }
+        catch (HttpRequestException e)
+        {
+            throw new InvalidOperationException($"Could not read the latest release from GitHub: {e.Message}", e);
+        }
+        catch (JsonException e)
+        {
+            throw new InvalidOperationException($"The GitHub release response was not readable: {e.Message}", e);
+        }
+
+        var candidates = (releases ?? Array.Empty<GitHubRelease>())
+            .Where(r => r.Assets?.Any(a => "SHA256SUMS.txt".Equals(a.Name, StringComparison.OrdinalIgnoreCase)) == true)
+            .OrderByDescending(r => r.PublishedAt ?? "", StringComparer.Ordinal)
+            .ToList();
+        if (candidates.Count == 0) return null;
+        if (rid is null) return candidates[0];
+
+        var wanted = AssetPrefix + rid;
+        return candidates.FirstOrDefault(r =>
+                   r.Assets!.Any(a => a.Name is not null && IsAssetFor(a.Name, wanted)))
+               ?? candidates[0];
+    }
+
+    /// <summary>
+    /// The always-on startup check (see the interface). A local executable that
+    /// is at least as new as the release is never offered - that is a build
+    /// newer than what GitHub has, not an update - and any failure degrades to
+    /// "no update" so an offline start is quiet.
+    /// </summary>
+    public async Task<SidecarUpdateInfo?> CheckForUpdateAsync(string rid, string? localExePath, CancellationToken ct = default)
+    {
+        try
+        {
+            var release = await FetchNewestManifestReleaseAsync(rid, ct).ConfigureAwait(false);
+            if (release?.TagName is null) return null;
+
+            var wanted = AssetPrefix + rid;
+            var matches = (release.Assets ?? Array.Empty<GitHubAsset>())
+                .Where(a => a.Name is not null && IsAssetFor(a.Name, wanted))
+                .ToList();
+            if (matches.Count == 0) return null;
+
+            var localExists = !string.IsNullOrEmpty(localExePath) && File.Exists(localExePath);
+            if (localExists)
+            {
+                if (release.PublishedAt is null ||
+                    !DateTime.TryParse(release.PublishedAt, null,
+                        System.Globalization.DateTimeStyles.AdjustToUniversal, out var published))
+                    return null;
+                if (published <= File.GetLastWriteTimeUtc(localExePath!)) return null;
+            }
+
+            return new SidecarUpdateInfo(
+                release.TagName, release.PublishedAt, matches.Sum(a => a.Size), LocalMissing: !localExists);
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Warning(nameof(SidecarDownloadService), $"Sidecar update check failed: {e.Message}");
+            return null;
+        }
     }
 
     /// <summary>
@@ -246,6 +348,9 @@ public sealed class SidecarDownloadService : ISidecarDownloadService
     {
         [JsonPropertyName("tag_name")]
         public string? TagName { get; init; }
+
+        [JsonPropertyName("published_at")]
+        public string? PublishedAt { get; init; }
 
         [JsonPropertyName("assets")]
         public GitHubAsset[]? Assets { get; init; }

@@ -17,10 +17,11 @@ log along the bottom.</p>
 
 <h2>The start screen</h2>
 
-<p>The middle of the window begins with two cards &mdash;
-<span class="ui">Tagging</span> and <span class="ui">Deduplication</span> &mdash;
-and the one you pick decides which steps the window then offers. See <a
-href="workflow-overview.html">Two routes at the start screen</a>. While the
+<p>The middle of the window begins with three cards &mdash;
+<span class="ui">Tagging</span>, <span class="ui">Deduplication</span> and
+<span class="ui">Upscaling</span> &mdash; and the one you pick decides which
+steps the window then offers. See <a
+href="workflow-overview.html">Three routes at the start screen</a>. While the
 chooser is up, the tab row and the Back/Next buttons are hidden; they come back
 as soon as a route is chosen.</p>
 
@@ -85,7 +86,7 @@ runs anywhere, or that it needs an NVIDIA GPU.</li>
 <h2>The wizard</h2>
 
 <p>Which tabs exist depends on the route you picked. The tagging route offers
-five:</p>
+six:</p>
 
 <table>
 <tr><th class="setting">Tab</th><th>What you decide there</th></tr>
@@ -94,12 +95,15 @@ five:</p>
 <tr><td>3 &middot; Process</td><td>Run the batch, watch progress, pause, resume or abort.</td></tr>
 <tr><td>4 &middot; Results</td><td>What happened per image: export, retry, verify.</td></tr>
 <tr><td>Deduplication</td><td>A separate tool that finds near-duplicate images in a local folder or in the Daminion catalog scope.</td></tr>
+<tr><td>Upscaling</td><td>A separate tool that enhances image resolution with AI (Swin2SR) or Lanczos over the same source.</td></tr>
 </table>
 
-<p>The deduplication route offers only two &mdash; <span class="ui">1 &middot;
-Datasource</span> and <span class="ui">Deduplication</span> &mdash; and the
+<p>The deduplication and upscaling routes offer only two tabs &mdash;
+<span class="ui">1 &middot;
+Datasource</span> and the route's own step &mdash; and the
 Engine, Process and Results tabs are not shown at all. The current route's name
-(<span class="ui">Tagging</span> or <span class="ui">Deduplication</span>) is
+(<span class="ui">Tagging</span>, <span class="ui">Deduplication</span> or
+<span class="ui">Upscaling</span>) is
 written in the tab row, and the <span class="ui">Home</span> button at its right
 end goes back to the start screen.</p>
 

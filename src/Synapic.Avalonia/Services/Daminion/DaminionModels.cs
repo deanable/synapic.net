@@ -146,6 +146,16 @@ public sealed class DaminionRemoveResponse
     public int ErrorCode { get; init; }
 }
 
+/// <summary>
+/// Body of POST /api/VersionControl/CheckOut and /api/VersionControl/UndoCheckOut
+/// (daminion_api.py VersionControlAPI: <c>{"Ids": item_ids}</c>).
+/// </summary>
+public sealed class DaminionVersionIdsRequest
+{
+    [JsonPropertyName("Ids")]
+    public int[] Ids { get; init; } = Array.Empty<int>();
+}
+
 /// <summary>One tag operation: attach/remove a tag value by id or by raw value.</summary>
 public sealed class DaminionTagOperation
 {

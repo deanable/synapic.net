@@ -1,0 +1,135 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>Upscaling</title>
+<link rel="stylesheet" type="text/css" href="help.css">
+</head>
+<body>
+
+<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; The workflow &rsaquo; Upscaling</p>
+
+<h1>Upscaling (Feature enhancement)</h1>
+
+<p class="lead">A resolution-boosting tool in the spirit of Daminion's Feature
+enhancement utility: pick a source, choose how aggressive the enhancement
+should be, and Synapic rewrites every image at a larger size &mdash; with AI
+super-resolution (Swin2SR) or with plain high-quality interpolation. The
+algorithm runs in the inference server, exactly like tagging does.</p>
+
+<div class="note">
+<p class="first">It has its own route.</p>
+<p>The start screen offers <span class="ui">Upscaling</span> beside
+<span class="ui">Tagging</span> and <span class="ui">Deduplication</span>, and
+that route is Datasource &rarr; Upscaling only: the Engine, Process and
+Results steps never appear. From the tagging route the same tool stays
+reachable through the <span class="ui">Upscaling</span> tab once you reach
+Results. See <a href="workflow-overview.html">Three routes at the start
+screen</a>.</p>
+</div>
+
+<h2>Choosing the source</h2>
+
+<p>The source is the one Step 1 configured &mdash; a local folder or the
+Daminion catalog scope (entire catalog, keyword search, shared collection or
+saved search), shown read-only at the top of the step. Change it by going back
+to <span class="ui">1 &middot; Datasource</span>.</p>
+
+<ul>
+<li><span class="term">Catalog source.</span> Each item is checked out, its
+original downloaded, enhanced, and checked back in as a new file version with
+a comment recording the parameters used. If the upload fails, the checkout is
+undone so no item is left locked.</li>
+<li><span class="term">Local source.</span> The enhanced image is written
+beside the original as <span class="path">name_upscaled.ext</span>; the
+original file itself is never modified.</li>
+</ul>
+
+<h2>Settings</h2>
+
+<table>
+<tr><th class="setting">Setting</th><th>What it does</th></tr>
+<tr><td><span class="ui">Workflow</span></td><td><span class="path">quality</span>: the classical Swin2SR model (2x or 4x) &mdash; the faithful, detail-preserving choice. <span class="path">balanced</span>: the real-world model with a denoise blend, better on noisy or compressed sources. <span class="path">fast</span>: plain Lanczos interpolation, no model, no download &mdash; instant and predictable.</td></tr>
+<tr><td><span class="ui">Factor</span></td><td><span class="path">2x</span> doubles each edge; <span class="path">4x</span> quadruples it (and the pixel count with it).</td></tr>
+<tr><td><span class="ui">Precision</span></td><td><span class="path">auto</span>, <span class="path">fp16</span> or <span class="path">fp32</span> for the AI workflows on a CUDA build. Disabled for <span class="path">fast</span>.</td></tr>
+<tr><td><span class="ui">Output</span></td><td><span class="path">keep</span> writes the source's own format; JPEG, PNG and WEBP convert. JPEG and WEBP quality is the <span class="ui">Quality</span> field (70&ndash;100).</td></tr>
+<tr><td><span class="ui">Denoise</span></td><td>Balanced workflow only: how much of the AI result to keep, blended toward plain interpolation at the low end. At 1.0 the output is pure AI; lower it when the model sharpens noise.</td></tr>
+<tr><td><span class="ui">Sharpen</span></td><td>Unsharp mask applied after upscaling, 0&ndash;2 (0 = off).</td></tr>
+<tr><td><span class="ui">Overwrite existing output</span></td><td>Off, a second run that would hit the same output file writes <span class="path">name_upscaled_1.ext</span> instead of replacing it.</td></tr>
+</table>
+
+<div class="tip">
+<p class="first">Start with fast, then decide.</p>
+<p>The fast workflow needs no model download and finishes instantly, so it is
+the quickest way to check that a source and a factor are what you wanted.
+Switch to quality or balanced when the result has to hold up to inspection.</p>
+</div>
+
+<h2>Running the batch</h2>
+
+<ol class="steps">
+<li>Press <span class="ui">Run Upscale Batch</span>. The parameters are echoed
+into the log, then each item is fetched, enhanced and written in turn.</li>
+<li>Watch the progress bar, the counter and the ETA. The first
+quality/balanced item also downloads the Swin2SR weights from Hugging Face
+(tens of megabytes, once per machine), so the first run starts slower than the
+rest.</li>
+<li>Press <span class="ui">Stop</span> to end the run: items already finished
+stay finished, the item in flight is cancelled, and no new item starts.</li>
+</ol>
+
+<p>One inference runs at a time &mdash; the same one-worker behavior the
+original application had &mdash; so a catalog of 300 images is a steady
+sequence rather than a burst, and the ETA reflects reality after the first
+couple of items.</p>
+
+<div class="warning">
+<p class="first">A catalog run writes to the server.</p>
+<p>For a Daminion source, every successful item becomes a new checked-in file
+version. The previous version remains in the catalog's version history, but
+the item's file is replaced &mdash; run a small scope first if you have not
+used the tool before.</p>
+</div>
+
+<h2>What the log tells you</h2>
+
+<p>Every stage writes to <span class="path">logs\synapic.log</span> beside the
+executable:</p>
+
+<ul>
+<li><span class="term">One line at the start</span> names the source and every
+parameter of the run (workflow, factor, precision, output, quality, denoise,
+sharpen, overwrite).</li>
+<li><span class="term">One line per item</span> with the dimensions before and
+after, the workflow and model used, and how long inference took.</li>
+<li><span class="term">One line per failure</span>: a checkout the server
+refused, an original that would not download, an upscale that errored, or a
+check-in the server rejected &mdash; each item is reported on its own and the
+batch continues.</li>
+<li><span class="term">One line when the batch finishes</span> with processed,
+succeeded and failed counts.</li>
+</ul>
+
+<h2>What this tool is not</h2>
+
+<ul>
+<li>It does not retouch, denoise by hand or change composition &mdash; it
+makes the same image bigger.</li>
+<li>It does not touch the original in a local source, and it does not run
+unattended: the batch stops when you close the step or press Stop.</li>
+<li>It needs the inference server. Fast works as soon as the server is
+running; quality and balanced additionally fetch their model on first use.</li>
+</ul>
+
+<div class="seealso">
+<h2>See also</h2>
+<ul>
+<li><a href="step1-datasource.html">Step 1 &mdash; Datasource</a> &mdash; the source every route reads</li>
+<li><a href="step1-limits.html">How many items to process</a></li>
+<li><a href="dedup.html">Deduplication</a> &mdash; the other catalog utility</li>
+<li><a href="admin-logs-support.html#logs">Logs, crashes and support</a> &mdash; where runs are recorded</li>
+</ul>
+</div>
+
+</body>
+</html>

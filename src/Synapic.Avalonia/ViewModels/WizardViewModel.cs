@@ -32,7 +32,8 @@ public partial class WizardViewModel : ViewModelBase
         Step2 = new Step2EngineViewModel(session, sidecar, engineStore, presetStore);
         Step3 = new Step3ProcessViewModel(session, sidecar, Step1);
         Step4 = new Step4ResultsViewModel(session, Step1, Step3);
-        Dedup = new StepDedupViewModel(step1: Step1, sidecar: sidecar);
+        Dedup = new StepDedupViewModel(step1: Step1);
+        Upscale = new StepUpscaleViewModel(step1: Step1, sidecar: sidecar);
 
         // Step 2's tag-field checkboxes gate navigation and the Step 3 Start
         // button; re-evaluate those commands whenever the selection changes.
@@ -40,6 +41,8 @@ public partial class WizardViewModel : ViewModelBase
         // Processing start/stop drives the wizard-wide navigation lock; the
         // shell's buttons only redraw when NotifyCanExecuteChanged fires.
         Step3.PropertyChanged += OnStep3PropertyChanged;
+        // The upscale run locks navigation exactly like a tagging batch.
+        Upscale.PropertyChanged += OnUpscalePropertyChanged;
 
         CurrentStep = Step1;
     }
@@ -69,13 +72,21 @@ public partial class WizardViewModel : ViewModelBase
             NotifyProcessingChanged();
     }
 
+    private void OnUpscalePropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(StepUpscaleViewModel.IsRunning))
+            NotifyProcessingChanged();
+    }
+
     public Step1DatasourceViewModel Step1 { get; }
     public Step2EngineViewModel Step2 { get; }
     public Step3ProcessViewModel Step3 { get; }
     public Step4ResultsViewModel Step4 { get; }
     public StepDedupViewModel Dedup { get; }
+    public StepUpscaleViewModel Upscale { get; }
 
-    // ── Route split (the app opens on a chooser: Tagging vs Deduplication) ──
+    // ── Route split (the app opens on a chooser: Tagging vs Deduplication vs
+    // Upscaling; each route shows only the steps its workflow needs) ────────
 
     /// <summary>
     /// True while the deduplication route owns the wizard: the shell offers only
@@ -86,10 +97,18 @@ public partial class WizardViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isDedupRoute;
 
+    /// <summary>
+    /// True while the upscaling route owns the wizard: Datasource → Upscaling
+    /// (the Daminion "Feature enhancement" utility), tagging steps hidden.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isUpscaleRoute;
+
     /// <summary>Enter the tagging route (start screen → Step 1 → … → Results).</summary>
     public void EnterTaggingRoute()
     {
         IsDedupRoute = false;
+        IsUpscaleRoute = false;
         ValidationError = null;
         CurrentStep = Step1;
     }
@@ -98,35 +117,65 @@ public partial class WizardViewModel : ViewModelBase
     public void EnterDedupRoute()
     {
         IsDedupRoute = true;
+        IsUpscaleRoute = false;
+        ValidationError = null;
+        CurrentStep = Step1;
+    }
+
+    /// <summary>Enter the upscaling route (start screen → Step 1 → Upscaling).</summary>
+    public void EnterUpscaleRoute()
+    {
+        IsDedupRoute = false;
+        IsUpscaleRoute = true;
         ValidationError = null;
         CurrentStep = Step1;
     }
 
     /// <summary>Engine/Process/Results tabs only exist in the tagging route.</summary>
-    public bool ShowTaggingTabs => !IsDedupRoute;
+    public bool ShowTaggingTabs => !IsDedupRoute && !IsUpscaleRoute;
 
     /// <summary>
     /// The Datasource tab reads as "step 1" of the tagging wizard (only once
-    /// you have left it) and as the first stop of the dedup route, where it is
-    /// always on screen — that is what makes the route look like Datasource →
-    /// Deduplication rather than one floating dedup tab.
+    /// you have left it) and as the first stop of the dedup/upscale routes,
+    /// where it is always on screen — that is what makes those routes look
+    /// like Datasource → their step rather than one floating tab.
     /// </summary>
-    public bool ShowDatasourceTab => IsDedupRoute || CurrentStepIndex > 0;
+    public bool ShowDatasourceTab => IsDedupRoute || IsUpscaleRoute || CurrentStepIndex > 0;
 
     /// <summary>
     /// The dedup tab is reachable from Step 1 in the dedup route (that is the
-    /// whole point of the split) and from Results in the tagging route.
+    /// whole point of the split) and from Results in the tagging route. It
+    /// hides while the upscale route owns the wizard.
     /// </summary>
+    public bool ShowDedupTab => !IsUpscaleRoute;
+
     public bool CanGoToDedupTab => IsDedupRoute || CurrentStepIndex >= 3;
 
-    partial void OnIsDedupRouteChanged(bool value)
+    /// <summary>The upscale tab hides while the dedup route owns the wizard (the
+    /// mirror image of ShowDedupTab).</summary>
+    public bool ShowUpscaleTab => !IsDedupRoute;
+
+    /// <summary>Reachable from Step 1 in the upscale route (the whole point of the
+    /// split) and from Results in the tagging route.</summary>
+    public bool CanGoToUpscaleTab => IsUpscaleRoute || CurrentStepIndex >= 3;
+
+    partial void OnIsDedupRouteChanged(bool value) => NotifyRouteGates();
+
+    partial void OnIsUpscaleRouteChanged(bool value) => NotifyRouteGates();
+
+    /// <summary>Re-evaluate everything whose state depends on which route owns the wizard.</summary>
+    private void NotifyRouteGates()
     {
         OnPropertyChanged(nameof(ShowTaggingTabs));
         OnPropertyChanged(nameof(ShowDatasourceTab));
+        OnPropertyChanged(nameof(ShowDedupTab));
         OnPropertyChanged(nameof(CanGoToDedupTab));
+        OnPropertyChanged(nameof(ShowUpscaleTab));
+        OnPropertyChanged(nameof(CanGoToUpscaleTab));
         OnPropertyChanged(nameof(NextButtonText));
         OnPropertyChanged(nameof(CurrentStepTitle));
         GoToDedupCommand.NotifyCanExecuteChanged();
+        GoToUpscaleCommand.NotifyCanExecuteChanged();
     }
 
     /// <summary>
@@ -154,6 +203,7 @@ public partial class WizardViewModel : ViewModelBase
         Step3ProcessViewModel => 2,
         Step4ResultsViewModel => 3,
         StepDedupViewModel => 4,
+        StepUpscaleViewModel => 5,
         _ => 0,
     };
 
@@ -164,13 +214,17 @@ public partial class WizardViewModel : ViewModelBase
     public bool CanStartOver => CurrentStepIndex > 0;
 
     /// <summary>Short hint under the nav bar (processing lock etc.).</summary>
-    public string NavHintText =>
-        IsNavigationLocked ? "Processing in progress — navigation locked. Abort from Step 3 first." : "";
+    public string NavHintText => !IsNavigationLocked ? ""
+        : Upscale.IsRunning
+            ? "Upscaling in progress — navigation locked. Press Stop first."
+            : "Processing in progress — navigation locked. Abort from Step 3 first.";
 
     /// <summary>Label of the forward action for the current step (shell nav bar).</summary>
     public string NextButtonText => CurrentStepIndex switch
     {
-        0 => IsDedupRoute ? "Next: Deduplication \u2192" : "Next: Engine \u2192",
+        0 => IsDedupRoute ? "Next: Deduplication \u2192"
+            : IsUpscaleRoute ? "Next: Upscaling \u2192"
+            : "Next: Engine \u2192",
         1 => "Next: Process \u2192",
         2 => "Next: Results \u2192",
         _ => "Start Over",
@@ -185,6 +239,7 @@ public partial class WizardViewModel : ViewModelBase
         OnPropertyChanged(nameof(CanGoToStep3Tab));
         OnPropertyChanged(nameof(CanGoToStep4Tab));
         OnPropertyChanged(nameof(CanGoToDedupTab));
+        OnPropertyChanged(nameof(CanGoToUpscaleTab));
         OnPropertyChanged(nameof(ShowDatasourceTab));
         OnPropertyChanged(nameof(CanStartOver));
         NextCommand.NotifyCanExecuteChanged();
@@ -200,11 +255,13 @@ public partial class WizardViewModel : ViewModelBase
         2 => "3 · Process",
         3 => "4 · Results",
         4 => "Deduplication",
+        5 => "Upscaling",
         _ => "",
     };
 
-    /// <summary>Navigation is locked while a batch runs (step3_process.py behavior).</summary>
-    public bool IsNavigationLocked => Step3.IsRunning;
+    /// <summary>Navigation is locked while a batch runs (step3_process.py behavior) —
+    /// including an upscale run, which is the same kind of batch.</summary>
+    public bool IsNavigationLocked => Step3.IsRunning || Upscale.IsRunning;
 
     /// <summary>Step-entry side effect; also invoked by the Back command.</summary>
     private async Task EnterStepAsync(ObservableObject step)
@@ -255,6 +312,14 @@ public partial class WizardViewModel : ViewModelBase
                     // feed the dedup scan, so Next skips Engine/Process/Results.
                     PrefillDedupSource();
                     await EnterStepAsync(Dedup);
+                    break;
+                }
+
+                if (IsUpscaleRoute)
+                {
+                    // Upscaling route: the datasource step feeds the upscale batch
+                    // (the step reads its source straight off Step 1 — no prefill).
+                    await EnterStepAsync(Upscale);
                     break;
                 }
 
@@ -340,6 +405,21 @@ public partial class WizardViewModel : ViewModelBase
 
     private bool CanOpenDedup() => !IsNavigationLocked;
 
+    [RelayCommand(CanExecute = nameof(CanOpenUpscale))]
+    private void GoToUpscale()
+    {
+        if (IsUpscaleRoute)
+        {
+            // Same gate as Next on Step 1: the upscale step needs a source, and
+            // the scope it uses is the one chosen right here.
+            var (valid, error) = _session.ValidateForStep2();
+            if (!valid) { ValidationError = error; return; }
+        }
+        _ = EnterStepAsync(Upscale);
+    }
+
+    private bool CanOpenUpscale() => !IsNavigationLocked;
+
     [RelayCommand(CanExecute = nameof(CanGoBack))]
     private void StartOver()
     {
@@ -356,6 +436,7 @@ public partial class WizardViewModel : ViewModelBase
         NextCommand.NotifyCanExecuteChanged();
         BackCommand.NotifyCanExecuteChanged();
         GoToDedupCommand.NotifyCanExecuteChanged();
+        GoToUpscaleCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(IsNavigationLocked));
         OnPropertyChanged(nameof(NavHintText));
         GoToStep2Command.NotifyCanExecuteChanged();

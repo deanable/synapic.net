@@ -138,6 +138,8 @@ public class SidecarDownloadServiceTests : IDisposable
 
         public string Tag { get; set; } = "v0.0.0";
 
+        public string? PublishedAt { get; set; } = "2026-09-25T17:15:40Z";
+
         public void Release(params (string Name, byte[] Bytes)[] assets)
         {
             _assets.Clear();
@@ -166,17 +168,23 @@ public class SidecarDownloadServiceTests : IDisposable
         {
             var url = request.RequestUri?.ToString() ?? string.Empty;
 
-            if (url.Contains("releases/latest", StringComparison.Ordinal))
+            // The service reads the recent-releases list (one request covers
+            // the download path and the startup update check).
+            if (url.Contains("/releases?per_page", StringComparison.Ordinal))
             {
-                var json = JsonSerializer.Serialize(new
+                var json = JsonSerializer.Serialize(new[]
                 {
-                    tag_name = Tag,
-                    assets = _assets.Select(a => new
+                    new
                     {
-                        name = a.Name,
-                        size = a.Bytes.Length,
-                        browser_download_url = UrlFor(a.Name),
-                    }).ToArray(),
+                        tag_name = Tag,
+                        published_at = PublishedAt,
+                        assets = _assets.Select(a => new
+                        {
+                            name = a.Name,
+                            size = a.Bytes.Length,
+                            browser_download_url = UrlFor(a.Name),
+                        }).ToArray(),
+                    },
                 });
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
                 {

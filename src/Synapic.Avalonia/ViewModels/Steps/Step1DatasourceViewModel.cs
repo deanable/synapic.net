@@ -223,6 +223,20 @@ public partial class Step1DatasourceViewModel : ViewModelBase
 
     public string Scope => ScopeIndexToString(ScopeIndex);
 
+    /// <summary>
+    /// Plain-language name of the chosen scope ("Entire catalog",
+    /// "Shared collection #7", …) — shared by every route that reads the
+    /// source back (deduplication, upscaling) so the wording lives in one
+    /// place, on the step that owns the choice.
+    /// </summary>
+    public string ScopeDescription => Scope switch
+    {
+        "collection" => $"Shared collection #{CollectionId}",
+        "saved_search" => $"Saved search #{SavedSearchId}",
+        "search" => $"Keyword search \"{SearchTerm}\"",
+        _ => "Entire catalog",
+    };
+
     partial void OnScopeIndexChanged(int value)
     {
         OnPropertyChanged(nameof(Scope));
