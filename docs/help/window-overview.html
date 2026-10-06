@@ -60,16 +60,19 @@ this &mdash; it is a developer-checkout message.</p>
 
 <h2>The setup panel</h2>
 
-<p>When Synapic cannot find a usable server, or when a variant is still missing,
-a panel appears under the toolbar listing each variant with its state and a way
-to get it: <span class="ui">Build sidecar</span> when this checkout can build,
-and <span class="ui">Download</span> to fetch the prebuilt executable from the
-latest release.</p>
+<p>When Synapic cannot find a usable server, or when a variant is missing or
+outdated, a panel appears under the toolbar listing each variant with its state
+and a way to get it: <span class="ui">Build sidecar</span> when this checkout
+can build, and <span class="ui">Download</span> to fetch the prebuilt executable
+from the latest release.</p>
 
-<p>A variant that already reads <span class="ui">Built</span> offers
-<span class="ui">Update</span> instead: it replaces that executable with a fresh
-one &mdash; building from source when this copy can, re-downloading the latest
-release when it cannot &mdash; and restarts a running server on the new build.</p>
+<p>A variant that already reads <span class="ui">Built</span> and is current
+shows a disabled <span class="ui">Up to date</span> marker instead: there is
+nothing to fetch or rebuild. When the row is outdated (it says
+<span class="ui">Update available</span>, or the startup check found a newer
+prebuilt on GitHub), it offers the <span class="ui">Build sidecar</span> and
+<span class="ui">Download</span> pair, and a running server is stopped and
+restarted on the replacement.</p>
 
 <ul>
 <li>The wizard below stays <span class="term">disabled</span> until at least one

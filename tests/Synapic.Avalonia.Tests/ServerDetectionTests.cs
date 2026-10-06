@@ -241,10 +241,10 @@ public class ServerDetectionTests
         }
     }
 
-    // ── Updating an already-built variant ───────────────────────────────────
+    // ── States of an already-built variant ───────────────────────────────────
 
     [AvaloniaFact]
-    public async Task Built_variant_offers_update_instead_of_build_or_download()
+    public async Task A_current_variant_offers_a_disabled_up_to_date_marker_instead_of_actions()
     {
         var rid = InferenceSidecarService.PreferredRid();
         var vm = new MainWindowViewModel(new FakeSidecar(), new FakeBuildService(), new Session(),
@@ -254,65 +254,66 @@ public class ServerDetectionTests
         var built = vm.SidecarVariants.Single(v => v.Rid == rid);
 
         Assert.True(built.IsBuilt);
+        // No enabled action when there is nothing to do - just the marker.
         Assert.False(built.IsBuildButtonVisible);
         Assert.False(built.IsDownloadButtonVisible);
-        Assert.True(built.IsUpdateButtonVisible);
-        Assert.True(built.UpdateCommand.CanExecute(null));
+        Assert.True(built.IsUpToDateVisible);
     }
 
     [AvaloniaFact]
-    public async Task Update_rebuilds_from_source_when_the_toolchain_is_available()
-    {
-        var rid = InferenceSidecarService.PreferredRid();
-        var build = new FakeBuildService();
-        var download = new FakeDownloadService();
-        var vm = new MainWindowViewModel(new FakeSidecar(), build, new Session(),
-            () => Exe, null, null, r => r == rid ? Exe : null, download: download);
-        await vm.DetectServerAsync();
-
-        await vm.SidecarVariants.Single(v => v.Rid == rid).UpdateCommand.ExecuteAsync(null);
-
-        Assert.Equal(new[] { rid }, build.BuiltRids);
-        Assert.Empty(download.DownloadedRids);
-    }
-
-    [AvaloniaFact]
-    public async Task Update_falls_back_to_the_release_when_this_machine_cannot_build()
+    public async Task A_machine_without_a_toolchain_offers_only_download()
     {
         var rid = InferenceSidecarService.PreferredRid();
         var build = new FakeBuildService { CanBuild = false };
         var download = new FakeDownloadService();
         var vm = new MainWindowViewModel(new FakeSidecar(), build, new Session(),
-            () => Exe, null, null, r => r == rid ? Exe : null, download: download);
+            () => null, null, null, _ => null, download: download);
         await vm.DetectServerAsync();
 
-        var built = vm.SidecarVariants.Single(v => v.Rid == rid);
-        await built.UpdateCommand.ExecuteAsync(null);
+        var row = vm.SidecarVariants.Single(v => v.Rid == rid);
+        Assert.False(row.IsBuildButtonVisible);
+        Assert.True(row.IsDownloadButtonVisible);
+
+        await row.DownloadCommand.ExecuteAsync(null);
 
         Assert.Equal(new[] { rid }, download.DownloadedRids);
         Assert.Empty(build.BuiltRids);
     }
 
     [AvaloniaFact]
-    public async Task Update_stops_a_running_server_and_starts_it_again_on_the_new_build()
+    public async Task A_newer_prebuilt_on_github_swaps_update_for_build_and_download()
     {
         var rid = InferenceSidecarService.PreferredRid();
-        var sidecar = new FakeSidecar();
         var build = new FakeBuildService();
-        var vm = new MainWindowViewModel(sidecar, build, new Session(),
-            () => Exe, null, null, r => r == rid ? Exe : null);
+        var download = new FakeDownloadService
+        {
+            UpdateInfo = new SidecarUpdateInfo("nightly", "2026-10-05T07:29:16Z", 100, LocalMissing: false),
+        };
+        var vm = new MainWindowViewModel(new FakeSidecar(), build, new Session(),
+            () => Exe, null, null, r => r == rid ? Exe : null, download: download);
         await vm.DetectServerAsync();
-        await vm.StartServerCommand.ExecuteAsync(null);
-        Assert.Equal(ServerUiState.Running, vm.ServerState);
 
-        await vm.SidecarVariants.Single(v => v.Rid == rid).UpdateCommand.ExecuteAsync(null);
+        var built = vm.SidecarVariants.Single(v => v.Rid == rid);
+        Assert.True(built.IsBuilt);
+        Assert.True(built.IsUpToDateVisible);   // current until GitHub says otherwise
 
-        // Windows will not let either the build or the file move overwrite a
-        // locked executable, and the replacement only counts once it is launched.
-        Assert.Equal(1, sidecar.StopCalls);
-        Assert.Equal(2, sidecar.StartCalls);
-        Assert.Equal(ServerUiState.Running, vm.ServerState);
-        Assert.Equal(new[] { rid }, build.BuiltRids);
+        await vm.CheckForSidecarUpdatesAsync();
+
+        // The row flips to the two ways forward, and the panel that holds them
+        // reopens even though nothing is stale on disk.
+        Assert.True(built.IsGitHubUpdate);
+        Assert.Contains("Build and Download", built.GitHubUpdateText);
+        Assert.True(built.IsBuildButtonVisible);
+        Assert.True(built.IsDownloadButtonVisible);
+        Assert.False(built.IsUpToDateVisible);
+        Assert.True(vm.IsSidecarPanelVisible);
+
+        // The bug this row guards against: Download must actually run for an
+        // executable that is already on disk - it used to be unreachable the
+        // moment a variant existed.
+        await built.DownloadCommand.ExecuteAsync(null);
+        Assert.Equal(new[] { rid }, download.DownloadedRids);
+        Assert.Empty(build.BuiltRids);
     }
 
     [AvaloniaFact]
@@ -333,9 +334,11 @@ public class ServerDetectionTests
             await vm.DetectServerAsync();
             Assert.False(vm.IsSidecarPanelVisible);
             Assert.All(vm.SidecarVariants, v => Assert.False(v.IsStale));
-            // Nothing is stale, but the button is still there: replacing a build is
-            // always legitimate, staleness only explains why it is worth doing.
-            Assert.All(vm.SidecarVariants, v => Assert.True(v.IsUpdateButtonVisible));
+            // Nothing is stale, so there is no action to offer: the row only
+            // shows the disabled "Up to date" marker.
+            Assert.All(vm.SidecarVariants, v => Assert.False(v.IsBuildButtonVisible));
+            Assert.All(vm.SidecarVariants, v => Assert.False(v.IsDownloadButtonVisible));
+            Assert.All(vm.SidecarVariants, v => Assert.True(v.IsUpToDateVisible));
 
             // Older than the sidecar source: an update exists, and the panel that
             // offers it has to come back into view to say so.
@@ -346,7 +349,11 @@ public class ServerDetectionTests
             var stale = vm.SidecarVariants.Single(v => v.Rid == rid);
             Assert.True(stale.IsStale);
             Assert.Contains("Update available", stale.StaleText);
-            Assert.True(stale.IsUpdateButtonVisible);
+            // An outdated row offers exactly two buttons - Build and Download -
+            // and never an enabled action when there is nothing to do.
+            Assert.True(stale.IsBuildButtonVisible);
+            Assert.True(stale.IsDownloadButtonVisible);
+            Assert.False(stale.IsUpToDateVisible);
         }
         finally
         {

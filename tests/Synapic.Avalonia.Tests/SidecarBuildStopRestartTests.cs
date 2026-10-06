@@ -10,9 +10,10 @@ namespace Synapic.Avalonia.Tests;
 /// Replacing the sidecar executable requires the server to be stopped first —
 /// on Windows a running process holds the executable open and PyInstaller dies
 /// with PermissionError only after minutes of packaging (the reproduced
-/// "cannot build from scratch" failure). The direct Build command now shares
-/// Update's stop/restart wrapper, and the build service itself sweeps orphans
-/// before starting PyInstaller.
+/// "cannot build from scratch" failure). The direct Build and Download
+/// commands share one stop/restart wrapper (Download replaces an outdated exe
+/// the server may be running from), and the build service itself sweeps
+/// orphans before starting PyInstaller.
 /// </summary>
 public class SidecarBuildStopRestartTests
 {
@@ -56,6 +57,43 @@ public class SidecarBuildStopRestartTests
             Assert.Equal(1, sidecar.StopCalls);
             Assert.Equal(cpu.Rid, Assert.Single(build.BuiltRids));
             Assert.Equal(1, sidecar.StartCalls);        // put back the way the user left it
+        }
+        finally
+        {
+            File.Delete(cudaExe);
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task Download_that_replaces_a_running_server_stops_it_first()
+    {
+        var cudaExe = MakeTempExe();
+        try
+        {
+            var sidecar = new FakeSidecar();
+            var download = new FakeDownloadService
+            {
+                UpdateInfo = new SidecarUpdateInfo("nightly", "2026-10-05T07:29:16Z", 1, LocalMissing: false),
+            };
+            var vm = new MainWindowViewModel(sidecar, new FakeBuildService(), new Session(),
+                sidecarExecutableLocator: () => cudaExe,
+                sidecarVariantLocator: rid => rid.EndsWith("-cuda", StringComparison.Ordinal) ? cudaExe : null,
+                download: download);
+            await vm.DetectServerAsync();
+            sidecar.RaiseStatus(SidecarStatus.Ready);   // the server is up, running from the CUDA exe
+            await vm.CheckForSidecarUpdatesAsync();     // GitHub: newer prebuilt than the exe on disk
+
+            // The outdated row offers Download; replacing the very exe the
+            // server runs from needs it stopped first (Windows locks a running
+            // exe, so the file move would otherwise fail).
+            var cuda = vm.SidecarVariants.Single(v => v.IsBuilt);
+            Assert.True(cuda.IsDownloadButtonVisible);
+            await cuda.DownloadCommand.ExecuteAsync(null);
+
+            Assert.Equal(new[] { cuda.Rid }, download.DownloadedRids);
+            Assert.Equal(1, sidecar.StopCalls);
+            Assert.Equal(1, sidecar.StartCalls);        // put back the way the user left it
+            Assert.Equal(ServerUiState.Running, vm.ServerState);
         }
         finally
         {

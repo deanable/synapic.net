@@ -300,14 +300,14 @@ public partial class MainWindowViewModel : ViewModelBase
 
     /// <summary>
     /// Shows the setup panel while any variant is still missing, or while a built
-    /// one trails the sidecar source - a stale executable is exactly when the
-    /// Update button is worth reaching for, so the panel must not hide itself
-    /// then. Deliberately not gated on CanBuild: a prebuilt executable can be
-    /// fetched from the GitHub release, so an installed app with no build scripts
-    /// can still pick up the variant it did not ship with (CUDA beside a CPU-only
-    /// install).
+    /// one is outdated - a stale executable, or a newer prebuilt on GitHub, is
+    /// exactly when the Build/Download pair must be reachable, so the panel must
+    /// not hide itself then. Deliberately not gated on CanBuild: a prebuilt
+    /// executable can be fetched from the GitHub release, so an installed app
+    /// with no build scripts can still pick up the variant it did not ship with
+    /// (CUDA beside a CPU-only install).
     /// </summary>
-    public bool IsSidecarPanelVisible => SidecarVariants.Any(v => !v.IsBuilt || v.IsStale);
+    public bool IsSidecarPanelVisible => SidecarVariants.Any(v => !v.IsBuilt || v.IsStale || v.IsGitHubUpdate);
 
     /// <summary>
     /// The wizard (datasource, engine, processing, results) is inert without a
@@ -392,7 +392,7 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             foreach (var rid in InferenceSidecarService.BuildableRids())
                 SidecarVariants.Add(new SidecarVariantViewModel(
-                    rid, DescribeVariant(rid), _build.CanBuild, BuildVariantAsync, DownloadVariantAsync, UpdateVariantAsync));
+                    rid, DescribeVariant(rid), _build.CanBuild, BuildVariantAsync, DownloadVariantAsync));
         }
 
         var repoRoot = InferenceSidecarService.FindRepoRoot();
@@ -401,7 +401,6 @@ public partial class MainWindowViewModel : ViewModelBase
             variant.CanBuild = _build.CanBuild;
             // A finished (or never-started) refresh re-arms every way of getting a variant.
             variant.CanDownload = true;
-            variant.CanUpdate = true;
             var exe = _findSidecarVariant(variant.Rid);
             variant.ApplyBuildState(exe, exe is null ? null : InferenceSidecarService.DescribeStaleness(exe, repoRoot));
         }
@@ -427,7 +426,7 @@ public partial class MainWindowViewModel : ViewModelBase
     /// <summary>
     /// Stop the managed server around a replacement of its executable, then
     /// put it back the way the user left it (started again on the new bytes).
-    /// Shared by the direct Build command and Update, so both paths get the
+    /// Shared by the Build and Download commands, so both paths get the
     /// same lock-avoidance; orphans that outlived a previous run are swept by
     /// the build service's own pre-flight.
     /// </summary>
@@ -464,7 +463,6 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             other.CanBuild = false;
             other.CanDownload = false;
-            other.CanUpdate = false;
         }
         variant.IsBuilding = true;
         variant.ResetBuildProgress();
@@ -499,28 +497,29 @@ public partial class MainWindowViewModel : ViewModelBase
     /// <summary>
     /// Fetches one variant from the GitHub release instead of compiling it -
     /// the way out for a machine with no Python/PyInstaller toolchain, and for
-    /// an installed app that wants a variant it did not ship with. Mirrors
-    /// <see cref="BuildVariantAsync"/>: one operation at a time, then re-detect
-    /// so the workspace unlocks the moment the file lands.
+    /// an installed app that wants a variant it did not ship with. The row only
+    /// offers Download while the variant is missing or outdated, so on an
+    /// outdated row this replaces the executable that is already there - which
+    /// needs the running server stopped first, exactly like a build (Windows
+    /// holds a running exe open, so the file move would fail otherwise).
+    /// Mirrors <see cref="BuildVariantAsync"/>: one operation at a time, then
+    /// re-detect so the workspace unlocks the moment the file lands.
     /// </summary>
-    private Task DownloadVariantAsync(SidecarVariantViewModel variant, CancellationToken ct) =>
-        DownloadVariantCoreAsync(variant, ct);
-
-    /// <summary>
-    /// The download half of an update: a variant that is already built is only
-    /// replaced on purpose (<paramref name="replaceExisting"/>), never as a side
-    /// effect of a refresh.
-    /// </summary>
-    private async Task DownloadVariantCoreAsync(SidecarVariantViewModel variant, CancellationToken ct, bool replaceExisting = false)
+    private async Task DownloadVariantAsync(SidecarVariantViewModel variant, CancellationToken ct)
     {
         if (variant.IsBuilding || variant.IsDownloading) return;
-        if (variant.IsBuilt && !replaceExisting) return;
+        await WithServerStoppedForReplacementAsync(
+            () => DownloadVariantCoreAsync(variant, ct), ct, "download");
+    }
+
+    private async Task DownloadVariantCoreAsync(SidecarVariantViewModel variant, CancellationToken ct)
+    {
+        if (variant.IsBuilding || variant.IsDownloading) return;
 
         foreach (var other in SidecarVariants)
         {
             other.CanBuild = false;
             other.CanDownload = false;
-            other.CanUpdate = false;
         }
         variant.IsDownloading = true;
         variant.ResetBuildProgress();
@@ -549,37 +548,6 @@ public partial class MainWindowViewModel : ViewModelBase
             IsBusy = false;
             // Re-detect: picks the new executable up and unlocks the wizard.
             await DetectServerAsync();
-        }
-    }
-
-    /// <summary>
-    /// Replaces an already-built variant with a fresh executable. Build and
-    /// Download both hide themselves once a variant exists, so without this a
-    /// newer sidecar had no way in at all - not rebuilt from source, not
-    /// re-fetched from the release. A source checkout rebuilds; a machine with no
-    /// toolchain (an installed app) takes what the latest release published.
-    /// A running server is stopped first - neither PyInstaller nor the file move
-    /// can overwrite a locked executable, and the replacement only takes effect
-    /// on the next launch anyway - then started again on the new bytes.
-    /// </summary>
-    private async Task UpdateVariantAsync(SidecarVariantViewModel variant, CancellationToken ct)
-    {
-        if (!variant.IsBuilt || variant.IsBusy || IsBusy) return;
-
-        variant.IsUpdating = true;
-        IsBusy = true;
-        try
-        {
-            await WithServerStoppedForReplacementAsync(
-                () => _build.CanBuild
-                    ? BuildVariantCoreAsync(variant, ct)
-                    : DownloadVariantCoreAsync(variant, ct, replaceExisting: true),
-                ct, "update");
-        }
-        finally
-        {
-            variant.IsUpdating = false;
-            IsBusy = false;
         }
     }
 
@@ -614,9 +582,9 @@ public partial class MainWindowViewModel : ViewModelBase
                     : "";
                 variant.GitHubUpdateText = info.LocalMissing
                     ? $"Prebuilt sidecar available on GitHub ({info.TagName}{published}) \u2014 use Download instead of building."
-                    : $"Newer prebuilt sidecar on GitHub ({info.TagName}{published}) \u2014 use Update instead of building.";
+                    : $"Newer prebuilt sidecar on GitHub ({info.TagName}{published}) \u2014 the row offers Build and Download: Download fetches this prebuilt, Build recompiles from source.";
                 AppendLog($"[update] GitHub offers a newer prebuilt {variant.DisplayName} sidecar ({info.TagName}{published}); " +
-                          "use Download/Update instead of building.");
+                          "use Download instead of building.");
                 SynapicLog.Info(nameof(MainWindowViewModel),
                     $"Sidecar update available for {variant.Rid}: {info.TagName}, " +
                     $"published {info.PublishedAt ?? "unknown"}, {info.TotalBytes:N0} bytes, localMissing={info.LocalMissing}");
@@ -627,6 +595,10 @@ public partial class MainWindowViewModel : ViewModelBase
                     $"Sidecar update check failed for {variant.Rid}: {e.Message}");
             }
         }
+
+        // A GitHub-newer row reopens the setup panel: the note lives inside it,
+        // and so do the Build/Download buttons it points at.
+        NotifySidecarSetupChanged();
     }
 
     private void OnSidecarStatusChanged(object? sender, SidecarStatusChangedEventArgs e)

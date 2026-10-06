@@ -64,9 +64,11 @@ toolchain, and works offline once its packages are cached.</p>
 <p>Synapic also checks GitHub for a newer prebuilt server every time it starts.
 When the release page carries a fresher executable than the one on disk &mdash;
 or no executable exists yet &mdash; a gold note appears on the row naming the
-release (for example <span class="ui">nightly</span>) and pointing at
-<span class="ui">Download</span> or <span class="ui">Update</span> as the quick
-alternative to a local build. The check never blocks startup: if GitHub is
+release (for example <span class="ui">nightly</span>). The row then offers
+exactly two buttons, <span class="ui">Build sidecar</span> and
+<span class="ui">Download</span>, so the note is pointing at
+<span class="ui">Download</span> as the quick alternative to a local build.
+The check never blocks startup: if GitHub is
 unreachable it stays silent, and a local build that is newer than the release
 is not offered back to you.</p>
 
@@ -87,13 +89,20 @@ one cannot break the other.</p>
 
 <h2>Updating or replacing the server</h2>
 
-<p>Press <span class="ui">Update</span> on the row. Synapic stops the server if
-it is running, replaces that variant's executable &mdash; building it from source
-when this copy has the Python toolchain, or fetching the newest released
-executable for that variant when it does not &mdash; and starts the server again
-on the replacement. A row whose executable is older than the inference source it
-was built from says so (<span class="ui">Update available</span>), which is the
-reminder that a fresh one exists.</p>
+<p>When a row is <em>outdated</em> &mdash; its executable is older than the
+inference source it was built from (the row says
+<span class="ui">Update available</span>), or the startup check found a newer
+prebuilt on GitHub (the gold note) &mdash; that row offers exactly two buttons:
+<span class="ui">Build sidecar</span> to recompile from source, or
+<span class="ui">Download</span> to fetch the released executable instead.
+Whichever you pick, Synapic stops the server if it is running, replaces that
+variant's executable, and starts the server again on the replacement.</p>
+
+<p>When a row is already current, no action is offered: the button is relabelled
+<span class="ui">Up to date</span> and disabled, because there is nothing to
+fetch or rebuild. The moment the source or the release moves ahead, the row
+opens up to <span class="ui">Build sidecar</span> and
+<span class="ui">Download</span> again.</p>
 
 <p>You can also do it by hand, which is the way to pin a specific release rather
 than the newest one. The server is one self-contained executable: put the new
@@ -128,7 +137,7 @@ href="admin-deploy.html">Deploying to many machines</a>.</p>
 <tr><td>Build fails part-way</td><td>The log pane has the build's own output. A failed first build is usually the network (fetching Python or packages), and rebuilding after the network is back is the fix.</td></tr>
 <tr><td>Download fails</td><td>The log pane names the release, the asset and the HTTP status. The usual cause is a release without this platform's server, or no network; <span class="ui">Build sidecar</span> is the way round it when this checkout has the toolchain.</td></tr>
 <tr><td>Status stuck on <span class="ui">Server starting&hellip;</span></td><td>A cold start really can take up to two minutes. If it exceeds that, the log says why; see <a href="troubleshooting.html#sidecar">Troubleshooting: the inference server</a>.</td></tr>
-<tr><td><span class="ui">stale build, rebuild recommended</span>, or <span class="ui">Update available</span> on a row</td><td>Developer checkouts only: the server executable is older than the inference source it was built from. Press <span class="ui">Update</span> on that row; a running server is stopped and started again on the new build.</td></tr>
+<tr><td><span class="ui">stale build, rebuild recommended</span>, or <span class="ui">Update available</span> on a row</td><td>Developer checkouts only: the server executable is older than the inference source it was built from. Use <span class="ui">Build sidecar</span> or <span class="ui">Download</span> on that row; a running server is stopped and started again on the new build.</td></tr>
 </table>
 
 <div class="seealso">

@@ -9,8 +9,9 @@ namespace Synapic.Avalonia.ViewModels;
 /// <summary>
 /// One sidecar variant (CPU or CUDA) as shown in the startup setup panel:
 /// whether it exists on disk, where it lives, and how to get it - build it from
-/// source, fetch the executable the GitHub release already published, or replace
-/// one that is already there.
+/// source or fetch the executable the GitHub release already published. A row
+/// that exists and is current offers no action at all, only a disabled
+/// "Up to date" marker.
 /// The sidecar is the pivotal part of the app - nothing can be tagged without
 /// it - so the panel is the only interactive surface until one variant exists.
 /// </summary>
@@ -18,18 +19,15 @@ public partial class SidecarVariantViewModel : ViewModelBase
 {
     private readonly Func<SidecarVariantViewModel, CancellationToken, Task> _buildAsync;
     private readonly Func<SidecarVariantViewModel, CancellationToken, Task> _downloadAsync;
-    private readonly Func<SidecarVariantViewModel, CancellationToken, Task> _updateAsync;
     private bool _canBuild;
     private bool _canDownload = true;
-    private bool _canUpdate = true;
 
     public SidecarVariantViewModel(
         string rid,
         string detail,
         bool canBuild,
         Func<SidecarVariantViewModel, CancellationToken, Task> buildAsync,
-        Func<SidecarVariantViewModel, CancellationToken, Task> downloadAsync,
-        Func<SidecarVariantViewModel, CancellationToken, Task> updateAsync)
+        Func<SidecarVariantViewModel, CancellationToken, Task> downloadAsync)
     {
         Rid = rid;
         DisplayName = InferenceSidecarService.VariantDisplayName(rid);
@@ -37,10 +35,8 @@ public partial class SidecarVariantViewModel : ViewModelBase
         _canBuild = canBuild;
         _buildAsync = buildAsync;
         _downloadAsync = downloadAsync;
-        _updateAsync = updateAsync;
         BuildCommand = new AsyncRelayCommand(ct => _buildAsync(this, ct), () => CanBuildNow);
         DownloadCommand = new AsyncRelayCommand(ct => _downloadAsync(this, ct), () => CanDownloadNow);
-        UpdateCommand = new AsyncRelayCommand(ct => _updateAsync(this, ct), () => CanUpdateNow);
     }
 
     public string Rid { get; }
@@ -52,25 +48,15 @@ public partial class SidecarVariantViewModel : ViewModelBase
 
     public AsyncRelayCommand BuildCommand { get; }
 
-    /// <summary>Fetches the prebuilt executable from the GitHub release instead of compiling it.</summary>
+    /// <summary>Fetches the prebuilt executable from the GitHub release instead
+    /// of compiling it - also how an outdated build is replaced by the release.</summary>
     public AsyncRelayCommand DownloadCommand { get; }
-
-    /// <summary>
-    /// Replaces an executable that already exists: the only action offered once a
-    /// variant is built, because Build and Download both hide themselves then -
-    /// which left a sidecar that trails its source with no way back in.
-    /// </summary>
-    public AsyncRelayCommand UpdateCommand { get; }
 
     [ObservableProperty]
     private bool _isBuilt;
 
     [ObservableProperty]
     private bool _isDownloading;
-
-    /// <summary>True while an existing executable is being replaced.</summary>
-    [ObservableProperty]
-    private bool _isUpdating;
 
     [ObservableProperty]
     private string _exePath = string.Empty;
@@ -137,31 +123,34 @@ public partial class SidecarVariantViewModel : ViewModelBase
         }
     }
 
-    /// <summary>False while another row is busy - only one operation runs at a time.</summary>
-    public bool CanUpdate
-    {
-        get => _canUpdate;
-        set
-        {
-            if (SetProperty(ref _canUpdate, value)) NotifyCommands();
-        }
-    }
+    /// <summary>
+    /// True while the variant has no executable on disk, or the one it has
+    /// trails the sidecar source or the GitHub release - exactly the states in
+    /// which the panel offers the two ways forward (Build and Download) and
+    /// withholds Update.
+    /// </summary>
+    public bool IsMissingOrOutdated => !IsBuilt || IsStale || IsGitHubUpdate;
 
-    /// <summary>Shown only for a variant that still needs building.</summary>
-    public bool IsBuildButtonVisible => CanBuild && !IsBuilt && !IsBusy;
+    /// <summary>Offered whenever the variant still needs getting: a missing
+    /// variant is built, an outdated one is rebuilt over what is there.</summary>
+    public bool IsBuildButtonVisible => CanBuild && IsMissingOrOutdated && !IsBusy;
 
-    /// <summary>The alternative to building: fetch what the latest release already published.</summary>
-    public bool IsDownloadButtonVisible => CanDownload && !IsBuilt && !IsBusy;
+    /// <summary>The alternative to building: fetch what the latest release
+    /// already published, replacing an outdated executable when there is one.</summary>
+    public bool IsDownloadButtonVisible => CanDownload && IsMissingOrOutdated && !IsBusy;
 
-    /// <summary>The only action offered for a variant that is already built.</summary>
-    public bool IsUpdateButtonVisible => CanUpdate && IsBuilt && !IsBusy;
+    /// <summary>
+    /// The no-action state: the executable exists and neither the source nor
+    /// the GitHub release has anything newer for it. Rendered as a disabled
+    /// "Up to date" button, so the row still has the shape of the ones that do
+    /// offer actions but cannot be pressed.
+    /// </summary>
+    public bool IsUpToDateVisible => IsBuilt && !IsMissingOrOutdated && !IsBusy;
 
-    /// <summary>One progress bar serves all three operations, so they must never overlap.</summary>
-    public bool IsBusy => IsBuilding || IsDownloading || IsUpdating;
+    /// <summary>One progress bar serves all operations, so they must never overlap.</summary>
+    public bool IsBusy => IsBuilding || IsDownloading;
 
-    public string StatusText => IsUpdating
-        ? "Updating\u2026"
-        : IsBuilding ? "Building\u2026"
+    public string StatusText => IsBuilding ? "Building\u2026"
         : IsDownloading ? "Downloading\u2026"
         : IsBuilt ? (SizeText.Length > 0 ? $"Built ({SizeText})" : "Built")
         : "Not built";
@@ -187,10 +176,10 @@ public partial class SidecarVariantViewModel : ViewModelBase
     {
         BuildCommand.NotifyCanExecuteChanged();
         DownloadCommand.NotifyCanExecuteChanged();
-        UpdateCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(IsMissingOrOutdated));
         OnPropertyChanged(nameof(IsBuildButtonVisible));
         OnPropertyChanged(nameof(IsDownloadButtonVisible));
-        OnPropertyChanged(nameof(IsUpdateButtonVisible));
+        OnPropertyChanged(nameof(IsUpToDateVisible));
         OnPropertyChanged(nameof(IsBusy));
         OnPropertyChanged(nameof(StatusText));
         OnPropertyChanged(nameof(StatusBrush));
@@ -219,11 +208,11 @@ public partial class SidecarVariantViewModel : ViewModelBase
         else Dispatcher.UIThread.Post(Apply);
     }
 
-    private bool CanBuildNow => CanBuild && !IsBuilt && !IsBusy;
+    // Can-execute mirrors the button visibility exactly: a command may never
+    // run in a state its button is hidden in (and vice versa).
+    private bool CanBuildNow => CanBuild && IsMissingOrOutdated && !IsBusy;
 
-    private bool CanDownloadNow => CanDownload && !IsBuilt && !IsBusy;
-
-    private bool CanUpdateNow => CanUpdate && IsBuilt && !IsBusy;
+    private bool CanDownloadNow => CanDownload && IsMissingOrOutdated && !IsBusy;
 
     partial void OnIsBuiltChanged(bool value) => NotifyCommands();
 
@@ -231,15 +220,20 @@ public partial class SidecarVariantViewModel : ViewModelBase
 
     partial void OnIsDownloadingChanged(bool value) => NotifyCommands();
 
-    partial void OnIsUpdatingChanged(bool value) => NotifyCommands();
-
     partial void OnStaleNoticeChanged(string? value)
     {
         OnPropertyChanged(nameof(IsStale));
         OnPropertyChanged(nameof(StaleText));
+        // Staleness flips which pair of buttons the row shows.
+        NotifyCommands();
     }
 
-    partial void OnGitHubUpdateTextChanged(string? value) => OnPropertyChanged(nameof(IsGitHubUpdate));
+    partial void OnGitHubUpdateTextChanged(string? value)
+    {
+        OnPropertyChanged(nameof(IsGitHubUpdate));
+        // The startup GitHub check flips the row from Update to Build+Download.
+        NotifyCommands();
+    }
 
     partial void OnHasProgressChanged(bool value) => OnPropertyChanged(nameof(IsBuildIndeterminate));
 

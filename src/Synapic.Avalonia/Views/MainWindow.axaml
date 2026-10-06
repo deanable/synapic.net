@@ -73,13 +73,14 @@
                                Value="{Binding BuildPercent}" Maximum="100"
                                Width="170" Height="6" VerticalAlignment="Center" />
                   <Button Content="Build sidecar" Command="{Binding BuildCommand}"
-                          IsVisible="{Binding IsBuildButtonVisible}" />
+                          IsVisible="{Binding IsBuildButtonVisible}"
+                          ToolTip.Tip="Compile this variant from source; replaces an outdated executable with fresh bytes" />
                   <Button Content="Download" Command="{Binding DownloadCommand}"
                           IsVisible="{Binding IsDownloadButtonVisible}"
-                          ToolTip.Tip="Fetch the prebuilt executable from the latest GitHub release instead of compiling it" />
-                  <Button Content="Update" Command="{Binding UpdateCommand}"
-                          IsVisible="{Binding IsUpdateButtonVisible}"
-                          ToolTip.Tip="Replace this server: rebuilds it from source, or re-fetches the prebuilt executable from the latest GitHub release when this machine has no toolchain. A running server is stopped and restarted." />
+                          ToolTip.Tip="Fetch the prebuilt executable from the latest GitHub release instead of compiling it; replaces an outdated executable" />
+                  <Button Content="Up to date" IsEnabled="False"
+                          IsVisible="{Binding IsUpToDateVisible}"
+                          ToolTip.Tip="Nothing to do: this executable matches the source it was built from, and the GitHub release carries nothing newer for it." />
                   <TextBlock Text="{Binding BuildStage}" IsVisible="{Binding IsBusy}"
                              VerticalAlignment="Center" Opacity="0.8" FontSize="11"
                              TextTrimming="CharacterEllipsis" />

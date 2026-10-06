@@ -88,10 +88,11 @@ The shell. Owns:
   buildable RID), `IsSidecarReady`, `IsSidecarRequired`,
   `IsSidecarPanelVisible`, and `IsWorkspaceEnabled` (the whole wizard is inert
   until a sidecar exists). `IsSidecarPanelVisible` also stays true while a
-  built variant is stale, so the panel that offers **Update** cannot hide
-  itself exactly when a newer sidecar exists. `UpdateVariantAsync` stops a
-  running server first (a locked exe can be neither rebuilt nor overwritten)
-  and starts it again on the replacement.
+  built variant is outdated - stale, or with a newer prebuilt on GitHub - so
+  the panel that offers the **Build**/**Download** pair cannot hide itself
+  exactly when a newer sidecar exists. `DownloadVariantAsync` stops a running
+  server first (a locked exe can be neither rebuilt nor overwritten) and starts
+  it again on the replacement, as does a build.
 - `ApplyDownloadStatus(HealthResponse)` — drives the model-download progress
   bar/text from the `/health` `download` field; also emits one log line per
   status transition.
@@ -102,9 +103,10 @@ The shell. Owns:
 - `CheckForSidecarUpdatesAsync()` — the always-on GitHub check, run by `App`
   right after detection: for every buildable variant, is there a prebuilt file
   on GitHub newer than the executable on disk (or no executable at all)? Sets
-  the row's `GitHubUpdateText` / `IsGitHubUpdate` so the panel points at
-  Download/Update instead of a local build, logs one line per offer, and the
-  offer is cleared once the variant is built or downloaded. Advisory by
+  the row's `GitHubUpdateText` / `IsGitHubUpdate`, which flips an outdated row
+  to the **Build**/**Download** pair (and reopens the panel) so the prebuilt is
+  offered instead of a local build; it logs one line per offer, and the offer
+  is cleared once the variant is built or downloaded. Advisory by
   design: failures log and return, nothing blocks startup, and only the real
   desktop launch reaches it (headless test sessions never do).
 - Help: `OpenHelpCommand` (the toolbar **Help** button) opens
@@ -144,25 +146,27 @@ Step 2 settings are persisted when leaving the engine step.
 
 ### `SidecarVariantViewModel`
 One buildable variant row (CPU / CUDA): `Rid`, `DisplayName`, `Detail`,
-`IsBuilt`, `ExePath`, `SizeText`, `IsBuilding`, `IsDownloading`, `IsUpdating`,`BuildPercent`, `BuildStage`, `HasProgress`, `StatusText`, `StatusBrush`,
+`IsBuilt`, `ExePath`, `SizeText`, `IsBuilding`, `IsDownloading`,
+`BuildPercent`, `BuildStage`, `HasProgress`, `StatusText`, `StatusBrush`,
 `StaleNotice` / `IsStale` / `StaleText`, `GitHubUpdateText` / `IsGitHubUpdate`
-(the startup GitHub check's "Download instead of building" note), and three
-commands. Progress updates are
-marshalled to the UI thread.
+(the startup GitHub check's "Download instead of building" note), and two
+commands. Progress updates are marshalled to the UI thread.
 
-- `BuildCommand` — visible while the variant does not exist yet.
-- `DownloadCommand` — also while it does not exist yet: the prebuilt exe from
-  the latest release instead of a compile.
-- `UpdateCommand` — the only action left once `IsBuilt`, because a sidecar that
-  trails its source otherwise had no way back in. `MainWindowViewModel`
-  rebuilds from source when `ISidecarBuildService.CanBuild`, and falls back to
-  the release download when this machine has no toolchain.
+- `BuildCommand` / `DownloadCommand` — the pair shown while the variant is
+  missing or outdated (`IsMissingOrOutdated`): compile it, or take the prebuilt
+  exe from the latest release instead. On an outdated variant Download replaces
+  the executable on disk (stop → fetch → restart, like a rebuild).
+- `IsUpToDateVisible` — the no-action state: built and current, rendered as a
+  disabled **Up to date** button. There is deliberately no update command: a
+  row with nothing to fetch or rebuild offers no enabled action at all.
 
-`IsBuildButtonVisible` / `IsDownloadButtonVisible` / `IsUpdateButtonVisible`
-are the visibility gates the axaml binds; exactly one is true per row.
-`ApplyBuildState(exePath, staleNotice)` applies detection, and `CanBuild` /
-`CanDownload` / `CanUpdate` are false for every row while any operation runs
-(one progress bar is shared by all three).
+`IsBuildButtonVisible` / `IsDownloadButtonVisible` / `IsUpToDateVisible`
+are the visibility gates the axaml binds: Build+Download together for a
+missing or outdated row, the disabled marker for a current one - never both
+at once, and all three hidden while the row itself runs an operation (one
+shared progress bar). `ApplyBuildState(exePath, staleNotice)` applies
+detection, and `CanBuild` / `CanDownload` are false for every row while any
+operation runs (one progress bar is shared by both).
 
 ### `Steps/Step1DatasourceViewModel`
 - Datasource type (`local` / `daminion`) with settable radio bindings
