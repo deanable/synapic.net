@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Numerics;
 using System.Security.Cryptography;
 using MetadataExtractor.Formats.Exif;
 using NetVips;
@@ -423,12 +424,17 @@ public sealed class DedupService : IDedupService
 
         // Normalize hamming distance to a 0-1 similarity; threshold 0.90 → ≤6 bits differ.
         var maxDistance = (int)Math.Round(64 * (1.0 - opts.Threshold));
+        // Hoist the hash values into an array: this is the O(n²) hot loop, and
+        // two dictionary lookups per pair dominate it on a large scope.
+        var values = new ulong[items.Length];
+        for (var i = 0; i < items.Length; i++) values[i] = hashes[items[i]];
+
         for (var i = 0; i < items.Length; i++)
         {
+            var value = values[i];
             for (var j = i + 1; j < items.Length; j++)
             {
-                var distance = HammingDistance(hashes[items[i]], hashes[items[j]]);
-                if (distance <= maxDistance) Union(items[i], items[j]);
+                if (HammingDistance(value, values[j]) <= maxDistance) Union(items[i], items[j]);
             }
         }
 
@@ -451,15 +457,5 @@ public sealed class DedupService : IDedupService
         }
     }
 
-    private static int HammingDistance(ulong a, ulong b)
-    {
-        var x = a ^ b;
-        var count = 0;
-        while (x != 0)
-        {
-            x &= x - 1;
-            count++;
-        }
-        return count;
-    }
+    private static int HammingDistance(ulong a, ulong b) => BitOperations.PopCount(a ^ b);
 }

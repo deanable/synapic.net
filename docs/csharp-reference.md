@@ -244,8 +244,10 @@ Algorithm (PHash/DHash/AHash/ColorMoment) + threshold over two sources — the
 same radio pattern as Step 1: `IsLocalSelected`/`IsDaminionSelected` pick a
 local `FolderPath` or the Step 1 Daminion scope (`DaminionScopeSummary`, fed by
 the injected `Step1DatasourceViewModel` + sidecar). `ScanCommand` enumerates
-supported extensions (local) or downloads each original to a temp file, hashes
-it and deletes it again (Daminion), producing `Groups` — a vertical list of
+supported extensions (local) or fetches Daminion items and groups them: items 
+with a server `HashCode` are grouped without download; items without fall back 
+to downloading each original, hashing it, and deleting the temp file. Produces 
+`Groups` — a vertical list of
 `DuplicateGroupViewModel` cards, each holding `DedupItemViewModel` rows with an
 `IsChecked` keep checkbox (checked = kept; unchecked = action target). The
 `SelectOldest`/`SelectNewest`/`SelectSmallest`/`SelectLargest` auto-select
@@ -405,10 +407,27 @@ parameter set (documented on the interface).
 
 **`DaminionModels`** — response wrappers tolerant of server-version key
 variation (`mediaItems` / `items` / `data`, `count` / `totalCount` / `data`),
-`DaminionItem` (+ `Dimensions`), `DaminionSavedSearch`, `DaminionCollection`,
+`DaminionItem` (+ `Dimensions`, + `HashCode`, + `FileSize`), `DaminionSavedSearch`, 
+`DaminionCollection`,
 `DaminionVerifyResult`, `DaminionBatchChangeRequest`,
 `DaminionTagOperation`, `DaminionRemoveRequest` (ids + delete flag),
 `DaminionRemoveResponse` (per-id status map + success/errorCode envelope).
+
+`DaminionItem.HashCode` is the server-computed content hash from the Daminion 
+API's `/api/MediaItems/Get` response (`hashCode` field). It is recalculated 
+when a file or new file version is imported. Synapic uses it in the dedup scan 
+as a free grouping key: items whose `HashCode` matches are grouped together 
+without downloading the original or computing an algorithmic hash. The field is 
+nullable — older server builds or scoped queries may omit it, and a missing 
+value falls back to the download-and-hash path. The API's `fileSize` is carried
+through as the dedup record's size on the no-download path, so the
+smallest/largest auto-select rules still work there. **Caveat:** the Daminion API 
+docs describe `hashCode` as a content hash but do not state whether it is 
+perceptual (tolerant of resize/re-encode) or exact (byte-identical only). 
+Until verified on a live catalog, `HashCode` is fed into the same 64-bit 
+comparison space as the algorithmic hashes (grouped by the threshold's hamming 
+distance); each scan's diagnostic summary reports the hashCode distribution to 
+help settle exactness.
 
 **`DaminionConnectionStore`** — Windows-registry persistence of the Step 1
 form (`HKCU\Software\Synapic\Daminion`), with the password DPAPI-protected
@@ -464,11 +483,18 @@ fetching, throttling, pause/cancel, progress with ETA, error isolation and the
   `TagFieldSelection`, `DatasourceSelection`, `ProcessWorkItem`,
   `ProcessProgress(...)` (+ `FormatDuration`, the shared ETA-line formatter).
 
-**`DedupScanHandler`** — the Daminion dedup scan's per-item operation:
-download original → hash → record (`DedupScanRecord`) → delete the temp file,
-with `DownloadFailures`/`HashFailures` counters and the `Hashes`/`Records`
-dictionaries the step builds its groups from. Runs one item at a time so a
-large scope never lands on disk whole. The local scan stays a direct
+**`DedupScanHandler`** — the Daminion dedup scan's per-item operation.
+For items that carry a server-computed `HashCode` (from `DaminionItem`), the 
+item is grouped directly from that hash — no download, no algorithmic hash. 
+For items without a server hash (older server builds, or scoped queries that 
+omit it), the original is downloaded and hashed the old way (download → 
+`DedupService.ComputeHash` → record → delete temp). One item at a time keeps 
+a large scope from landing on disk whole. Counters: 
+`ServerHashGrouped` (items grouped from server hash only), 
+`DownloadFailures`, `HashFailures`. Produces `Hashes` 
+(`Dictionary<string, ulong>`, keyed `"daminion:{id}"`) and `Records` 
+(`Dictionary<string, DedupScanRecord>`) the step builds its groups from via 
+`IDedupService.GroupFromHashes`. The local scan stays a direct
 `DedupService` call (no downloads involved).
 
 **`UpscaleItemHandler`** — the upscale workflow's per-item operation (port of

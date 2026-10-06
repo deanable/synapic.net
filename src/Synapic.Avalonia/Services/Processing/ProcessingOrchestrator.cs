@@ -329,4 +329,28 @@ public sealed record ProcessWorkItem
     public string? LocalPath { get; init; }
     public int? DaminionId { get; init; }
     public required string FileName { get; init; }
+
+    /// <summary>
+    /// The Daminion server's content hash for this item, when the server
+    /// included it in the response. When this is set the dedup scan can group
+    /// the item from the server hash alone — no download, no algorithmic hash.
+    /// Items whose server hash is 0 or missing still go through the
+    /// download-and-hash path.
+    /// </summary>
+    public long ServerHashCode { get; init; }
+
+    /// <summary>
+    /// Server-reported file size in bytes for a Daminion item (the API's
+    /// <c>fileSize</c>), or 0 when unknown. Lets the dedup review offer
+    /// size-based auto-select for items grouped from their server hash — the
+    /// path that deliberately never downloads the original.
+    /// </summary>
+    public long SizeBytes { get; init; }
+
+    /// <summary>
+    /// Best available date for this item: EXIF capture date, else file creation
+    /// date (for Daminion items the server may include this, otherwise it is
+    /// filled in later from the downloaded original or left null).
+    /// </summary>
+    public DateTime? DateTakenUtc { get; init; }
 }

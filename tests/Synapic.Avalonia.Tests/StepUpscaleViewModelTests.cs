@@ -195,8 +195,8 @@ public class StepUpscaleViewModelTests
             Assert.Contains(vm.LogLines, l => l.Contains("Upscale run started.", StringComparison.Ordinal));
             var parameters = vm.LogLines.Single(l => l.Contains("Parameters:", StringComparison.Ordinal));
             Assert.Equal(
-                "Parameters: workflow=balanced, factor=4x, precision=auto, output=keep, " +
-                "quality=88, denoise=0.50, sharpen=0.25, overwrite=true",
+                "Parameters: workflow=balanced, factor=4x, precision=auto, max_dimension=2048, " +
+                "output=keep, quality=88, denoise=0.50, sharpen=0.25, overwrite=true",
                 parameters[(parameters.IndexOf(']') + 2)..]);      // strip "[HH:mm:ss] "
             Assert.Contains(vm.LogLines, l => l.Contains("Done. Processed 0", StringComparison.Ordinal));
         }

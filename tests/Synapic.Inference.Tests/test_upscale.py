@@ -194,6 +194,46 @@ class TestUpscaleFastWorkflow:
         assert Path(resp.json()["output_path"]) == target
         assert target.is_file()
 
+    def test_max_dimension_caps_the_input_before_upscaling(self, client, tmp_path):
+        """A source larger than max_dimension is capped first: the output is
+        (capped input) x factor, while the reported original stays the source size."""
+        image = _make_image(tmp_path / "huge.png", size=(64, 32))
+        resp = client.post(
+            "/upscale",
+            json={
+                "image_path": str(image),
+                "options": {"workflow": "fast", "factor": 2, "max_dimension": 16},
+            },
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert (body["original_width"], body["original_height"]) == (64, 32)
+        assert (body["width"], body["height"]) == (32, 16)
+
+    def test_max_dimension_zero_disables_the_cap(self, client, tmp_path):
+        image = _make_image(tmp_path / "photo.png", size=(64, 32))
+        resp = client.post(
+            "/upscale",
+            json={
+                "image_path": str(image),
+                "options": {"workflow": "fast", "factor": 2, "max_dimension": 0},
+            },
+        )
+        assert resp.status_code == 200, resp.text
+        assert (resp.json()["width"], resp.json()["height"]) == (128, 64)
+
+    def test_input_within_max_dimension_is_not_resampled(self, client, tmp_path):
+        image = _make_image(tmp_path / "photo.png", size=(64, 32))
+        resp = client.post(
+            "/upscale",
+            json={
+                "image_path": str(image),
+                "options": {"workflow": "fast", "factor": 2, "max_dimension": 2048},
+            },
+        )
+        assert resp.status_code == 200, resp.text
+        assert (resp.json()["width"], resp.json()["height"]) == (128, 64)
+
     def test_sharpen_amount_applies_without_error(self, client, tmp_path):
         image = _make_image(tmp_path / "photo.png")
         resp = client.post(
@@ -261,6 +301,36 @@ class TestUpscaleAiWorkflows:
             expected = source.convert("RGB").resize((32, 24), Image.Resampling.LANCZOS)
         with Image.open(resp.json()["output_path"]) as actual:
             assert actual.convert("RGB").tobytes() == expected.tobytes()
+
+    def test_max_dimension_caps_the_model_input(self, client, tmp_path, fake_swin2sr):
+        image = _make_image(tmp_path / "big.png", size=(64, 32))
+        resp = client.post(
+            "/upscale",
+            json={
+                "image_path": str(image),
+                "options": {"workflow": "quality", "factor": 2, "max_dimension": 16},
+            },
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert (body["original_width"], body["original_height"]) == (64, 32)
+        assert (body["width"], body["height"]) == (32, 16)
+
+    def test_balanced_and_quality_agree_on_capped_output_size(
+        self, client, tmp_path, fake_swin2sr
+    ):
+        """Both AI workflows must size their output from the capped model input,
+        not from the original source."""
+        image = _make_image(tmp_path / "big.png", size=(64, 32))
+        resp = client.post(
+            "/upscale",
+            json={
+                "image_path": str(image),
+                "options": {"workflow": "balanced", "factor": 2, "max_dimension": 16},
+            },
+        )
+        assert resp.status_code == 200, resp.text
+        assert (resp.json()["width"], resp.json()["height"]) == (32, 16)
 
     def test_alpha_channel_survives(self, client, tmp_path, fake_swin2sr):
         image = _make_image(tmp_path / "cutout.png", mode="RGBA", size=(16, 12))

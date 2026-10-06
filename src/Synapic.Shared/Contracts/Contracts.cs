@@ -216,6 +216,19 @@ public record UpscaleOptions
     [JsonPropertyName("sharpen_amount")]
     public double SharpenAmount { get; init; }
 
+    /// <summary>
+    /// Maximum dimension (width or height) of the input image before upscaling.
+    /// Images larger than this are downscaled to fit before being fed to the
+    /// upscaler. The model works on 64×64 patches, so feeding it a 16000×12000
+    /// image does not improve quality — it only wastes memory and time on the
+    /// pre/post-processing, and would multiply an already-huge output. Pass 0 to
+    /// disable (feed the full image). The saved output is always the
+    /// (possibly capped) input size × the factor, so an oversized source yields
+    /// a proportionally smaller result rather than a much larger one.
+    /// </summary>
+    [JsonPropertyName("max_dimension")]
+    public int MaxDimension { get; init; } = 2048;
+
     /// <summary>keep | JPEG | PNG | WEBP.</summary>
     [JsonPropertyName("output_format")]
     public string OutputFormat { get; init; } = "keep";

@@ -72,6 +72,35 @@ public sealed class DaminionItem
     [JsonPropertyName("PixelHeight")]
     public int? PixelHeight { get; init; }
 
+    /// <summary>
+    /// Server-computed content hash for this media item, recalculated when the
+    /// file or a new file version is imported. Present on every item returned by
+    /// /api/MediaItems/Get when the server includes it (Daminion 11.x).
+    ///
+    /// Used by the Daminion dedup scan as a free group key: items whose hashCode
+    /// matches are exact duplicates at ingest time and need no download or
+    /// algorithmic hash to be grouped. The field is deliberately nullable —
+    /// older server builds and some scoped queries may omit it, and a missing
+    /// value still falls back to the download-and-hash path.
+    ///
+    /// Caveat: the Daminion API docs describe hashCode as a content hash, but do
+    /// not state whether it is perceptual (tolerant of resize/re-encode) or
+    /// exact (byte-identical only). Until that is verified on a live catalog,
+    /// hashCode is fed into the same 64-bit comparison space as the algorithmic
+    /// hashes, so it groups by the hamming distance the threshold defines.
+    /// LogDiagnosticSummary reports the hashCode distribution after every scan
+    /// to help settle whether it is perceptual or exact.
+    /// </summary>
+    [JsonPropertyName("hashCode")]
+    public long? HashCode { get; init; }
+
+    /// <summary>File size in bytes (the API's <c>fileSize</c>), used by the
+    /// dedup review so size-based auto-select works for catalog items grouped
+    /// from their server hash without downloading. Null when the server omitted
+    /// it (e.g. a scoped query that restricts the returned fields).</summary>
+    [JsonPropertyName("fileSize")]
+    public long? FileSize { get; init; }
+
     [JsonIgnore]
     public (int W, int H)? Dimensions
     {

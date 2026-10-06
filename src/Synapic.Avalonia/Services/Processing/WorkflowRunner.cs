@@ -145,6 +145,8 @@ public sealed class WorkflowRunner
                 {
                     DaminionId = item.Id,
                     FileName = item.FileName ?? $"Item {item.Id}",
+                    ServerHashCode = item.HashCode ?? 0,
+                    SizeBytes = item.FileSize ?? 0,
                 });
             }
 

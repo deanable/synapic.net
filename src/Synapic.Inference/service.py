@@ -95,6 +95,7 @@ class UpscaleOptionsModel(BaseModel):
     precision: str = Field(default="auto", pattern="^(auto|fp16|fp32)$")
     denoise_strength: float = Field(default=1.0, ge=0.0, le=1.0)
     sharpen_amount: float = Field(default=0.0, ge=0.0, le=2.0)
+    max_dimension: int = Field(default=2048, ge=0, le=10000)
     output_format: str = Field(default="keep", pattern="^(keep|JPEG|PNG|WEBP)$")
     jpeg_quality: int = Field(default=95, ge=70, le=100)
     overwrite_existing: bool = True
@@ -154,6 +155,11 @@ async def lifespan(_app: FastAPI):
     # weights are not in the cache yet - downloading them is the other
     # thread's job.
     threading.Thread(target=_warm_up_model, name="model-warmup", daemon=True).start()
+    # Pre-warm the Swin2SR upscaler on the first /upscale — without this the
+    # first upscale item pays the model load cost inline (there is no 503
+    # retry path for /upscale like there is for /tag). The upscaler imports
+    # torch, so this stays lazy and off the import path of /tag-only tests.
+    threading.Thread(target=_warm_up_upscaler, name="upscaler-warmup", daemon=True).start()
     yield
     logger.info("Synapic inference sidecar shutting down")
 
@@ -237,6 +243,42 @@ def _warm_up_model() -> None:
             model_loader.set_status(before.get("status", "ready"), before.get("error"))
         except Exception:
             logger.exception("Could not restore status after warm-up failure")
+
+
+def _warm_up_upscaler() -> None:
+    """Touch the Swin2SR upscaler singleton at boot so the first /upscale
+    does not pay the model load cost inline.
+
+    Unlike /tag, /upscale has no 503 retry path, so a cold first upscale
+    just waits with no backoff. Warming here moves that cost to boot.
+
+    Skipped when ``SYNAPIC_DISABLE_WARMUP`` is set, or when torch is not
+    available (CPU-only / no-AI machines — the fast workflow needs no model).
+    The upscaler is lazy and imports torch on construction, so this stays off
+    the import path of /tag-only test runs.
+    """
+    if os.environ.get(config.WARMUP_DISABLE_ENV, "").lower() in ("1", "true", "yes"):
+        logger.info(f"Upscaler warm-up disabled via {config.WARMUP_DISABLE_ENV}")
+        return
+
+    try:
+        import torch  # noqa: F401 - warm-up is skipped on ImportError below
+    except ImportError:
+        logger.info("Upscaler warm-up skipped - torch not available")
+        return
+
+    try:
+        from pathlib import Path
+
+        # Touch the singleton so it imports torch and constructs the lock.
+        # Model loading happens on first /upscale (workflow/factor-specific),
+        # so this only warms the wrapper, not any SR weights — which is fine,
+        # because the weights are workflow/factor-specific and we do not know
+        # which the host will ask for.
+        _get_upscaler()
+        logger.info("Upscaler singleton warmed up at boot")
+    except Exception:
+        logger.exception("Upscaler warm-up failed - the first /upscale will load on demand")
 
 
 def _wait_for_model_ready(timeout: float) -> bool:
@@ -443,15 +485,23 @@ def tag(body: TagRequestModel) -> dict:
 # ---------------------------------------------------------------------------
 
 _upscaler_instance: "upscaler.Swin2SRUpscaler | None" = None
+_upscaler_init_lock = threading.Lock()
 _upscale_lock = threading.Lock()
 
 
 def _get_upscaler() -> "upscaler.Swin2SRUpscaler":
     """Lazy singleton: constructing Swin2SRUpscaler imports torch, which must
-    stay off the import path of every test that only exercises /tag."""
+    stay off the import path of every test that only exercises /tag.
+
+    Guarded by its own lock (not ``_upscale_lock``): the boot-time warm-up
+    thread calls this without holding ``_upscale_lock``, and the request path
+    calls it *while* holding that lock, so reusing it here would self-deadlock.
+    """
     global _upscaler_instance
     if _upscaler_instance is None:
-        _upscaler_instance = upscaler.Swin2SRUpscaler()
+        with _upscaler_init_lock:
+            if _upscaler_instance is None:
+                _upscaler_instance = upscaler.Swin2SRUpscaler()
     return _upscaler_instance
 
 
@@ -497,6 +547,7 @@ def upscale(body: UpscaleRequestModel) -> dict:
         precision=raw.precision.strip().lower(),
         denoise_strength=float(raw.denoise_strength),
         sharpen_amount=float(raw.sharpen_amount),
+        max_dimension=int(raw.max_dimension),
         output_format=raw.output_format.strip(),
         jpeg_quality=int(raw.jpeg_quality),
         overwrite_existing=bool(raw.overwrite_existing),
@@ -515,6 +566,11 @@ def upscale(body: UpscaleRequestModel) -> dict:
     output_target = Path(body.output_path) if body.output_path else None
     started = time.monotonic()
     try:
+        # Serialized on purpose: the original app ran a single upscale worker
+        # thread, and two concurrent CPU inferences would double the model's
+        # resident set for no throughput gain (the host already runs one item
+        # at a time). The lock covers the whole call, PIL open/save included,
+        # so a request never observes another one's half-written output file.
         with _upscale_lock:
             result_path = _get_upscaler().upscale(
                 input_path=input_path,

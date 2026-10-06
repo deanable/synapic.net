@@ -51,6 +51,7 @@ class UpscaleOptions:
     precision: str = "auto"  # auto | fp16 | fp32
     denoise_strength: float = 1.0  # Used by balanced workflow (0.0..1.0)
     sharpen_amount: float = 0.0  # 0.0 = off
+    max_dimension: int = 2048  # 0 = disable; cap input dim before Swin2SR (model works on 64px patches)
     output_format: str = "keep"  # keep | JPEG | PNG | WEBP
     jpeg_quality: int = 95
     overwrite_existing: bool = True
@@ -168,9 +169,18 @@ class Swin2SRUpscaler:
             resolved_options.workflow, model_factor, status_callback
         )
 
+        # Cap an oversized input before the model: Swin2SR works on 64 px
+        # patches, so a source wider (or taller) than max_dimension only spends
+        # memory and time on the pre/post-processing without adding detail. The
+        # saved output is always the (possibly capped) input size x factor, so
+        # an oversized source yields a proportionally smaller output instead of
+        # a multi-hundred-megapixel one. max_dimension <= 0 disables the cap.
         with Image.open(input_path) as source_image:
             source_mode = source_image.mode
             source_format = source_image.format
+            source_image = self._cap_input_size(
+                source_image, factor, resolved_options, status_callback
+            )
             rgb_image = source_image.convert("RGB")
             alpha_channel = source_image.getchannel("A") if "A" in source_mode else None
 
@@ -196,7 +206,10 @@ class Swin2SRUpscaler:
         output = output.squeeze(0).clamp(0, 1).cpu()
         output_image = self._tensor_to_pil(output)
 
-        # Balanced workflow can blend AI output with smoother interpolation for denoise control.
+        # Balanced workflow can blend AI output with smoother interpolation for denoise
+        # control. The target is the size of the image actually fed to the model
+        # (capped when the input was oversized), so the quality and balanced
+        # workflows agree on output dimensions.
         if resolved_options.workflow == WORKFLOW_BALANCED:
             target_size = (
                 int(rgb_image.width * factor),
@@ -238,6 +251,9 @@ class Swin2SRUpscaler:
         self._emit(status_callback, f"Running fast Lanczos upscale ({factor}x)...")
         with Image.open(input_path) as source_image:
             source_format = source_image.format
+            source_image = self._cap_input_size(
+                source_image, factor, options, status_callback
+            )
             new_size = (
                 int(source_image.width * factor),
                 int(source_image.height * factor),
@@ -253,6 +269,41 @@ class Swin2SRUpscaler:
         )
         output_image.save(output_path, **save_kwargs)
         return output_path
+
+    def _cap_input_size(
+        self,
+        image: Image.Image,
+        factor: int,
+        options: UpscaleOptions,
+        status_callback: StatusCallback,
+    ) -> Image.Image:
+        """Shrink an oversized input to ``options.max_dimension`` (longest edge).
+
+        Returns the image to upscale from: the same one when the cap is
+        disabled (``max_dimension <= 0``) or the source already fits, otherwise
+        a LANCZOS-downscaled copy. Because the model upscales whatever it is
+        handed, capping the input bounds the model's memory/time cost and the
+        saved output size together.
+        """
+        max_dim = options.max_dimension
+        if max_dim <= 0:
+            return image
+
+        width, height = image.size
+        if max(width, height) <= max_dim:
+            return image
+
+        scale = max_dim / max(width, height)
+        new_size = (
+            max(1, int(round(width * scale))),
+            max(1, int(round(height * scale))),
+        )
+        self._emit(
+            status_callback,
+            f"Capping {width}x{height} input to {new_size[0]}x{new_size[1]} "
+            f"(output {new_size[0] * factor}x{new_size[1] * factor})",
+        )
+        return image.resize(new_size, Image.Resampling.LANCZOS)
 
     def _apply_sharpen(self, image: Image.Image, amount: float) -> Image.Image:
         if amount <= 0:

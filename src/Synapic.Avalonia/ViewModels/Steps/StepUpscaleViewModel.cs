@@ -105,6 +105,7 @@ public partial class StepUpscaleViewModel : ViewModelBase
         Precision = Precisions[Math.Clamp(SelectedPrecision, 0, Precisions.Length - 1)],
         DenoiseStrength = Math.Clamp(DenoiseStrength, 0.0, 1.0),
         SharpenAmount = Math.Clamp(SharpenAmount, 0.0, 2.0),
+        MaxDimension = 2048, // cap input to 2048px before Swin2SR — model works on 64px patches
         OutputFormat = OutputFormats[Math.Clamp(SelectedOutputFormat, 0, OutputFormats.Length - 1)],
         JpegQuality = Math.Clamp(JpegQuality, 70, 100),
         OverwriteExisting = OverwriteExisting,
@@ -188,7 +189,7 @@ public partial class StepUpscaleViewModel : ViewModelBase
         var sharpen = FormattableString.Invariant($"{options.SharpenAmount:0.00}");
         var description =
             $"workflow={options.Workflow}, factor={options.Factor}x, precision={options.Precision}, " +
-            $"output={options.OutputFormat}, quality={options.JpegQuality}, " +
+            $"max_dimension={options.MaxDimension}, output={options.OutputFormat}, quality={options.JpegQuality}, " +
             $"denoise={denoise}, sharpen={sharpen}, " +
             $"overwrite={options.OverwriteExisting.ToString().ToLowerInvariant()}";
         AppendLog("Upscale run started.");

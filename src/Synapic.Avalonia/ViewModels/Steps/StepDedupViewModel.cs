@@ -481,8 +481,12 @@ public partial class StepDedupViewModel : ViewModelBase
     /// Daminion scan: fetch the Step 1 scope's items through the shared
     /// workflow kernel (same fetch, progress and per-item isolation as tagging
     /// and upscaling), with this scan's per-item operation being
-    /// <see cref="DedupScanHandler"/> — download each original to a temp file,
-    /// hash it, record size + EXIF/file date, delete the temp again.
+    /// <see cref="DedupScanHandler"/>. Items that carry a server-computed
+    /// hashCode are grouped directly from that hash — no download, no
+    /// algorithmic hash. Items without a server hash (older server builds, or
+    /// scoped queries that omit it) fall back to downloading the original and
+    /// hashing it the old way, one at a time so a large scope never lands on
+    /// disk whole.
     /// </summary>
     private async Task<DedupResult> ScanDaminionAsync(DedupOptions opts, CancellationToken ct)
     {
@@ -491,34 +495,53 @@ public partial class StepDedupViewModel : ViewModelBase
 
         var ds = step1.ToSelectionForProcessing(client);
         var items = await WorkflowRunner.FetchItemsAsync(ds, ct);
+        var serverHashCount = items.Count(i => i.ServerHashCode != 0);
         SynapicLog.Info(nameof(StepDedupViewModel),
-            $"Dedup fetch: {items.Count} item(s) in scope ({ScopeIdForLog()}) — downloading each original to hash it");
+            $"Dedup fetch: {items.Count} item(s) in scope ({ScopeIdForLog()}) — " +
+            (serverHashCount > 0
+                ? $"{serverHashCount} carry a server hash (grouped without download), " +
+                  $"{items.Count - serverHashCount} need a download to hash"
+                : "no server hashes available — downloading each original to hash it"));
 
         var handler = new DedupScanHandler(client, opts, _dedup);
         var workflow = new WorkflowDefinition(
             Key: "dedup",
             Title: "Duplicate scan",
-            MaxDegreeOfParallelism: 1, // one download+hash at a time: a large scope never lands on disk whole
-            Description: $"hashing {opts.Algorithm} at threshold {opts.Threshold:0.###}");
+            MaxDegreeOfParallelism: 1, // one item at a time: a large scope never lands on disk whole
+            Description: serverHashCount > 0
+                ? $"grouping {serverHashCount} item(s) from server hash, {opts.Algorithm} at threshold {opts.Threshold:0.###} for the rest"
+                : $"hashing {opts.Algorithm} at threshold {opts.Threshold:0.###}");
 
-        // Live scan text — the same "Downloading i/N: file" line the hand-rolled
-        // loop showed: the runner reports at item start (count = done so far).
+        // Live scan text. When the server already computed a content hash for an
+        // item it is grouped without a download, so the progress line says
+        // "grouping" rather than "downloading" for those.
         var progress = new Progress<ProcessProgress>(p =>
-            ScanSummary = $"Downloading {Math.Min(p.Processed + 1, Math.Max(p.Total, 1))}/{p.Total}: {p.CurrentFile}");
+            ScanSummary = serverHashCount > 0
+                ? $"Grouping {Math.Min(p.Processed + 1, Math.Max(p.Total, 1))}/{p.Total}: {p.CurrentFile}"
+                : $"Downloading {Math.Min(p.Processed + 1, Math.Max(p.Total, 1))}/{p.Total}: {p.CurrentFile}");
 
         await new WorkflowRunner().RunItemsAsync(workflow, items, handler, progress, log: null, pause: null, ct);
 
         SynapicLog.Info(nameof(StepDedupViewModel),
-            $"Dedup hashing done: {handler.Hashes.Count} of {items.Count} item(s) hashed " +
-            $"({handler.DownloadFailures} download failure(s), {handler.HashFailures} unhashable file(s))");
+            $"Dedup scan done: {handler.Hashes.Count} of {items.Count} item(s) hashed " +
+            $"({handler.ServerHashGrouped} from server hash, " +
+            $"{handler.DownloadFailures} download failure(s), {handler.HashFailures} unhashable file(s))");
+
+        // Diagnostic summary: log detailed information about what happened under the hood.
+        // This is essential for the live-server verification of whether the server
+        // hashCode is perceptual or exact. Look for the "=== Dedup Diagnostic Summary ==="
+        // section in the log after the scan completes.
+        handler.LogDiagnosticSummary($"Daminion catalog, {ScopeIdForLog()}");
 
         // Row data for the review list, built from what the scan recorded.
         _pendingDaminionItems = handler.Records.Values.ToDictionary(
             r => r.Key,
             r => new DedupItemViewModel(r.Key, r.FileName)
             {
-                SizeBytes = r.SizeBytes,
-                DateTaken = r.DateTakenUtc,
+                // 0 means "unknown" (no download and no server fileSize) — map it
+                // to null so the row shows "—" instead of a bogus "0 B".
+                SizeBytes = r.SizeBytes > 0 ? r.SizeBytes : null,
+                DateTaken = r.DateTakenUtc, // may be null when the server hash path was used without a download
                 DaminionId = r.DaminionId,
             });
 

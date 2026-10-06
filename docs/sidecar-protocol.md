@@ -367,6 +367,7 @@ Wire shapes of every DTO used above (nested DTOs included).
 | `precision` | string | no |
 | `denoise_strength` | number | no |
 | `sharpen_amount` | number | no |
+| `max_dimension` | integer | no |
 | `output_format` | string | no |
 | `jpeg_quality` | integer | no |
 | `overwrite_existing` | boolean | no |
