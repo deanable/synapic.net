@@ -80,6 +80,21 @@ public sealed class DatasourceState
     public string LocalPath { get; set; } = "";
     public bool LocalRecursive { get; set; }
 
+    /// <summary>
+    /// Restore the source identity config.json carries: which folder, whether
+    /// subfolders are included, and whether the last session was a folder or the
+    /// catalog. The shell applies it once at launch, so the start screen can gate
+    /// the three workflows and run the record count without the user re-picking
+    /// anything. Scope, filters and limits are not part of this: the step that
+    /// owns them restores those.
+    /// </summary>
+    public void ApplyStoredSource(Synapic.Avalonia.Services.DatasourceSettings stored)
+    {
+        Type = stored.Type == "daminion" ? "daminion" : "local";
+        LocalPath = stored.LocalPath ?? "";
+        LocalRecursive = stored.LocalRecursive;
+    }
+
     public string DaminionUrl { get; set; } = "";
     public string DaminionUser { get; set; } = "";
     public string DaminionPass { get; set; } = "";

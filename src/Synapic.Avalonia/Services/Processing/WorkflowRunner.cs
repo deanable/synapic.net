@@ -73,7 +73,24 @@ public sealed record WorkflowRunSummary(int Total, int Processed, int Succeeded,
 /// </summary>
 public sealed class WorkflowRunner
 {
-    private static readonly string[] LocalExtensions = { ".jpg", ".jpeg", ".png", ".tif", ".tiff" };
+    /// <summary>The image types a folder scan picks up (the ones Synapic can read and write).</summary>
+    public static readonly string[] LocalImageExtensions = { ".jpg", ".jpeg", ".png", ".tif", ".tiff" };
+
+    /// <summary>True when a file's extension is one Synapic processes.</summary>
+    public static bool IsLocalImage(string path) =>
+        LocalImageExtensions.Contains(Path.GetExtension(path).ToLowerInvariant());
+
+    /// <summary>
+    /// Count the images a folder scan would process, with exactly the filter
+    /// <see cref="FetchItemsAsync"/> applies — so a number shown before a run is
+    /// the number the run will actually see.
+    /// </summary>
+    public static int CountLocalImages(string folder, bool recursive)
+    {
+        if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder)) return 0;
+        var option = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
+        return Directory.EnumerateFiles(folder, "*.*", option).Count(IsLocalImage);
+    }
 
     // ── Fetch (shared: local recursive scan or Daminion pagination) ─────────
 
@@ -96,7 +113,7 @@ public sealed class WorkflowRunner
             var option = ds.LocalRecursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
             foreach (var path in Directory.EnumerateFiles(ds.LocalPath, "*.*", option))
             {
-                if (LocalExtensions.Contains(Path.GetExtension(path).ToLowerInvariant()))
+                if (IsLocalImage(path))
                     items.Add(new ProcessWorkItem { LocalPath = path, FileName = Path.GetFileName(path) });
             }
             SynapicLog.Info(nameof(WorkflowRunner), $"Found {items.Count} image files in {ds.LocalPath} (recursive={ds.LocalRecursive})");

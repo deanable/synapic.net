@@ -11,8 +11,10 @@
 
 <h1>How many items to process</h1>
 
-<p class="lead">The last row of Step 1 decides how big the batch is and how much
-of each image the model looks at. Both are about time, not quality.</p>
+<p class="lead">Step 1 decides how big the batch is and how much of each image
+the model looks at. Both are about time, not quality. The source itself &mdash;
+which folder, or which catalog scope &mdash; is chosen on the start screen; see
+<a href="step1-datasource.html">The source, and Step 1</a>.</p>
 
 <h2>How many items</h2>
 
@@ -20,7 +22,7 @@ of each image the model looks at. Both are about time, not quality.</p>
 <tr><th class="setting">Control</th><th>What it does</th></tr>
 <tr><td><span class="ui">Max items</span></td><td>The ceiling for this run: 100 by default, raised in steps of 50. The batch stops when it has taken that many items. Setting it to 0 removes the ceiling, exactly as <span class="ui">Process all</span> does.</td></tr>
 <tr><td><span class="ui">Process all (page until empty)</span></td><td>Ignores the ceiling and keeps requesting pages of results until the server returns none. This is the switch for a catalog larger than a single API response &mdash; without it, a big catalog can look like it was fully processed when only the first page was.</td></tr>
-<tr><td><span class="ui">Count matching items</span></td><td>Reports how many items the scope and filters select, so you can size the job before running it. See <a href="step1-scope-filters.html">Scope and filters</a>.</td></tr>
+<tr><td><span class="ui">Recount</span></td><td>Lives on the start screen beside the source, not in Step 1: it reports how many items the scope and filters select. The count refreshes by itself, so this button is only a re-ask. See <a href="step1-scope-filters.html">Scope and filters</a>.</td></tr>
 </table>
 
 <div class="note">

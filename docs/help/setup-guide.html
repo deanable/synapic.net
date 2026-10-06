@@ -78,16 +78,19 @@ inference server</a> before going further.</p>
 <h2>Stage 3 &mdash; Choose your images</h2>
 
 <ol class="steps">
-<li>In <a href="step1-datasource.html">Step 1 &mdash; Datasource</a>, select
+<li>On the start screen, in the source panel, select
 <span class="ui">Local Folder</span>.</li>
 <li>Browse to your test folder. Leave <span class="ui">Include
 subfolders</span> off for the rehearsal.</li>
+<li>Watch the folder light turn green (it names the folder it will use) and the
+record count appear under the panel. The three workflow cards unlock at the same
+moment.</li>
 <li>Daminion users: select <span class="ui">Daminion Server</span> instead and
 carry on with Stage 4.</li>
 </ol>
 
 <p>Synapic tags JPEG, PNG and TIFF files; RAW files are skipped. Details and
-edge cases: <a href="step1-datasource.html">Choosing a datasource</a>.</p>
+edge cases: <a href="step1-datasource.html">The source, and Step 1</a>.</p>
 
 <h2>Stage 4 &mdash; Connect and scope Daminion</h2>
 
@@ -102,9 +105,10 @@ the server URL, so a wrong URL lands in a different catalog.</li>
 search, shared collection or saved search &mdash; then the filters (status,
 "only items with untagged&hellip;"). Details:
 <a href="step1-scope-filters.html">Scope and filters</a>.</li>
-<li>Set the <span class="ui">Max items</span> ceiling for the first run
-(100 is the default) and press <span class="ui">Count matching items</span>
-to see what the scope selects before anything runs.</li>
+<li>Read the record count under the source panel: it runs by itself on launch
+and after every scope or filter change, so you can see what the scope selects
+before anything runs. Set the <span class="ui">Max items</span> ceiling for the
+first run in Step 1 (100 is the default).</li>
 </ol>
 
 <p>Batch size and image scaling:
@@ -213,7 +217,7 @@ in <a href="settings-reference.html#application">Application settings</a>.</li>
 <tr><td>The installer finished and the app opens</td><td>1. Install</td><td><a href="getting-started.html">Install and first run</a></td></tr>
 <tr><td>The status dot is green and the wizard is enabled</td><td>2. Server</td><td><a href="first-run-sidecar.html">Build the inference server</a></td></tr>
 <tr><td>A folder or a Daminion connection is selected</td><td>3&ndash;4. Images</td><td><a href="step1-datasource.html">Step 1</a></td></tr>
-<tr><td>Count matching items reports a sensible number</td><td>4. Scope</td><td><a href="step1-scope-filters.html">Scope and filters</a></td></tr>
+<tr><td>The record count reports a sensible number</td><td>4. Scope</td><td><a href="step1-scope-filters.html">Scope and filters</a></td></tr>
 <tr><td>Model, device and tag fields are as you want them</td><td>5. Engine</td><td><a href="step2-engine.html">Step 2</a></td></tr>
 <tr><td>The first batch finished with Ok rows</td><td>6. Run</td><td><a href="step3-process.html">Step 3</a></td></tr>
 <tr><td>You opened a file and saw the tags in it</td><td>7. Verify</td><td><a href="metadata-written.html">What gets written</a></td></tr>

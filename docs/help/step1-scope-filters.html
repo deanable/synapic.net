@@ -12,8 +12,8 @@
 <h1>Scope and filters</h1>
 
 <p class="lead">Scope says which part of the catalog to look at; filters say
-which of those items are worth your time. Together they decide the batch, so a
-count before you start saves hours.</p>
+which of those items are worth your time. Together they decide the batch, and the
+count that follows every change tells you its size before you start.</p>
 
 <h2>Scope</h2>
 
@@ -49,10 +49,14 @@ Synapic.</p>
 
 <h2>Counting before you start</h2>
 
-<p><span class="ui">Count matching items</span> asks the server how many items the
-current scope and filters select, without downloading anything. It is the cheapest
-sanity check Synapic offers, and it is worth doing every time before a long
-batch:</p>
+<p>Synapic asks the server how many items the current scope and filters select,
+without downloading anything &mdash; and it does so on its own: on launch, after
+a connect, and every time the scope, the search term, the collection or a filter
+changes. The number is shown under the source panel on the start screen, next to
+the source lights, so it is in front of you before you pick a workflow. The
+<span class="ui">Recount</span> button beside it is only a re-ask, for when the
+catalog changed underneath the session. It is the cheapest sanity check Synapic
+offers, so read it before a long batch:</p>
 
 <ul>
 <li>A count of 0 means the batch will do nothing. Check the scope and the status

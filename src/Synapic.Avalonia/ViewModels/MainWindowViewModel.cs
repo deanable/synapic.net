@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Synapic.Avalonia.Models;
 using Synapic.Avalonia.Services;
+using Synapic.Avalonia.ViewModels.Steps;
 using Synapic.Shared.Contracts;
 
 namespace Synapic.Avalonia.ViewModels;
@@ -76,6 +77,15 @@ public partial class MainWindowViewModel : ViewModelBase
         SynapicLog.UiSink.Emitted += OnUiLogEmitted;
 
         Wizard = new WizardViewModel(_session, _sidecar, connectionStore, engineStore, presetStore);
+
+        // The start screen's three route cards are gated on the source panel
+        // having something usable to work on; the panel lives on Step 1, so its
+        // readiness has to travel up to the shell's binding.
+        Wizard.Step1.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(Step1DatasourceViewModel.HasUsableSource))
+                OnPropertyChanged(nameof(CanStartRoute));
+        };
     }
 
     public WizardViewModel Wizard { get; }
@@ -92,6 +102,14 @@ public partial class MainWindowViewModel : ViewModelBase
     private string _route = HomeRoute;
 
     public bool IsHomeVisible => Route == HomeRoute;
+
+    /// <summary>
+    /// The start screen's gate: the three workflow cards stay disabled until the
+    /// source panel has a usable source — an existing local folder, or a live
+    /// Daminion session — so a route is never entered without knowing what it
+    /// would work on.
+    /// </summary>
+    public bool CanStartRoute => Wizard.Step1.HasUsableSource;
 
     public bool IsWizardVisible => Route != HomeRoute;
 

@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Synapic.Avalonia.Models;
@@ -23,9 +24,22 @@ public partial class Step1DatasourceViewModel : ViewModelBase
     {
         _session = session;
         _connectionStore = connectionStore;
-        HydrateFromSession();
-        HydrateSavedConnection();
+        // Hydration fills the form field by field; none of that may fire a
+        // count. The launch sequence (InitializeAsync) counts once instead.
+        _suppressAutoCount = true;
+        try
+        {
+            HydrateFromSession();
+            HydrateSavedConnection();
+        }
+        finally
+        {
+            _suppressAutoCount = false;
+        }
     }
+
+    /// <summary>True while the constructor is filling the form (no counting yet).</summary>
+    private bool _suppressAutoCount;
 
     /// <summary>
     /// Pre-fill the connection form from the registry (last successful
@@ -100,6 +114,10 @@ public partial class Step1DatasourceViewModel : ViewModelBase
     private void HydrateFromSession()
     {
         var ds = _session.Datasource;
+        // The stored *type* comes back too: the start screen gates the three
+        // workflows on it, and the automatic reconnect at launch only applies
+        // when the last session was on Daminion.
+        DatasourceType = ds.Type;
         LocalPath = ds.LocalPath;
         LocalRecursive = ds.LocalRecursive;
         DaminionUrl = ds.DaminionUrl;
@@ -131,9 +149,19 @@ public partial class Step1DatasourceViewModel : ViewModelBase
     [ObservableProperty]
     private bool _localRecursive;
 
-    partial void OnLocalPathChanged(string value) => _session.Datasource.LocalPath = value;
+    partial void OnLocalPathChanged(string value)
+    {
+        _session.Datasource.LocalPath = value;
+        NotifySourceChanged();
+        ScheduleCountRefresh();
+    }
 
-    partial void OnLocalRecursiveChanged(bool value) => _session.Datasource.LocalRecursive = value;
+    partial void OnLocalRecursiveChanged(bool value)
+    {
+        _session.Datasource.LocalRecursive = value;
+        NotifySourceChanged();
+        ScheduleCountRefresh();
+    }
 
     // ── Daminion connection ─────────────────────────────────────────────────
 
@@ -170,6 +198,11 @@ public partial class Step1DatasourceViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsDaminion));
         OnPropertyChanged(nameof(IsLocalSelected));
         OnPropertyChanged(nameof(IsDaminionSelected));
+        // The count belongs to the source that is selected now, so the other
+        // source's number must not linger on screen.
+        CountText = null;
+        NotifySourceChanged();
+        ScheduleCountRefresh();
     }
 
     /// <summary>
@@ -191,6 +224,66 @@ public partial class Step1DatasourceViewModel : ViewModelBase
     }
 
     public DaminionApiClient? ConnectedClient { get; private set; }
+
+    partial void OnIsDaminionConnectedChanged(bool value) => NotifySourceChanged();
+
+    // ── Source readiness (the start screen gates the three workflows on this) ──
+
+    /// <summary>
+    /// True when the chosen folder exists on disk. A typed path only counts once
+    /// it resolves — the workflows would fail on their first fetch otherwise.
+    /// </summary>
+    public bool LocalFolderExists
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(LocalPath)) return false;
+            try { return Directory.Exists(LocalPath); }
+            catch { return false; }   // invalid characters in a hand-typed path
+        }
+    }
+
+    /// <summary>
+    /// True when the selected source is usable right now: an existing folder, or
+    /// a live Daminion session. The start screen keeps the three workflow cards
+    /// disabled until this flips, so no route is entered without a source.
+    /// </summary>
+    public bool HasUsableSource => IsDaminion ? IsDaminionConnected : LocalFolderExists;
+
+    /// <summary>
+    /// Green while the catalog session is live, red while it is not.
+    /// </summary>
+    public IBrush DaminionSourceBrush => IsDaminionConnected ? Brushes.ForestGreen : Brushes.Red;
+
+    /// <summary>Green once a folder is selected and exists, red otherwise.</summary>
+    public IBrush LocalSourceBrush => LocalFolderExists ? Brushes.ForestGreen : Brushes.Red;
+
+    /// <summary>
+    /// Daminion half of the source profile. Both halves are always on screen, so
+    /// the pair says what you are working with whatever the radio buttons say.
+    /// </summary>
+    public string DaminionSourceText => IsDaminionConnected
+        ? $"Daminion: connected \u2014 {DaminionUrl}"
+        : "Daminion: not connected";
+
+    /// <summary>Folder half of the source profile: the folder itself, or why there is none.</summary>
+    public string LocalSourceText => string.IsNullOrWhiteSpace(LocalPath)
+        ? "Folder: not selected"
+        : LocalFolderExists
+            ? $"Folder: {LocalPath}{(LocalRecursive ? " (with subfolders)" : "")}"
+            : $"Folder: not found \u2014 {LocalPath}";
+
+    /// <summary>Everything that depends on the source turning usable (or not).</summary>
+    private void NotifySourceChanged()
+    {
+        OnPropertyChanged(nameof(LocalFolderExists));
+        OnPropertyChanged(nameof(HasUsableSource));
+        OnPropertyChanged(nameof(DaminionSourceBrush));
+        OnPropertyChanged(nameof(LocalSourceBrush));
+        OnPropertyChanged(nameof(DaminionSourceText));
+        OnPropertyChanged(nameof(LocalSourceText));
+        CountCommand.NotifyCanExecuteChanged();
+    }
 
     // The Connect button binds to ConnectCommand; CanExecute is only re-queried
     // when we signal it. Without these calls the button stays disabled forever
@@ -244,6 +337,7 @@ public partial class Step1DatasourceViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsSearchScope));
         OnPropertyChanged(nameof(IsCollectionScope));
         OnPropertyChanged(nameof(IsSavedSearchScope));
+        ScheduleCountRefresh();
     }
 
     public static string ScopeIndexToString(int i) => i switch
@@ -269,7 +363,11 @@ public partial class Step1DatasourceViewModel : ViewModelBase
     [ObservableProperty]
     private string _searchTerm = "";
 
-    partial void OnSearchTermChanged(string value) => _session.Datasource.SearchTerm = value;
+    partial void OnSearchTermChanged(string value)
+    {
+        _session.Datasource.SearchTerm = value;
+        ScheduleCountRefresh();
+    }
 
     // ── Saved searches & collections (loaded from the server on connect) ────
 
@@ -331,6 +429,7 @@ public partial class Step1DatasourceViewModel : ViewModelBase
     partial void OnSavedSearchIdChanged(string value)
     {
         _session.Datasource.SavedSearchId = value;
+        ScheduleCountRefresh();
         if (!_hydrating)
         {
             _hydrating = true;
@@ -342,6 +441,7 @@ public partial class Step1DatasourceViewModel : ViewModelBase
     partial void OnCollectionIdChanged(string value)
     {
         _session.Datasource.CollectionId = value;
+        ScheduleCountRefresh();
         if (!_hydrating)
         {
             _hydrating = true;
@@ -363,6 +463,7 @@ public partial class Step1DatasourceViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(StatusFilter));
         _session.Datasource.StatusFilter = StatusFilter;
+        ScheduleCountRefresh();
     }
 
     public static string StatusIndexToString(int i) => i switch
@@ -390,9 +491,23 @@ public partial class Step1DatasourceViewModel : ViewModelBase
     [ObservableProperty]
     private bool _untaggedDescription;
 
-    partial void OnUntaggedKeywordsChanged(bool value) => _session.Datasource.UntaggedKeywords = value;
-    partial void OnUntaggedCategoriesChanged(bool value) => _session.Datasource.UntaggedCategories = value;
-    partial void OnUntaggedDescriptionChanged(bool value) => _session.Datasource.UntaggedDescription = value;
+    partial void OnUntaggedKeywordsChanged(bool value)
+    {
+        _session.Datasource.UntaggedKeywords = value;
+        ScheduleCountRefresh();
+    }
+
+    partial void OnUntaggedCategoriesChanged(bool value)
+    {
+        _session.Datasource.UntaggedCategories = value;
+        ScheduleCountRefresh();
+    }
+
+    partial void OnUntaggedDescriptionChanged(bool value)
+    {
+        _session.Datasource.UntaggedDescription = value;
+        ScheduleCountRefresh();
+    }
 
     [RelayCommand]
     private void SelectAllUntagged()
@@ -448,6 +563,17 @@ public partial class Step1DatasourceViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanConnect))]
     private async Task ConnectAsync(CancellationToken ct)
     {
+        // The record count is automatic: a fresh session counts as soon as it lands.
+        if (await ConnectCoreAsync(ct)) await RefreshCountAsync(ct);
+    }
+
+    /// <summary>
+    /// Sign in and load the catalog pickers. Returns false when the login failed
+    /// (the on-screen message says why). Shared by the Connect button and by the
+    /// automatic reconnect the shell runs at launch.
+    /// </summary>
+    private async Task<bool> ConnectCoreAsync(CancellationToken ct)
+    {
         IsConnecting = true;
         ConnectionMessage = null;
         try
@@ -494,6 +620,8 @@ public partial class Step1DatasourceViewModel : ViewModelBase
             ConnectCommand.NotifyCanExecuteChanged();
             CountCommand.NotifyCanExecuteChanged();
         }
+
+        return IsDaminionConnected;
     }
 
     private bool CanConnect() =>
@@ -512,6 +640,7 @@ public partial class Step1DatasourceViewModel : ViewModelBase
         Collections.Clear();
         ActiveCatalog = null;
         ConnectionMessage = "Disconnected";
+        CountText = null;
         CountCommand.NotifyCanExecuteChanged();
         SynapicLog.Info(nameof(Step1DatasourceViewModel), "Daminion disconnected");
     }
@@ -567,17 +696,97 @@ public partial class Step1DatasourceViewModel : ViewModelBase
         }
     }
 
+    // ── Record count (automatic: launch, connect, and every scope change) ────
+
     [ObservableProperty]
     private string? _countText;
 
     [ObservableProperty]
     private bool _isCounting;
 
+    private bool _countInFlight;
+    private bool _countStale;
+    private CancellationTokenSource? _countDebounce;
+
+    private const int CountDebounceMs = 350;
+
+    /// <summary>
+    /// Manual recount (the panel's button). The count refreshes itself, so this
+    /// exists for the case where the catalog changed underneath the session.
+    /// </summary>
     [RelayCommand(CanExecute = nameof(CanCount))]
-    private async Task CountAsync(CancellationToken ct)
+    private Task CountAsync(CancellationToken ct) => RefreshCountAsync(ct);
+
+    private bool CanCount() => !IsCounting && HasUsableSource;
+
+    /// <summary>
+    /// Launch sequence for the source panel, called once by the shell: reconnect
+    /// to the last Daminion server when that is the stored source (the registry
+    /// keeps the URL, user and DPAPI-protected password), then run the record
+    /// count — so the start screen's indicators and the three workflow cards are
+    /// correct without a button press. Never throws.
+    /// </summary>
+    public async Task InitializeAsync(CancellationToken ct = default)
     {
-        if (ConnectedClient is null) return;
+        try
+        {
+            if (IsDaminion && !IsDaminionConnected && CanConnect())
+            {
+                SynapicLog.Info(nameof(Step1DatasourceViewModel),
+                    "Stored source is Daminion — reconnecting automatically, then counting");
+                await ConnectCoreAsync(ct);
+            }
+            await RefreshCountAsync(ct);
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Warning(nameof(Step1DatasourceViewModel), $"Source initialization failed: {e.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Refresh the record count for the active source: folder images for a local
+    /// source, the server's filtered item count for Daminion. Automatic — a
+    /// change that lands mid-count queues one more run, so the number on screen
+    /// is always the number for the current settings.
+    /// </summary>
+    public async Task RefreshCountAsync(CancellationToken ct = default)
+    {
+        if (_countInFlight)
+        {
+            _countStale = true;
+            return;
+        }
+
+        _countInFlight = true;
         IsCounting = true;
+        try
+        {
+            bool again;
+            do
+            {
+                _countStale = false;
+                if (IsDaminion) await CountDaminionAsync(ct);
+                else await CountLocalAsync(ct);
+                again = _countStale;
+            } while (again);
+        }
+        catch (OperationCanceledException)
+        {
+            // A newer change superseded this run; its own count will report.
+        }
+        finally
+        {
+            _countInFlight = false;
+            IsCounting = false;
+            CountCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    /// <summary>Ask the server how many items the current scope and filters select.</summary>
+    private async Task CountDaminionAsync(CancellationToken ct)
+    {
+        if (ConnectedClient is null) return;   // not signed in: nothing to ask
         try
         {
             var count = await ConnectedClient.GetFilteredItemCountAsync(
@@ -589,21 +798,72 @@ public partial class Step1DatasourceViewModel : ViewModelBase
                 statusFilter: StatusFilter);
             CountText = count < 0
                 ? "Count failed — see log"
-                : $"{count:N0} items match the current filters";
+                : count == 1
+                    ? "1 item matches the current scope and filters"
+                    : $"{count:N0} items match the current scope and filters";
             SynapicLog.Info(nameof(Step1DatasourceViewModel), $"Item count: {count}");
         }
+        catch (OperationCanceledException) { throw; }
         catch (Exception e)
         {
             CountText = $"Count failed: {e.Message}";
             SynapicLog.Warning(nameof(Step1DatasourceViewModel), CountText);
         }
-        finally
+    }
+
+    /// <summary>
+    /// Count the image files a folder scan would process, with exactly the filter
+    /// the batch's fetch uses — so the number is what the run will actually see.
+    /// </summary>
+    private async Task CountLocalAsync(CancellationToken ct)
+    {
+        if (!LocalFolderExists)
         {
-            IsCounting = false;
+            CountText = string.IsNullOrWhiteSpace(LocalPath) ? null : $"Folder not found: {LocalPath}";
+            return;
+        }
+
+        var folder = LocalPath;
+        var recursive = LocalRecursive;
+        try
+        {
+            var count = await Task.Run(() => WorkflowRunner.CountLocalImages(folder, recursive), ct);
+            CountText = count == 1 ? "1 image file" : $"{count:N0} image files";
+            SynapicLog.Info(nameof(Step1DatasourceViewModel),
+                $"Counted {count} image file(s) in {folder} (recursive={recursive})");
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception e)
+        {
+            CountText = $"Count failed: {e.Message}";
+            SynapicLog.Warning(nameof(Step1DatasourceViewModel), CountText);
         }
     }
 
-    private bool CanCount() => IsDaminionConnected && ConnectedClient is not null && !IsCounting;
+    /// <summary>
+    /// Queue a count for the current settings, coalescing rapid changes (typing a
+    /// search term fires per keystroke). Nothing in the UI asks for this — the
+    /// panel is a display of a count that keeps itself current.
+    /// </summary>
+    private void ScheduleCountRefresh()
+    {
+        if (_suppressAutoCount) return;   // constructor hydration: one count at launch instead
+        _countDebounce?.Cancel();
+        var cts = new CancellationTokenSource();
+        _countDebounce = cts;
+        _ = DebouncedCountAsync(cts.Token);
+    }
+
+    private async Task DebouncedCountAsync(CancellationToken ct)
+    {
+        try
+        {
+            await Task.Delay(CountDebounceMs, ct);
+            if (!HasUsableSource) return;   // still typing a path / not connected yet
+            await RefreshCountAsync(ct);
+        }
+        catch (OperationCanceledException) { /* superseded by a newer change */ }
+    }
 
     /// <summary>Build a DatasourceSelection for the processing orchestrator (shares the connected client).</summary>
     public DatasourceSelection ToSelectionForProcessing(DaminionApiClient? sharedClient) =>

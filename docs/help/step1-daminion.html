@@ -12,12 +12,14 @@
 <h1>Connecting to Daminion</h1>
 
 <p class="lead">One login does the whole run: it lists the catalog, counts
-matching items, downloads the images, and writes the tags back.</p>
+matching items, downloads the images, and writes the tags back. The connect form
+lives on the start screen &mdash; the record count and the two source lights sit
+beside it &mdash; so the connection is established before a workflow is picked.</p>
 
 <h2>Connecting</h2>
 
 <ol class="steps">
-<li>In Step 1, choose <span class="ui">Daminion Server</span>.</li>
+<li>On the start screen, under the two source lights, choose <span class="ui">Daminion Server</span>.</li>
 <li>Fill in three fields:
 <ul>
 <li><span class="ui">Server URL</span> &mdash; the Daminion server address, for
@@ -61,8 +63,12 @@ by id. If either list is empty, those scopes fall back to typing an id by hand.<
 <tr><td>Your previous settings</td><td>Scope, search term, filters and limits are
 restored from the last successful connect, so a repeated run is one button
 press.</td></tr>
-<tr><td><span class="ui">Count matching items</span></td><td>Becomes usable once
-there is a connection to ask.</td></tr>
+<tr><td>The record count</td><td>Runs by itself as soon as the login lands, and
+again on every scope or filter change. <span class="ui">Recount</span> asks the
+server once more.</td></tr>
+<tr><td>The next launch</td><td>Synapic signs in to the same server on its own and
+counts immediately, so the start screen is ready before you press anything. A
+login that fails just leaves the connect form filled in.</td></tr>
 </table>
 
 <div class="note">
@@ -76,7 +82,8 @@ Windows account on that machine.</p>
 <h2>Disconnecting</h2>
 
 <p><span class="ui">Disconnect</span> appears once you are connected. It ends the
-session, clears the collection and saved-search lists, and disables counting. The
+session, clears the collection and saved-search lists, and puts the Daminion light
+back to red (which disables the workflow cards until another source is ready). The
 saved connection stays in the registry, so reconnecting is one press of
 <span class="ui">Connect</span>.</p>
 

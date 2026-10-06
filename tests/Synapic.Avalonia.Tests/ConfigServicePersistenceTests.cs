@@ -92,6 +92,42 @@ public class ConfigServicePersistenceTests
         }
     }
     /// <summary>
+    /// The start screen's source survives a restart: the folder and the source
+    /// type are persisted into config.json and come back with the session, which
+    /// is what lets the launch sequence gate the workflows and count the folder
+    /// before the user touches anything.
+    /// </summary>
+    [AvaloniaFact]
+    public void Persisted_source_comes_back_for_the_next_launch()
+    {
+        var path = TempPath();
+        try
+        {
+            var folder = Path.GetTempPath();
+            var session = new Session();
+            session.Datasource.Type = "local";
+            session.Datasource.LocalPath = folder;
+            session.Datasource.LocalRecursive = true;
+            var vm = new MainWindowViewModel(
+                new FakeSidecar(), new FakeBuildService(), session,
+                () => "x.exe", null, null, _ => null);
+
+            vm.PersistConfig(new ConfigService(path));
+
+            var next = new Session();
+            next.Datasource.ApplyStoredSource(new ConfigService(path).Load().Datasource);
+
+            Assert.Equal("local", next.Datasource.Type);
+            Assert.Equal(folder, next.Datasource.LocalPath);
+            Assert.True(next.Datasource.LocalRecursive);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    /// <summary>
     /// Regression: PersistConfig used to resolve ConfigService from DI where it
     /// was never registered, silently writing nothing. With the service passed
     /// in, the wizard's merged snapshot must really land on disk.

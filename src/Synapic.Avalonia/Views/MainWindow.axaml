@@ -150,17 +150,39 @@
 
     <!-- Body: start screen (route chooser) or the wizard for the chosen route -->
     <Grid Grid.Row="3" Margin="8,0">
-      <Grid IsVisible="{Binding IsHomeVisible}" RowDefinitions="Auto,Auto,*"
-            help:HelpScope.Topic="workflow-overview.html">
-        <StackPanel Grid.Row="0" HorizontalAlignment="Center" Margin="0,28,0,0" Spacing="6">
+      <!-- Start screen: source first, then the workflow. The three route cards
+           stay disabled until the source panel has a usable source (a folder
+           that exists, or a live Daminion session), so no route can be entered
+           without knowing what it would work on. The panel is the wizard's own
+           Step 1 view model, so the choice carries into every route. -->
+      <ScrollViewer Margin="0" IsVisible="{Binding IsHomeVisible}">
+      <StackPanel Spacing="12" Margin="0,20,0,20" help:HelpScope.Topic="workflow-overview.html">
+        <StackPanel HorizontalAlignment="Center" Spacing="6">
           <TextBlock Text="What do you want to do?" FontSize="22" FontWeight="SemiBold"
                      HorizontalAlignment="Center" />
-          <TextBlock Text="Synapic has three workflows. Pick one — the others stay out of your way."
+          <TextBlock Text="Pick a source first — the three workflows unlock once Synapic knows what to work on."
                      Opacity="0.7" HorizontalAlignment="Center" />
         </StackPanel>
 
-        <UniformGrid Grid.Row="2" Columns="3" VerticalAlignment="Center" Margin="0,0,0,40">
+        <Border Classes="card" Padding="14" help:HelpScope.Topic="step1-datasource.html">
+          <StackPanel Spacing="10">
+            <TextBlock Text="1 · Where are the images?" FontWeight="SemiBold" FontSize="14" />
+            <steps:DatasourceSourcePanel DataContext="{Binding Wizard.Step1}" />
+          </StackPanel>
+        </Border>
+
+        <StackPanel Spacing="6" Margin="0,6,0,0">
+          <TextBlock Text="2 · What do you want to do?" FontWeight="SemiBold" FontSize="14"
+                     HorizontalAlignment="Center" />
+          <TextBlock Text="Choose a folder or connect to Daminion first — the three workflows stay disabled until then."
+                     IsVisible="{Binding !CanStartRoute}"
+                     Foreground="#B3261E" FontSize="12" TextWrapping="Wrap"
+                     HorizontalAlignment="Center" TextAlignment="Center" />
+        </StackPanel>
+
+        <UniformGrid Columns="3">
           <Button Classes="routeCard" Command="{Binding StartTaggingRouteCommand}"
+                  IsEnabled="{Binding CanStartRoute}"
                   Margin="3" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
             <StackPanel Spacing="6" Margin="6">
               <TextBlock Text="🏷  Tagging" FontSize="18" FontWeight="SemiBold" />
@@ -170,6 +192,7 @@
             </StackPanel>
           </Button>
           <Button Classes="routeCard" Command="{Binding StartDedupRouteCommand}"
+                  IsEnabled="{Binding CanStartRoute}"
                   Margin="3" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
             <StackPanel Spacing="6" Margin="6">
               <TextBlock Text="🧹  Deduplication" FontSize="18" FontWeight="SemiBold" />
@@ -179,6 +202,7 @@
             </StackPanel>
           </Button>
           <Button Classes="routeCard" Command="{Binding StartUpscaleRouteCommand}"
+                  IsEnabled="{Binding CanStartRoute}"
                   Margin="3" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
             <StackPanel Spacing="6" Margin="6">
               <TextBlock Text="✨  Upscaling" FontSize="18" FontWeight="SemiBold" />
@@ -188,7 +212,8 @@
             </StackPanel>
           </Button>
         </UniformGrid>
-      </Grid>
+      </StackPanel>
+      </ScrollViewer>
 
       <ScrollViewer Margin="0" IsEnabled="{Binding IsWorkspaceEnabled}"
                     IsVisible="{Binding IsWizardVisible}">

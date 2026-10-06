@@ -234,6 +234,37 @@ public class WorkflowRunnerTests
         }
     }
 
+    /// <summary>
+    /// The folder count shown before a run must be the number the run sees: both
+    /// go through the same image filter, so a mixed folder cannot report one
+    /// number and process another.
+    /// </summary>
+    [Fact]
+    public async Task Folder_count_agrees_with_what_a_fetch_would_process()
+    {
+        var dir = Directory.CreateTempSubdirectory("synapic-count-").FullName;
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "a.jpg"), "x");
+            File.WriteAllText(Path.Combine(dir, "b.JPEG"), "x");   // extension case must not matter
+            File.WriteAllText(Path.Combine(dir, "c.txt"), "x");
+            Directory.CreateDirectory(Path.Combine(dir, "sub"));
+            File.WriteAllText(Path.Combine(dir, "sub", "d.PNG"), "x");
+
+            var recursive = await WorkflowRunner.FetchItemsAsync(
+                new DatasourceSelection { LocalPath = dir, LocalRecursive = true }, CancellationToken.None);
+
+            Assert.Equal(3, WorkflowRunner.CountLocalImages(dir, recursive: true));
+            Assert.Equal(recursive.Count, WorkflowRunner.CountLocalImages(dir, recursive: true));
+            Assert.Equal(2, WorkflowRunner.CountLocalImages(dir, recursive: false));
+            Assert.Equal(0, WorkflowRunner.CountLocalImages(Path.Combine(dir, "nope"), recursive: true));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
     [Fact]
     public async Task Fetch_of_a_missing_folder_throws_instead_of_returning_empty()
     {

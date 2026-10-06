@@ -1,10 +1,14 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.Media;
 using Avalonia.VisualTree;
 using Synapic.Avalonia.Models;
 using Synapic.Avalonia.ViewModels;
 using Synapic.Avalonia.Views;
+using Synapic.Avalonia.Views.Wizard;
 using Xunit;
+using Shapes = Avalonia.Controls.Shapes;
 
 namespace Synapic.Avalonia.Tests;
 
@@ -180,6 +184,111 @@ public class RouteSplitTests
         var button = window.GetVisualDescendants().OfType<Button>()
             .FirstOrDefault(b => b.Content is string text && text == content);
         return button is not null && EffectivelyVisible(button);
+    }
+
+    /// <summary>
+    /// The start screen owns the source now: the folder picker and the Daminion
+    /// connect form live there, the two source lights report what is ready, and
+    /// the three workflow cards stay disabled until something usable is chosen.
+    /// </summary>
+    [AvaloniaFact]
+    public void Start_screen_gates_the_workflow_cards_on_a_usable_source()
+    {
+        var window = new MainWindow { DataContext = Shell(SourceSession("local", localPath: "")) };
+        window.Show();
+        try
+        {
+            var vm = (MainWindowViewModel)window.DataContext!;
+            var cards = new[]
+            {
+                vm.StartTaggingRouteCommand,
+                vm.StartDedupRouteCommand,
+                vm.StartUpscaleRouteCommand,
+            }.Select(command => window.GetVisualDescendants().OfType<Button>()
+                .Single(b => b.Command == command)).ToList();
+
+            Assert.False(vm.CanStartRoute);
+            Assert.All(cards, card => Assert.False(card.IsEnabled));
+
+            // The strip's second light is the folder (the first is Daminion), and
+            // its text names the folder the workflows would run on.
+            var strip = window.GetVisualDescendants().OfType<SourceStatusStrip>().First();
+            var lights = strip.GetVisualDescendants().OfType<Shapes.Ellipse>().ToList();
+            Assert.Equal(2, lights.Count);
+            Assert.Equal(Colors.Red, ((ISolidColorBrush)lights[1].Fill!).Color);
+
+            var folder = Path.GetTempPath();
+            vm.Wizard.Step1.LocalPath = folder;
+
+            Assert.True(vm.CanStartRoute);
+            Assert.All(cards, card => Assert.True(card.IsEnabled));
+            Assert.Equal(Colors.ForestGreen, ((ISolidColorBrush)lights[1].Fill!).Color);
+            var folderLine = Assert.Single(strip.GetVisualDescendants().OfType<TextBlock>(),
+                t => t.Text?.StartsWith("Folder:") == true);
+            Assert.Contains(folder, folderLine.Text!);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    /// <summary>
+    /// The start screen has to stay usable with the source panel on it: the panel
+    /// is laid out above the three cards, and the cards keep a real size instead
+    /// of being pushed out of the window. Headless layout runs the real
+    /// measure/arrange, so this catches a panel that swallowed the viewport.
+    /// </summary>
+    [AvaloniaFact]
+    public void Start_screen_lays_the_source_panel_out_above_the_workflow_cards()
+    {
+        var window = new MainWindow { DataContext = Shell(SourceSession("daminion", localPath: "")) };
+        window.Show();
+        try
+        {
+            var vm = (MainWindowViewModel)window.DataContext!;
+            var panel = window.GetVisualDescendants().OfType<DatasourceSourcePanel>().First();
+            var card = window.GetVisualDescendants().OfType<Button>()
+                .Single(b => b.Command == vm.StartTaggingRouteCommand);
+
+            Assert.True(panel.Bounds.Height > 0, "the source panel did not lay out");
+            Assert.True(card.Bounds.Width > 0 && card.Bounds.Height > 0, "the route cards did not lay out");
+
+            var panelTop = panel.TranslatePoint(new Point(0, 0), window)!.Value;
+            var cardTop = card.TranslatePoint(new Point(0, 0), window)!.Value;
+            Assert.True(cardTop.Y >= panelTop.Y + panel.Bounds.Height,
+                $"the cards overlap the source panel (panel ends at {panelTop.Y + panel.Bounds.Height}, card starts at {cardTop.Y})");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    /// <summary>
+    /// The Daminion connect form has to be on the start screen (that is the
+    /// point of the redesign) and only there — Step 1 reports the source instead
+    /// of asking for it a second time.
+    /// </summary>
+    [AvaloniaFact]
+    public void Daminion_connect_form_lives_on_the_start_screen_only()
+    {
+        var window = new MainWindow { DataContext = Shell(SourceSession("daminion", localPath: "")) };
+        window.Show();
+        try
+        {
+            var vm = (MainWindowViewModel)window.DataContext!;
+            var connect = Assert.Single(window.GetVisualDescendants().OfType<Button>(),
+                b => b.Command == vm.Wizard.Step1.ConnectCommand);
+
+            Assert.True(vm.IsHomeVisible);          // the start screen is what is on top
+            Assert.False(vm.IsWizardVisible);
+            Assert.True(EffectivelyVisible(connect));
+        }
+        finally
+        {
+            window.Close();
+        }
     }
 
     [AvaloniaFact]

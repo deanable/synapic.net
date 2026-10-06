@@ -15,10 +15,19 @@
 for tags, and writes the tags. The five steps are the decisions you get to make
 before and after that loop.</p>
 
-<h2>Three routes at the start screen</h2>
+<h2>Source first, then the route</h2>
 
-<p>Every launch opens on a start screen with three cards, so the choice comes
-first instead of being buried at the end of a wizard:</p>
+<p>Every launch opens on a start screen, and it asks one question before it asks
+what you want to do: <em>which images?</em> The source panel holds a local folder
+picker and the Daminion connect form, and two lights above them answer the
+question at a glance &mdash; green while a Daminion session is live, green while
+the chosen folder exists, red while either is missing. The record count for the
+chosen source runs on its own: on launch, after a connect, and whenever the
+folder, the scope or a filter changes.</p>
+
+<p>The three workflow cards below stay disabled until one of those lights is
+green &mdash; a folder that exists, or a real connection to the Daminion server.
+Pick the source, then pick the route; the choice follows you into the wizard.</p>
 
 <table>
 <tr><th class="setting">Route</th><th>What it is for</th><th>Steps it shows</th></tr>
@@ -27,11 +36,13 @@ first instead of being buried at the end of a wizard:</p>
 <tr><td><span class="ui">Upscaling</span></td><td>Enhance image resolution (the Daminion Feature enhancement utility)</td><td>Datasource &rarr; Upscaling</td></tr>
 </table>
 
-<p>The deduplication and upscaling routes skip the tagging steps entirely:
-Step 1 exists only to pick the source (a folder, or the Daminion catalog
-scope), and <span class="ui">Next</span> goes straight to that route's step.
-In those routes the nav bar shows just <span class="ui">1 &middot;
-Datasource</span> and the route's own step.</p>
+<p>All three routes start from the same source. Step 1 reports it read-only and
+owns the processing limits (how many items, and how much of each image); the
+source itself is changed on the start screen, next to the record count. The
+deduplication and upscaling routes skip the tagging steps entirely:
+<span class="ui">Next</span> goes straight to that route's step. In those routes
+the nav bar shows just <span class="ui">1 &middot; Datasource</span> and the
+route's own step.</p>
 
 <p>The <span class="ui">Home</span> button in the nav bar returns to the start
 screen at any time; the route you were in is kept, so coming back and picking a
@@ -42,7 +53,8 @@ Deduplication and Upscaling from their own tabs once you reach Results.</p>
 
 <table>
 <tr><th class="setting">Step</th><th>The decision</th><th>Where it is remembered</th></tr>
-<tr><td>1 &mdash; Datasource</td><td>A folder on disk, or a Daminion catalog plus scope, filters and how many items to take</td><td>Daminion settings: registry, on a successful connect</td></tr>
+<tr><td>Start screen &mdash; Source</td><td>A folder on disk, or a Daminion server plus scope and filters</td><td>Folder: <span class="path">config.json</span>. Daminion: registry, on a successful connect</td></tr>
+<tr><td>1 &mdash; Datasource</td><td>The chosen source, restated; plus how many items to take and how much of each image the model sees</td><td>&mdash;</td></tr>
 <tr><td>2 &mdash; Engine</td><td>Model and device, prompts, and which of the three returned fields to write</td><td>Registry, when you leave the step</td></tr>
 <tr><td>3 &mdash; Process</td><td>Nothing &mdash; you watch, pause, resume or abort</td><td>&mdash;</td></tr>
 <tr><td>4 &mdash; Results</td><td>Review, export, retry failures, verify Daminion writes</td><td>&mdash;</td></tr>

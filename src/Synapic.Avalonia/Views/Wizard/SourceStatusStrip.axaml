@@ -1,0 +1,30 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Synapic.Avalonia.ViewModels.Steps"
+             xmlns:help="using:Synapic.Avalonia.Services"
+             x:Class="Synapic.Avalonia.Views.Wizard.SourceStatusStrip"
+             x:DataType="vm:Step1DatasourceViewModel"
+             help:HelpScope.Topic="step1-datasource.html">
+
+  <!-- The source profile: two lights, always both on screen, so at a glance you
+       know what the next run would touch. Green = that source is ready to work
+       with (a live catalog session, or a folder that exists); the text says
+       which server, or which folder and whether subfolders are included. -->
+  <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto">
+    <Ellipse Grid.Row="0" Grid.Column="0" Width="10" Height="10"
+             VerticalAlignment="Center" Margin="0,0,8,2"
+             Fill="{Binding DaminionSourceBrush}"
+             ToolTip.Tip="Green while a Daminion session is live; red while nobody is signed in." />
+    <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding DaminionSourceText}"
+               VerticalAlignment="Center" FontSize="12" Margin="0,0,0,2"
+               TextTrimming="CharacterEllipsis" />
+
+    <Ellipse Grid.Row="1" Grid.Column="0" Width="10" Height="10"
+             VerticalAlignment="Center" Margin="0,0,8,0"
+             Fill="{Binding LocalSourceBrush}"
+             ToolTip.Tip="Green once the chosen folder exists on disk; red while no folder is selected." />
+    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding LocalSourceText}"
+               VerticalAlignment="Center" FontSize="12"
+               TextTrimming="CharacterEllipsis" />
+  </Grid>
+</UserControl>

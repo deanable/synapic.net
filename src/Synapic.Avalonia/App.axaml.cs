@@ -90,7 +90,13 @@ public partial class App : Application
         // churn) before merging config.json.
         services.AddSingleton(configService);
         services.AddSingleton(config);
-        services.AddSingleton<Session>();
+        // The start screen owns the source, and the record count runs on launch,
+        // so the stored source comes back with the session: the folder and the
+        // source type from config.json, the Daminion connection from the registry
+        // (password included, DPAPI-protected).
+        var session = new Session();
+        session.Datasource.ApplyStoredSource(config.Datasource);
+        services.AddSingleton(session);
         services.AddSingleton(new DaminionConnectionStore());
         services.AddSingleton(new EngineSettingsStore());
         services.AddSingleton(new SystemPromptPresetStore());
@@ -122,6 +128,12 @@ public partial class App : Application
             // local build. Advisory only - it must never delay or fail startup.
             var shell = (MainWindowViewModel)mainWindow.DataContext;
             _ = DetectThenCheckForUpdatesAsync(shell, log);
+
+            // Source first: reconnect to the last Daminion server when that is
+            // the stored source, then run the record count — so the start
+            // screen's indicators and the three workflow cards are correct
+            // without a button press.
+            _ = InitializeSourceAsync(shell, log);
 
             // Server lifecycle (user requirement): the inference server starts
             // when the application launches. ui.autoLaunchSidecar (default
@@ -179,6 +191,24 @@ public partial class App : Application
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    /// <summary>
+    /// Startup sequence for the start screen's source panel: the automatic
+    /// reconnect (when the stored source is Daminion) and the automatic record
+    /// count. Guarded - a dead server or a folder that has since moved must not
+    /// affect the launch.
+    /// </summary>
+    private static async Task InitializeSourceAsync(MainWindowViewModel vm, Serilog.ILogger log)
+    {
+        try
+        {
+            await vm.Wizard.Step1.InitializeAsync();
+        }
+        catch (Exception e)
+        {
+            log.Error(e, "Source initialization failed at startup");
+        }
     }
 
     /// <summary>Startup sequence: detection first (it creates the variant

@@ -11,10 +11,15 @@ vision-language model (default `LiquidAI/LFM2.5-VL-450M`) and writes the
 results either into the image files' metadata or back into a **Daminion** DAM
 catalog.
 
-Entry point: the app opens on a **start screen** with three routes &mdash;
-`Tagging` (the wizard below), `Deduplication` (Datasource &rarr; Dedup, nothing
-else) and `Upscaling` (Datasource &rarr; Upscaling, the Daminion "Feature
-enhancement" utility). `MainWindowViewModel.Route` holds `home` / `tagging` /
+Entry point: the app opens on a **start screen** whose first section is the
+**source panel** (folder picker, Daminion connect, scope, filters, and a record
+count that refreshes itself on launch and on every change), then three routes
+&mdash; `Tagging` (the wizard below), `Deduplication` (Datasource &rarr; Dedup,
+nothing else) and `Upscaling` (Datasource &rarr; Upscaling, the Daminion
+"Feature enhancement" utility). The route cards stay disabled until the panel has
+a usable source (`Step1.HasUsableSource`: a folder that exists, or a live
+Daminion session), and the panel *is* `Wizard.Step1`, so one source feeds every
+route. `MainWindowViewModel.Route` holds `home` / `tagging` /
 `dedup` / `upscale` and owns `StartTaggingRouteCommand` /
 `StartDedupRouteCommand` / `StartUpscaleRouteCommand` / `GoHomeCommand`;
 `WizardViewModel.IsDedupRoute` / `IsUpscaleRoute` are what hide
@@ -26,10 +31,11 @@ progress/ETA &rarr; summary &mdash; only the parameters (`TagRequest`,
 
 Wizard flow (tagging route):
 
-1. **Datasource** — local folder (recursive or not) or a connected Daminion
-   server with a scope (whole catalog / keyword search / shared collection /
-   saved search), filters (status flag, "only untagged fields"), and a fetch
-   limit (plus an optional *Process all*).
+1. **Datasource** — the source chosen on the start screen (local folder,
+   recursive or not; or a connected Daminion server with a scope &mdash; whole
+   catalog / keyword search / shared collection / saved search &mdash; and
+   filters), shown read-only with its record count, plus the fetch limit (and an
+   optional *Process all*) and the AI image scale.
 2. **Engine** — model id (from the local HF cache or by hand), device
    (CPU/CUDA/MPS), probability mode + candidate labels, a custom VLM system
    prompt, and which of the three returned fields to write.

@@ -25,9 +25,14 @@ window → detect/auto-launch the sidecar → stop it on shutdown. See the
 
 ### `Views/MainWindow.axaml(.cs)`
 Shell layout: toolbar (server indicator, Start/Stop Server, Build Server,
-download progress), a **start screen** with two route cards (`Tagging` /
-`Deduplication`, bound to `StartTaggingRouteCommand` / `StartDedupRouteCommand`,
-visible while `IsHomeVisible`), a navigation bar whose tabs follow the active
+download progress), a **start screen** with the **source panel**
+(`DatasourceSourcePanel` — folder picker, Daminion connect, scope, filters and the
+record count — bound to `Wizard.Step1`, the same view model every route runs on)
+and three route cards (`Tagging` / `Deduplication` / `Upscaling`, bound to
+`StartTaggingRouteCommand` / `StartDedupRouteCommand` / `StartUpscaleRouteCommand`,
+visible while `IsHomeVisible` and gated on **`CanStartRoute`** = the source panel
+has a usable source: `Step1.HasUsableSource` — a folder that exists, or a live
+Daminion session), a navigation bar whose tabs follow the active
 route (`Wizard.ShowTaggingTabs`, `Wizard.ShowDatasourceTab`, route title, `⌂
 Home` button), a scrollable content area hosting the current wizard step
 via `ContentControl` data templates, and a live **Log** list.
@@ -51,7 +56,9 @@ One user control per step. Code-behind is intentionally thin:
 
 | View | Code-behind behaviour |
 |------|-----------------------|
-| `Step1Datasource.axaml.cs` | `OnBrowseFolder` — OS folder picker writes `vm.LocalPath` |
+| `Step1Datasource.axaml.cs` | bare `InitializeComponent`; the source summary (`SourceStatusStrip`) and the processing limits |
+| `DatasourceSourcePanel.axaml.cs` | `OnBrowseFolder` — OS folder picker writes `vm.LocalPath`; hosts `SourceStatusStrip` |
+| `SourceStatusStrip.axaml.cs` | the two source lights (Daminion / folder), shared by the start screen and Step 1 |
 | `Step2Engine.axaml.cs` | bare `InitializeComponent` |
 | `Step3Process.axaml.cs` | auto-scrolls the log list to the last line |
 | `Step4Results.axaml.cs` | `Refresh` button + auto-scrolls the results grid to the newest row |
@@ -185,14 +192,27 @@ operation runs (one progress bar is shared by both).
   Keywords/Categories/Description (+ "Select all untagged").
 - Processing limits: `MaxItems`, **`ProcessAll`** (ignore the ceiling and page
   until the server returns nothing), `ResizeScale`, `UseThumbnailOverride`.
-- `CountCommand` → `GetFilteredItemCountAsync`; `CountText` shows the result or
-  a failure hint.
+- Source readiness (the start screen's gate): `LocalFolderExists`,
+  `HasUsableSource`, `DaminionSourceBrush` / `LocalSourceBrush` and
+  `DaminionSourceText` / `LocalSourceText` — the two source lights.
+- Record count (automatic): `RefreshCountAsync` counts `WorkflowRunner`'s
+  `CountLocalImages` for a folder or `GetFilteredItemCountAsync` for the catalog;
+  `ScheduleCountRefresh` debounces every scope/filter/folder change onto it,
+  `IsCounting` drives the spinner and `CountText` shows the result or a failure
+  hint. `CountCommand` ("Recount") is only a manual re-ask.
+- `InitializeAsync` — the launch sequence `App` runs: reconnect when the stored
+  source is Daminion (`ConnectCoreAsync`, shared with the Connect button), then
+  count once.
+- `ApplyStoredSource` (on `DatasourceState`) restores the folder/type from
+  `config.json` at startup, so the start screen has a source before the user
+  touches anything.
 - `ToSelectionForProcessing(client)` builds the orchestrator's
   `DatasourceSelection` (sharing the authenticated client).
 
 Persistence: on a **successful** connect, every field is saved to
 `DaminionConnectionStore`; on construction the form is pre-filled from the
-store (never auto-connected).
+store, and `InitializeAsync` reconnects to it once at launch (a failed login
+just leaves the form filled in).
 
 ### `Steps/Step2EngineViewModel`
 - Local model picker (`LocalModels` from `/models/list`, `SelectedModel`,

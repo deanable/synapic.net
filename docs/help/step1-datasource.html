@@ -2,17 +2,19 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
-<title>Step 1 &mdash; Datasource</title>
+<title>The source, and Step 1</title>
 <link rel="stylesheet" type="text/css" href="help.css">
 </head>
 <body>
 
-<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; The workflow &rsaquo; Step 1 &mdash; Datasource</p>
+<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; The workflow &rsaquo; The source, and Step 1</p>
 
-<h1>Step 1 &mdash; Datasource</h1>
+<h1>The source, and Step 1</h1>
 
-<p class="lead">Step 1 answers one question: which images? Everything else in the
-run follows from it, so this is the step worth getting right.</p>
+<p class="lead">A run answers one question first: which images? That is decided on
+the start screen, next to the three workflows, because nothing else about the run
+means anything until it is answered. Step 1 restates the answer and sets how much
+of it to process.</p>
 
 <h2>Two kinds of source</h2>
 
@@ -22,8 +24,24 @@ run follows from it, so this is the step worth getting right.</p>
 <tr><td><span class="ui">Daminion Server</span></td><td>Images managed by Daminion, where the catalog is the source of truth.</td><td>Into the Daminion catalog, through its API</td></tr>
 </table>
 
-<p>You can switch between them freely; the two panels below the radio buttons are
-mutually exclusive, and the rest of the step only shows what applies.</p>
+<p>Choose one on the start screen with the radio buttons under the two lights.
+The panels below them are mutually exclusive, and the rest of the panel only
+shows what applies.</p>
+
+<h2>The two source lights</h2>
+
+<p>Above the radio buttons, two lights are always on screen &mdash; the quickest
+answer to "what am I working with?" before you commit to anything:</p>
+
+<table>
+<tr><th class="setting">Light</th><th>Green means</th><th>Red means</th></tr>
+<tr><td>Daminion</td><td>A session is live; the line beside it names the server URL.</td><td>Nobody is signed in. Credentials typed into the form do not count until the server accepts them.</td></tr>
+<tr><td>Folder</td><td>The chosen folder exists; the line beside it names the folder, and says so when subfolders are included.</td><td>No folder is selected, or the typed path does not exist (a typo, or a drive that is not mounted).</td></tr>
+</table>
+
+<p>The three workflow cards stay disabled until one of the lights is green. That
+is deliberate: entering a route with no source would only lead to a run that
+cannot fetch anything.</p>
 
 <h2>Local folder</h2>
 
@@ -57,12 +75,22 @@ to have their own topics:</p>
 
 <ul>
 <li><a href="step1-daminion.html">Connecting to Daminion</a> &mdash; URL,
-credentials, and what happens on connect.</li>
+credentials, and what happens on connect. That happens on the start screen: the
+form is not hidden in a step.</li>
 <li><a href="step1-scope-filters.html">Scope and filters</a> &mdash; which items
 from the catalog, and which of them still need tagging.</li>
-<li><a href="step1-limits.html">How many items to process</a> &mdash; limits,
-image size, and counting before you commit.</li>
+<li><a href="step1-limits.html">How many items to process</a> &mdash; the ceiling
+and the image size, which stay in Step 1.</li>
 </ul>
+
+<h2>What Step 1 shows</h2>
+
+<p>Step 1 does not ask for the source a second time. It reports it &mdash; the
+same two lights, the record count, and a line saying the source is changed on the
+start screen (<span class="ui">&#8962; Home</span>) &mdash; and it owns the two
+limits that decide the size of the batch: how many items to take, and how much of
+each image the model sees. See <a href="step1-limits.html">How many items to
+process</a>.</p>
 
 <h2>What Step 1 is not</h2>
 
@@ -76,11 +104,13 @@ is the line to look for when a run finishes suspiciously fast.</li>
 </ul>
 
 <div class="note">
-<p class="first">Your Daminion credentials are stored, your folder path is not.</p>
-<p>On Windows, a <em>successful</em> Daminion connect saves the connection, scope,
-filters and limits so the next run only needs a button press. A failed login
-never overwrites a working set. The local folder path lives only in the session
-and in the app config.</p>
+<p class="first">Your source comes back next time.</p>
+<p>On Windows, a <em>successful</em> Daminion connect saves the connection,
+scope and filters, and Synapic reconnects to that server automatically on the
+next launch &mdash; so the record count is there before you touch anything. A
+failed login never overwrites a working set; the stored password is protected
+with Windows DPAPI. The local folder path is kept in the app config, so the
+folder you used last is still selected when you come back.</p>
 </div>
 
 <div class="seealso">
@@ -88,6 +118,7 @@ and in the app config.</p>
 <ul>
 <li><a href="step1-daminion.html">Connecting to Daminion</a></li>
 <li><a href="step1-scope-filters.html">Scope and filters</a></li>
+<li><a href="step1-limits.html">How many items to process</a></li>
 <li><a href="step2-engine.html">Step 2 &mdash; Engine</a></li>
 <li><a href="metadata-written.html">What gets written to your images</a></li>
 </ul>
