@@ -246,7 +246,9 @@ local `FolderPath` or the Step 1 Daminion scope (`DaminionScopeSummary`, fed by
 the injected `Step1DatasourceViewModel` + sidecar). `ScanCommand` enumerates
 supported extensions (local) or fetches Daminion items and groups them: items 
 with a server `HashCode` are grouped without download; items without fall back 
-to downloading each original, hashing it, and deleting the temp file. Produces 
+to downloading each original, hashing it, and deleting the temp file. The Server
+hash picker (Daminion only) decides how those server hashes are compared —
+Exact (identical values only, the default) or Hamming at the threshold. Produces 
 `Groups` — a vertical list of
 `DuplicateGroupViewModel` cards, each holding `DedupItemViewModel` rows with an
 `IsChecked` keep checkbox (checked = kept; unchecked = action target). The
@@ -424,10 +426,10 @@ through as the dedup record's size on the no-download path, so the
 smallest/largest auto-select rules still work there. **Caveat:** the Daminion API 
 docs describe `hashCode` as a content hash but do not state whether it is 
 perceptual (tolerant of resize/re-encode) or exact (byte-identical only). 
-Until verified on a live catalog, `HashCode` is fed into the same 64-bit 
-comparison space as the algorithmic hashes (grouped by the threshold's hamming 
-distance); each scan's diagnostic summary reports the hashCode distribution to 
-help settle exactness.
+`HashCode` is compared only with other server hashes — never with the algorithmic
+hashes — by the rule the dedup step's Server hash picker sets: exact equality
+(the default) or hamming distance at the threshold. Each scan's diagnostic
+summary reports the hashCode distribution to help settle which it is.
 
 **`DaminionConnectionStore`** — Windows-registry persistence of the Step 1
 form (`HKCU\Software\Synapic\Daminion`), with the password DPAPI-protected
@@ -491,8 +493,10 @@ omit it), the original is downloaded and hashed the old way (download →
 `DedupService.ComputeHash` → record → delete temp). One item at a time keeps 
 a large scope from landing on disk whole. Counters: 
 `ServerHashGrouped` (items grouped from server hash only), 
-`DownloadFailures`, `HashFailures`. Produces `Hashes` 
-(`Dictionary<string, ulong>`, keyed `"daminion:{id}"`) and `Records` 
+`DownloadFailures`, `HashFailures`. Produces `ExactHashes` (server content
+hashes, grouped by the Server hash rule) and `PerceptualHashes` 
+(both `Dictionary<string, ulong>` keyed `"daminion:{id}"`, never compared
+with each other) plus `Records` 
 (`Dictionary<string, DedupScanRecord>`) the step builds its groups from via 
 `IDedupService.GroupFromHashes`. The local scan stays a direct
 `DedupService` call (no downloads involved).
@@ -516,13 +520,16 @@ Union-Find grouping with a hamming-distance threshold, and
 `ApplyToPathsAsync` (also behind `ApplyActionsAsync`) for Delete / Move (into a
 `duplicates/` subfolder) / Tag. `ComputeHash` is public static (instance member
 on the interface too) and returns `null` for unreadable images;
-`GroupFromHashes` groups already-computed hashes — the Daminion scan's
-incremental path. `CreateThumbnail(path, maxSize = 128)` scales an image into
+`GroupFromHashes(perceptualHashes, exactHashes, opts)` groups already-computed
+hashes — the Daminion scan's
+incremental path; server hashes are compared only with each other, by
+`DedupOptions.ServerHashMatch` (exact equality by default, hamming on request).
+`CreateThumbnail(path, maxSize = 128)` scales an image into
 an in-memory JPEG buffer for review previews (null for unreadable images,
 alpha flattened for JPEG). `ReadImageDateUtc(path)` reads the EXIF capture date
 (DateTimeOriginal, else IFD0 DateTime) for the auto-select rules, returning
 null when absent so callers fall back to file time.
-Types: `HashAlgorithm`, `DedupAction`, `DedupOptions`, `DedupProgress`,
+Types: `HashAlgorithm`, `DedupAction`, `ServerHashMatchMode`, `DedupOptions`, `DedupProgress`,
 `DuplicateGroup`, `DedupResult`.
 
 ### Media & metadata

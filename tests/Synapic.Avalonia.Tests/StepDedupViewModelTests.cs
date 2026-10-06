@@ -25,6 +25,30 @@ public class StepDedupViewModelTests
     private static DuplicateGroupViewModel Group(params DedupItemViewModel[] items) =>
         new(items, "phash", 0.90);
 
+    // ── Scan settings ───────────────────────────────────────────────────────
+
+    [Fact]
+    public void BuildOptions_CarriesTheServerHashRule()
+    {
+        var vm = new StepDedupViewModel();
+
+        // Exact is the default: the server hash is only trusted for identical
+        // values until a live scan shows it behaves perceptually.
+        Assert.Equal(ServerHashMatchMode.Exact, vm.BuildOptions().ServerHashMatch);
+        Assert.Equal("Exact", vm.ServerHashMatches[0]);
+
+        vm.SelectedServerHashMatch = 1; // "Hamming"
+        Assert.Equal(ServerHashMatchMode.Hamming, vm.BuildOptions().ServerHashMatch);
+    }
+
+    [Fact]
+    public void BuildOptions_ClampsTheAlgorithmIndexToTheKnownSet()
+    {
+        var vm = new StepDedupViewModel { SelectedAlgorithm = 99 };
+
+        Assert.Equal(HashAlgorithm.ColorMoment, vm.BuildOptions().Algorithm);
+    }
+
     // ── Auto-select rules ───────────────────────────────────────────────────
 
     [Fact]
@@ -443,6 +467,48 @@ public class StepDedupViewModelTests
         // …and the wizard hands Step 1 in for the Daminion scope summary.
         Assert.NotEqual("No datasource step available", wizard.Dedup.DaminionScopeSummary);
         Assert.Contains("Step 1", wizard.Dedup.DaminionScopeSummary);
+    }
+
+    /// <summary>The Server hash picker exists only for the catalog source and is
+    /// bound both ways: it appears with the Daminion source, tracks the VM's
+    /// selection, and writes a picked value back (a mistyped binding would leave
+    /// it at -1 or drop the write).</summary>
+    [AvaloniaFact]
+    public void ServerHashPicker_IsDaminionOnly_AndBindsBothWays()
+    {
+        var vm = new StepDedupViewModel { DatasourceType = "local" };
+        var view = new StepDedup { DataContext = vm };
+        var window = new Window { Content = view, Width = 1000, Height = 800 };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        try
+        {
+            var combo = view.GetVisualDescendants().OfType<ComboBox>()
+                .Single(c => c.ItemsSource is string[] items && items.Contains("Hamming"));
+
+            // Local source: there are no server hashes to compare, so the picker
+            // stays hidden — and its binding is already resolved to the default.
+            Assert.False(combo.IsVisible);
+            Assert.Equal(0, combo.SelectedIndex);
+
+            vm.DatasourceType = "daminion";
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(combo.IsVisible);
+
+            // VM → view.
+            vm.SelectedServerHashMatch = 1;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, combo.SelectedIndex);
+
+            // View → VM (Manual = the user picking in the dropdown).
+            combo.SelectedIndex = 0;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(0, vm.SelectedServerHashMatch);
+        }
+        finally
+        {
+            window.Close();
+        }
     }
 
     /// <summary>The image column binds through real compiled XAML: a row with a

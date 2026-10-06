@@ -27,7 +27,7 @@
     <Border IsVisible="{Binding IsDaminion}" Classes="card" Padding="14">
       <StackPanel Spacing="4">
         <TextBlock Text="{Binding DaminionScopeSummary}" FontWeight="SemiBold" TextWrapping="Wrap" />
-        <TextBlock Text="The catalog scope is chosen in Step 1 — originals are downloaded one at a time for hashing."
+        <TextBlock Text="The catalog scope is chosen in Step 1 — items the catalog already hashed are compared without downloading; the rest are downloaded one at a time and hashed."
                    Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
       </StackPanel>
     </Border>
@@ -40,10 +40,18 @@
       <TextBlock Text="Threshold:" VerticalAlignment="Center"
                  help:HelpScope.Topic="settings-reference.html#dedup-threshold" />
       <NumericUpDown Value="{Binding Threshold}" Minimum="0.5" Maximum="1" Increment="0.01" Width="110" />
+      <TextBlock Text="Server hash:" VerticalAlignment="Center" IsVisible="{Binding IsDaminion}"
+                 help:HelpScope.Topic="settings-reference.html#dedup-server-hash" />
+      <ComboBox SelectedIndex="{Binding SelectedServerHashMatch, Mode=TwoWay}" ItemsSource="{Binding ServerHashMatches}"
+                MinWidth="120" IsVisible="{Binding IsDaminion}"
+                help:HelpScope.Topic="settings-reference.html#dedup-server-hash" />
       <Button Content="Scan" Command="{Binding ScanCommand}" Classes="accent" />
       <ProgressBar IsIndeterminate="True" Width="90" Height="6" VerticalAlignment="Center"
                    IsVisible="{Binding IsScanning}" />
     </StackPanel>
+
+    <TextBlock Text="{Binding ServerHashMatchHint}" Opacity="0.7" FontSize="12" TextWrapping="Wrap"
+               IsVisible="{Binding IsDaminion}" />
 
     <TextBlock Text="{Binding ScanSummary}" Opacity="0.8" TextWrapping="Wrap" />
 

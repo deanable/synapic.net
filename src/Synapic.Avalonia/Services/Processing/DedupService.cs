@@ -22,11 +22,33 @@ public enum DedupAction
     Delete,
 }
 
+/// <summary>
+/// How Daminion server content hashes are compared. Server hashes are only
+/// ever compared with other server hashes — never against algorithmic
+/// perceptual hashes, which are a different hash function.
+/// </summary>
+public enum ServerHashMatchMode
+{
+    /// <summary>
+    /// Same hashCode value only. Safe when the server hash is byte-exact:
+    /// two different files whose values merely sit close together stay apart.
+    /// </summary>
+    Exact,
+
+    /// <summary>
+    /// Hamming distance inside the threshold, the way algorithmic hashes are
+    /// compared. Use it when the server hashCode turns out to be perceptual
+    /// (visually similar files share close values).
+    /// </summary>
+    Hamming,
+}
+
 /// <summary>Dedup options (spec §5.3).</summary>
 public sealed record DedupOptions(
     HashAlgorithm Algorithm = HashAlgorithm.PHash,
     double Threshold = 0.90,
-    int MaxDimension = 512);
+    int MaxDimension = 512,
+    ServerHashMatchMode ServerHashMatch = ServerHashMatchMode.Exact);
 
 /// <summary>Progress reported during hashing/grouping.</summary>
 public sealed record DedupProgress(int FilesHashed, int TotalFiles, int GroupsFound);
@@ -67,8 +89,20 @@ public interface IDedupService
     /// originals one at a time and must not keep them all on disk.</summary>
     ulong? ComputeHash(string path, DedupOptions opts);
 
-    /// <summary>Group already-computed hashes (Daminion scan) instead of files (local scan).</summary>
-    DedupResult GroupFromHashes(IReadOnlyDictionary<string, ulong> hashes, DedupOptions opts);
+    /// <summary>
+    /// Group already-computed hashes (Daminion scan) instead of files (local
+    /// scan). The two key spaces stay apart: <paramref name="exactHashes"/> are
+    /// server content hashes, grouped among themselves by
+    /// <see cref="DedupOptions.ServerHashMatch"/> (exact equality by default,
+    /// hamming distance on request), while <paramref name="perceptualHashes"/> are
+    /// algorithmic hashes, always grouped by the threshold's hamming distance.
+    /// A server hash is never compared with a perceptual hash — different hash
+    /// functions, so their bit patterns are not comparable.
+    /// </summary>
+    DedupResult GroupFromHashes(
+        IReadOnlyDictionary<string, ulong> perceptualHashes,
+        IReadOnlyDictionary<string, ulong> exactHashes,
+        DedupOptions opts);
 
     /// <summary>Apply an action to an explicit set of file paths — the unchecked
     /// (duplicate) items the user reviewed, across all groups.</summary>
@@ -149,16 +183,24 @@ public sealed class DedupService : IDedupService
 
     /// <summary>Group pre-computed hashes — used by the Daminion dedup scan,
     /// whose images are downloaded to a temp file, hashed, and deleted again
-    /// one at a time.</summary>
-    public DedupResult GroupFromHashes(IReadOnlyDictionary<string, ulong> hashes, DedupOptions opts)
+    /// one at a time. Server hashes and algorithmic hashes are grouped by their
+    /// own rules and never cross-compared (see <see cref="IDedupService.GroupFromHashes"/>).</summary>
+    public DedupResult GroupFromHashes(
+        IReadOnlyDictionary<string, ulong> perceptualHashes,
+        IReadOnlyDictionary<string, ulong> exactHashes,
+        DedupOptions opts)
     {
         var result = new DedupResult
         {
-            TotalFiles = hashes.Count,
+            TotalFiles = perceptualHashes.Count + exactHashes.Count,
             Algorithm = opts.Algorithm.ToString().ToLowerInvariant(),
             Threshold = opts.Threshold,
         };
-        GroupDuplicates(hashes, opts, result.Groups);
+        GroupDuplicates(perceptualHashes, opts, result.Groups);
+        if (opts.ServerHashMatch == ServerHashMatchMode.Hamming)
+            GroupDuplicates(exactHashes, opts, result.Groups, hashType: "server-hash");
+        else
+            GroupExact(exactHashes, result.Groups);
         return result;
     }
 
@@ -403,7 +445,11 @@ public sealed class DedupService : IDedupService
 
     // ── Grouping (Union-Find port of dedup_engine.py) ───────────────────────
 
-    private static void GroupDuplicates(IReadOnlyDictionary<string, ulong> hashes, DedupOptions opts, List<DuplicateGroup> groups)
+    private static void GroupDuplicates(
+        IReadOnlyDictionary<string, ulong> hashes,
+        DedupOptions opts,
+        List<DuplicateGroup> groups,
+        string? hashType = null)
     {
         var items = hashes.Keys.ToArray();
         var parent = new Dictionary<string, string>(items.Length);
@@ -423,7 +469,7 @@ public sealed class DedupService : IDedupService
         }
 
         // Normalize hamming distance to a 0-1 similarity; threshold 0.90 → ≤6 bits differ.
-        var maxDistance = (int)Math.Round(64 * (1.0 - opts.Threshold));
+        var maxDistance = MaxHammingDistance(opts.Threshold);
         // Hoist the hash values into an array: this is the O(n²) hot loop, and
         // two dictionary lookups per pair dominate it on a large scope.
         var values = new ulong[items.Length];
@@ -451,11 +497,49 @@ public sealed class DedupService : IDedupService
             {
                 Items = groupItems,
                 SimilarityScores = scores,
-                HashType = opts.Algorithm.ToString().ToLowerInvariant(),
+                HashType = hashType ?? opts.Algorithm.ToString().ToLowerInvariant(),
                 KeepItem = groupItems[0], // keep-first; UI can override (largest/newest)
             });
         }
     }
 
+    /// <summary>
+    /// Group server content hashes by exact equality — the only safe rule when
+    /// the hash function's semantics are unknown. The Daminion API documents
+    /// <c>hashCode</c> as a content hash without saying whether it is
+    /// byte-exact, so two values that merely sit close together (inside the
+    /// perceptual threshold) must stay separate: they are different files until
+    /// the server says otherwise. Singletons are dropped, like the perceptual
+    /// path does.
+    /// </summary>
+    private static void GroupExact(IReadOnlyDictionary<string, ulong> hashes, List<DuplicateGroup> groups)
+    {
+        foreach (var bucket in hashes.GroupBy(pair => pair.Value).Where(g => g.Count() > 1))
+        {
+            var items = bucket
+                .Select(pair => pair.Key)
+                .OrderBy(key => key, StringComparer.Ordinal)
+                .ToArray();
+
+            groups.Add(new DuplicateGroup
+            {
+                Items = items,
+                // Equal server hashes are identical by the server's own
+                // reckoning, so each item scores a perfect match against the
+                // group's representative.
+                SimilarityScores = Enumerable.Repeat(1.0, items.Length).ToArray(),
+                HashType = "server-hash",
+                KeepItem = items[0],
+            });
+        }
+    }
+
     private static int HammingDistance(ulong a, ulong b) => BitOperations.PopCount(a ^ b);
+
+    /// <summary>
+    /// The hamming-distance cutoff a threshold maps to: 0.90 of 64 bits means at
+    /// most 6 may differ. Public so the Daminion scan's diagnostics can state
+    /// the rule the comparison actually used.
+    /// </summary>
+    public static int MaxHammingDistance(double threshold) => (int)Math.Round(64 * (1.0 - threshold));
 }

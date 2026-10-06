@@ -106,4 +106,96 @@ public class DedupServiceTests
         };
         Assert.Empty(DedupTestHarness.Group(hashes, 0.90));
     }
+
+    // ── Server-hash grouping: selectable rule, spaces never mixed ────
+
+    [Fact]
+    public void ServerHashes_ExactRule_MergesOnlyIdenticalValues()
+    {
+        var exact = new Dictionary<string, ulong>
+        {
+            ["daminion:1"] = 100UL,
+            ["daminion:2"] = 100UL,
+            ["daminion:3"] = 200UL,
+            ["daminion:4"] = 200UL,
+        };
+
+        var groups = DedupTestHarness.GroupExact(exact);
+
+        Assert.Equal(2, groups.Count);
+        Assert.All(groups, g => Assert.Equal("server-hash", g.HashType));
+        Assert.All(groups, g => Assert.All(g.SimilarityScores, s => Assert.Equal(1.0, s, 10)));
+    }
+
+    [Fact]
+    public void ServerHashes_ExactRule_DoesNotBridgeValuesInsideThePerceptualThreshold()
+    {
+        // 0 and 0b111111 differ by 6 bits → similarity 0.906 ≥ 0.90, so the
+        // perceptual path groups them. Exact must not: different content hashes
+        // are different files.
+        var close = new Dictionary<string, ulong>
+        {
+            ["daminion:1"] = 0UL,
+            ["daminion:2"] = 0b_111111UL,
+        };
+
+        Assert.Empty(DedupTestHarness.GroupExact(close));
+        Assert.Single(DedupTestHarness.Group(close, 0.90)); // the perceptual path still groups
+    }
+
+    [Fact]
+    public void ServerHashes_HammingRule_GroupsLikeTheAlgorithmicPath()
+    {
+        var close = new Dictionary<string, ulong>
+        {
+            ["daminion:1"] = 0UL,
+            ["daminion:2"] = 0b_111111UL,  // 6 bits from #1 → inside the threshold
+            ["daminion:3"] = 0b_1111111UL, // 7 from #1, but 1 from #2 → joins the chain
+        };
+
+        var groups = DedupTestHarness.GroupExactHamming(close);
+
+        Assert.Single(groups);
+        Assert.Equal(3, groups[0].Items.Length);
+        Assert.Equal("server-hash", groups[0].HashType);
+    }
+
+    [Fact]
+    public void ServerHashes_HammingRule_StillExcludesSingletons()
+    {
+        var hashes = new Dictionary<string, ulong>
+        {
+            ["daminion:1"] = 0UL,
+            ["daminion:2"] = ulong.MaxValue,
+        };
+
+        Assert.Empty(DedupTestHarness.GroupExactHamming(hashes));
+    }
+
+    [Fact]
+    public void ServerHashes_AreNeverComparedWithAlgorithmicHashes()
+    {
+        // Identical values on purpose: if the two spaces were ever compared,
+        // these two items would merge at distance 0 under either rule.
+        var perceptual = new Dictionary<string, ulong> { ["file.png"] = 0UL };
+        var exact = new Dictionary<string, ulong> { ["daminion:1"] = 0UL };
+        var options = new DedupOptions(Threshold: 0.90);
+
+        Assert.Empty(new DedupService().GroupFromHashes(perceptual, exact, options).Groups);
+        Assert.Empty(
+            new DedupService()
+                .GroupFromHashes(perceptual, exact, options with { ServerHashMatch = ServerHashMatchMode.Hamming })
+                .Groups);
+    }
+
+    [Fact]
+    public void ServerHashes_TotalFilesCountsBothSpaces()
+    {
+        var result = new DedupService().GroupFromHashes(
+            new Dictionary<string, ulong> { ["a.png"] = 1UL, ["b.png"] = 2UL },
+            new Dictionary<string, ulong> { ["daminion:1"] = 3UL },
+            new DedupOptions(Threshold: 0.90));
+
+        Assert.Equal(3, result.TotalFiles);
+    }
 }

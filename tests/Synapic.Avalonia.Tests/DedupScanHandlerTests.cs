@@ -49,8 +49,11 @@ public class DedupScanHandlerTests
         Task<DedupResult> IDedupService.FindDuplicatesAsync(IEnumerable<string> imagePaths, DedupOptions opts, IProgress<DedupProgress>? progress, CancellationToken ct)
             => Task.FromResult(new DedupResult { TotalFiles = 0 });
 
-        DedupResult IDedupService.GroupFromHashes(IReadOnlyDictionary<string, ulong> hashes, DedupOptions opts)
-            => new DedupResult { TotalFiles = hashes.Count };
+        DedupResult IDedupService.GroupFromHashes(
+            IReadOnlyDictionary<string, ulong> perceptualHashes,
+            IReadOnlyDictionary<string, ulong> exactHashes,
+            DedupOptions opts)
+            => new DedupResult { TotalFiles = perceptualHashes.Count + exactHashes.Count };
 
         Task<bool> IDedupService.ApplyToPathsAsync(IEnumerable<string> paths, DedupAction action, CancellationToken ct)
             => Task.FromResult(true);
@@ -73,8 +76,11 @@ public class DedupScanHandlerTests
         Task<DedupResult> IDedupService.FindDuplicatesAsync(IEnumerable<string> imagePaths, DedupOptions opts, IProgress<DedupProgress>? progress, CancellationToken ct)
             => Task.FromResult(new DedupResult { TotalFiles = 0 });
 
-        DedupResult IDedupService.GroupFromHashes(IReadOnlyDictionary<string, ulong> hashes, DedupOptions opts)
-            => new DedupResult { TotalFiles = hashes.Count };
+        DedupResult IDedupService.GroupFromHashes(
+            IReadOnlyDictionary<string, ulong> perceptualHashes,
+            IReadOnlyDictionary<string, ulong> exactHashes,
+            DedupOptions opts)
+            => new DedupResult { TotalFiles = perceptualHashes.Count + exactHashes.Count };
 
         Task<bool> IDedupService.ApplyToPathsAsync(IEnumerable<string> paths, DedupAction action, CancellationToken ct)
             => Task.FromResult(true);
@@ -106,13 +112,14 @@ public class DedupScanHandlerTests
         Assert.Equal(0, downloader.DownloadOriginalCallCount);
         Assert.Equal(0, dedup.ComputeHashCallCount);
 
-        // All three items should be hashed (two share a hash, one is unique).
-        Assert.Equal(3, handler.Hashes.Count);
+        // All three items land in the server-hash set, none in the perceptual one.
+        Assert.Equal(3, handler.ExactHashes.Count);
+        Assert.Empty(handler.PerceptualHashes);
 
         // Two items share hash 12345 → they should be in the same group.
-        Assert.Equal(12345UL, handler.Hashes["daminion:1"]);
-        Assert.Equal(12345UL, handler.Hashes["daminion:2"]);
-        Assert.Equal(67890UL, handler.Hashes["daminion:3"]);
+        Assert.Equal(12345UL, handler.ExactHashes["daminion:1"]);
+        Assert.Equal(12345UL, handler.ExactHashes["daminion:2"]);
+        Assert.Equal(67890UL, handler.ExactHashes["daminion:3"]);
 
         // The server-hash-grouped counter should reflect all three items.
         Assert.Equal(3, handler.ServerHashGrouped);
@@ -148,21 +155,49 @@ public class DedupScanHandlerTests
         foreach (var item in items)
             await handler.ProcessAsync(item, CancellationToken.None);
 
-        Assert.Equal(5, handler.Hashes.Count);
+        Assert.Equal(5, handler.ExactHashes.Count);
         Assert.Equal(5, handler.ServerHashGrouped);
 
-        // Items with the same server hash must have the same ulong hash value.
-        Assert.Equal(100UL, handler.Hashes["daminion:1"]);
-        Assert.Equal(100UL, handler.Hashes["daminion:2"]);
-        Assert.Equal(100UL, handler.Hashes["daminion:3"]);
-        Assert.Equal(200UL, handler.Hashes["daminion:4"]);
-        Assert.Equal(200UL, handler.Hashes["daminion:5"]);
+        // Items with the same server hash get the same ulong value.
+        Assert.Equal(100UL, handler.ExactHashes["daminion:1"]);
+        Assert.Equal(100UL, handler.ExactHashes["daminion:2"]);
+        Assert.Equal(100UL, handler.ExactHashes["daminion:3"]);
+        Assert.Equal(200UL, handler.ExactHashes["daminion:4"]);
+        Assert.Equal(200UL, handler.ExactHashes["daminion:5"]);
 
-        // Verify grouping: identical hashes (hamming distance 0) always group.
-        // The three 100UL items form one group, the two 200UL items form another.
-        var groups = DedupTestHarness.Group(handler.Hashes, 0.90);
-        Assert.Single(groups); // all 5 items are within hamming distance 6 of each other
-        Assert.Equal(5, groups[0].Items.Length);
+        // The default (exact) rule must keep 100 and 200 apart even though their
+        // values sit inside the 0.90 hamming threshold (5 bits differ): different
+        // server hashes mean different files until proven otherwise.
+        var result = new DedupService().GroupFromHashes(
+            handler.PerceptualHashes, handler.ExactHashes, Options);
+
+        Assert.Equal(2, result.Groups.Count);
+        Assert.All(result.Groups, g => Assert.Equal("server-hash", g.HashType));
+        Assert.Equal(3, result.Groups.Single(g => g.Items.Contains("daminion:1")).Items.Length);
+        Assert.Equal(2, result.Groups.Single(g => g.Items.Contains("daminion:4")).Items.Length);
+    }
+
+    [Fact]
+    public async Task ServerHashHammingMode_BridgesValuesInsideTheThreshold()
+    {
+        var handler = new DedupScanHandler(new FakeDownloader(), Options, new FakeDedup());
+
+        await handler.ProcessAsync(
+            new ProcessWorkItem { DaminionId = 1, FileName = "a.jpg", ServerHashCode = 100 },
+            CancellationToken.None);
+        await handler.ProcessAsync(
+            new ProcessWorkItem { DaminionId = 2, FileName = "b.jpg", ServerHashCode = 200 },
+            CancellationToken.None);
+
+        var hamming = Options with { ServerHashMatch = ServerHashMatchMode.Hamming };
+        var result = new DedupService().GroupFromHashes(
+            handler.PerceptualHashes, handler.ExactHashes, hamming);
+
+        // 100 ^ 200 = 5 bits, inside the threshold's 6 — the opt-in rule the user
+        // picks when the server hash turns out to be perceptual.
+        var group = Assert.Single(result.Groups);
+        Assert.Equal(2, group.Items.Length);
+        Assert.Equal("server-hash", group.HashType);
     }
 
     [Fact]
@@ -183,8 +218,9 @@ public class DedupScanHandlerTests
         Assert.Equal(1, downloader.DownloadOriginalCallCount);
         Assert.Equal(1, dedup.ComputeHashCallCount);
         Assert.Equal(0, handler.ServerHashGrouped);
-        Assert.Single(handler.Hashes);
-        Assert.Equal(0xFF_FFFF_FFFF_FFFFUL, handler.Hashes["daminion:1"]);
+        Assert.Single(handler.PerceptualHashes);
+        Assert.Equal(0xFF_FFFF_FFFF_FFFFUL, handler.PerceptualHashes["daminion:1"]);
+        Assert.Empty(handler.ExactHashes);
     }
 
     [Fact]
@@ -203,13 +239,16 @@ public class DedupScanHandlerTests
         foreach (var item in items)
             await handler.ProcessAsync(item, CancellationToken.None);
 
-        Assert.Equal(2, handler.Hashes.Count);
+        // The two spaces stay apart: the server-hash item lands in ExactHashes,
+        // the downloaded one in PerceptualHashes.
+        Assert.Single(handler.ExactHashes);
+        Assert.Single(handler.PerceptualHashes);
         Assert.Equal(1, handler.ServerHashGrouped);
         Assert.Equal(1, downloader.DownloadOriginalCallCount);
         Assert.Equal(1, dedup.ComputeHashCallCount);
 
-        Assert.Equal(42UL, handler.Hashes["daminion:1"]);
-        Assert.Equal(0xFF_FFFF_FFFF_FFFFUL, handler.Hashes["daminion:2"]);
+        Assert.Equal(42UL, handler.ExactHashes["daminion:1"]);
+        Assert.Equal(0xFF_FFFF_FFFF_FFFFUL, handler.PerceptualHashes["daminion:2"]);
     }
 
     [Fact]
@@ -238,7 +277,8 @@ public class DedupScanHandlerTests
         Assert.False(outcome.Success);
         Assert.Equal("no original downloaded", outcome.Status);
         Assert.Equal(1, failingHandler.DownloadFailures);
-        Assert.Empty(failingHandler.Hashes);
+        Assert.Empty(failingHandler.PerceptualHashes);
+        Assert.Empty(failingHandler.ExactHashes);
     }
 
     [Fact]

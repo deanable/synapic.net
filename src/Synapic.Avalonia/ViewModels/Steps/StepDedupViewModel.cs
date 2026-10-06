@@ -257,6 +257,29 @@ public partial class StepDedupViewModel : ViewModelBase
 
     public string[] Algorithms { get; } = { "PHash", "DHash", "AHash", "ColorMoment" };
 
+    /// <summary>
+    /// How the Daminion server's own content hashes are compared, in dropdown
+    /// order — index = the enum value. Exact is the default because the API does
+    /// not say whether <c>hashCode</c> is byte-exact; switch to Hamming once a
+    /// live scan shows it behaves perceptually. Either way server hashes are
+    /// only compared with each other, never with algorithmic hashes.
+    /// </summary>
+    public string[] ServerHashMatches { get; } = { "Exact", "Hamming" };
+
+    [ObservableProperty]
+    private int _selectedServerHashMatch; // index into ServerHashMatches
+
+    private ServerHashMatchMode ServerHashMatch =>
+        (ServerHashMatchMode)Math.Clamp(SelectedServerHashMatch, 0, ServerHashMatches.Length - 1);
+
+    /// <summary>One-line explanation of the selected rule, shown beside the picker.</summary>
+    public string ServerHashMatchHint => ServerHashMatch == ServerHashMatchMode.Exact
+        ? "Same hashCode value only — groups byte-identical catalog items."
+        : "Hamming distance at the threshold, the way algorithmic hashes compare.";
+
+    partial void OnSelectedServerHashMatchChanged(int value)
+        => OnPropertyChanged(nameof(ServerHashMatchHint));
+
     public string[] LocalActions { get; } = { "Tag", "Move", "Delete" };
 
     /// <summary>Actions offered per source: Daminion only supports deleting catalog entries.</summary>
@@ -368,6 +391,16 @@ public partial class StepDedupViewModel : ViewModelBase
 
     // ── Scan ────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// The scan's parameters as the dedup engine wants them (clamps included),
+    /// mirroring StepUpscaleViewModel.BuildOptions. Public for tests.
+    /// </summary>
+    public DedupOptions BuildOptions() => new(
+        (HashAlgorithm)Math.Clamp(SelectedAlgorithm, 0, Algorithms.Length - 1),
+        Threshold,
+        MaxDimension: 512,
+        ServerHashMatch: ServerHashMatch);
+
     private bool CanScan() => !IsScanning && (IsLocal ? !string.IsNullOrWhiteSpace(FolderPath) : DaminionReady);
 
     [RelayCommand(CanExecute = nameof(CanScan))]
@@ -381,16 +414,14 @@ public partial class StepDedupViewModel : ViewModelBase
         ScanSummary = IsDaminion ? "Fetching items from Daminion…" : "Scanning…";
         try
         {
-            var opts = new DedupOptions(
-                (HashAlgorithm)SelectedAlgorithm,
-                Threshold,
-                MaxDimension: 512);
+            var opts = BuildOptions();
 
             // Everything a failed scan needs to be diagnosed after the fact:
             // which source, which algorithm/threshold, and which scope id.
             SynapicLog.Info(nameof(StepDedupViewModel),
                 $"Scan starting — source={(IsDaminion ? $"Daminion catalog, {ScopeIdForLog()}" : $"local folder '{FolderPath}'")}, " +
-                $"algorithm={opts.Algorithm}, threshold={opts.Threshold:0.###}, maxDimension={opts.MaxDimension}");
+                $"algorithm={opts.Algorithm}, threshold={opts.Threshold:0.###}, maxDimension={opts.MaxDimension}" +
+                (IsDaminion ? $", serverHashMatch={opts.ServerHashMatch}" : ""));
 
             // Before pulling whole originals, drop anything a previous crash
             // left in the download folder — a scan is the only flow that can
@@ -523,7 +554,7 @@ public partial class StepDedupViewModel : ViewModelBase
         await new WorkflowRunner().RunItemsAsync(workflow, items, handler, progress, log: null, pause: null, ct);
 
         SynapicLog.Info(nameof(StepDedupViewModel),
-            $"Dedup scan done: {handler.Hashes.Count} of {items.Count} item(s) hashed " +
+            $"Dedup scan done: {handler.ExactHashes.Count + handler.PerceptualHashes.Count} of {items.Count} item(s) hashed " +
             $"({handler.ServerHashGrouped} from server hash, " +
             $"{handler.DownloadFailures} download failure(s), {handler.HashFailures} unhashable file(s))");
 
@@ -545,7 +576,7 @@ public partial class StepDedupViewModel : ViewModelBase
                 DaminionId = r.DaminionId,
             });
 
-        return _dedup.GroupFromHashes(handler.Hashes, opts);
+        return _dedup.GroupFromHashes(handler.PerceptualHashes, handler.ExactHashes, opts);
     }
 
     /// <summary>Daminion item metadata keyed by "daminion:{id}" for the current scan.</summary>

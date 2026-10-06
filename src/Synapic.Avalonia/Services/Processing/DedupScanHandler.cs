@@ -60,6 +60,11 @@ internal sealed class DaminionApiClientDownloader : IDaminionDownloader
 /// large scope from landing on disk whole. Failures are counted + logged rather
 /// than thrown, because a missing or unhashable file only shrinks the comparison
 /// set; it never fails the scan.
+///
+/// Server hashes and algorithmic hashes are kept in separate dictionaries
+/// (<see cref="ExactHashes"/> / <see cref="PerceptualHashes"/>): they are
+/// different hash functions, so each set is grouped by its own rule and the two
+/// are never compared with each other.
 /// </summary>
 public sealed class DedupScanHandler : IWorkflowItemHandler
 {
@@ -87,12 +92,25 @@ public sealed class DedupScanHandler : IWorkflowItemHandler
     {
     }
 
-    /// <summary>Hashes keyed "daminion:{id}" — input to GroupFromHashes.</summary>
-    /// For items with a server hashCode the value is the hashCode widened to ulong;
-    /// for items that were downloaded and algorithmically hashed it is the
-    /// perceptual hash. Either way the key space is the same and GroupFromHashes
-    /// groups by hamming distance across the mixed set.
-    public Dictionary<string, ulong> Hashes { get; } = new();
+    // One lock for every mutable map below: the runner's worker threads call
+    // ProcessAsync concurrently (dedup currently runs one item at a time, but
+    // the handler must stay correct if that bound is ever raised).
+    private readonly object _hashesLock = new();
+
+    /// <summary>
+    /// Algorithmic (perceptual) hashes for items that were downloaded and
+    /// hashed, keyed "daminion:{id}" — grouped by the threshold's hamming
+    /// distance, like a local scan.
+    /// </summary>
+    public Dictionary<string, ulong> PerceptualHashes { get; } = new();
+
+    /// <summary>
+    /// Server content hashes for items the catalog already hashed, keyed
+    /// "daminion:{id}" — grouped among themselves by
+    /// <see cref="DedupOptions.ServerHashMatch"/>. Deliberately a separate map:
+    /// these values are not comparable with the perceptual hashes above.
+    /// </summary>
+    public Dictionary<string, ulong> ExactHashes { get; } = new();
 
     /// <summary>Row data per hashed item, consumed by the review UI.</summary>
     public Dictionary<string, DedupScanRecord> Records { get; } = new();
@@ -128,9 +146,9 @@ public sealed class DedupScanHandler : IWorkflowItemHandler
         if (item.ServerHashCode is { } serverHash && serverHash != 0)
         {
             var key = $"daminion:{id}";
-            lock (Hashes)
+            lock (_hashesLock)
             {
-                Hashes[key] = (ulong)serverHash;
+                ExactHashes[key] = (ulong)serverHash;
                 Records[key] = new DedupScanRecord(
                     key,
                     item.FileName ?? $"Item {id}",
@@ -182,9 +200,9 @@ public sealed class DedupScanHandler : IWorkflowItemHandler
             }
 
             var key = $"daminion:{id}";
-            lock (Hashes)
+            lock (_hashesLock)
             {
-                Hashes[key] = hash.Value;
+                PerceptualHashes[key] = hash.Value;
                 Records[key] = new DedupScanRecord(
                     key,
                     item.FileName ?? $"Item {id}",
@@ -218,10 +236,10 @@ public sealed class DedupScanHandler : IWorkflowItemHandler
     /// - If server hashes are perceptual: items that are visually similar but not
     ///   byte-identical will share the same hashCode, and you'll see large groups
     ///   with high item counts per hashCode.
-    /// - If server hashes are exact: each unique file will have a unique hashCode,
-    ///   and groups will only form when the algorithmic hash finds perceptual
-    ///   similarity among items with different server hashes.
-    /// - The "Items requiring algorithmic hash" count tells you how many items
+    /// - If server hashes are exact: nearly every file has its own hashCode, so
+    ///   the exact-match groups are small and mostly pairs of byte-identical
+    ///   files.
+    /// - The "Downstream + algorithmically hashed" count tells you how many items
     ///   still needed the expensive download+hash path — if this is 0, the server
     ///   hash covered everything.
     /// </summary>
@@ -236,15 +254,22 @@ public sealed class DedupScanHandler : IWorkflowItemHandler
         SynapicLog.Info(nameof(DedupScanHandler),
             $"Server-hash grouped (no download): {ServerHashGrouped}");
         SynapicLog.Info(nameof(DedupScanHandler),
-            $"Downloaded + algorithmically hashed: {Records.Count - ServerHashGrouped}");
+            $"Downloaded + algorithmically hashed: {PerceptualHashes.Count}");
+        SynapicLog.Info(nameof(DedupScanHandler),
+            $"Server-hash comparison: {_options.ServerHashMatch} " +
+            (ServerHashGrouped == 0
+                ? "(no server hashes in this scope)"
+                : _options.ServerHashMatch == ServerHashMatchMode.Exact
+                    ? "(identical hash values only)"
+                    : $"(hamming distance ≤ {DedupService.MaxHammingDistance(_options.Threshold)} bits)"));
         SynapicLog.Info(nameof(DedupScanHandler),
             $"Download failures: {DownloadFailures}");
         SynapicLog.Info(nameof(DedupScanHandler),
             $"Hash failures: {HashFailures}");
 
         // HashCode distribution. Materialize every bucket before slicing: the
-        // "unique hashes" count below drives the collision warning, so it must
-        // not be limited to the handful of buckets actually printed.
+        // "unique hashes" count below drives the sharing line, so it must not be
+        // limited to the handful of buckets actually printed.
         var serverHashCounts = Records
             .Where(r => r.Value.ServerHashCode != 0)
             .GroupBy(r => r.Value.ServerHashCode)
@@ -277,16 +302,18 @@ public sealed class DedupScanHandler : IWorkflowItemHandler
             SynapicLog.Info(nameof(DedupScanHandler),
                 $"\nUnique server hashes: {uniqueServerHashes} across {totalServerHashed} items");
 
-            // Diagnostic: if there are fewer unique hashes than items, the server
-            // hash is grouping different files together. This could mean it's
-            // perceptual (good for dedup) or that different files happen to have
-            // the same hash (collision — bad). The group sizes help distinguish:
-            // large groups of items that are known to be different files suggest
-            // either perceptual hashing or collisions.
-            if (uniqueServerHashes < totalServerHashed)
+            // Sharing a hash is how groups form, so this is informational, not a
+            // warning: the bucket sizes above are what tell us whether the server
+            // hash behaves like an exact one (mostly single-item buckets) or a
+            // perceptual one (large buckets of visually similar files).
+            var shared = totalServerHashed - uniqueServerHashes;
+            if (shared > 0)
             {
-                SynapicLog.Warning(nameof(DedupScanHandler),
-                    $"\nWARNING: {totalServerHashed - uniqueServerHashes} items share a server hash with another item.");
+                SynapicLog.Info(nameof(DedupScanHandler),
+                    $"\n{shared} item(s) share a server hash with another item — " +
+                    (_options.ServerHashMatch == ServerHashMatchMode.Exact
+                        ? "exact matching offers those as groups."
+                        : "the hamming rule may also bridge nearby hash values."));
             }
         }
 

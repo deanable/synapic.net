@@ -85,11 +85,12 @@ public sealed class DaminionItem
     ///
     /// Caveat: the Daminion API docs describe hashCode as a content hash, but do
     /// not state whether it is perceptual (tolerant of resize/re-encode) or
-    /// exact (byte-identical only). Until that is verified on a live catalog,
-    /// hashCode is fed into the same 64-bit comparison space as the algorithmic
-    /// hashes, so it groups by the hamming distance the threshold defines.
+    /// exact (byte-identical only). Server hashes are therefore compared only
+    /// with each other, by the rule the dedup step's "Server hash" setting picks:
+    /// exact equality (the default, safe), or the threshold's hamming distance
+    /// once a live scan shows the values behave perceptually.
     /// LogDiagnosticSummary reports the hashCode distribution after every scan
-    /// to help settle whether it is perceptual or exact.
+    /// to help settle which it is.
     /// </summary>
     [JsonPropertyName("hashCode")]
     public long? HashCode { get; init; }

@@ -40,7 +40,8 @@ its summary is shown above the scan button.</li>
 automatically and the scan covers <span class="path">.jpg</span>,
 <span class="path">.jpeg</span>, <span class="path">.png</span>,
 <span class="path">.tif</span> and <span class="path">.tiff</span>. For the
-catalog source, each original is downloaded to a temporary file, hashed and
+catalog source, items the catalog has already hashed are compared without
+downloading them; the rest are downloaded to a temporary file, hashed and
 deleted again &mdash; one at a time, so a big collection never lands on disk
 whole.</li>
 </ol>
@@ -61,10 +62,14 @@ reports what it still holds &mdash; which should read zero files.</p>
 
 <ol class="steps">
 <li>Choose an <span class="ui">algorithm</span> and a
-<span class="ui">Threshold</span>. The defaults are a good starting point.</li>
+<span class="ui">Threshold</span>. The defaults are a good starting point. For the catalog source the
+<span class="ui">Server hash</span> picker decides how the catalog's own
+content hashes are compared: <span class="ui">Exact</span> (the default) trusts
+only identical values, <span class="ui">Hamming</span> compares them by
+similarity at the threshold.</li>
 <li>Press <span class="ui">Scan</span>. Progress is reported as files are hashed:
-<span class="ui">Hashed 240/1500&hellip;</span> &mdash; or as items are
-downloaded for the catalog source.</li>
+<span class="ui">Hashed 240/1500&hellip;</span> &mdash; or as items are grouped
+from the catalog's own hashes or downloaded for hashing.</li>
 <li>Read the summary: <span class="ui">1500 files scanned &mdash; 12 groups,
 18 duplicates</span>.</li>
 </ol>
@@ -143,7 +148,8 @@ an action that does not stick, can be read rather than guessed at:</p>
 
 <ul>
 <li><span class="term">One line at the start</span> names the source (folder, or
-scope and id), the algorithm, the threshold and the maximum dimension.</li>
+scope and id), the algorithm, the threshold, the maximum dimension and (for the
+catalog source) the server-hash rule.</li>
 <li><span class="term">One line per skipped item</span>: an original that would
 not download, or a file whose hash could not be computed, is listed with the item
 id, the file name and the reason &mdash; items are never dropped silently.</li>
