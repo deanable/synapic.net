@@ -67,7 +67,10 @@ public class SidecarBuildStopRestartTests
     [AvaloniaFact]
     public async Task Download_that_replaces_a_running_server_stops_it_first()
     {
-        var cudaExe = MakeTempExe();
+        // The preferred RID exists on every platform (a -cuda row does not),
+        // so this runs the same on Windows and the Linux CI runner.
+        var rid = InferenceSidecarService.PreferredRid();
+        var exe = MakeTempExe();
         try
         {
             var sidecar = new FakeSidecar();
@@ -76,28 +79,29 @@ public class SidecarBuildStopRestartTests
                 UpdateInfo = new SidecarUpdateInfo("nightly", "2026-10-05T07:29:16Z", 1, LocalMissing: false),
             };
             var vm = new MainWindowViewModel(sidecar, new FakeBuildService(), new Session(),
-                sidecarExecutableLocator: () => cudaExe,
-                sidecarVariantLocator: rid => rid.EndsWith("-cuda", StringComparison.Ordinal) ? cudaExe : null,
+                sidecarExecutableLocator: () => exe,
+                sidecarVariantLocator: r => r == rid ? exe : null,
                 download: download);
             await vm.DetectServerAsync();
-            sidecar.RaiseStatus(SidecarStatus.Ready);   // the server is up, running from the CUDA exe
+            sidecar.RaiseStatus(SidecarStatus.Ready);   // the server is up, running from that exe
             await vm.CheckForSidecarUpdatesAsync();     // GitHub: newer prebuilt than the exe on disk
 
             // The outdated row offers Download; replacing the very exe the
             // server runs from needs it stopped first (Windows locks a running
             // exe, so the file move would otherwise fail).
-            var cuda = vm.SidecarVariants.Single(v => v.IsBuilt);
-            Assert.True(cuda.IsDownloadButtonVisible);
-            await cuda.DownloadCommand.ExecuteAsync(null);
+            var row = vm.SidecarVariants.Single(v => v.Rid == rid);
+            Assert.True(row.IsBuilt);
+            Assert.True(row.IsDownloadButtonVisible);
+            await row.DownloadCommand.ExecuteAsync(null);
 
-            Assert.Equal(new[] { cuda.Rid }, download.DownloadedRids);
+            Assert.Equal(new[] { rid }, download.DownloadedRids);
             Assert.Equal(1, sidecar.StopCalls);
             Assert.Equal(1, sidecar.StartCalls);        // put back the way the user left it
             Assert.Equal(ServerUiState.Running, vm.ServerState);
         }
         finally
         {
-            File.Delete(cudaExe);
+            File.Delete(exe);
         }
     }
 
