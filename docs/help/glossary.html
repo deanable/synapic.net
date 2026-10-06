@@ -32,6 +32,19 @@ the way Synapic means them.</p>
 <tr><td><span class="term">Warm-up</span></td><td>The server loading the model at startup so the first image of a batch does not pay for it.</td></tr>
 </table>
 
+<h2>The start screen and the source</h2>
+
+<table>
+<tr><th class="setting">Term</th><th>Meaning</th></tr>
+<tr><td><span class="term">Source</span></td><td>What a run reads: a folder on disk, or a Daminion catalog scope. Not to be confused with the sidecar, which is the engine rather than the material.</td></tr>
+<tr><td><span class="term">Source panel</span></td><td>The first thing on the start screen: the folder picker, the Daminion connect form, the scope, the filters, and the record count. It belongs to Step 1's view model, so its choice is the source every route runs on.</td></tr>
+<tr><td><span class="term">Source lights</span> / <span class="term">source profile</span></td><td>The two always-visible indicators above the radio buttons &mdash; one for the Daminion session, one for the local folder. Green means that source is ready to be worked with; the line beside each names the server URL, or the folder and whether subfolders are included.</td></tr>
+<tr><td><span class="term">Record count</span></td><td>How many images the current source and scope select: the files a folder scan would pick up, or the items Daminion reports for the scope and filters. It refreshes itself at launch, after a connect, and on every scope, filter or folder change.</td></tr>
+<tr><td><span class="term">Recount</span></td><td>The button next to the record count. The count is automatic, so this is only a re-ask &mdash; useful when the catalog changed underneath the session.</td></tr>
+<tr><td><span class="term">Stored source</span></td><td>The source kept for the next launch: the folder and the source type in <span class="path">config.json</span>, the Daminion connection in the registry. A stored Daminion source is reconnected to automatically, which is why the count can be there before you touch anything.</td></tr>
+<tr><td><span class="term">Route</span></td><td>One of the three workflows on the start screen: Tagging, Deduplication or Upscaling. A route is disabled until a source light is green.</td></tr>
+</table>
+
 <h2>Daminion and DAM vocabulary</h2>
 
 <table>
@@ -45,6 +58,8 @@ the way Synapic means them.</p>
 <tr><td><span class="term">Untagged filter</span></td><td>The Step 1 option to select only items where keywords, categories or the description are still empty.</td></tr>
 <tr><td><span class="term">Item</span> / <span class="term">asset</span></td><td>One image in the catalog. Synapic tags items; for a folder it tags files, which are the same thing.</td></tr>
 <tr><td><span class="term">Paging</span></td><td>Fetching items in pages. <span class="ui">Process all</span> keeps paging until Daminion returns nothing.</td></tr>
+<tr><td><span class="term">Version control</span> (checkout / check-in)</td><td>Daminion's lock on an item. The upscaling route checks an item out, downloads the original, uploads the enhanced file as a new version with a comment, and checks it back in; a failed upload is undone so the item is never left checked out.</td></tr>
+<tr><td><span class="term">Feature enhancement</span></td><td>Daminion's name for the resolution-raising utility. Synapic's <span class="ui">Upscaling</span> route is that utility against the same catalog scope.</td></tr>
 </table>
 
 <h2>Metadata vocabulary</h2>
@@ -59,6 +74,17 @@ the way Synapic means them.</p>
 <tr><td><span class="term">Sidecar</span> (the other meaning)</td><td>A metadata file stored next to an image. TIFF files get an <span class="path">.xmp</span> sidecar; do not confuse it with the inference server, which this help also calls a sidecar.</td></tr>
 </table>
 
+<h2>Engine and inference vocabulary</h2>
+
+<table>
+<tr><th class="setting">Term</th><th>Meaning</th></tr>
+<tr><td><span class="term">Confidence threshold</span></td><td>A cut-off from the general-purpose tagging pipeline: results below it would be discarded. A vision-language model answers in prose, so the setting is ignored here &mdash; leaving it alone is correct.</td></tr>
+<tr><td><span class="term">Probability mode</span> and <span class="term">Prob. threshold</span></td><td>The zero-shot scoring controls from that same pipeline. Ignored for the local model, like the confidence threshold.</td></tr>
+<tr><td><span class="term">Candidate labels</span></td><td>An optional list of labels to score against. With the local model these are only a hint in the prompt; they do not restrict what the model may answer.</td></tr>
+<tr><td><span class="term">Embedding rescue</span></td><td>A fallback that retries an item whose first answer failed to parse, by comparing embeddings instead. Off by default.</td></tr>
+<tr><td><span class="term">Thumbnail override</span></td><td>Asking Daminion for its 200-pixel thumbnail instead of the full image: dramatically faster on a large catalog, and the reason a batch can produce vague descriptions.</td></tr>
+</table>
+
 <h2>Deduplication</h2>
 
 <table>
@@ -67,6 +93,11 @@ the way Synapic means them.</p>
 <tr><td><span class="term">pHash / dHash / aHash / ColorMoment</span></td><td>The four fingerprinting algorithms the deduplication tool offers, from the most robust (pHash) to the most colour-oriented (ColorMoment).</td></tr>
 <tr><td><span class="term">Threshold</span></td><td>How different two fingerprints may be and still count as duplicates. 0.90 by default; higher is stricter.</td></tr>
 <tr><td><span class="term">Keep item</span></td><td>The one file in a duplicate group that is left alone; the chosen action applies to the others.</td></tr>
+<tr><td><span class="term">Algorithmic hash</span></td><td>A fingerprint Synapic computes itself, from an image it has downloaded or read from disk. This is what <span class="term">pHash</span> and friends produce.</td></tr>
+<tr><td><span class="term">Server hash</span></td><td>The content hash Daminion already stores for an item (<code>hashCode</code>). Items the catalog has hashed do not need downloading to be compared, which is what makes a catalog scan cheap.</td></tr>
+<tr><td><span class="term">Exact match</span></td><td>Comparing server hashes by equality: identical values, nothing else. The default, and the safe one while it is unconfirmed whether Daminion's hash is byte-exact or perceptual.</td></tr>
+<tr><td><span class="term">Hamming match</span></td><td>Comparing those same values by bit distance at the threshold, exactly as the algorithmic hashes are compared. More tolerant of re-encodes, and more likely to group items you consider distinct.</td></tr>
+<tr><td><span class="term">Hash spaces</span></td><td>Server hashes and algorithmic hashes are different functions, so they are never compared with each other &mdash; the two spaces are grouped separately and only then reported together.</td></tr>
 </table>
 
 <h2>Windows plumbing</h2>
@@ -82,6 +113,7 @@ the way Synapic means them.</p>
 <div class="seealso">
 <h2>See also</h2>
 <ul>
+<li><a href="getting-started.html">Getting started with Synapic</a></li>
 <li><a href="workflow-overview.html">The five-step workflow</a></li>
 <li><a href="metadata-written.html">What gets written to your images</a></li>
 <li><a href="faq.html">Frequently asked questions</a></li>

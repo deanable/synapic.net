@@ -2,17 +2,91 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
-<title>Install and first run</title>
+<title>Getting started with Synapic</title>
 <link rel="stylesheet" type="text/css" href="help.css">
 </head>
 <body>
 
-<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; Getting started &rsaquo; Install and first run</p>
+<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; Getting started &rsaquo; Getting started with Synapic</p>
 
-<h1>Install and first run</h1>
+<h1>Getting started with Synapic</h1>
 
-<p class="lead">From download to tagged images, in five steps. The only part
-that takes real time is the first one, and you only do it once.</p>
+<p class="lead">This topic is the long version of your first five minutes: what
+Synapic actually does, why it asks you to build a server before it will tag
+anything, and what a first batch feels like. The tick-list version is
+<a href="setup-guide.html">the setup guide</a>; this is the explanation behind
+it.</p>
+
+<h2>The idea, in one page</h2>
+
+<p>A <span class="term">vision-language model</span> looks at a picture and
+describes it. Synapic wraps a library workflow around that one skill: for every
+image it collects three answers &mdash; a <span class="term">category</span>, a
+set of <span class="term">keywords</span>, and a
+<span class="term">description</span> &mdash; and writes them where your library
+keeps its words.</p>
+
+<p>Two ideas explain almost everything the app does afterwards:</p>
+
+<table>
+<tr><th class="setting">Idea</th><th>What it means in practice</th></tr>
+<tr><td>It runs on this machine</td><td>The model is downloaded once (about 860 MB) and executed locally. No account, no API key, no per-image cost, and your images are never uploaded. It is also why the first run is slower than every run after it.</td></tr>
+<tr><td>The engine is a separate program</td><td>The <span class="term">inference server</span> (also called the sidecar) holds the model and answers one request per image. Synapic starts it, talks to it over a local port, and stops it when the app closes. It is the one part you have to build or download before anything can be tagged.</td></tr>
+</table>
+
+<p>Where the words go is your choice, and it is the first thing the app asks:</p>
+
+<ul>
+<li><span class="term">A folder on disk</span> &mdash; the tags are written into
+the image files themselves, as XMP metadata, so a tagged folder travels: copy it
+to a machine without Synapic and the words come with the images.</li>
+<li><span class="term">Your Daminion catalog</span> &mdash; the tags are written
+back through the Daminion API, so the catalog stays the source of truth and the
+metadata lives where your colleagues already look for it.</li>
+</ul>
+
+<div class="note">
+<p class="first">One call produces all three fields.</p>
+<p>There is no second request for the description and no per-field model. Step 2's
+<span class="ui">Tag fields</span> checkboxes decide what gets
+<em>written</em>, not what the model is asked &mdash; which is the answer to the
+most common "why are my keywords there but my description missing?" question. See
+<a href="step2-tag-fields.html">Tag fields: what gets written</a>.</p>
+</div>
+
+<h2>What you see when it opens</h2>
+
+<p>Synapic is one window: a toolbar for the server at the top, the
+<span class="term">source panel</span> and the three routes in the middle, and a
+live log along the bottom.</p>
+
+<p>The order of that middle section is deliberate. A run means nothing until you
+know which images it covers, so the source panel comes first, and it answers that
+question twice over: once in words you choose (a folder, or a Daminion login plus
+scope), and once at a glance, in two <span class="term">source lights</span>.</p>
+
+<table>
+<tr><th class="setting">Light</th><th>Green means</th><th>Red means</th></tr>
+<tr><td>Daminion</td><td>A session is live; the line beside it names the server URL.</td><td>Nobody is signed in. Credentials typed into the form do not count until the server accepts them.</td></tr>
+<tr><td>Folder</td><td>The folder exists; the line beside it names it, and says when subfolders are included.</td><td>No folder selected yet, or the typed path does not exist.</td></tr>
+</table>
+
+<p>Under the lights the panel shows the <span class="term">record count</span>
+&mdash; how many images the current source and scope select. It keeps itself
+current: at launch, after a connect, and every time the folder, the scope or a
+filter changes. Nothing needs pressing; the <span class="ui">Recount</span>
+button is only there for the case where the catalog changed underneath you.</p>
+
+<p>Only then do the three routes matter, and they stay disabled until one of the
+lights is green &mdash; so a workflow is never entered without knowing what it
+would work on:</p>
+
+<table>
+<tr><th class="setting">Route</th><th>What it is for</th></tr>
+<tr><td><span class="ui">Tagging</span></td><td>Run the model over the source and write the tags. Four steps: Datasource, Engine, Process, Results.</td></tr>
+<tr><td><span class="ui">Deduplication</span></td><td>Find near-duplicate images &mdash; local folder or catalog scope &mdash; and tag, move or delete the extras.</td></tr>
+<tr><td><span class="ui">Upscaling</span></td><td>Raise image resolution, with AI (Swin2SR) or fast Lanczos resampling, over the same source.</td></tr>
+</table>
 
 <h2>Install</h2>
 
@@ -30,18 +104,11 @@ launch Synapic for you.</li>
 <p>For unattended installs and for the other platforms, see <a
 href="admin-install.html">Installing and upgrading</a>.</p>
 
-<h2>First run</h2>
+<h2>Your first run, end to end</h2>
 
-<p>Synapic opens on the toolbar, a start screen with the source panel and three
-routes, and the log. Choose a folder or connect to Daminion first: the three
-cards stay disabled until that panel has something to work on, and the record
-count appears beside it. Then pick <span class="ui">Tagging</span> to reach the
-wizard &mdash; or <span class="ui">Deduplication</span> /
-<span class="ui">Upscaling</span> to skip it and go straight to the duplicate
-finder or the upscaler. If this is a fresh
-install, the first thing you will notice is that the wizard is greyed out and a
-panel says <span class="ui">Inference sidecar required</span>. That is expected:
-nothing can be tagged until an inference server exists.</p>
+<p>If this is a fresh install, the first thing you will notice is that the wizard
+is greyed out and a panel says <span class="ui">Inference sidecar required</span>.
+That is expected, and it is the only part that takes real time:</p>
 
 <ol class="steps">
 <li><span class="term">Get an inference server.</span> In the panel, press
@@ -55,35 +122,44 @@ as soon as one exists, and the status dot turns green with
 <span class="ui">Server running (port &hellip;)</span>. The very first launch is
 slow &mdash; up to a couple of minutes &mdash; because the model is unpacked and
 loaded.</li>
-<li><span class="term">Choose images.</span> In <a href="step1-datasource.html">Step 1
-&mdash; Datasource</a>, either point at a folder on disk or connect to Daminion.
-For a first test, a small folder is the kindest choice.</li>
-<li><span class="term">Run the batch.</span> Go to <a href="step3-process.html">Step 3
-&mdash; Process</a> and press <span class="ui">Start Processing</span>. The first
-image also triggers the model download (about 860 MB) if the model has never been
-used on this machine.</li>
-<li><span class="term">Review.</span> <a href="step4-results.html">Step 4 &mdash;
-Results</a> lists what happened to every image, and
+<li><span class="term">Choose the images.</span> In the source panel, either
+point at a folder on disk or connect to Daminion. Watch the matching light turn
+green and the record count appear; that pair is your confirmation that the run
+will see what you think it will. For a first test, a small folder is the kindest
+choice.</li>
+<li><span class="term">Run the batch.</span> Pick <span class="ui">Tagging</span>,
+then go to <a href="step3-process.html">Step 3 &mdash; Process</a> and press
+<span class="ui">Start Processing</span>. The first image also triggers the model
+download (about 860 MB) if the model has never been used on this machine.</li>
+<li><span class="term">Review.</span> <a href="step4-results.html">Step 4
+&mdash; Results</a> lists what happened to every image, and
 <span class="ui">Verify Daminion Writes</span> re-reads a Daminion catalog to
 confirm the tags really landed.</li>
 </ol>
 
-<h2>A safe first batch</h2>
+<h2>What a batch is doing, image by image</h2>
 
-<p>To see what the model produces without committing anything, tag a copy of a
-dozen images in a folder:</p>
+<p>Understanding the loop explains the timings, the log and the one thing you
+cannot do (go back):</p>
 
 <ol class="steps">
-<li>Step 1: choose <span class="ui">Local Folder</span>, point at the copy, and
-leave <span class="ui">Include subfolders</span> off.</li>
-<li>Step 2: leave the defaults. The three <span class="ui">Tag fields</span> boxes
-are ticked, so all three results are written into the files' XMP metadata.</li>
-<li>Step 3: <span class="ui">Start Processing</span>, then read the log as it
-scrolls. A line per image reports the category, the number of keywords, and the
-start of the description.</li>
-<li>Step 4: check the rows, then look at one of the files in your own image
-viewer or in Daminion to see the metadata.</li>
+<li><span class="term">Fetch.</span> For a folder, the files are listed; for
+Daminion, the items your scope and filters select are paged from the catalog and
+each image (or a thumbnail) is downloaded as it is reached.</li>
+<li><span class="term">Tag.</span> The image goes to the inference server, which
+returns the category, keywords and description in one call.</li>
+<li><span class="term">Write.</span> The fields you ticked in Step 2 are written
+&mdash; XMP into the file, or a metadata update for a Daminion item. Because the
+write replaces what Synapic manages, there is no undo; run a first batch on
+copies if that matters.</li>
+<li><span class="term">Record.</span> The outcome is appended to the run's
+results: success, write failure, or an error explaining why that image could not
+be processed.</li>
 </ol>
+
+<p>Four images move through that loop at once, so a batch is never as slow as one
+image times the count &mdash; see <a href="workflow-overview.html">the
+workflow</a> for how throughput and latency differ.</p>
 
 <h2>What the first run costs you in time</h2>
 
@@ -96,10 +172,59 @@ viewer or in Daminion to see the metadata.</li>
 <tr><td>Each image after that</td><td>One model call plus a metadata write</td><td>Around ten seconds on CPU; less on a GPU</td></tr>
 </table>
 
+<p>The second run of the same folder is dramatically faster than the first, and
+the second batch of the same session faster still: the model is already in memory
+and the server process is already running.</p>
+
+<h2>A safe first batch</h2>
+
+<p>To see what the model produces without committing anything, tag a copy of a
+dozen images in a folder:</p>
+
+<ol class="steps">
+<li>The source panel: choose <span class="ui">Local Folder</span>, point at the
+copy, and leave <span class="ui">Include subfolders</span> off. The folder light
+turns green and the count reports roughly a dozen files.</li>
+<li>Step 2: leave the defaults. The three <span class="ui">Tag fields</span>
+boxes are ticked, so all three results are written into the files' XMP
+metadata.</li>
+<li>Step 3: <span class="ui">Start Processing</span>, then read the log as it
+scrolls. A line per image reports the category, the number of keywords, and the
+start of the description.</li>
+<li>Step 4: check the rows, then look at one of the files in your own image
+viewer or in Daminion to see the metadata.</li>
+</ol>
+
+<h2>What Synapic will not do for you</h2>
+
+<p>Knowing the edges saves a lot of second-guessing:</p>
+
+<ul>
+<li><span class="term">There is no cloud service and no account.</span> If the
+app wanted to upload your images, this help would have a section about quotas.
+It does not.</li>
+<li><span class="term">There is no undo.</span> A metadata write replaces the
+previous values of the fields Synapic manages. Keep a backup of a collection
+before a large first run, and rehearse on copies.</li>
+<li><span class="term">There is no vocabulary control and no translation.</span>
+The model writes in the language the image implies, with the words it knows. A
+system prompt is how you steer that &mdash; see <a href="step2-prompts.html">
+Prompts</a>.</li>
+<li><span class="term">There is no review step before writing.</span> Tags are
+written as the batch runs. If you want to approve them first, run against a
+folder or a disposable collection and then apply the same settings to the real
+target.</li>
+<li><span class="term">There is no curation.</span> The model does not know which
+of two similar shots you meant to keep, and it cannot read your catalog's rules.
+That judgement is still yours; the tool is there to make it cheap.</li>
+</ul>
+
 <div class="seealso">
 <h2>See also</h2>
 <ul>
 <li><a href="requirements.html">What you need</a></li>
+<li><a href="setup-guide.html">Setup guide</a> &mdash; the same ground, as a checklist</li>
+<li><a href="glossary.html">Glossary</a> &mdash; every term used here, defined</li>
 <li><a href="window-overview.html">The main window</a></li>
 <li><a href="workflow-overview.html">The five-step workflow</a></li>
 <li><a href="troubleshooting.html#sidecar">Troubleshooting: the inference server</a></li>

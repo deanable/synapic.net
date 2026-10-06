@@ -18,6 +18,10 @@
 		<param name="Local" value="step1-limits.html">
 		</OBJECT>
 	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="algorithmic hash">
+		<param name="Local" value="dedup.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
 		<param name="Name" value="algorithms, deduplication">
 		<param name="Local" value="dedup.html">
 		</OBJECT>
@@ -28,6 +32,10 @@
 	<LI> <OBJECT type="text/sitemap">
 		<param name="Name" value="built-in tag instruction">
 		<param name="Local" value="step2-prompts.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="candidate labels">
+		<param name="Local" value="step2-engine.html">
 		</OBJECT>
 	<LI> <OBJECT type="text/sitemap">
 		<param name="Name" value="build the inference server">
@@ -62,7 +70,7 @@
 		<param name="Local" value="step1-daminion.html">
 		</OBJECT>
 	<LI> <OBJECT type="text/sitemap">
-		<param name="Name" value="count matching items">
+		<param name="Name" value="record count">
 		<param name="Local" value="step1-scope-filters.html">
 		</OBJECT>
 	<LI> <OBJECT type="text/sitemap">
@@ -106,6 +114,10 @@
 		<param name="Local" value="requirements.html">
 		</OBJECT>
 	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="embedding rescue">
+		<param name="Local" value="step2-engine.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
 		<param name="Name" value="ETA">
 		<param name="Local" value="step3-process.html">
 		</OBJECT>
@@ -130,6 +142,10 @@
 		<param name="Local" value="admin-deploy.html">
 		</OBJECT>
 	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="first run">
+		<param name="Local" value="getting-started.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
 		<param name="Name" value="folder, local images">
 		<param name="Local" value="step1-datasource.html">
 		</OBJECT>
@@ -138,12 +154,20 @@
 		<param name="Local" value="index.html">
 		</OBJECT>
 	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="getting started">
+		<param name="Local" value="getting-started.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
 		<param name="Name" value="glossary">
 		<param name="Local" value="glossary.html">
 		</OBJECT>
 	<LI> <OBJECT type="text/sitemap">
 		<param name="Name" value="GPU acceleration">
 		<param name="Local" value="first-run-sidecar.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="Hamming match, server hashes">
+		<param name="Local" value="dedup.html">
 		</OBJECT>
 	<LI> <OBJECT type="text/sitemap">
 		<param name="Name" value="HKCU registry keys">
@@ -222,6 +246,10 @@
 		<param name="Local" value="faq.html">
 		</OBJECT>
 	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="Recount">
+		<param name="Local" value="step1-scope-filters.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
 		<param name="Name" value="registry keys">
 		<param name="Local" value="admin-settings-files.html#registry">
 		</OBJECT>
@@ -236,6 +264,10 @@
 	<LI> <OBJECT type="text/sitemap">
 		<param name="Name" value="saved search">
 		<param name="Local" value="step1-scope-filters.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="server hash">
+		<param name="Local" value="dedup.html">
 		</OBJECT>
 	<LI> <OBJECT type="text/sitemap">
 		<param name="Name" value="scope">
@@ -254,6 +286,18 @@
 		<param name="Local" value="first-run-sidecar.html">
 		</OBJECT>
 	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="source">
+		<param name="Local" value="step1-datasource.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="source lights">
+		<param name="Local" value="step1-datasource.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="source panel">
+		<param name="Local" value="step1-datasource.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
 		<param name="Name" value="silent installation">
 		<param name="Local" value="admin-install.html#silent">
 		</OBJECT>
@@ -268,6 +312,10 @@
 	<LI> <OBJECT type="text/sitemap">
 		<param name="Name" value="status flags, Daminion">
 		<param name="Local" value="step1-scope-filters.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="stored source">
+		<param name="Local" value="step1-datasource.html">
 		</OBJECT>
 	<LI> <OBJECT type="text/sitemap">
 		<param name="Name" value="super-resolution">
@@ -308,6 +356,10 @@
 	<LI> <OBJECT type="text/sitemap">
 		<param name="Name" value="upgrade">
 		<param name="Local" value="admin-install.html#upgrade">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="version control, Daminion">
+		<param name="Local" value="upscale.html">
 		</OBJECT>
 	<LI> <OBJECT type="text/sitemap">
 		<param name="Name" value="verify Daminion writes">
