@@ -2,15 +2,15 @@ using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using Synapic.Avalonia.Models;
-using Synapic.Avalonia.Services;
-using Synapic.Avalonia.Services.Processing;
-using Synapic.Avalonia.ViewModels;
-using Synapic.Avalonia.ViewModels.Steps;
-using Synapic.Avalonia.Views.Wizard;
+using Synapic.Main.Models;
+using Synapic.Main.Services;
+using Synapic.Main.Services.Processing;
+using Synapic.Main.ViewModels;
+using Synapic.Main.ViewModels.Steps;
+using Synapic.Main.Views.Wizard;
 using Xunit;
 
-namespace Synapic.Avalonia.Tests;
+namespace Synapic.Main.Tests;
 
 /// <summary>
 /// Dedup step behaviour: the local/Daminion source switch, the per-item keep
@@ -379,7 +379,7 @@ public class StepDedupViewModelTests
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         for (var i = 0; i < 6 && dir is not null; i++, dir = dir.Parent)
         {
-            var candidate = Path.Combine(dir.FullName, "tests", "Synapic.Avalonia.Tests", "TestData", "sample.jpg");
+            var candidate = Path.Combine(dir.FullName, "tests", "Synapic.Main.Tests", "TestData", "sample.jpg");
             if (File.Exists(candidate)) return candidate;
         }
         return null;

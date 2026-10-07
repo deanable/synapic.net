@@ -1,7 +1,7 @@
-using Synapic.Avalonia.Services;
+using Synapic.Main.Services;
 using Xunit;
 
-namespace Synapic.Avalonia.Tests;
+namespace Synapic.Main.Tests;
 
 /// <summary>
 /// The live log starts empty for every run, and the run it replaces is rotated

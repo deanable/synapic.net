@@ -1,13 +1,13 @@
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
-using Synapic.Avalonia.Models;
-using Synapic.Avalonia.Services;
-using Synapic.Avalonia.ViewModels;
-using Synapic.Avalonia.Views;
-using Synapic.Avalonia.Views.Wizard;
+using Synapic.Main.Models;
+using Synapic.Main.Services;
+using Synapic.Main.ViewModels;
+using Synapic.Main.Views;
+using Synapic.Main.Views.Wizard;
 using Xunit;
 
-namespace Synapic.Avalonia.Tests;
+namespace Synapic.Main.Tests;
 
 /// <summary>
 /// Regression tests for the startup NullReferenceException inside

@@ -1,8 +1,8 @@
-using Synapic.Avalonia.Services.Daminion;
+using Synapic.Main.Services.Daminion;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace Synapic.Avalonia.Tests;
+namespace Synapic.Main.Tests;
 
 /// <summary>
 /// Replicates the original Python client's login process against a live server

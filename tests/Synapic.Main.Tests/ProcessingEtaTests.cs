@@ -1,9 +1,9 @@
-using Synapic.Avalonia.Models;
-using Synapic.Avalonia.Services.Processing;
-using Synapic.Avalonia.ViewModels.Steps;
+using Synapic.Main.Models;
+using Synapic.Main.Services.Processing;
+using Synapic.Main.ViewModels.Steps;
 using Xunit;
 
-namespace Synapic.Avalonia.Tests;
+namespace Synapic.Main.Tests;
 
 /// <summary>
 /// Step 3 ETA math (port of processing.py progress_callback): average seconds

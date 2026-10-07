@@ -2,7 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.VisualTree;
 
-namespace Synapic.Avalonia.Services;
+namespace Synapic.Main.Services;
 
 /// <summary>
 /// Per-control help scoping: attach <c>HelpScope.Topic</c> to a control and F1
@@ -15,7 +15,7 @@ namespace Synapic.Avalonia.Services;
 /// (a path, a non-.html name) is skipped rather than falling back to the home
 /// page: a stale annotation degrades to the next scope up, and finally to the
 /// unscoped F1 behaviour in
-/// <see cref="Synapic.Avalonia.ViewModels.MainWindowViewModel.ContextHelpTopic"/>
+/// <see cref="Synapic.Main.ViewModels.MainWindowViewModel.ContextHelpTopic"/>
 /// (the sidecar panel, or the wizard step on screen).
 /// </summary>
 public sealed class HelpScope

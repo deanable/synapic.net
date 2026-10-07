@@ -1,10 +1,10 @@
-using Synapic.Avalonia.Models;
-using Synapic.Avalonia.Services;
-using Synapic.Avalonia.Services.Processing;
+using Synapic.Main.Models;
+using Synapic.Main.Services;
+using Synapic.Main.Services.Processing;
 using Synapic.Shared.Contracts;
 using Xunit;
 
-namespace Synapic.Avalonia.Tests;
+namespace Synapic.Main.Tests;
 
 /// <summary>Sidecar fake whose TagAsync blocks until the test releases it — lets pause tests observe in-flight vs queued items deterministically.</summary>
 internal sealed class BlockingSidecar : IInferenceSidecar

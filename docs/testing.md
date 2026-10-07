@@ -16,7 +16,7 @@ python -m pytest tests/Synapic.Inference.Tests -q
 
 ---
 
-## `tests/Synapic.Avalonia.Tests` (xUnit + Avalonia.Headless)
+## `tests/Synapic.Main.Tests` (xUnit + Avalonia.Headless)
 
 | File | What it pins down |
 |------|-------------------|

@@ -1,7 +1,7 @@
-using Synapic.Avalonia.Services;
+using Synapic.Main.Services;
 using Xunit;
 
-namespace Synapic.Avalonia.Tests;
+namespace Synapic.Main.Tests;
 
 /// <summary>
 /// The system-prompt history file. Every test runs against its own temp file so

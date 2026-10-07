@@ -1,7 +1,7 @@
-using Synapic.Avalonia.Models;
+using Synapic.Main.Models;
 using Xunit;
 
-namespace Synapic.Avalonia.Tests;
+namespace Synapic.Main.Tests;
 
 public class SessionTests
 {

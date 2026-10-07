@@ -73,7 +73,7 @@ foreach ($name in @("ArtifactsDir", "OutputDir")) {
 
 if (-not $SkipPublish) {
     Write-Host "Publishing $Rid payload into $ArtifactsDir..."
-    & dotnet publish (Join-Path $repoRoot "src/Synapic.Avalonia/Synapic.Avalonia.csproj") `
+    & dotnet publish (Join-Path $repoRoot "src/Synapic.Main/Synapic.Main.csproj") `
         -c Release -r $Rid --self-contained false -p:PublishSingleFile=false -o $ArtifactsDir
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed with exit code $LASTEXITCODE" }
 }

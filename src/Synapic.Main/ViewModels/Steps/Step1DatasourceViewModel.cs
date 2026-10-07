@@ -2,12 +2,12 @@ using System.Collections.ObjectModel;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Synapic.Avalonia.Models;
-using Synapic.Avalonia.Services;
-using Synapic.Avalonia.Services.Daminion;
-using Synapic.Avalonia.Services.Processing;
+using Synapic.Main.Models;
+using Synapic.Main.Services;
+using Synapic.Main.Services.Daminion;
+using Synapic.Main.Services.Processing;
 
-namespace Synapic.Avalonia.ViewModels.Steps;
+namespace Synapic.Main.ViewModels.Steps;
 
 /// <summary>
 /// Step 1: Datasource (port of step1_datasource.py) — local folder browser or

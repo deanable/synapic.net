@@ -5,7 +5,7 @@ using System.Text.Json;
 using Synapic.Shared;
 using Synapic.Shared.Contracts;
 
-namespace Synapic.Avalonia.Services;
+namespace Synapic.Main.Services;
 
 /// <summary>
 /// HTTP client for the sidecar API (spec §4.2). /tag uses a 5-minute timeout

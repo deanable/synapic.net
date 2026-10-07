@@ -1,8 +1,8 @@
 using System.IO;
-using Synapic.Avalonia.Services.Processing;
+using Synapic.Main.Services.Processing;
 using Xunit;
 
-namespace Synapic.Avalonia.Tests;
+namespace Synapic.Main.Tests;
 
 /// <summary>
 /// Tests for the DedupScanHandler's server-hash shortcut path: when a Daminion

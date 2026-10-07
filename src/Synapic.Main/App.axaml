@@ -1,15 +1,109 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             x:Class="Synapic.Avalonia.App"
+             x:Class="Synapic.Main.App"
              RequestedThemeVariant="Default">
 
   <Application.Styles>
     <FluentTheme />
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         Shared control styles for the redesigned shell. They live on the
+         Application rather than on MainWindow so a dialog (the engine
+         settings modal) and any future window get the same look without
+         re-declaring them.
+         ═══════════════════════════════════════════════════════════════ -->
+
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="{DynamicResource SystemRegionBrush}" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="12" />
+      <Setter Property="BoxShadow" Value="0 1 4 0 #22000000" />
+    </Style>
+
+    <!-- Start-screen route cards: three equal, tall, self-describing choices. -->
+    <Style Selector="Button.routeCard">
+      <Setter Property="Padding" Value="18" />
+      <Setter Property="MinHeight" Value="150" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    </Style>
+
+    <!-- Primary action (proposal §5.2: one obvious primary action per view). -->
+    <Style Selector="Button.accent">
+      <Setter Property="Padding" Value="14,6" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Background" Value="{DynamicResource SynapicAccentBrush}" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.accent /template/ ContentPresenter">
+      <Setter Property="TextElement.Foreground" Value="White" />
+    </Style>
+    <Style Selector="Button.accent:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource SynapicAccentHoverBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.validationError">
+      <Setter Property="Foreground" Value="{DynamicResource SynapicDangerBrush}" />
+    </Style>
+
+    <!-- ── Sidebar navigation (proposal §2.2.2) ──────────────────────────── -->
+    <Style Selector="Button.navItem">
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="Padding" Value="10,7" />
+      <Setter Property="Margin" Value="0,1" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="FontSize" Value="13" />
+    </Style>
+    <!-- The entry that is on screen right now (proposal §6.4: selected item
+         carries the accent and an indicator). -->
+    <Style Selector="Button.navItem.active">
+      <Setter Property="Background" Value="{DynamicResource SynapicAccentBrush}" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="Button.navItem.active /template/ ContentPresenter">
+      <Setter Property="TextElement.Foreground" Value="White" />
+    </Style>
+
+    <!-- Mode headers: they both group the sidebar and switch mode. -->
+    <Style Selector="Button.navMode">
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="Padding" Value="10,8,10,4" />
+      <Setter Property="Margin" Value="0,8,0,2" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+
+    <Style Selector="TextBlock.navGroup">
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Opacity" Value="0.55" />
+      <Setter Property="Margin" Value="10,10,10,2" />
+    </Style>
   </Application.Styles>
 
   <Application.Resources>
     <Thickness x:Key="CardPadding">16</Thickness>
     <CornerRadius x:Key="CardCornerRadius">8</CornerRadius>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         Palette (proposal §6.4). These are *semantic* colours, so they are
+         fixed rather than theme-dependent: an accent that changes with the
+         theme stops being recognisable as "the primary action".
+         Surfaces, borders and text keep using Fluent's theme brushes so
+         light, dark and High Contrast keep working — the proposal's literal
+         gray-100/gray-900 table would have hard-coded a light UI.
+         ═══════════════════════════════════════════════════════════════ -->
+    <SolidColorBrush x:Key="SynapicAccentBrush" Color="#2563EB" />
+    <SolidColorBrush x:Key="SynapicAccentHoverBrush" Color="#1D4ED8" />
+    <SolidColorBrush x:Key="SynapicSuccessBrush" Color="#16A34A" />
+    <SolidColorBrush x:Key="SynapicDangerBrush" Color="#DC2626" />
+    <SolidColorBrush x:Key="SynapicWarningBrush" Color="#EA580C" />
   </Application.Resources>
 
 </Application>

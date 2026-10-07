@@ -70,7 +70,7 @@ README.md                    the original migration specification
 plan.md                      phased implementation plan + build-mode PR sequence
 
 src/
-  Synapic.Avalonia/          the desktop app (WinExe, assembly name "Synapic")
+  Synapic.Main/          the desktop app (WinExe, assembly name "Synapic")
     Program.cs               STAThread entry point
     App.axaml(.cs)           startup: logging, crash handler, DI, sidecar lifecycle
     Models/Session.cs        wizard state (datasource, engine, results, counters)
@@ -80,7 +80,7 @@ src/
   Synapic.Shared/            HTTP contract DTOs + System.Text.Json source-gen context
   Synapic.Inference/         Python sidecar (NOT a .NET project; not in the .sln)
 tests/
-  Synapic.Avalonia.Tests/    xUnit + Avalonia.Headless (the bulk of the suite)
+  Synapic.Main.Tests/    xUnit + Avalonia.Headless (the bulk of the suite)
   Synapic.Shared.Tests/      contract round-trip tests
   Synapic.Inference.Tests/   pytest (sidecar)
   Synapic.Integration.Tests/ placeholder for environment-dependent E2E
@@ -264,7 +264,7 @@ implemented once, in the runner.
 | Opt-in usage counters | `logs/synapic-usage.json` |
 | Model cache (sidecar `HF_HOME`) | Windows `%LOCALAPPDATA%\Synapic\models`; elsewhere `~/.cache/synapic/models` |
 | Sidecar port file | `%TEMP%/synapic_port_{hostpid}.txt` containing `port\npid\n` |
-| User help payload | Windows: `Synapic.chm` + `help-payload.json` **embedded in `Synapic.dll`**, unpacked to `%LOCALAPPDATA%\Synapic\help\` after a SHA-256 check. Non-Windows: `help/*.html` beside the executable. Both from `docs/help`, wired by `src/Synapic.Avalonia/Synapic.Avalonia.csproj`; a dev checkout falls back to `docs/help` itself |
+| User help payload | Windows: `Synapic.chm` + `help-payload.json` **embedded in `Synapic.dll`**, unpacked to `%LOCALAPPDATA%\Synapic\help\` after a SHA-256 check. Non-Windows: `help/*.html` beside the executable. Both from `docs/help`, wired by `src/Synapic.Main/Synapic.Main.csproj`; a dev checkout falls back to `docs/help` itself |
 
 Notes:
 - `config.json` is written by `MainWindowViewModel.PersistConfig` when the user
@@ -369,7 +369,7 @@ python build/generate-protocol-doc.py
 python build/generate-protocol-doc.py --check
 
 # Run the app (needs a built sidecar for actual tagging)
-dotnet run --project src/Synapic.Avalonia
+dotnet run --project src/Synapic.Main
 
 # Tests
 dotnet test Synapic.Net.sln -c Release

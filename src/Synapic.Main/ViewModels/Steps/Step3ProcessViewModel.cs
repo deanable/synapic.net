@@ -2,12 +2,12 @@ using System.Collections.ObjectModel;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Synapic.Avalonia.Models;
-using Synapic.Avalonia.Services;
-using Synapic.Avalonia.Services.Processing;
+using Synapic.Main.Models;
+using Synapic.Main.Services;
+using Synapic.Main.Services.Processing;
 using Synapic.Shared.Contracts;
 
-namespace Synapic.Avalonia.ViewModels.Steps;
+namespace Synapic.Main.ViewModels.Steps;
 
 /// <summary>
 /// Step 3: Process (port of step3_process.py) — progress bar with ETA, live

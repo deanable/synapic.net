@@ -1,7 +1,7 @@
-using Synapic.Avalonia.Services;
+using Synapic.Main.Services;
 using Xunit;
 
-namespace Synapic.Avalonia.Tests;
+namespace Synapic.Main.Tests;
 
 /// <summary>
 /// The build progress table: markers in the real pipeline output must map to a

@@ -1,6 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        x:Class="Synapic.Avalonia.Views.RuntimeDialogWindow"
+        x:Class="Synapic.Main.Views.RuntimeDialogWindow"
         Title="Synapic — .NET runtime needed"
         Icon="/Assets/Icon.ico"
         Width="560" Height="340"

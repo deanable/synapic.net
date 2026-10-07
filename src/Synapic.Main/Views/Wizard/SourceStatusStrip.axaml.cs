@@ -1,6 +1,6 @@
 using Avalonia.Controls;
 
-namespace Synapic.Avalonia.Views.Wizard;
+namespace Synapic.Main.Views.Wizard;
 
 /// <summary>
 /// The "what am I working with" profile: one light for the Daminion session and

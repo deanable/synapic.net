@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Synapic.Avalonia.Services.Daminion;
+namespace Synapic.Main.Services.Daminion;
 
 /// <summary>Wrapper shapes returned by /api/MediaItems/Get (response format varies by server version).</summary>
 public sealed class DaminionItemsResponse

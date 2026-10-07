@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
-namespace Synapic.Avalonia.Services;
+namespace Synapic.Main.Services;
 
 /// <summary>
 /// Windows Job Object wrapper that ties a child process's lifetime to this

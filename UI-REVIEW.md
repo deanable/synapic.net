@@ -80,10 +80,10 @@
 
 ## Files Audited
 
-- `src/Synapic.Avalonia/Views/Wizard/StepDedup.axaml` (+ `.axaml.cs`)
-- `src/Synapic.Avalonia/Views/ConfirmDialogWindow.axaml` (+ `.axaml.cs`)
-- `src/Synapic.Avalonia/ViewModels/Steps/StepDedupViewModel.cs`
-- `src/Synapic.Avalonia/Views/Wizard/Step1Datasource.axaml` (reference for app conventions)
-- `src/Synapic.Avalonia/Views/MainWindow.axaml` (card style, step hosting)
-- `src/Synapic.Avalonia/Services/Processing/DedupService.cs` (apply semantics behind the action list)
+- `src/Synapic.Main/Views/Wizard/StepDedup.axaml` (+ `.axaml.cs`)
+- `src/Synapic.Main/Views/ConfirmDialogWindow.axaml` (+ `.axaml.cs`)
+- `src/Synapic.Main/ViewModels/Steps/StepDedupViewModel.cs`
+- `src/Synapic.Main/Views/Wizard/Step1Datasource.axaml` (reference for app conventions)
+- `src/Synapic.Main/Views/MainWindow.axaml` (card style, step hosting)
+- `src/Synapic.Main/Services/Processing/DedupService.cs` (apply semantics behind the action list)
 - Help contract: `docs/help/dedup.html`, `docs/help/settings-reference.html` (copy consistency with UI)

@@ -1,7 +1,7 @@
 using Avalonia;
 using System;
 
-namespace Synapic.Avalonia;
+namespace Synapic.Main;
 
 internal static class Program
 {

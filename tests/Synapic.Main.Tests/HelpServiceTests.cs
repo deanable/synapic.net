@@ -6,14 +6,14 @@ using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
-using Synapic.Avalonia.Models;
-using Synapic.Avalonia.Services;
-using Synapic.Avalonia.ViewModels;
+using Synapic.Main.Models;
+using Synapic.Main.Services;
+using Synapic.Main.ViewModels;
 using Avalonia.VisualTree;
-using Synapic.Avalonia.Views;
+using Synapic.Main.Views;
 using Xunit;
 
-namespace Synapic.Avalonia.Tests;
+namespace Synapic.Main.Tests;
 
 /// <summary>
 /// The help system wiring (docs/help): where the app gets its help from, how a
@@ -437,7 +437,7 @@ public class HelpServiceTests : IDisposable
         if (repoRoot is null) return;
 
         var project = File.ReadAllText(Path.Combine(
-            repoRoot, "src", "Synapic.Avalonia", "Synapic.Avalonia.csproj"));
+            repoRoot, "src", "Synapic.Main", "Synapic.Main.csproj"));
 
         foreach (var file in new[] { HelpService.ChmName, "help-payload.json" })
         {

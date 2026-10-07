@@ -1,8 +1,8 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:vm="using:Synapic.Avalonia.ViewModels.Steps"
-             xmlns:help="using:Synapic.Avalonia.Services"
-             x:Class="Synapic.Avalonia.Views.Wizard.Step2Engine"
+             xmlns:vm="using:Synapic.Main.ViewModels.Steps"
+             xmlns:help="using:Synapic.Main.Services"
+             x:Class="Synapic.Main.Views.Wizard.Step2Engine"
              x:DataType="vm:Step2EngineViewModel">
 
   <StackPanel Spacing="12">

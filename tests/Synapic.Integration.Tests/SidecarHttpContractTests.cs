@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using Synapic.Avalonia.Services;
+using Synapic.Main.Services;
 using Synapic.Shared.Contracts;
 using Xunit;
 

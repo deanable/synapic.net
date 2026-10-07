@@ -45,7 +45,7 @@
 | Task | Content |
 |------|---------|
 | P0.1 | .sln, Directory.Build.props, global.json, nuget.config, .gitignore |
-| P0.2 | Projects: Synapic.Avalonia, Synapic.Shared, tests (xUnit+Headless, pytest, integration) |
+| P0.2 | Projects: Synapic.Main, Synapic.Shared, tests (xUnit+Headless, pytest, integration) |
 | P0.3 | Sidecar source: service.py, model_loader.py ← huggingface_utils.py, inference_engine.py, tag_extractor.py ← extract_tags_from_result + keyword scoring; trimmed pinned requirements; synapic-inference.spec |
 | P0.4 | Build scripts: fetch-python, install-python-deps, build-sidecar (ps1 + sh) |
 | P0.5 | Avalonia shell: Start/Stop Server + status indicator, log pane; InferenceSidecarService full lifecycle; config `ui.autoLaunchSidecar` (default **true**; opt out for manual Start/Stop) |

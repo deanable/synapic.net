@@ -3,10 +3,10 @@ using System.Net.Http;
 using System.Text;
 using System.Security.Cryptography;
 using System.Text.Json;
-using Synapic.Avalonia.Services;
+using Synapic.Main.Services;
 using Xunit;
 
-namespace Synapic.Avalonia.Tests;
+namespace Synapic.Main.Tests;
 
 /// <summary>
 /// The Download button is the way out for a machine that cannot compile the

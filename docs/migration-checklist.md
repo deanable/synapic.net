@@ -52,7 +52,7 @@ File-by-file porting map from the Python app
 
 - ✅ `dotnet build` clean (TreatWarningsAsErrors)
 - ✅ 6 contract tests (Synapic.Shared.Tests)
-- ✅ 148 C# service/model/view-model tests (Synapic.Avalonia.Tests)
+- ✅ 148 C# service/model/view-model tests (Synapic.Main.Tests)
 - ✅ 189 pytest sidecar tests incl. live FastAPI contract checks
 
 See [`testing.md`](testing.md) for what each suite covers and which tests are

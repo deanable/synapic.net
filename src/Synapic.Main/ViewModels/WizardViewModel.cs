@@ -1,11 +1,11 @@
 using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Synapic.Avalonia.Models;
-using Synapic.Avalonia.Services;
-using Synapic.Avalonia.ViewModels.Steps;
+using Synapic.Main.Models;
+using Synapic.Main.Services;
+using Synapic.Main.ViewModels.Steps;
 
-namespace Synapic.Avalonia.ViewModels;
+namespace Synapic.Main.ViewModels;
 
 /// <summary>
 /// Wizard orchestration (port of src/ui/app.py): linear navigation across
@@ -230,9 +230,24 @@ public partial class WizardViewModel : ViewModelBase
         _ => "Start Over",
     };
 
+    // Which sidebar item reads as the current one (the sidebar is the nav now,
+    // so the active entry has to follow the step the same way the old tab strip did.
+    public bool IsSourceStepActive => CurrentStepIndex == 0;
+    public bool IsEngineStepActive => CurrentStepIndex == 1;
+    public bool IsProcessStepActive => CurrentStepIndex == 2;
+    public bool IsResultsStepActive => CurrentStepIndex == 3;
+    public bool IsDedupStepActive => CurrentStepIndex == 4;
+    public bool IsUpscaleStepActive => CurrentStepIndex == 5;
+
     partial void OnCurrentStepChanged(ObservableObject value)
     {
         OnPropertyChanged(nameof(CurrentStepIndex));
+        OnPropertyChanged(nameof(IsSourceStepActive));
+        OnPropertyChanged(nameof(IsEngineStepActive));
+        OnPropertyChanged(nameof(IsProcessStepActive));
+        OnPropertyChanged(nameof(IsResultsStepActive));
+        OnPropertyChanged(nameof(IsDedupStepActive));
+        OnPropertyChanged(nameof(IsUpscaleStepActive));
         OnPropertyChanged(nameof(NextButtonText));
         OnPropertyChanged(nameof(CurrentStepTitle));
         OnPropertyChanged(nameof(CanGoToStep2Tab));
@@ -347,6 +362,17 @@ public partial class WizardViewModel : ViewModelBase
         !IsNavigationLocked &&
         (CurrentStepIndex != 1 || _session.Engine.HasSelectedTagField);
 
+    /// <summary>
+    /// Sidebar "Source" entry: go straight to the datasource step from anywhere.
+    /// The old nav bar reused Back for this, which from Results landed on Process.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanGoBack))]
+    private async Task GoToStep1()
+    {
+        if (CurrentStepIndex == 1) PersistStep2IfLoaded();
+        await EnterStepAsync(Step1);
+    }
+
     [RelayCommand(CanExecute = nameof(CanGoBack))]
     private async Task BackAsync()
     {
@@ -435,6 +461,7 @@ public partial class WizardViewModel : ViewModelBase
     {
         NextCommand.NotifyCanExecuteChanged();
         BackCommand.NotifyCanExecuteChanged();
+        GoToStep1Command.NotifyCanExecuteChanged();
         GoToDedupCommand.NotifyCanExecuteChanged();
         GoToUpscaleCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(IsNavigationLocked));

@@ -2,9 +2,9 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Synapic.Avalonia.Services;
+using Synapic.Main.Services;
 
-namespace Synapic.Avalonia.ViewModels;
+namespace Synapic.Main.ViewModels;
 
 /// <summary>
 /// One sidecar variant (CPU or CUDA) as shown in the startup setup panel:

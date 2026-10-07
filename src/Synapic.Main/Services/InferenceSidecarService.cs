@@ -2,11 +2,11 @@ using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Runtime.InteropServices;
-using Synapic.Avalonia.Models;
+using Synapic.Main.Models;
 using Synapic.Shared;
 using Synapic.Shared.Contracts;
 
-namespace Synapic.Avalonia.Services;
+namespace Synapic.Main.Services;
 
 /// <summary>Sidecar lifecycle state shown in the UI server indicator (spec §2).</summary>
 public enum SidecarStatus

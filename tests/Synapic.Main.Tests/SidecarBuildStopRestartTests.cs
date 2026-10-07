@@ -1,10 +1,10 @@
 using Avalonia.Headless.XUnit;
-using Synapic.Avalonia.Models;
-using Synapic.Avalonia.Services;
-using Synapic.Avalonia.ViewModels;
+using Synapic.Main.Models;
+using Synapic.Main.Services;
+using Synapic.Main.ViewModels;
 using Xunit;
 
-namespace Synapic.Avalonia.Tests;
+namespace Synapic.Main.Tests;
 
 /// <summary>
 /// Replacing the sidecar executable requires the server to be stopped first —

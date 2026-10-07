@@ -1,11 +1,10 @@
-using System.Collections.Specialized;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
-using Synapic.Avalonia.Services;
-using Synapic.Avalonia.ViewModels;
+using Synapic.Main.Services;
+using Synapic.Main.ViewModels;
 
-namespace Synapic.Avalonia.Views;
+namespace Synapic.Main.Views;
 
 public partial class MainWindow : Window
 {
@@ -18,7 +17,11 @@ public partial class MainWindow : Window
         // The UI log sink is process-wide and Serilog keeps writing while the app
         // shuts down: once this window is gone, stop feeding the view model, or
         // log lines keep appending to a collection whose control no longer exists.
-        Closed += (_, _) => _vm?.DetachUiLog();
+        Closed += (_, _) =>
+        {
+            Layout?.DetachLog();
+            _vm?.DetachUiLog();
+        };
 
         DataContextChanged += (_, _) =>
         {
@@ -26,14 +29,9 @@ public partial class MainWindow : Window
             {
                 _vm = vm;
                 vm.AttachSidecarLog();
-                vm.LogEntries.CollectionChanged -= OnLogEntriesChanged;
-                vm.LogEntries.CollectionChanged += OnLogEntriesChanged;
             }
         };
     }
-
-    private void OnLogEntriesChanged(object? sender, NotifyCollectionChangedEventArgs e) =>
-        ListAutoScroll.ToEnd(LogList);
 
     /// <summary>
     /// F1 follows the focus: the nearest <see cref="HelpScope"/> around whatever
@@ -42,6 +40,8 @@ public partial class MainWindow : Window
     /// focus is inside nothing annotated. The shortcut used to be a
     /// Window.KeyBinding; a key binding cannot see which control has focus, so
     /// it cannot be context aware below the step.
+    /// Alt+Home returns to the mode chooser, Ctrl+S persists the current
+    /// configuration (proposal §5.1).
     /// </summary>
     protected override void OnKeyDown(KeyEventArgs e)
     {
@@ -49,6 +49,21 @@ public partial class MainWindow : Window
         {
             var topic = HelpScope.Resolve(e.Source) ?? _vm.ContextHelpTopic;
             _vm.OpenTopicCommand.Execute(topic);
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.Home && e.KeyModifiers.HasFlag(KeyModifiers.Alt) && _vm is not null)
+        {
+            if (_vm.GoHomeCommand.CanExecute(null))
+                _vm.GoHomeCommand.Execute(null);
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.S && e.KeyModifiers.HasFlag(KeyModifiers.Control) && _vm is not null)
+        {
+            _vm.PersistConfig();
             e.Handled = true;
             return;
         }

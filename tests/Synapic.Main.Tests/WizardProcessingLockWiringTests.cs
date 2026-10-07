@@ -1,9 +1,9 @@
 using Avalonia.Headless.XUnit;
-using Synapic.Avalonia.Models;
-using Synapic.Avalonia.ViewModels;
+using Synapic.Main.Models;
+using Synapic.Main.ViewModels;
 using Xunit;
 
-namespace Synapic.Avalonia.Tests;
+namespace Synapic.Main.Tests;
 
 /// <summary>
 /// Regression: Step 3's IsRunning flips must re-arm the wizard's nav commands

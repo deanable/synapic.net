@@ -1,7 +1,7 @@
-using Synapic.Avalonia.Services.Processing;
+using Synapic.Main.Services.Processing;
 using Xunit;
 
-namespace Synapic.Avalonia.Tests;
+namespace Synapic.Main.Tests;
 
 /// <summary>
 /// The shared batch kernel every route runs on: fetching, bounded per-item

@@ -4,9 +4,9 @@ using Avalonia.Controls;
 using Avalonia.Input.Platform;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Synapic.Avalonia.Services;
+using Synapic.Main.Services;
 
-namespace Synapic.Avalonia.Views;
+namespace Synapic.Main.Views;
 
 /// <summary>
 /// View model for the crash dialog: holds the formatted diagnostics text and

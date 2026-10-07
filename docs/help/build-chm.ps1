@@ -203,7 +203,7 @@ $sizeKb = [math]::Round((Get-Item -LiteralPath $target).Length / 1KB)
 Write-Host "Compiled $target ($sizeKb KB)" -ForegroundColor Green
 
 # The SHA-256 of the bytes this run produced, written beside the .chm it
-# describes. Synapic.Avalonia.csproj embeds this manifest into Synapic.dll
+# describes. Synapic.Main.csproj embeds this manifest into Synapic.dll
 # alongside the compiled help, and HelpService checks the bytes against it before
 # opening them: this is what makes the help tamper-evident rather than merely
 # compiled. No BOM - JsonDocument does not skip one, and Windows PowerShell's

@@ -1,8 +1,8 @@
-using Synapic.Avalonia.Models;
-using Synapic.Avalonia.ViewModels;
+using Synapic.Main.Models;
+using Synapic.Main.ViewModels;
 using Xunit;
 
-namespace Synapic.Avalonia.Tests;
+namespace Synapic.Main.Tests;
 
 public class WizardNavigationTests
 {

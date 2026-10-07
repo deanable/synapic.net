@@ -1,7 +1,7 @@
-using Synapic.Avalonia.Services;
+using Synapic.Main.Services;
 using Xunit;
 
-namespace Synapic.Avalonia.Tests;
+namespace Synapic.Main.Tests;
 
 /// <summary>
 /// A sidecar exe that predates the sidecar source keeps regenerating

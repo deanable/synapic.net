@@ -1,9 +1,9 @@
 using System;
 using System.IO;
-using Synapic.Avalonia.Services;
+using Synapic.Main.Services;
 using Xunit;
 
-namespace Synapic.Avalonia.Tests;
+namespace Synapic.Main.Tests;
 
 /// <summary>
 /// Locks the shipped server-lifecycle default (README §2): the sidecar is

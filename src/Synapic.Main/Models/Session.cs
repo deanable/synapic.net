@@ -1,7 +1,7 @@
-using Synapic.Avalonia.Services.Daminion;
-using Synapic.Avalonia.Services.Processing;
+using Synapic.Main.Services.Daminion;
+using Synapic.Main.Services.Processing;
 
-namespace Synapic.Avalonia.Models;
+namespace Synapic.Main.Models;
 
 /// <summary>
 /// Wizard session state (port of src/core/session.py): datasource selection,
@@ -88,7 +88,7 @@ public sealed class DatasourceState
     /// anything. Scope, filters and limits are not part of this: the step that
     /// owns them restores those.
     /// </summary>
-    public void ApplyStoredSource(Synapic.Avalonia.Services.DatasourceSettings stored)
+    public void ApplyStoredSource(Synapic.Main.Services.DatasourceSettings stored)
     {
         Type = stored.Type == "daminion" ? "daminion" : "local";
         LocalPath = stored.LocalPath ?? "";

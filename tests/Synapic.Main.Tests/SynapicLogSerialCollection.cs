@@ -1,6 +1,6 @@
 using Xunit;
 
-namespace Synapic.Avalonia.Tests;
+namespace Synapic.Main.Tests;
 
 /// <summary>
 /// Tests that reset the process-global SynapicLog (Initialize/ResetForTests)

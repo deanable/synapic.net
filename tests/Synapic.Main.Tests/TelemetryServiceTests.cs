@@ -1,7 +1,7 @@
-using Synapic.Avalonia.Services;
+using Synapic.Main.Services;
 using Xunit;
 
-namespace Synapic.Avalonia.Tests;
+namespace Synapic.Main.Tests;
 
 /// <summary>
 /// Local-only opt-in telemetry (P6.1, spec §11 Q5): counters accrue in a JSON

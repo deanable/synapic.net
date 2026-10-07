@@ -1,7 +1,7 @@
 using System.IO;
 using System.Text;
 
-namespace Synapic.Avalonia.Services;
+namespace Synapic.Main.Services;
 
 /// <summary>One captured crash: the exception plus the environment context.</summary>
 public sealed record CrashReport(

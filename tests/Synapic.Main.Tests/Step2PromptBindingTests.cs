@@ -3,13 +3,13 @@ using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Threading;
-using Synapic.Avalonia.Services;
-using Synapic.Avalonia.Models;
-using Synapic.Avalonia.ViewModels.Steps;
-using Synapic.Avalonia.Views.Wizard;
+using Synapic.Main.Services;
+using Synapic.Main.Models;
+using Synapic.Main.ViewModels.Steps;
+using Synapic.Main.Views.Wizard;
 using Xunit;
 
-namespace Synapic.Avalonia.Tests;
+namespace Synapic.Main.Tests;
 
 /// <summary>
 /// A mistyped binding in Avalonia is silent - the control just never updates -

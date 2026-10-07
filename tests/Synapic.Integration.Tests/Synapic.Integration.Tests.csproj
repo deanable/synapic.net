@@ -11,7 +11,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Synapic.Avalonia\Synapic.Avalonia.csproj" />
+    <ProjectReference Include="..\..\src\Synapic.Main\Synapic.Main.csproj" />
   </ItemGroup>
 
 </Project>

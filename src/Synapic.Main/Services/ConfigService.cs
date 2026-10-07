@@ -3,7 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Synapic.Shared;
 
-namespace Synapic.Avalonia.Services;
+namespace Synapic.Main.Services;
 
 /// <summary>UI/application settings persisted to %APPDATA%/Synapic/config.json (spec §6.1).</summary>
 public sealed class AppConfig

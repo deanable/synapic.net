@@ -4,7 +4,7 @@ using System.Security.Cryptography;
 using MetadataExtractor.Formats.Exif;
 using NetVips;
 
-namespace Synapic.Avalonia.Services.Processing;
+namespace Synapic.Main.Services.Processing;
 
 /// <summary>Hash algorithms (spec §5.3 DedupService).</summary>
 public enum HashAlgorithm

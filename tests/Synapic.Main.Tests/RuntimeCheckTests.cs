@@ -1,11 +1,11 @@
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.VisualTree;
-using Synapic.Avalonia.Services;
-using Synapic.Avalonia.Views;
+using Synapic.Main.Services;
+using Synapic.Main.Views;
 using Xunit;
 
-namespace Synapic.Avalonia.Tests;
+namespace Synapic.Main.Tests;
 
 /// <summary>
 /// Startup runtime-check logic: the app targets the .NET 10 Desktop Runtime,

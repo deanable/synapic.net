@@ -24,7 +24,7 @@ Two-process design per the migration spec (README §2):
 
 ## Components
 
-### Avalonia frontend (`src/Synapic.Avalonia`)
+### Avalonia frontend (`src/Synapic.Main`)
 - **ViewModels** (CommunityToolkit.Mvvm): `MainWindowViewModel` (shell, server indicator, Start/Stop Server), `WizardViewModel` (step navigation + validation gates), per-step VMs under `ViewModels/Steps/`.
 - **Services**:
   - `InferenceSidecarService` — sidecar process lifecycle (see below)

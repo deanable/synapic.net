@@ -1,12 +1,13 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Synapic.Avalonia.Models;
-using Synapic.Avalonia.Services;
-using Synapic.Avalonia.Services.Processing;
+using Synapic.Main.Models;
+using Synapic.Main.Services;
+using Synapic.Main.Services.Processing;
 using Synapic.Shared.Contracts;
 
-namespace Synapic.Avalonia.ViewModels.Steps;
+namespace Synapic.Main.ViewModels.Steps;
 
 /// <summary>
 /// Step 2: Engine (port of step2_tagging.py) — local model picker (HF cache
@@ -45,8 +46,31 @@ public partial class Step2EngineViewModel : ViewModelBase
     /// </summary>
     public const string MultimodalTask = "image-text-to-text";
 
-    [ObservableProperty]
+    /// <summary>
+    /// The device the Device combo shows. Hand-written rather than generated:
+    /// the setter has to refuse the <c>null</c> a two-way <c>SelectedItem</c>
+    /// binding writes back (see <see cref="HandleSelectedDeviceChanged"/>), and
+    /// <c>[ObservableProperty]</c>'s generated setter has no hook that can
+    /// rewrite the incoming value.
+    /// </summary>
     private DeviceOption _selectedDevice = new("CPU", "cpu");
+
+    public DeviceOption SelectedDevice
+    {
+        get => _selectedDevice;
+        set
+        {
+            // A null from the view means "the combo let go of its selection",
+            // not "the user picked nothing": keep what is already selected.
+            var next = value ?? _selectedDevice;
+            if (EqualityComparer<DeviceOption>.Default.Equals(_selectedDevice, next)) return;
+
+            OnPropertyChanging(new PropertyChangingEventArgs(nameof(SelectedDevice)));
+            _selectedDevice = next;
+            OnPropertyChanged(new PropertyChangedEventArgs(nameof(SelectedDevice)));
+            HandleSelectedDeviceChanged(next);
+        }
+    }
 
     [ObservableProperty]
     private int _probabilityModeIndex;
@@ -63,7 +87,15 @@ public partial class Step2EngineViewModel : ViewModelBase
     partial void OnDeviceAvailabilityNoteChanged(string value) =>
         OnPropertyChanged(nameof(HasDeviceAvailabilityNote));
 
-    public string Device => SelectedDevice.Value;
+    /// <summary>
+    /// The device the session, the launcher and the inference server speak.
+    /// Never throws: the <see cref="SelectedDevice"/> setter refuses the null a
+    /// two-way binding can write back, and the session is where the last pushed
+    /// value already lives, so that is the honest fallback rather than an
+    /// invented one.
+    /// </summary>
+    public string Device => SelectedDevice?.Value ?? _session.Engine.Device;
+
     public string ProbabilityMode => ProbabilityModeIndexToString(ProbabilityModeIndex);
 
     public static string ProbabilityModeIndexToString(int i) => i switch
@@ -307,7 +339,12 @@ public partial class Step2EngineViewModel : ViewModelBase
     }
 
     partial void OnManualModelIdChanged(string value) => PushToSession();
-    partial void OnSelectedDeviceChanged(DeviceOption value)
+    /// <summary>
+    /// Everything that follows a device change: the <c>Device</c> property, the
+    /// session, and the running server. Never called with a null — the setter
+    /// keeps <see cref="SelectedDevice"/> non-null.
+    /// </summary>
+    private void HandleSelectedDeviceChanged(DeviceOption value)
     {
         OnPropertyChanged(nameof(Device));
         PushToSession();

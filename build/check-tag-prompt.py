@@ -302,7 +302,7 @@ def main() -> int:
     _logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
     images = make_images(Path(__file__).resolve().parent / "_prompt-ab-images")
-    images.append(REPO / "tests" / "Synapic.Avalonia.Tests" / "TestData" / "sample.jpg")
+    images.append(REPO / "tests" / "Synapic.Main.Tests" / "TestData" / "sample.jpg")
     if os.environ.get("AB_IMAGES"):
         wanted = os.environ["AB_IMAGES"].split(",")
         images = [p for p in images if p.stem in wanted]

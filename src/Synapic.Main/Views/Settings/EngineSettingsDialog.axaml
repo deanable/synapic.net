@@ -1,0 +1,38 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Synapic.Main.ViewModels.Steps"
+        xmlns:steps="using:Synapic.Main.Views.Wizard"
+        xmlns:help="using:Synapic.Main.Services"
+        x:Class="Synapic.Main.Views.Settings.EngineSettingsDialog"
+        x:DataType="vm:Step2EngineViewModel"
+        Title="Engine Settings"
+        Icon="/Assets/Icon.ico"
+        Width="960" Height="760"
+        CanResize="True"
+        WindowStartupLocation="CenterOwner"
+        help:HelpScope.Topic="step2-engine.html">
+
+  <!-- The settings modal (proposal §2.2.3): every engine setting in one
+       scrollable panel with the action buttons pinned to the bottom. It hosts
+       the existing Step2Engine view over the wizard's own view model, so the
+       23 settings-reference help anchors inside it keep pointing at real
+       topics and an edit here is the same edit the wizard step shows. -->
+  <Grid RowDefinitions="*,Auto">
+
+    <ScrollViewer Grid.Row="0" Padding="16,16,16,4">
+      <steps:Step2Engine />
+    </ScrollViewer>
+
+    <Border Grid.Row="1" Classes="card" Margin="16,8,16,16" Padding="12,10">
+      <Grid ColumnDefinitions="*,Auto,Auto">
+        <TextBlock Grid.Column="0"
+                   Text="Settings apply to the moment you change them; Apply saves them to config.json as well."
+                   VerticalAlignment="Center" Opacity="0.7" TextWrapping="Wrap" />
+        <Button Grid.Column="1" Content="Apply" Classes="accent" Click="OnApply"
+                Margin="0,0,8,0" MinWidth="90" />
+        <Button Grid.Column="2" Content="Close" Click="OnClose" MinWidth="90" />
+      </Grid>
+    </Border>
+
+  </Grid>
+</Window>

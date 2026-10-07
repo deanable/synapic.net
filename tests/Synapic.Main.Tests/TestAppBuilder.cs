@@ -1,11 +1,11 @@
 using Avalonia;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
-using Synapic.Avalonia;
+using Synapic.Main;
 
-[assembly: AvaloniaTestApplication(typeof(Synapic.Avalonia.Tests.TestAppBuilder))]
+[assembly: AvaloniaTestApplication(typeof(Synapic.Main.Tests.TestAppBuilder))]
 
-namespace Synapic.Avalonia.Tests;
+namespace Synapic.Main.Tests;
 
 /// <summary>
 /// Headless Avalonia bootstrap for XUnit: spins up the real <see cref="App"/>

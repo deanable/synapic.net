@@ -51,7 +51,7 @@ Thumbs.db
 .DS_Store
 
 # Model caches (never commit weights) — anchored so the rule cannot
-# swallow source directories named Models/ (e.g. src/Synapic.Avalonia/Models).
+# swallow source directories named Models/ (e.g. src/Synapic.Main/Models).
 /models/
 *.safetensors
 *.gguf

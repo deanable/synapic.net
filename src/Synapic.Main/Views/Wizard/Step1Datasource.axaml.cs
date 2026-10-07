@@ -1,6 +1,6 @@
 using Avalonia.Controls;
 
-namespace Synapic.Avalonia.Views.Wizard;
+namespace Synapic.Main.Views.Wizard;
 
 /// <summary>
 /// Step 1: the source the run will use, reported read-only (it is chosen on the

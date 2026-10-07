@@ -1,6 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        x:Class="Synapic.Avalonia.Views.CrashDialogWindow"
+        x:Class="Synapic.Main.Views.CrashDialogWindow"
         Title="Synapic — Something went wrong"
         Icon="/Assets/Icon.ico"
         Width="560" Height="420"

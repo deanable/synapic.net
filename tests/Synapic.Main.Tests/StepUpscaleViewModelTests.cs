@@ -1,9 +1,9 @@
 using Avalonia.Headless.XUnit;
-using Synapic.Avalonia.Models;
-using Synapic.Avalonia.ViewModels.Steps;
+using Synapic.Main.Models;
+using Synapic.Main.ViewModels.Steps;
 using Xunit;
 
-namespace Synapic.Avalonia.Tests;
+namespace Synapic.Main.Tests;
 
 /// <summary>
 /// The upscale step (port of step_upscale.py): BuildOptions must produce the
@@ -22,7 +22,7 @@ public class StepUpscaleViewModelTests
         return session;
     }
 
-    private static StepUpscaleViewModel VmForFolder(string folder, Synapic.Avalonia.Services.IInferenceSidecar? sidecar = null)
+    private static StepUpscaleViewModel VmForFolder(string folder, Synapic.Main.Services.IInferenceSidecar? sidecar = null)
         => new(new Step1DatasourceViewModel(LocalSession(folder)), sidecar);
 
     // ── BuildOptions: the parameters that differ between workflows ─────────

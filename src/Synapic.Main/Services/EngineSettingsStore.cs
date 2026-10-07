@@ -1,6 +1,6 @@
 using Microsoft.Win32;
 
-namespace Synapic.Avalonia.Services;
+namespace Synapic.Main.Services;
 
 /// <summary>Step 2 engine settings (model id, device, thresholds, prompt, tag-field checkboxes).</summary>
 /// Persisted to HKCU\Software\Synapic\Engine so the user does not re-enter them on consecutive runs.

@@ -1,8 +1,8 @@
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
-using Synapic.Avalonia.ViewModels.Steps;
+using Synapic.Main.ViewModels.Steps;
 
-namespace Synapic.Avalonia.Views.Wizard;
+namespace Synapic.Main.Views.Wizard;
 
 public partial class StepDedup : UserControl
 {

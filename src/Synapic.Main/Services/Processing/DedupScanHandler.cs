@@ -1,8 +1,8 @@
 using System.IO;
 using System.Linq;
-using Synapic.Avalonia.Services.Daminion;
+using Synapic.Main.Services.Daminion;
 
-namespace Synapic.Avalonia.Services.Processing;
+namespace Synapic.Main.Services.Processing;
 
 /// <summary>What a Daminion dedup scan learned about one item (the row data
 /// the review UI needs once grouping finishes).</summary>

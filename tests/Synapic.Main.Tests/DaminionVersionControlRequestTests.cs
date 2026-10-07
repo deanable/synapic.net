@@ -1,11 +1,11 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using Synapic.Avalonia.Services.Daminion;
+using Synapic.Main.Services.Daminion;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace Synapic.Avalonia.Tests;
+namespace Synapic.Main.Tests;
 
 /// <summary>
 /// The upscale flow's catalog dance (daminion_api.py VersionControlAPI port):

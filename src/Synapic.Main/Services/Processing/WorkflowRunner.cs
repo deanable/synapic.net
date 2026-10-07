@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace Synapic.Avalonia.Services.Processing;
+namespace Synapic.Main.Services.Processing;
 
 /// <summary>
 /// The parameters that differ between the three workflows — tag assignment,

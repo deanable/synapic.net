@@ -1,9 +1,9 @@
-using Synapic.Avalonia.Services;
-using Synapic.Avalonia.Services.Processing;
+using Synapic.Main.Services;
+using Synapic.Main.Services.Processing;
 using Synapic.Shared.Contracts;
 using Xunit;
 
-namespace Synapic.Avalonia.Tests;
+namespace Synapic.Main.Tests;
 
 /// <summary>Sidecar fake returning all three fields in one multimodal response.</summary>
 internal sealed class FixedTagSidecar : IInferenceSidecar

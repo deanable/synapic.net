@@ -1,4 +1,4 @@
-namespace Synapic.Avalonia.Services.Processing;
+namespace Synapic.Main.Services.Processing;
 
 /// <summary>
 /// Cooperative pause signal for the processing batch. Items call

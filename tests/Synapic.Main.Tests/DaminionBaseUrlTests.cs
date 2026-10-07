@@ -1,7 +1,7 @@
-using Synapic.Avalonia.Services.Daminion;
+using Synapic.Main.Services.Daminion;
 using Xunit;
 
-namespace Synapic.Avalonia.Tests;
+namespace Synapic.Main.Tests;
 
 /// <summary>
 /// The Step 1 server URL is free-text user input. A URL without a scheme

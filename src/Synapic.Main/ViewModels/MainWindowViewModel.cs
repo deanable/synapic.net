@@ -1,14 +1,16 @@
 using System.Collections.ObjectModel;
+using Avalonia;
 using Avalonia.Media;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Synapic.Avalonia.Models;
-using Synapic.Avalonia.Services;
-using Synapic.Avalonia.ViewModels.Steps;
+using Synapic.Main.Models;
+using Synapic.Main.Services;
+using Synapic.Main.ViewModels.Steps;
+using Synapic.Main.Views;
 using Synapic.Shared.Contracts;
 
-namespace Synapic.Avalonia.ViewModels;
+namespace Synapic.Main.ViewModels;
 
 /// <summary>
 /// User-facing state of the inference server, shown by the always-visible
@@ -137,6 +139,52 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsDedupRoute));
         OnPropertyChanged(nameof(IsUpscaleRoute));
         OnPropertyChanged(nameof(RouteTitle));
+        OnPropertyChanged(nameof(IsNavHomeActive));
+    }
+
+    /// <summary>Which sidebar entry reads as the current one on the start screen.</summary>
+    public bool IsNavHomeActive => Route == HomeRoute;
+
+    // ── Engine settings as a modal (proposal §2.2.3) ───────────────────
+
+    /// <summary>
+    /// Opens the engine settings dialog over whatever is on screen. It hosts a
+    /// second view of <see cref="WizardViewModel.Step2"/> — one view model, two
+    /// views — so an edit in the dialog is the same edit the wizard step shows,
+    /// and every help anchor inside Step2Engine keeps working untouched.
+    /// </summary>
+    [RelayCommand]
+    private void OpenSettings()
+    {
+        try
+        {
+            var dialog = new Views.Settings.EngineSettingsDialog
+            {
+                DataContext = Wizard.Step2,
+            };
+
+            // Prefer the running window; fall back to DI (both are unavailable
+            // in headless tests, where a non-modal show is the right outcome).
+            var owner = (Application.Current?.ApplicationLifetime
+                    as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)
+                ?.MainWindow as MainWindow;
+
+            if (owner is null)
+            {
+                try { owner = App.Services.GetService(typeof(MainWindow)) as MainWindow; }
+                catch { /* App.Services is not built yet */ }
+            }
+
+            if (owner is not null)
+                _ = dialog.ShowDialog(owner);
+            else
+                dialog.Show();
+        }
+        catch (Exception e)
+        {
+            // Never let a missing application lifetime break the shell.
+            SynapicLog.Warning(nameof(MainWindowViewModel), $"Could not open settings: {e.Message}");
+        }
     }
 
     /// <summary>Start screen → the four-step tagging wizard.</summary>
@@ -187,7 +235,7 @@ public partial class MainWindowViewModel : ViewModelBase
     /// <summary>
     /// F1 fallback: the topic for the state of the app - the sidecar topic while
     /// that panel is what is gating them, otherwise the wizard step on screen.
-    /// The window's key handler asks <see cref="Synapic.Avalonia.Services.HelpScope"/>
+    /// The window's key handler asks <see cref="Synapic.Main.Services.HelpScope"/>
     /// first, so focus inside an annotated scope (a section, or one setting)
     /// opens that scope's topic instead; this is what applies when focus sits
     /// in nothing annotated.
@@ -206,8 +254,8 @@ public partial class MainWindowViewModel : ViewModelBase
     /// the behaviour directly testable.
     /// </summary>
     public void PersistConfig() => PersistConfig(
-        App.Services.GetService(typeof(Synapic.Avalonia.Services.ConfigService))
-            as Synapic.Avalonia.Services.ConfigService);
+        App.Services.GetService(typeof(Synapic.Main.Services.ConfigService))
+            as Synapic.Main.Services.ConfigService);
 
     /// <summary>Core persistence; the DI path delegates here.</summary>
     public void PersistConfig(ConfigService? config)

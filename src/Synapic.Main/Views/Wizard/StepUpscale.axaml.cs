@@ -1,8 +1,8 @@
 using System.Collections.Specialized;
 using Avalonia.Controls;
-using Synapic.Avalonia.ViewModels.Steps;
+using Synapic.Main.ViewModels.Steps;
 
-namespace Synapic.Avalonia.Views.Wizard;
+namespace Synapic.Main.Views.Wizard;
 
 public partial class StepUpscale : UserControl
 {

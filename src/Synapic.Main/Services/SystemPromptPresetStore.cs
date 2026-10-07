@@ -1,7 +1,7 @@
 using System.IO;
 using System.Text.Json;
 
-namespace Synapic.Avalonia.Services;
+namespace Synapic.Main.Services;
 
 /// <summary>The file shape: a JSON object holding the prompt list.</summary>
 public sealed class SystemPromptPresetFile

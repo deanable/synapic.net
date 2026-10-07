@@ -183,9 +183,9 @@ Synapic.Net/
 
 ├── src/
 
-│   ├── Synapic.Avalonia/           # Main Avalonia application
+│   ├── Synapic.Main/           # Main Avalonia application
 
-│   │   ├── Synapic.Avalonia.csproj
+│   │   ├── Synapic.Main.csproj
 
 │   │   ├── Program.cs
 
@@ -299,7 +299,7 @@ Synapic.Net/
 
 ├── tests/
 
-│   ├── Synapic.Avalonia.Tests/     # Unit tests (xUnit + Avalonia.Headless)
+│   ├── Synapic.Main.Tests/     # Unit tests (xUnit + Avalonia.Headless)
 
 │   ├── Synapic.Inference.Tests/    # pytest for Python sidecar
 
@@ -787,7 +787,7 @@ components:
 
 
 
-## 5. Avalonia Frontend Specification (`Synapic.Avalonia`)
+## 5. Avalonia Frontend Specification (`Synapic.Main`)
 
 
 
@@ -1177,7 +1177,7 @@ jobs:
 
       - name: Build Avalonia
 
-        run: dotnet publish src/Synapic.Avalonia -c Release -r ${{ matrix.rid }} --self-contained -p:PublishSingleFile=true -o artifacts/${{ matrix.rid }}
+        run: dotnet publish src/Synapic.Main -c Release -r ${{ matrix.rid }} --self-contained -p:PublishSingleFile=true -o artifacts/${{ matrix.rid }}
 
       - name: Stage bundle
 

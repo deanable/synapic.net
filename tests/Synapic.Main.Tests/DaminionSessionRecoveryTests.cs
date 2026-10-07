@@ -1,10 +1,10 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using Synapic.Avalonia.Services.Daminion;
+using Synapic.Main.Services.Daminion;
 using Xunit;
 
-namespace Synapic.Avalonia.Tests;
+namespace Synapic.Main.Tests;
 
 /// <summary>
 /// Offline regression for session-expiry recovery: the stub Daminion answers

@@ -1,6 +1,6 @@
 using System.IO;
 
-namespace Synapic.Avalonia.Services;
+namespace Synapic.Main.Services;
 
 /// <summary>
 /// Which accelerated compute devices this machine can actually run, so the

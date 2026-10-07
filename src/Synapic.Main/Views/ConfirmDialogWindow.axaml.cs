@@ -1,7 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 
-namespace Synapic.Avalonia.Views;
+namespace Synapic.Main.Views;
 
 /// <summary>Message + Yes/No pair rendered by <see cref="ConfirmDialogWindow"/>.</summary>
 public sealed record ConfirmDialogState(string Message, string ConfirmLabel);

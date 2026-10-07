@@ -2,7 +2,7 @@ using System.Net;
 using System.Text.Json;
 using Refit;
 
-namespace Synapic.Avalonia.Services.Daminion;
+namespace Synapic.Main.Services.Daminion;
 
 /// <summary>Typed Daminion errors (ported from daminion_api.py exception hierarchy).</summary>
 public abstract class DaminionException : Exception

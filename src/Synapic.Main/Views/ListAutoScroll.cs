@@ -3,7 +3,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 
-namespace Synapic.Avalonia.Views;
+namespace Synapic.Main.Views;
 
 /// <summary>
 /// Reveals the newest row of a tailing list without ever asking Avalonia to lay

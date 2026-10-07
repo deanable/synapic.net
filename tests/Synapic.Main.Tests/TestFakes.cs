@@ -1,7 +1,7 @@
-using Synapic.Avalonia.Services;
+using Synapic.Main.Services;
 using Synapic.Shared.Contracts;
 
-namespace Synapic.Avalonia.Tests;
+namespace Synapic.Main.Tests;
 
 /// <summary>In-memory IInferenceSidecar for view-model tests.</summary>
 internal sealed class FakeSidecar : IInferenceSidecar

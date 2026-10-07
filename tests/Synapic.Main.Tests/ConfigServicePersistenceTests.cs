@@ -1,12 +1,12 @@
 using System.IO;
 using System.Text.Json.Nodes;
 using Avalonia.Headless.XUnit;
-using Synapic.Avalonia.Models;
-using Synapic.Avalonia.Services;
-using Synapic.Avalonia.ViewModels;
+using Synapic.Main.Models;
+using Synapic.Main.Services;
+using Synapic.Main.ViewModels;
 using Xunit;
 
-namespace Synapic.Avalonia.Tests;
+namespace Synapic.Main.Tests;
 
 /// <summary>
 /// Pins ConfigService.Save's document-merge promise (codebase-guide §7):

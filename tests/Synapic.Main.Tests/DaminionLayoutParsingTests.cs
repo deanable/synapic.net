@@ -1,8 +1,8 @@
 using System.Text.Json;
-using Synapic.Avalonia.Services.Daminion;
+using Synapic.Main.Services.Daminion;
 using Xunit;
 
-namespace Synapic.Avalonia.Tests;
+namespace Synapic.Main.Tests;
 
 /// <summary>
 /// The GetDefaultLayout response shape differs across Daminion builds: older

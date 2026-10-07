@@ -131,7 +131,7 @@ jobs:
 
       - name: Publish Avalonia app
         run: >-
-          dotnet publish src/Synapic.Avalonia -c Release -r ${{ matrix.rid }}
+          dotnet publish src/Synapic.Main -c Release -r ${{ matrix.rid }}
           --self-contained ${{ matrix.rid == 'win-x64' && 'false' || 'true' }}
           -p:PublishSingleFile=false
           -o artifacts/${{ matrix.rid }}

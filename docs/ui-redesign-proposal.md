@@ -392,7 +392,7 @@ All existing functionality must be preserved:
 ### 6.1 File Structure Refactor
 
 ```
-src/Synapic.Avalonia/Views/
+src/Synapic.Main/Views/
 ├── MainLayout.axaml.cs              # Shell wrapper
 │   ├── HeaderPanel.axaml           # Source selector
 │   ├── MainContentPanel.axaml      # Grid with sidebar + content
@@ -429,7 +429,7 @@ src/Synapic.Avalonia/Views/
 Current independent viewmodels for each wizard step should be refactored:
 
 ```
-src/Synapic.Avalonia/ViewModels/
+src/Synapic.Main/ViewModels/
 ├── Steps/
 │   ├── Step1DatasourceViewModel.cs        # → Datasource/SharedDatasourceViewModel.cs
 │   ├── Step2EngineViewModel.cs            # → Tagging/TaggingConfigViewModel.cs

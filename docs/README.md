@@ -8,7 +8,7 @@ phase plan that tracked it.
 |----------|----------------|
 | [`codebase-guide.md`](codebase-guide.md) | **Start here.** Repository layout, how to build/run/test, the two-process architecture, DI wiring, data flow, concurrency, persistence, and a troubleshooting index. |
 | [`architecture.md`](architecture.md) | Short component/process overview and the batch data flow. |
-| [`csharp-reference.md`](csharp-reference.md) | The Avalonia host (`src/Synapic.Avalonia`, `src/Synapic.Shared`): every service, view model, model, and contract. |
+| [`csharp-reference.md`](csharp-reference.md) | The Avalonia host (`src/Synapic.Main`, `src/Synapic.Shared`): every service, view model, model, and contract. |
 | [`sidecar-reference.md`](sidecar-reference.md) | The Python sidecar (`src/Synapic.Inference`): routes, inference pipeline, scoring tiers, model loading, and prompt handling. |
 | [`sidecar-concurrency.md`](sidecar-concurrency.md) | Concurrency deep dive: what runs concurrently, what gets serialized, and where each limit lives when multiple calls hit the sidecar. |
 | [`sidecar-protocol.md`](sidecar-protocol.md) | The HTTP/JSON contract between the two processes. **Generated** from the live FastAPI schema + the C# DTOs (`python build/generate-protocol-doc.py`); CI fails if it goes stale. |
@@ -37,7 +37,7 @@ asked to tag.
 ```bash
 # .NET host (from repo root)
 dotnet build Synapic.Net.sln -c Debug
-dotnet run --project src/Synapic.Avalonia          # needs a built sidecar to tag
+dotnet run --project src/Synapic.Main          # needs a built sidecar to tag
 
 # Python sidecar from source (flat imports: run it from its own folder)
 python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate

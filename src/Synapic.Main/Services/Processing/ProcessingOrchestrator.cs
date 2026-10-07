@@ -1,7 +1,7 @@
-using Synapic.Avalonia.Services.Daminion;
+using Synapic.Main.Services.Daminion;
 using Synapic.Shared.Contracts;
 
-namespace Synapic.Avalonia.Services.Processing;
+namespace Synapic.Main.Services.Processing;
 
 /// <summary>One processed item's outcome (session.results entry port).</summary>
 public sealed record ProcessItemResult(

@@ -1,8 +1,8 @@
-using Synapic.Avalonia.Services;
-using Synapic.Avalonia.Services.Processing;
+using Synapic.Main.Services;
+using Synapic.Main.Services.Processing;
 using Xunit;
 
-namespace Synapic.Avalonia.Tests;
+namespace Synapic.Main.Tests;
 
 public class DedupServiceTests
 {
@@ -13,7 +13,7 @@ public class DedupServiceTests
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         for (var i = 0; i < 6 && dir is not null; i++, dir = dir.Parent)
         {
-            var candidate = Path.Combine(dir.FullName, "tests", "Synapic.Avalonia.Tests", "TestData", "sample.jpg");
+            var candidate = Path.Combine(dir.FullName, "tests", "Synapic.Main.Tests", "TestData", "sample.jpg");
             if (File.Exists(candidate)) return candidate;
         }
         return null;

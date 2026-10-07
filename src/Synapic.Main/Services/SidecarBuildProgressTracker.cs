@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace Synapic.Avalonia.Services;
+namespace Synapic.Main.Services;
 
 /// <summary>
 /// Progress of a sidecar build. <see cref="Percent"/> is 0-100 and

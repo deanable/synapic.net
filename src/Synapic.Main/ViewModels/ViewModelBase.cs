@@ -1,6 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 
-namespace Synapic.Avalonia.ViewModels;
+namespace Synapic.Main.ViewModels;
 
 public abstract class ViewModelBase : ObservableObject
 {

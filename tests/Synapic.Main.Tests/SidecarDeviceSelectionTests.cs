@@ -1,11 +1,11 @@
 using Microsoft.Extensions.DependencyInjection;
-using Synapic.Avalonia.Models;
-using Synapic.Avalonia.Services;
-using Synapic.Avalonia.ViewModels;
-using Synapic.Avalonia.ViewModels.Steps;
+using Synapic.Main.Models;
+using Synapic.Main.Services;
+using Synapic.Main.ViewModels;
+using Synapic.Main.ViewModels.Steps;
 using Xunit;
 
-namespace Synapic.Avalonia.Tests;
+namespace Synapic.Main.Tests;
 
 /// <summary>
 /// The device selected in Step 2 is what decides which sidecar variant runs and

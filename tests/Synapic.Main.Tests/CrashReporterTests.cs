@@ -1,8 +1,8 @@
-using Synapic.Avalonia.Services;
-using Synapic.Avalonia.Views;
+using Synapic.Main.Services;
+using Synapic.Main.Views;
 using Xunit;
 
-namespace Synapic.Avalonia.Tests;
+namespace Synapic.Main.Tests;
 
 /// <summary>
 /// Local-only crash reporting (P6.1): every captured exception must produce a
@@ -72,7 +72,7 @@ public class CrashReporterTests : IDisposable
         {
             var report = reporter.Capture(ex, "TestSource", isTerminal: false);
             Assert.NotNull(report);
-            Assert.Contains("at Synapic.Avalonia.Tests.CrashReporterTests", File.ReadAllText(report!.ReportPath!));
+            Assert.Contains("at Synapic.Main.Tests.CrashReporterTests", File.ReadAllText(report!.ReportPath!));
         }
     }
 

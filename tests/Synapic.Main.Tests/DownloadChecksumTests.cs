@@ -1,8 +1,8 @@
 using System.Security.Cryptography;
-using Synapic.Avalonia.Services;
+using Synapic.Main.Services;
 using Xunit;
 
-namespace Synapic.Avalonia.Tests;
+namespace Synapic.Main.Tests;
 
 /// <summary>
 /// The app executes what SidecarDownloadService downloads, so the SHA256SUMS

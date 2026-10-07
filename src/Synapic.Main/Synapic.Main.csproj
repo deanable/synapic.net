@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <RootNamespace>Synapic.Avalonia</RootNamespace>
+    <RootNamespace>Synapic.Main</RootNamespace>
     <AssemblyName>Synapic</AssemblyName>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
     <ApplicationManifest>app.manifest</ApplicationManifest>
@@ -45,7 +45,7 @@
 
   <ItemGroup>
     <!-- The teardown-safety tests drive the guarded tail-scroll helper directly. -->
-    <InternalsVisibleTo Include="Synapic.Avalonia.Tests" />
+    <InternalsVisibleTo Include="Synapic.Main.Tests" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,6 +1,6 @@
 using Xunit;
 
-namespace Synapic.Avalonia.Tests;
+namespace Synapic.Main.Tests;
 
 /// <summary>
 /// Regression pin for the config-persistence wiring: MainWindowViewModel
@@ -14,15 +14,15 @@ public class AppConfigDiRegistrationTests
     [Fact]
     public void App_registers_the_config_service_it_persist_resolves()
     {
-        var appSource = System.IO.Path.Combine(RepoRoot(), "src", "Synapic.Avalonia", "App.axaml.cs");
+        var appSource = System.IO.Path.Combine(RepoRoot(), "src", "Synapic.Main", "App.axaml.cs");
         var appText = System.IO.File.ReadAllText(appSource);
 
         Assert.Contains("services.AddSingleton(configService);", appText);
         Assert.Contains("services.AddSingleton(config);", appText);
 
         var vmSource = System.IO.File.ReadAllText(System.IO.Path.Combine(
-            RepoRoot(), "src", "Synapic.Avalonia", "ViewModels", "MainWindowViewModel.cs"));
-        Assert.Contains("GetService(typeof(Synapic.Avalonia.Services.ConfigService))", vmSource);
+            RepoRoot(), "src", "Synapic.Main", "ViewModels", "MainWindowViewModel.cs"));
+        Assert.Contains("GetService(typeof(Synapic.Main.Services.ConfigService))", vmSource);
     }
 
     private static string RepoRoot()

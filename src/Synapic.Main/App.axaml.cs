@@ -3,13 +3,13 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using Microsoft.Extensions.DependencyInjection;
-using Synapic.Avalonia.Models;
-using Synapic.Avalonia.Services;
-using Synapic.Avalonia.Services.Daminion;
-using Synapic.Avalonia.ViewModels;
-using Synapic.Avalonia.Views;
+using Synapic.Main.Models;
+using Synapic.Main.Services;
+using Synapic.Main.Services.Daminion;
+using Synapic.Main.ViewModels;
+using Synapic.Main.Views;
 
-namespace Synapic.Avalonia;
+namespace Synapic.Main;
 
 public partial class App : Application
 {

@@ -50,7 +50,7 @@ artifact.
 
 ## How the app opens this help
 
-`HelpService` (`src/Synapic.Avalonia/Services/HelpService.cs`) finds and starts
+`HelpService` (`src/Synapic.Main/Services/HelpService.cs`) finds and starts
 the topic. The order is deliberate, and every entry is tried in turn:
 
 | Platform | What | Where it comes from |
@@ -76,7 +76,7 @@ Payload, per build:
 
 | File | Who copies it |
 |------|---------------|
-| `Synapic.chm` + `help-payload.json` | `Synapic.Avalonia.csproj`, from this folder, as embedded resources (`Synapic.Help.*`) on every RID. Only when they exist - neither is committed |
+| `Synapic.chm` + `help-payload.json` | `Synapic.Main.csproj`, from this folder, as embedded resources (`Synapic.Help.*`) on every RID. Only when they exist - neither is committed |
 | `help/*.html`, `help/help.css` | the same project, but only for **non-Windows** RIDs, which have no `.chm` viewer |
 
 So the `.chm` is produced by CI on the Windows legs, before the app is
@@ -143,7 +143,7 @@ The help claims to describe what the app actually does, so a change to a label,
 a checkbox or a persisted setting is a help change too. When you touch Step 1-4
 or the sidecar panel:
 
-- Labels live in `src/Synapic.Avalonia/Views/*.axaml`; match them exactly,
+- Labels live in `src/Synapic.Main/Views/*.axaml`; match them exactly,
   including the `&mdash;` in headings like "Step 2 &mdash; Engine".
 - Persisted values live in `EngineSettingsStore` /
   `DaminionConnectionStore`; `admin-settings-files.html` lists those names and

@@ -1,12 +1,12 @@
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.VisualTree;
-using Synapic.Avalonia.Models;
-using Synapic.Avalonia.ViewModels;
-using Synapic.Avalonia.Views;
+using Synapic.Main.Models;
+using Synapic.Main.ViewModels;
+using Synapic.Main.Views;
 using Xunit;
 
-namespace Synapic.Avalonia.Tests;
+namespace Synapic.Main.Tests;
 
 /// <summary>
 /// The third route: the start screen's ✨ Upscaling card — the Daminion
@@ -103,7 +103,9 @@ public class UpscaleRouteTests
             var vm = (MainWindowViewModel)window.DataContext!;
             var buttons = window.GetVisualDescendants().OfType<Button>().ToList();
 
-            var upscaleCard = buttons.Single(b => b.Command == vm.StartUpscaleRouteCommand);
+            // The start-screen card specifically: the sidebar's mode header is
+            // bound to the same command on purpose.
+            var upscaleCard = buttons.Single(b => b.Command == vm.StartUpscaleRouteCommand && b.Classes.Contains("routeCard"));
             Assert.True(EffectivelyVisible(upscaleCard));
 
             // Start screen: the nav bar (and its tabs) is collapsed.

@@ -25,7 +25,7 @@ build/install-python-deps.ps1|.sh <rid>   # pip install -r requirements.txt (CPU
 build/build-sidecar.ps1|.sh <rid>    # PyInstaller → synapic-inference(.exe) + variant guard
 build/install-html-help-workshop.ps1 # Windows only: hhc.exe, from build/vendor (hash-checked)
 docs/help/build-chm.ps1              # Windows only: docs/help → Synapic.chm + SHA-256 manifest
-dotnet publish src/Synapic.Avalonia -c Release -r <rid> --self-contained
+dotnet publish src/Synapic.Main -c Release -r <rid> --self-contained
 build/package-windows.ps1            # Inno Setup 6 → Synapic-Setup-x64.exe
 build/package-windows-msi.ps1        # WiX → Synapic-win-x64.msi + Synapic-Setup-win-x64-msi.exe
 build/wix/Synapic.Installer.wixproj  # that MSI as a solution project (built on its own)

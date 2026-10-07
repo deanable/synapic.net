@@ -1,12 +1,12 @@
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
-using Synapic.Avalonia.Models;
-using Synapic.Avalonia.Services;
-using Synapic.Avalonia.ViewModels;
+using Synapic.Main.Models;
+using Synapic.Main.Services;
+using Synapic.Main.ViewModels;
 using Synapic.Shared.Contracts;
 using Xunit;
 
-namespace Synapic.Avalonia.Tests;
+namespace Synapic.Main.Tests;
 
 /// <summary>
 /// Startup server-detection behavior: black "not detected" + one-off Build

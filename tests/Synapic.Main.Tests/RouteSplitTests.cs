@@ -3,14 +3,14 @@ using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
 using Avalonia.VisualTree;
-using Synapic.Avalonia.Models;
-using Synapic.Avalonia.ViewModels;
-using Synapic.Avalonia.Views;
-using Synapic.Avalonia.Views.Wizard;
+using Synapic.Main.Models;
+using Synapic.Main.ViewModels;
+using Synapic.Main.Views;
+using Synapic.Main.Views.Wizard;
 using Xunit;
 using Shapes = Avalonia.Controls.Shapes;
 
-namespace Synapic.Avalonia.Tests;
+namespace Synapic.Main.Tests;
 
 /// <summary>
 /// The entry-point split: Synapic opens on a start screen with two routes —
@@ -142,8 +142,10 @@ public class RouteSplitTests
             var vm = (MainWindowViewModel)window.DataContext!;
             var buttons = window.GetVisualDescendants().OfType<Button>().ToList();
 
-            var tagCard = buttons.Single(b => b.Command == vm.StartTaggingRouteCommand);
-            var dedupCard = buttons.Single(b => b.Command == vm.StartDedupRouteCommand);
+            // The start-screen cards, not the sidebar's mode headers: both are
+            // bound to the same route commands by design (the sidebar switches mode).
+            var tagCard = buttons.Single(b => b.Command == vm.StartTaggingRouteCommand && b.Classes.Contains("routeCard"));
+            var dedupCard = buttons.Single(b => b.Command == vm.StartDedupRouteCommand && b.Classes.Contains("routeCard"));
             var homeButton = buttons.Single(b => b.Command == vm.GoHomeCommand);
             Assert.True(tagCard.IsVisible);
             Assert.True(dedupCard.IsVisible);
@@ -205,7 +207,7 @@ public class RouteSplitTests
                 vm.StartDedupRouteCommand,
                 vm.StartUpscaleRouteCommand,
             }.Select(command => window.GetVisualDescendants().OfType<Button>()
-                .Single(b => b.Command == command)).ToList();
+                .Single(b => b.Command == command && b.Classes.Contains("routeCard"))).ToList();
 
             Assert.False(vm.CanStartRoute);
             Assert.All(cards, card => Assert.False(card.IsEnabled));
@@ -249,7 +251,7 @@ public class RouteSplitTests
             var vm = (MainWindowViewModel)window.DataContext!;
             var panel = window.GetVisualDescendants().OfType<DatasourceSourcePanel>().First();
             var card = window.GetVisualDescendants().OfType<Button>()
-                .Single(b => b.Command == vm.StartTaggingRouteCommand);
+                .Single(b => b.Command == vm.StartTaggingRouteCommand && b.Classes.Contains("routeCard"));
 
             Assert.True(panel.Bounds.Height > 0, "the source panel did not lay out");
             Assert.True(card.Bounds.Width > 0 && card.Bounds.Height > 0, "the route cards did not lay out");

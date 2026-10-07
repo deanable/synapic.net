@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Refit;
 
-namespace Synapic.Avalonia.Services.Daminion;
+namespace Synapic.Main.Services.Daminion;
 
 /// <summary>
 /// Daminion REST endpoints used by Synapic — mechanical port of the endpoints

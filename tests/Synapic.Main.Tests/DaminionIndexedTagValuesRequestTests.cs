@@ -2,10 +2,10 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using Refit;
-using Synapic.Avalonia.Services.Daminion;
+using Synapic.Main.Services.Daminion;
 using Xunit;
 
-namespace Synapic.Avalonia.Tests;
+namespace Synapic.Main.Tests;
 
 /// <summary>
 /// Daminion routes /api/IndexedTagValues on its FULL parameter set: omitting

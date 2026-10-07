@@ -4,13 +4,13 @@ using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.VisualTree;
-using Synapic.Avalonia.Models;
-using Synapic.Avalonia.Services;
-using Synapic.Avalonia.ViewModels;
-using Synapic.Avalonia.Views;
+using Synapic.Main.Models;
+using Synapic.Main.Services;
+using Synapic.Main.ViewModels;
+using Synapic.Main.Views;
 using Xunit;
 
-namespace Synapic.Avalonia.Tests;
+namespace Synapic.Main.Tests;
 
 /// <summary>
 /// The context-aware half of the help system: HelpScope.Topic annotations in
@@ -143,7 +143,7 @@ public partial class HelpScopeTests
 
         var helpDir = Path.Combine(repoRoot, "docs", HelpService.TopicsFolderName);
         var compiled = File.ReadAllText(Path.Combine(helpDir, "Synapic.hhp"));
-        var viewsDir = Path.Combine(repoRoot, "src", "Synapic.Avalonia", "Views");
+        var viewsDir = Path.Combine(repoRoot, "src", "Synapic.Main", "Views");
         var count = 0;
 
         foreach (var axaml in Directory.EnumerateFiles(viewsDir, "*.axaml", SearchOption.AllDirectories))

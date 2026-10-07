@@ -1,6 +1,6 @@
-using Synapic.Avalonia.Services.Processing;
+using Synapic.Main.Services.Processing;
 
-namespace Synapic.Avalonia.Tests;
+namespace Synapic.Main.Tests;
 
 /// <summary>
 /// Test accessor over DedupService's grouping. It delegates to the real public

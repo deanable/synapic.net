@@ -2,13 +2,13 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 18
 VisualStudioVersion = 18.10.12217.157
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Synapic.Avalonia", "src\Synapic.Avalonia\Synapic.Avalonia.csproj", "{A1B2C3D4-0001-4000-9000-000000000001}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Synapic.Main", "src\Synapic.Main\Synapic.Main.csproj", "{A1B2C3D4-0001-4000-9000-000000000001}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Synapic.Shared", "src\Synapic.Shared\Synapic.Shared.csproj", "{A1B2C3D4-0002-4000-9000-000000000002}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Synapic.Shared.Tests", "tests\Synapic.Shared.Tests\Synapic.Shared.Tests.csproj", "{A1B2C3D4-0003-4000-9000-000000000003}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Synapic.Avalonia.Tests", "tests\Synapic.Avalonia.Tests\Synapic.Avalonia.Tests.csproj", "{A1B2C3D4-0004-4000-9000-000000000004}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Synapic.Main.Tests", "tests\Synapic.Main.Tests\Synapic.Main.Tests.csproj", "{A1B2C3D4-0004-4000-9000-000000000004}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Synapic.Integration.Tests", "tests\Synapic.Integration.Tests\Synapic.Integration.Tests.csproj", "{A1B2C3D4-0005-4000-9000-000000000005}"
 EndProject

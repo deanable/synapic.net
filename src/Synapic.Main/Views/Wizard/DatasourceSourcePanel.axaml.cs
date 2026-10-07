@@ -1,8 +1,8 @@
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
-using Synapic.Avalonia.ViewModels.Steps;
+using Synapic.Main.ViewModels.Steps;
 
-namespace Synapic.Avalonia.Views.Wizard;
+namespace Synapic.Main.Views.Wizard;
 
 /// <summary>
 /// The source panel of the start screen: folder picker, Daminion connect, scope,

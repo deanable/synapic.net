@@ -4,7 +4,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Synapic.Avalonia.Services;
+namespace Synapic.Main.Services;
 
 /// <summary>Progress of a sidecar download, reported as bytes land.</summary>
 public sealed record SidecarDownloadProgress(double Percent, string Stage);

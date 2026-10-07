@@ -3,7 +3,7 @@ using System.Text;
 using Microsoft.Win32;
 using Synapic.Shared;
 
-namespace Synapic.Avalonia.Services;
+namespace Synapic.Main.Services;
 
 /// <summary>Per-user Daminion connection parameters (Step 1 convenience).</summary>
 /// <summary>Daminion connection + Step 1 scope/filter/limit settings.</summary>

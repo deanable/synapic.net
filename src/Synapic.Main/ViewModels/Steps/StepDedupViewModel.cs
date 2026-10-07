@@ -2,11 +2,11 @@ using System.Collections.ObjectModel;
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Synapic.Avalonia.Services;
-using Synapic.Avalonia.Services.Daminion;
-using Synapic.Avalonia.Services.Processing;
+using Synapic.Main.Services;
+using Synapic.Main.Services.Daminion;
+using Synapic.Main.Services.Processing;
 
-namespace Synapic.Avalonia.ViewModels.Steps;
+namespace Synapic.Main.ViewModels.Steps;
 
 /// <summary>
 /// One image inside a duplicate group. The checkbox is the keep-set: a checked

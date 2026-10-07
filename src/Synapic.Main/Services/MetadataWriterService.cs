@@ -5,7 +5,7 @@ using MetadataExtractor.Formats.Exif;
 using MetadataExtractor.Formats.Xmp;
 using MetadataExtractor.Formats.Iptc;
 
-namespace Synapic.Avalonia.Services;
+namespace Synapic.Main.Services;
 
 /// <summary>Tags extracted from (or to be written to) an image file.</summary>
 public sealed record TagResult(

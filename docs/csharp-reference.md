@@ -1,9 +1,9 @@
-# C# Host Reference (`src/Synapic.Avalonia`, `src/Synapic.Shared`)
+# C# Host Reference (`src/Synapic.Main`, `src/Synapic.Shared`)
 
 Every type in the Avalonia host, what it owns, and how it behaves. For the
 system-level picture read [`codebase-guide.md`](codebase-guide.md) first.
 
-Assembly name is **`Synapic`** (`Synapic.Avalonia.csproj` → `AssemblyName`),
+Assembly name is **`Synapic`** (`Synapic.Main.csproj` → `AssemblyName`),
 output type `WinExe`, targeting `net10.0` with nullable + warnings-as-errors
 from `Directory.Build.props`.
 
@@ -653,7 +653,7 @@ plus IPTC/EXIF fallbacks. `TagResult(Category, Keywords, Description)`. See
   `Tips`, `ForStepIndex(stepIndex)`). `NormalizeTopic` maps anything that is
   not a plain `.html` name with an optional `#anchor` to the home page, so a bad
   value cannot reach outside the help.
-- Payload: `Synapic.Avalonia.csproj` embeds `docs/help/Synapic.chm` and
+- Payload: `Synapic.Main.csproj` embeds `docs/help/Synapic.chm` and
   `help-payload.json` as `Synapic.Help.*` resources (when they exist — both are
   artifacts of `docs/help/build-chm.ps1`), and copies `docs/help/*.html` and
   `help.css` into `help/` for the **non-Windows** RIDs, which have no `.chm`

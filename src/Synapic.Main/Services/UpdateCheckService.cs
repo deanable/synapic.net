@@ -2,7 +2,7 @@ using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 
-namespace Synapic.Avalonia.Services;
+namespace Synapic.Main.Services;
 
 /// <summary>Result of an update check against GitHub Releases.</summary>
 public sealed record UpdateCheckResult(bool UpdateAvailable, string? LatestVersion, string? DownloadUrl, string? Notes);

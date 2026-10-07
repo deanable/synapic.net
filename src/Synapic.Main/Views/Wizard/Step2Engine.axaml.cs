@@ -1,9 +1,9 @@
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
-using Synapic.Avalonia.ViewModels.Steps;
+using Synapic.Main.ViewModels.Steps;
 
-namespace Synapic.Avalonia.Views.Wizard;
+namespace Synapic.Main.Views.Wizard;
 
 public partial class Step2Engine : UserControl
 {

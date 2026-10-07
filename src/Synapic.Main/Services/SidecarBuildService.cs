@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.IO;
 
-namespace Synapic.Avalonia.Services;
+namespace Synapic.Main.Services;
 
 /// <summary>
 /// Builds the Python inference sidecar (synapic-inference.exe) from source by

@@ -3,13 +3,13 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Serilog.Events;
 using Serilog.Parsing;
-using Synapic.Avalonia.Models;
-using Synapic.Avalonia.Services;
-using Synapic.Avalonia.ViewModels;
-using Synapic.Avalonia.Views;
+using Synapic.Main.Models;
+using Synapic.Main.Services;
+using Synapic.Main.ViewModels;
+using Synapic.Main.Views;
 using Xunit;
 
-namespace Synapic.Avalonia.Tests;
+namespace Synapic.Main.Tests;
 
 /// <summary>
 /// Regression tests for the crash on app close:

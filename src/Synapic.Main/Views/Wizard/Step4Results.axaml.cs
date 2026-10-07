@@ -2,9 +2,9 @@ using System.Collections.Specialized;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
-using Synapic.Avalonia.ViewModels.Steps;
+using Synapic.Main.ViewModels.Steps;
 
-namespace Synapic.Avalonia.Views.Wizard;
+namespace Synapic.Main.Views.Wizard;
 
 public partial class Step4Results : UserControl
 {
