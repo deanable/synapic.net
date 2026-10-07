@@ -63,3 +63,9 @@ docs/help/*.chm
 docs/help/help-payload.json
 build/_*.log
 UpgradeLog*.htm
+
+# HeatWave's project converter drops a trace log named for the operation
+# beside the project it is working on. Per-machine output, same rule as the
+# other logs above - seen as untracked noise in build/wix/ after every
+# HeatWave install or upgrade.
+build/wix/HeatWaveConvert*.log
