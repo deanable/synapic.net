@@ -53,9 +53,9 @@ boundaries changed (UI queues → HTTP).
 ## Sidecar lifecycle (README §2)
 
 1. **Auto-launch (default):** the sidecar starts with the app (unless `ui.autoLaunchSidecar` is `false` in config.json, in which case the user presses **Start Server** to trigger this same sequence).
-2. Avalonia launches `synapic-inference --port=0` with `SYNAPIC_PORT_FILE=%TEMP%/synapic_port_{pid}.txt` and `HF_HOME=%LOCALAPPDATA%/Synapic/models` (or `~/.cache/synapic/models`).
+2. Avalonia launches `synapic-inference --port=0` with `SYNAPIC_PORT_FILE=%TEMP%/synapic_port_{pid}.txt`, `HF_HOME=%LOCALAPPDATA%/Synapic/models` (or `~/.cache/synapic/models`) and `SYNAPIC_DEVICE=<the Step 2 device>`. The device picks the variant to launch first: `cuda` resolves to the CUDA build when one is on disk, everything else to the CPU build.
 3. The sidecar binds an OS-assigned port and writes `port\npid\n` to the port file.
-4. Avalonia reads the port, polls `/health` until `status == "ready"` (max 120 s).
+4. Avalonia reads the port, states the device again with `PUT /config` (so a sidecar that ignores `SYNAPIC_DEVICE` — anything built before it existed — is configured too), then polls `/health` until `status == "ready"` (max 120 s). The `device` it reports is the one the model actually loaded on, and the status bar shows it.
 5. **Inference:** `POST /tag` with a 5-minute timeout; one automatic retry on 503 (model loading).
 6. **Manual launch (opt-out):** with `ui.autoLaunchSidecar: false` in config.json the server stays stopped until the user presses **Start Server**; the setting is config-file-only (there is no Options panel in the shipped UI).
 7. **Shutdown (always):** app exit → `POST /shutdown` → 5 s grace → `Process.Kill(entireProcessTree: true)`. The sidecar never outlives the app.

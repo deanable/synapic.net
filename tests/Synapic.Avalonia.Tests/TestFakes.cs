@@ -41,6 +41,15 @@ internal sealed class FakeSidecar : IInferenceSidecar
     public Task<HealthResponse> GetHealthAsync(CancellationToken ct = default)
         => Task.FromResult(new HealthResponse());
 
+    /// <summary>Every device pushed through SetDeviceAsync, in order.</summary>
+    public List<string?> PushedDevices { get; } = new();
+
+    public Task SetDeviceAsync(string? device, CancellationToken ct = default)
+    {
+        PushedDevices.Add(device);
+        return Task.CompletedTask;
+    }
+
     /// <summary>Stand-in for the sidecar's built-in instruction.</summary>
     public string PromptDefaults { get; set; } = "BUILT-IN INSTRUCTION";
 

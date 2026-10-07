@@ -20,6 +20,8 @@ the way Synapic means them.</p>
 <tr><th class="setting">Term</th><th>Meaning</th></tr>
 <tr><td><span class="term">Inference server</span> / <span class="term">sidecar</span></td><td>The separate program that loads the model and answers one tagging request per image. Synapic starts it, talks to it over a local port, and stops it. See <a href="first-run-sidecar.html">Build the inference server</a>.</td></tr>
 <tr><td><span class="term">Variant</span></td><td>A build of the inference server for a particular runtime: the CPU build, or the CUDA build for NVIDIA GPUs.</td></tr>
+<tr><td><span class="term">Device</span></td><td>Where the model is computed: the CPU, an NVIDIA GPU (CUDA) or Apple silicon (MPS). Step 2 offers only the devices this machine can run, and the choice both selects the device for the next run and decides which server variant is launched. The status bar names the device the running server reports.</td></tr>
+<tr><td><span class="term">CUDA</span></td><td>NVIDIA's GPU compute platform. Needs an NVIDIA driver on the machine <em>and</em> the CUDA build of the inference server; with both, tagging is many times faster than on the CPU. Missing either one means the run falls back to the CPU.</td></tr>
 <tr><td><span class="term">Model</span></td><td>The vision-language network that turns an image into a category, keywords and a description. Default: <code>LiquidAI/LFM2.5-VL-450M</code>.</td></tr>
 <tr><td><span class="term">Model cache</span></td><td>The folder holding downloaded model weights, shared by every install on the machine: <span class="path">%LOCALAPPDATA%\Synapic\models</span>.</td></tr>
 <tr><td><span class="term">Batch</span></td><td>One run of Step 3: fetch, tag, write, for the items your Step 1 settings selected.</td></tr>

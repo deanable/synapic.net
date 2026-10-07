@@ -119,6 +119,17 @@ MAX_KEYWORDS_PER_IMAGE = 20
 PORT_FILE_ENV_VAR = "SYNAPIC_PORT_FILE"
 
 # ============================================================================
+# LAUNCH DEVICE (C# ↔ Python contract)
+# ============================================================================
+
+# Compute device the host wants the tag pipeline built on (cpu | cuda | mps).
+# An environment variable rather than a command-line argument on purpose: the
+# host must be able to launch any sidecar build, and one built before it learned
+# the argument would refuse to start on the unknown flag, while an unknown
+# environment variable is ignored. See service.apply_launch_device.
+DEVICE_ENV_VAR = "SYNAPIC_DEVICE"
+
+# ============================================================================
 # MODEL DOWNLOAD CONFIGURATION
 # ============================================================================
 

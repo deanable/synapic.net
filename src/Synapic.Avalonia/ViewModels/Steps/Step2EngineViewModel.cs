@@ -19,6 +19,7 @@ public partial class Step2EngineViewModel : ViewModelBase
     private readonly IInferenceSidecar _sidecar;
     private readonly EngineSettingsStore? _engineStore;
     private readonly SystemPromptPresetStore? _presetStore;
+    private readonly Func<ComputeAvailability> _availability;
 
     [ObservableProperty]
     private string _manualModelId = "LiquidAI/LFM2.5-VL-450M";
@@ -27,7 +28,15 @@ public partial class Step2EngineViewModel : ViewModelBase
     // and description together, so there is no per-field task choice: the old
     // TaskOptions entries (image-classification / zero-shot) were unrelated
     // transformer pipeline tasks that a VLM cannot actually run.
-    public string[] DeviceOptions { get; } = { "CPU", "CUDA", "MPS" };
+
+    /// <summary>
+    /// The Device combo's entries: only the devices this machine can run (see
+    /// <see cref="ComputeAvailability"/>). CUDA on a machine with no NVIDIA driver
+    /// and MPS away from macOS are not offered at all — a choice that silently
+    /// falls back to the CPU is worse than no choice.
+    /// </summary>
+    public ObservableCollection<DeviceOption> DeviceOptions { get; } = new();
+
     public string[] ProbabilityModeOptions { get; } = { "LLM only", "Probability only", "Both" };
 
     /// <summary>
@@ -37,27 +46,25 @@ public partial class Step2EngineViewModel : ViewModelBase
     public const string MultimodalTask = "image-text-to-text";
 
     [ObservableProperty]
-    private int _deviceIndex;
+    private DeviceOption _selectedDevice = new("CPU", "cpu");
 
     [ObservableProperty]
     private int _probabilityModeIndex;
 
-    public string Device => DeviceIndexToString(DeviceIndex);
+    /// <summary>
+    /// Why a device is missing from the list, and what a run will use instead.
+    /// Blank when every device the app knows about is offered.
+    /// </summary>
+    [ObservableProperty]
+    private string _deviceAvailabilityNote = "";
+
+    public bool HasDeviceAvailabilityNote => DeviceAvailabilityNote.Length > 0;
+
+    partial void OnDeviceAvailabilityNoteChanged(string value) =>
+        OnPropertyChanged(nameof(HasDeviceAvailabilityNote));
+
+    public string Device => SelectedDevice.Value;
     public string ProbabilityMode => ProbabilityModeIndexToString(ProbabilityModeIndex);
-
-    public static string DeviceIndexToString(int i) => i switch
-    {
-        1 => "cuda",
-        2 => "mps",
-        _ => "cpu",
-    };
-
-    public static int DeviceStringToIndex(string s) => s?.ToLowerInvariant() switch
-    {
-        "cuda" => 1,
-        "mps" => 2,
-        _ => 0,
-    };
 
     public static string ProbabilityModeIndexToString(int i) => i switch
     {
@@ -73,19 +80,27 @@ public partial class Step2EngineViewModel : ViewModelBase
         _ => 2,
     };
 
+    /// <param name="availabilityProbe">
+    /// Overridable so tests (and future re-probing) can state what the machine
+    /// can run instead of depending on the GPU under the test runner.
+    /// </param>
     public Step2EngineViewModel(Session session, IInferenceSidecar sidecar,
-        EngineSettingsStore? engineStore = null, SystemPromptPresetStore? presetStore = null)
+        EngineSettingsStore? engineStore = null, SystemPromptPresetStore? presetStore = null,
+        Func<ComputeAvailability>? availabilityProbe = null)
     {
         _session = session;
         _sidecar = sidecar;
         _engineStore = engineStore;
         _presetStore = presetStore;
+        _availability = availabilityProbe ?? ComputeAvailability.Detect;
+        // The list must exist before anything hydrates into it.
+        RefreshDeviceOptions();
         HydrateFromStore();
         var engine = session.Engine;
         ManualModelId = engine.ModelId;
         // Correct any stale per-field task persisted by an older session.
         engine.Task = MultimodalTask;
-        DeviceIndex = DeviceStringToIndex(engine.Device);
+        TrySelectDevice(engine.Device);
         ConfidenceThreshold = engine.ConfidenceThreshold;
         ProbabilityModeIndex = ProbabilityModeStringToIndex(engine.ProbabilityMode);
         ProbabilityThreshold = engine.ProbabilityThreshold;
@@ -114,7 +129,7 @@ public partial class Step2EngineViewModel : ViewModelBase
             _session.Engine.Task = MultimodalTask;
 
             // Device + threshold sliders.
-            DeviceIndex = DeviceStringToIndex(saved.Device);
+            TrySelectDevice(saved.Device);
             ConfidenceThreshold = (float)saved.ConfidenceThreshold;
             ProbabilityModeIndex = ProbabilityModeStringToIndex(saved.ProbabilityMode);
             ProbabilityThreshold = (float)saved.ProbabilityThreshold;
@@ -292,10 +307,95 @@ public partial class Step2EngineViewModel : ViewModelBase
     }
 
     partial void OnManualModelIdChanged(string value) => PushToSession();
-    partial void OnDeviceIndexChanged(int value)
+    partial void OnSelectedDeviceChanged(DeviceOption value)
     {
         OnPropertyChanged(nameof(Device));
         PushToSession();
+        _ = PushDeviceToServerAsync();
+    }
+
+    /// <summary>
+    /// Rebuild the offered devices from the machine's capabilities and keep the
+    /// current choice when it is still on the list. Called on entry to the step as
+    /// well as at construction, so a driver installed (or a GPU plugged in) while
+    /// the app was open is picked up without a restart.
+    /// </summary>
+    public void RefreshDeviceOptions()
+    {
+        var availability = _availability();
+        var wanted = SelectedDevice.Value;
+
+        DeviceOptions.Clear();
+        DeviceOptions.Add(new DeviceOption("CPU", "cpu"));
+        if (availability.Cuda) DeviceOptions.Add(new DeviceOption("CUDA", "cuda"));
+        if (availability.Mps) DeviceOptions.Add(new DeviceOption("MPS", "mps"));
+
+        var kept = DeviceOptions.FirstOrDefault(o => o.Value == wanted);
+        if (kept is null && wanted != "cpu")
+        {
+            // The device was selectable a moment ago and is not any more (a
+            // driver removed, a GPU unplugged, a settings file from a machine
+            // that had one) - say what happened to it.
+            DeviceAvailabilityNote = DeviceUnavailableNote(wanted);
+        }
+        else if (!availability.Cuda)
+        {
+            DeviceAvailabilityNote = "CUDA is not offered here: no NVIDIA CUDA driver was detected.";
+        }
+        else
+        {
+            DeviceAvailabilityNote = "";
+        }
+
+        SelectedDevice = kept ?? DeviceOptions[0];
+    }
+
+    /// <summary>
+    /// Select a device by value ("cpu"/"cuda"/"mps"). False when this machine
+    /// does not offer it — the caller keeps the fallback instead of a device that
+    /// would silently run on the CPU, and the reason is put on screen.
+    /// </summary>
+    public bool TrySelectDevice(string? value)
+    {
+        var wanted = (value ?? "").Trim().ToLowerInvariant();
+        var match = DeviceOptions.FirstOrDefault(o => o.Value == wanted);
+        if (match is null)
+        {
+            if (wanted is "cuda" or "mps") DeviceAvailabilityNote = DeviceUnavailableNote(wanted);
+            return false;
+        }
+        SelectedDevice = match;
+        return true;
+    }
+
+    /// <summary>What to say when a device that was asked for cannot be used.</summary>
+    private static string DeviceUnavailableNote(string value) => value switch
+    {
+        "cuda" => "CUDA was selected, but this machine has no NVIDIA CUDA driver \u2014 using the CPU.",
+        "mps" => "MPS was selected, but it is not available on this machine \u2014 using the CPU.",
+        _ => "",
+    };
+
+    /// <summary>
+    /// Tell a running server which device this run expects. The device is part
+    /// of the server's session configuration and its tag pipeline is built from
+    /// it, so a server launched before this selection would otherwise keep
+    /// serving on whatever it started with - the reason choosing CUDA could
+    /// leave inference on the CPU. Silent when nothing is running (a server that
+    /// starts later gets the device from its launch environment) and never
+    /// fatal: /health still reports the device the run actually got.
+    /// </summary>
+    private async Task PushDeviceToServerAsync()
+    {
+        try
+        {
+            await _sidecar.SetDeviceAsync(Device);
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Warning(nameof(Step2EngineViewModel),
+                $"Could not tell the server to use {Device}: {e.Message}");
+        }
     }
     partial void OnConfidenceThresholdChanged(double value) => PushToSession();
     partial void OnProbabilityModeIndexChanged(int value)
@@ -577,9 +677,27 @@ public partial class Step2EngineViewModel : ViewModelBase
     /// <summary>Populate the model list from the running server (invoked when entering Step 2).</summary>
     public async Task OnEnteredAsync()
     {
+        // The machine may have gained (or lost) a GPU driver since the last
+        // look, so the offered devices are re-probed before the run starts.
+        RefreshDeviceOptions();
+        // A device chosen while another server was running (or before this one
+        // existed) is re-stated here, so entering the step always leaves the
+        // server and the combo box agreeing.
+        await PushDeviceToServerAsync();
         if (LocalModels.Count == 0 && !IsLoadingModels)
             await RefreshModelsAsync(CancellationToken.None);
     }
 
 
+}
+
+/// <summary>
+/// One entry in Step 2's Device combo. <see cref="Value"/> is the string the
+/// session, the launcher and the inference server all speak
+/// ("cpu"/"cuda"/"mps"); <see cref="ToString"/> is the label the combo shows, so
+/// the list needs no item template.
+/// </summary>
+public sealed record DeviceOption(string Name, string Value)
+{
+    public override string ToString() => Name;
 }

@@ -30,6 +30,12 @@ between the app and the tests.
 - Task names (`MODEL_TASK_*`, `VALID_TASKS`), display/capability maps.
 - `DEFAULT_CANDIDATE_LABELS`, `MAX_IMAGE_SIZE_MB`, `MAX_KEYWORDS_PER_IMAGE`.
 - `PORT_FILE_ENV_VAR = "SYNAPIC_PORT_FILE"`.
+- `DEVICE_ENV_VAR = "SYNAPIC_DEVICE"` — the compute device the host wants the
+  tag pipeline built on (`cpu`/`cuda`/`mps`), read in `main()` before the
+  warm-up thread starts. An environment variable rather than a command-line
+  argument so a sidecar built before the setting existed still starts (an
+  unknown flag would abort it, an unknown variable is ignored). `--device` is
+  the same thing for manual runs, and `PUT /config` overrides it at runtime.
 - `MODEL_FILE_EXCLUSIONS`, `INCOMPATIBLE_MODEL_PATTERNS` (gptq/AWQ/GGUF/EXL2/
   bitsandbytes/int4/int8…).
 - `STOP_WORDS` (keyword extraction).

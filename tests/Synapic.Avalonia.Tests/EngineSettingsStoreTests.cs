@@ -126,10 +126,13 @@ public class EngineSettingsStoreTests : IDisposable
             TagCategories: true,
             TagDescription: false));
 
-        var vm = new Step2EngineViewModel(new Session(), new FakeSidecar(), _store);
+        // A CUDA-capable machine is pinned: the device combo only offers CUDA
+        // where the driver exists, and the test runner is not a GPU box.
+        var vm = new Step2EngineViewModel(new Session(), new FakeSidecar(), _store,
+            null, () => new ComputeAvailability(Cuda: true, Mps: false));
 
         Assert.Equal("org/model-v2", vm.ManualModelId);
-        Assert.Equal(1, vm.DeviceIndex); // cuda
+        Assert.Equal("cuda", vm.Device);
         Assert.Equal(0.5, vm.ConfidenceThreshold);
         Assert.Equal(0, vm.ProbabilityModeIndex); // llm
         Assert.Equal(0.7, vm.ProbabilityThreshold, 6);
@@ -175,7 +178,7 @@ public class EngineSettingsStoreTests : IDisposable
         var vm = new Step2EngineViewModel(new Session(), new FakeSidecar());
 
         Assert.Equal("LiquidAI/LFM2.5-VL-450M", vm.ManualModelId);
-        Assert.Equal(0, vm.DeviceIndex); // cpu
+        Assert.Equal("cpu", vm.Device);
         Assert.Equal(0.3, vm.ConfidenceThreshold);
         Assert.Equal(2, vm.ProbabilityModeIndex); // both
         Assert.Equal(0.5, vm.ProbabilityThreshold);
@@ -193,12 +196,13 @@ public class EngineSettingsStoreTests : IDisposable
         if (!OperatingSystem.IsWindows()) return;
 
         // Hydration path: store -> VM -> user nudges a value -> SaveToStore -> reload.
-        var vm = new Step2EngineViewModel(new Session(), new FakeSidecar(), _store);
+        var vm = new Step2EngineViewModel(new Session(), new FakeSidecar(), _store,
+            null, () => new ComputeAvailability(Cuda: true, Mps: false));
 
         // The store was empty, so VM is at session defaults. Nudge a few fields
         // and persist.
         vm.ManualModelId = "user/model";
-        vm.DeviceIndex = 1; // cuda
+        Assert.True(vm.TrySelectDevice("cuda"));
         vm.ConfidenceThreshold = 0.25;
         vm.ProbabilityModeIndex = 1; // probability
         vm.ProbabilityThreshold = 0.8;

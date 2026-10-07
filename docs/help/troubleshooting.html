@@ -38,6 +38,7 @@ href="#performance">speed and timings</a>.</li>
 <tr><td><code>Timed out waiting for the sidecar port file</code></td><td>The server process never got far enough to publish its port. Look a few lines up in the log for its error: a corrupted build, an antivirus quarantine, or no write access to the temporary folder.</td></tr>
 <tr><td><code>Sidecar process exited unexpectedly</code></td><td>The server crashed mid-run. Restart it from the toolbar; if it repeats on the same image, that image is the suspect &mdash; a truncated or unusual file.</td></tr>
 <tr><td><code>Model loading &mdash; retry shortly</code></td><td>The server is still loading the model. Wait for it to report healthy; Synapic retries the request once by itself.</td></tr>
+<tr><td>Tagging is slow and the status bar says <span class="ui">CPU</span> although Step 2 says <span class="ui">CUDA</span></td><td>The server in use has no usable CUDA, so it fell back to the CPU. The note beside the indicator says which build to get: build or download the <span class="ui">CUDA (NVIDIA GPU)</span> variant (see <a href="first-run-sidecar.html">Build the inference server</a>), then restart the server &mdash; the launch picks the CUDA executable from then on. A GPU-less machine reports the same thing, and CUDA needs a current NVIDIA driver.</td></tr>
 <tr><td><span class="ui">stale build, rebuild recommended</span></td><td>Developer checkouts only: the server executable predates the inference source. Rebuild that variant.</td></tr>
 </table>
 

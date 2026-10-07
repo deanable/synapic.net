@@ -164,6 +164,41 @@ async def lifespan(_app: FastAPI):
     logger.info("Synapic inference sidecar shutting down")
 
 
+def apply_launch_device(device: str | None) -> None:
+    """Set the session device from the launch environment / ``--device``.
+
+    The device lives in the session config (``PUT /config``) and ``/tag``
+    builds its pipeline from it, so the host has to say which device it wants
+    before the first tag. Saying it at launch rather than only over HTTP has
+    two consequences that matter:
+
+    * the boot warm-up, which starts ``WARMUP_GRACE_SECONDS`` after this
+      returns, loads the model on the requested device — otherwise it loads
+      the CPU default and the first tag of a CUDA run pays a second, full
+      model load on the GPU while the CPU copy is still resident;
+    * an installed app whose bundled executable is the CUDA build gets GPU
+      inference without any host-side configuration at all.
+
+    The host passes the device in ``config.DEVICE_ENV_VAR``; an environment
+    variable is compatible with every build, an unknown CLI flag is not.
+
+    Unknown values are ignored rather than fatal: the host validates before it
+    launches, and a stale or hand-edited setting must not stop the server.
+    """
+    requested = (device or "").strip().lower()
+    if not requested or requested == _session_config["device"]:
+        return
+    if requested not in ("cpu", "cuda", "mps"):
+        logger.warning(
+            f"Ignoring unknown launch device '{device}' - keeping "
+            f"'{_session_config['device']}'"
+        )
+        return
+    with _config_lock:
+        _session_config["device"] = requested
+    logger.info(f"Session device set to '{requested}' by the launch environment")
+
+
 def _ensure_default_model() -> None:
     """Make sure the default vision model is available locally.
 
@@ -210,9 +245,12 @@ def _warm_up_model() -> None:
     ``/health`` "error", which the host treats as a fatal startup failure -
     the first real ``/tag`` retries the load and reports it properly.
 
-    Note the pipeline cache is keyed by device and the session device arrives
-    via ``PUT /config``, so a host configured for CUDA rebuilds it on the first
-    tag; warming on the boot default is still correct for the CPU path.
+    The device warmed here is whatever the session is already configured for:
+    the host passes its Step 2 selection in ``config.DEVICE_ENV_VAR`` at launch
+    (``apply_launch_device``, which runs before this thread exists), and
+    ``PUT /config`` can change it later. The pipeline cache is keyed by device,
+    so a change made after warm-up simply rebuilds the pipeline on the first
+    tag and evicts the previous one.
     """
     if os.environ.get(config.WARMUP_DISABLE_ENV, "").lower() in ("1", "true", "yes"):
         logger.info(f"Warm-up disabled via {config.WARMUP_DISABLE_ENV}")
@@ -695,16 +733,47 @@ def _delayed_exit() -> None:
 # ---------------------------------------------------------------------------
 
 
-def main() -> None:
-    global _uvicorn_server
+def _build_arg_parser() -> "argparse.ArgumentParser":
+    """The sidecar's command line. Split out so the arguments the host passes
+    can be asserted without starting a server.
 
+    ``--port`` is the port to bind; 0 lets the OS pick one and the host reads it
+    from the port file. ``--device`` is the compute device for the tag pipeline
+    (manual runs; the host passes ``config.DEVICE_ENV_VAR`` instead), so the boot
+    warm-up loads on it rather than on the CPU default.
+    """
     import argparse
-    import socket as _socket
 
     parser = argparse.ArgumentParser(description="Synapic inference sidecar")
     parser.add_argument("--port", type=int, default=0, help="0 = OS-assigned free port")
     parser.add_argument("--host", default="127.0.0.1")
-    args = parser.parse_args()
+    parser.add_argument(
+        "--device",
+        default="",
+        choices=("cpu", "cuda", "mps"),
+        help=(
+            "Compute device for the tag pipeline (cpu, cuda or mps). Overrides "
+            f"{config.DEVICE_ENV_VAR}, which is how the host passes the Step 2 "
+            "selection so the boot warm-up loads on it instead of the CPU "
+            "default."
+        ),
+    )
+    return parser
+
+
+def main() -> None:
+    global _uvicorn_server
+
+    import socket as _socket
+
+    args = _build_arg_parser().parse_args()
+
+    # The flag is explicit when given, otherwise the host's environment
+    # variable (see config.DEVICE_ENV_VAR). Before the port file and before
+    # uvicorn's lifespan: the warm-up thread is started there and must already
+    # see the requested device.
+    requested_device = args.device or os.environ.get(config.DEVICE_ENV_VAR, "")
+    apply_launch_device(requested_device)
 
     # Pre-bind the socket so the actual OS-assigned port is known BEFORE the
     # server starts. Uvicorn >=0.38 no longer exposes its bound sockets via the

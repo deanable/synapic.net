@@ -34,14 +34,23 @@
       <TextBox Watermark="Model id (Hugging Face repo)" Text="{Binding ManualModelId}"
                help:HelpScope.Topic="settings-reference.html#model-id" />
 
-      <StackPanel Orientation="Horizontal" Spacing="16"
+      <StackPanel Orientation="Vertical" Spacing="4"
                   help:HelpScope.Topic="settings-reference.html#device">
-        <TextBlock Text="Device:" VerticalAlignment="Center" />
-        <ComboBox SelectedIndex="{Binding DeviceIndex}" ItemsSource="{Binding DeviceOptions}" MinWidth="100" />
-        <TextBlock Text="Task:" VerticalAlignment="Center" />
-        <TextBlock Text="Category + Keywords + Description (multimodal)"
-                   VerticalAlignment="Center" Opacity="0.7"
-                   help:HelpScope.Topic="settings-reference.html#task" />
+        <StackPanel Orientation="Horizontal" Spacing="16">
+          <TextBlock Text="Device:" VerticalAlignment="Center" />
+          <ComboBox SelectedItem="{Binding SelectedDevice}" ItemsSource="{Binding DeviceOptions}"
+                    MinWidth="110" />
+          <TextBlock Text="Task:" VerticalAlignment="Center" />
+          <TextBlock Text="Category + Keywords + Description (multimodal)"
+                     VerticalAlignment="Center" Opacity="0.7"
+                     help:HelpScope.Topic="settings-reference.html#task" />
+        </StackPanel>
+        <!-- Only devices this machine can run are listed: CUDA is absent when no
+             NVIDIA driver was detected, rather than selectable and silently
+             serving from the CPU. -->
+        <TextBlock Text="{Binding DeviceAvailabilityNote}"
+                   IsVisible="{Binding HasDeviceAvailabilityNote}"
+                   FontSize="11" Opacity="0.75" TextWrapping="Wrap" />
       </StackPanel>
 
       <!-- Which returned fields to tag; the multimodal prompt always yields all

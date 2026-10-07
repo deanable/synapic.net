@@ -40,18 +40,40 @@ reads <span class="ui">Category + Keywords + Description (multimodal)</span>
 because there is no per-field choice: one call produces all three.</p>
 </div>
 
-<h2>Device</h2>
+<h2 id="device">Device</h2>
 
 <table>
 <tr><th class="setting">Device</th><th>Notes</th></tr>
 <tr><td><span class="ui">CPU</span></td><td>The default and always correct. Slower, but needs nothing special and cannot fail for driver reasons.</td></tr>
-<tr><td><span class="ui">CUDA</span></td><td>Requires the CUDA build of the inference server (see <a href="first-run-sidecar.html">Build the inference server</a>) and an NVIDIA driver. Much faster when both are present.</td></tr>
-<tr><td><span class="ui">MPS</span></td><td>Apple silicon GPU acceleration, on macOS builds.</td></tr>
+<tr><td><span class="ui">CUDA</span></td><td>NVIDIA GPU acceleration. Listed only when an NVIDIA driver was detected on this machine; it also needs the CUDA build of the inference server (see <a href="first-run-sidecar.html">Build the inference server</a>) to actually run. Much faster when both are present.</td></tr>
+<tr><td><span class="ui">MPS</span></td><td>Apple silicon GPU acceleration. Listed only on macOS.</td></tr>
 </table>
 
-<p>If the device does not match the server you have, requests fail with an error
-in the log. When in doubt choose <span class="ui">CPU</span>; it is the only
-device that needs no counterpart in the server build.</p>
+<p>A device this machine cannot run is not offered at all: the list holds only
+what works here, and a note under it says which device is missing and why. A
+saved setting for a device that is no longer available (a driver removed, a
+settings file from another machine) falls back to <span class="ui">CPU</span>
+with the same kind of note, rather than staying on a device that would quietly
+serve from the CPU.</p>
+
+<p>This is the choice, not just a preference. It decides which inference server
+Synapic starts &mdash; <span class="ui">CUDA</span> runs the CUDA executable when
+one exists on this machine, and anything else runs the CPU one &mdash; and it
+tells the running server, before the model is loaded, which device to build its
+pipeline on. A server already running is told the same thing the moment you
+change this control.</p>
+
+<p>The status bar shows the device the server reports for the model it actually
+loaded, so a server that had to fall back says <span class="ui">CPU</span> there
+even while this control says <span class="ui">CUDA</span>, with a note beside it
+explaining that the CUDA build is what is missing. That is also what the log
+records for every run: <code>Requested device 'cuda' not available ... falling
+back to CPU</code>.</p>
+
+<p>When in doubt choose <span class="ui">CPU</span>; it is the only device that
+needs no counterpart in the server build. Selecting <span class="ui">CUDA</span>
+without a CUDA build is not an error and breaks nothing &mdash; it simply runs on
+the CPU, and the status bar says so.</p>
 
 <h2 id="scoring-settings">Scoring controls</h2>
 

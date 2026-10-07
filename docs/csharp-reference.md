@@ -336,18 +336,28 @@ Single source of truth for wizard state:
 - `SidecarStatus { Stopped, Starting, Ready, Error }`, `StatusChanged`,
   `LogReceived` (raw stdout/stderr lines), `CurrentStatus`, `SidecarPort`,
   `IsRunning`.
-- `StartAsync`: refuses a duplicate start; resolves the executable; sweeps
+- `StartAsync`: refuses a duplicate start; resolves the executable *for the
+  selected device* (`FindExecutableForDevice`: the CUDA build when `cuda` is
+  selected and one is on disk, the CPU build otherwise, warning when CUDA was
+  asked for and only a CPU build exists); sweeps
   stale `synapic_port_*.txt` files; launches with `--port=0` and
-  `SYNAPIC_PORT_FILE` + `HF_HOME`; wires stdout/stderr; assigns the process to
+  `SYNAPIC_PORT_FILE` + `HF_HOME` + `SYNAPIC_DEVICE`; wires stdout/stderr; assigns the process to
   the Windows kill-on-close job object; reads the port file (validating pid
-  liveness); polls `/health` for `ready` (max 120 s).
+  liveness); pushes the device with `PUT /config` (bounded at 5 s, non-fatal) so
+  a sidecar that predates `SYNAPIC_DEVICE` is configured as well; polls
+  `/health` for `ready` (max 120 s).
+- `SetDeviceAsync(device)`: `PUT /config` on a running server — how a device
+  changed while the server runs reaches the pipeline `/tag` builds. The device
+  lives in the sidecar's session config; it is not a `/tag` field.
 - `StopAsync`: `POST /shutdown` → wait (default 5 s) → kill tree; deletes its
   port file; always sets status `Stopped`.
 - `WatchProcessExit` flips status to `Error` ("Server stopped unexpectedly")
   when a ready/starting process dies on its own.
 - Static helpers: `ExeName`, `PreferredRid()`, `BuildableRids()`
   (`win-x64`, `win-x64-cuda` on Windows), `VariantDisplayName`,
-  `FindExecutable()` / `FindExecutableForRid()`, `FindRepoRoot()`,
+  `NormalizeDevice()`, `VariantPreferenceForDevice()`,
+  `FindExecutable()` / `FindExecutableForRid()` / `FindExecutableForDevice()`,
+  `FindRepoRoot()`,
   `ModelsRoot()`, and `DescribeStaleness(exe, repoRoot)` — compares the exe's
   timestamp with the newest file under `src/Synapic.Inference` (dev checkouts
   only) and returns a description when the binary predates the source. The

@@ -532,4 +532,84 @@ public class ServerDetectionTests
         Assert.Contains("Model download failed for LiquidAI/LFM2.5-VL-450M: offline",
             vm.LogEntries.Single(l => l.RenderedMessage.Contains("Model download failed")).RenderedMessage);
     }
+
+    // ── The device the server is really using ────────────────────────────────
+
+    [AvaloniaFact]
+    public void Reported_device_matching_the_selection_is_shown_without_a_warning()
+    {
+        var session = new Session();
+        session.Engine.Device = "cuda";
+        var vm = new MainWindowViewModel(new FakeSidecar(), new FakeBuildService(), session, () => Exe, null, null, _ => Exe);
+
+        vm.ApplyServerDevice("cuda");
+
+        Assert.Equal("CUDA", vm.ServerDeviceText);
+        Assert.True(vm.IsServerDeviceVisible);
+        Assert.False(vm.IsDeviceNoticeVisible);
+        Assert.Null(vm.DeviceNotice);
+    }
+
+    [AvaloniaFact]
+    public void Cpu_fallback_under_a_cuda_selection_is_called_out()
+    {
+        // The failure this exists for: CUDA selected, server running (bundled CPU
+        // build, no usable CUDA) and everything tagged on the CPU with nothing
+        // on screen saying so.
+        var session = new Session();
+        session.Engine.Device = "cuda";
+        var vm = new MainWindowViewModel(new FakeSidecar(), new FakeBuildService(), session, () => Exe, null, null, _ => Exe);
+
+        vm.ApplyServerDevice("cpu");
+
+        Assert.Equal("CPU", vm.ServerDeviceText);
+        Assert.True(vm.IsDeviceNoticeVisible);
+        Assert.Contains("running on the CPU", vm.DeviceNotice);
+        Assert.Contains("CUDA variant", vm.DeviceNotice);
+        Assert.Contains(
+            "Inference device mismatch",
+            vm.LogEntries.Single(l => l.RenderedMessage.Contains("device mismatch")).RenderedMessage);
+    }
+
+    [AvaloniaFact]
+    public void Any_other_mismatch_is_stated_without_the_cuda_advice()
+    {
+        var session = new Session();
+        session.Engine.Device = "cpu";
+        var vm = new MainWindowViewModel(new FakeSidecar(), new FakeBuildService(), session, () => Exe, null, null, _ => Exe);
+
+        vm.ApplyServerDevice("mps");
+
+        Assert.Equal("MPS", vm.ServerDeviceText);
+        Assert.Contains("running on MPS while CPU is selected", vm.DeviceNotice);
+    }
+
+    [AvaloniaFact]
+    public void Device_is_unknown_until_a_model_is_loaded()
+    {
+        var vm = new MainWindowViewModel(new FakeSidecar(), new FakeBuildService(), new Session(), () => Exe, null, null, _ => Exe);
+
+        // /health reports no device before the first load; the strip stays empty
+        // rather than claiming CPU.
+        vm.ApplyServerDevice(null);
+
+        Assert.False(vm.IsServerDeviceVisible);
+        Assert.False(vm.IsDeviceNoticeVisible);
+    }
+
+    [AvaloniaFact]
+    public void Device_strip_clears_when_the_server_stops()
+    {
+        var sidecar = new FakeSidecar();
+        var vm = new MainWindowViewModel(sidecar, new FakeBuildService(), new Session(), () => Exe, null, null, _ => Exe);
+        sidecar.RaiseStatus(SidecarStatus.Ready);
+        vm.ApplyServerDevice("cpu");
+        Assert.True(vm.IsServerDeviceVisible);
+
+        // The device shown belongs to the server that just went away.
+        sidecar.RaiseStatus(SidecarStatus.Stopped);
+
+        Assert.False(vm.IsServerDeviceVisible);
+        Assert.False(vm.IsDeviceNoticeVisible);
+    }
 }

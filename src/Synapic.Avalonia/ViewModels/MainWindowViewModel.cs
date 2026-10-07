@@ -48,6 +48,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private string? _detectedExe;
     private CancellationTokenSource? _healthPollCts;
     private string _lastDownloadStatus = "";
+    private string _lastReportedDevice = "";
 
     public MainWindowViewModel(
         IInferenceSidecar sidecar,
@@ -352,6 +353,67 @@ public partial class MainWindowViewModel : ViewModelBase
         ? ""
         : " \u2014 stale build, rebuild recommended";
 
+    // ── Which device the server is really using ────────────────────────────
+
+    /// <summary>
+    /// The device <c>/health</c> reports for the loaded model ("CPU", "CUDA",
+    /// "MPS"). Empty until the server has loaded a model. Shown beside the
+    /// status text: a device the server fell back from is otherwise invisible,
+    /// which is how a run could report success while every image was tagged on
+    /// the CPU.
+    /// </summary>
+    [ObservableProperty]
+    private string _serverDeviceText = "";
+
+    /// <summary>Set when the server reports a device other than the selected one.</summary>
+    [ObservableProperty]
+    private string? _deviceNotice;
+
+    public bool IsServerDeviceVisible => ServerDeviceText.Length > 0;
+
+    public bool IsDeviceNoticeVisible => DeviceNotice is not null;
+
+    partial void OnServerDeviceTextChanged(string value) => OnPropertyChanged(nameof(IsServerDeviceVisible));
+
+    partial void OnDeviceNoticeChanged(string? value) => OnPropertyChanged(nameof(IsDeviceNoticeVisible));
+
+    /// <summary>Applies the device a /health payload reports (public for tests).</summary>
+    public void ApplyServerDevice(string? reported)
+    {
+        if (Dispatcher.UIThread.CheckAccess())
+            ApplyServerDeviceCore(reported);
+        else
+            Dispatcher.UIThread.Post(() => ApplyServerDeviceCore(reported));
+    }
+
+    private void ApplyServerDeviceCore(string? reported)
+    {
+        var device = (reported ?? "").Trim();
+        ServerDeviceText = device.Length == 0 ? "" : device.ToUpperInvariant();
+
+        var expected = InferenceSidecarService.NormalizeDevice(_session.Engine.Device);
+        DeviceNotice = device.Length == 0 || string.Equals(device, expected, StringComparison.OrdinalIgnoreCase)
+            ? null
+            : string.Equals(device, "cpu", StringComparison.OrdinalIgnoreCase) && expected == "cuda"
+                // The exact case this notice exists for: the run is on the CPU
+                // while the GPU was asked for. The server says why in its own
+                // log ("Requested device 'cuda' not available ... falling back
+                // to CPU"), and the fix is a sidecar build that has CUDA.
+                ? "Inference is running on the CPU, not the GPU: this server has no usable CUDA. "
+                    + "Build or download the CUDA variant in the setup panel, then start the server again."
+                : $"Inference is running on {device.ToUpperInvariant()} while {expected.ToUpperInvariant()} is selected.";
+
+        // Log once per change, so the file log records which device the batch ran on.
+        if (_lastReportedDevice == device.ToLowerInvariant()) return;
+        _lastReportedDevice = device.ToLowerInvariant();
+        if (device.Length == 0) return;
+
+        if (DeviceNotice is null)
+            SynapicLog.Info(nameof(MainWindowViewModel), $"Inference server device: {ServerDeviceText}");
+        else
+            SynapicLog.Warning(nameof(MainWindowViewModel), $"Inference device mismatch - {DeviceNotice}");
+    }
+
     partial void OnServerStateChanged(ServerUiState value)
     {
         OnPropertyChanged(nameof(IsServerRunning));
@@ -369,6 +431,13 @@ public partial class MainWindowViewModel : ViewModelBase
             ServerUiState.Error => "Server error \u2014 see log",
             _ => value.ToString(),
         };
+        // The device shown belongs to the server that just went away.
+        if (value is not (ServerUiState.Starting or ServerUiState.Running))
+        {
+            ServerDeviceText = "";
+            DeviceNotice = null;
+            _lastReportedDevice = "";
+        }
         EnsureHealthPolling(value is ServerUiState.Starting or ServerUiState.Running);
         NotifyCommands();
     }
@@ -682,6 +751,14 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         AppendLog($"[server] Inference server executable: {exe}");
+        // Say which device the launch will use, and which variant that picks:
+        // the machine's own log is the first place a "selected CUDA, ran on the
+        // CPU" surprise used to show up.
+        var device = InferenceSidecarService.NormalizeDevice(_session.Engine.Device);
+        var launchExe = InferenceSidecarService.FindExecutableForDevice(device);
+        AppendLog(launchExe is not null && !string.Equals(launchExe, exe, StringComparison.OrdinalIgnoreCase)
+            ? $"[server] Device {device} - this launch runs {launchExe}"
+            : $"[server] Device {device}");
         // Strict lifecycle: a fresh launch means the server is NOT running
         // (leftover servers cannot exist - the sidecar runs in a kill-on-close
         // job object). Only our own Start/auto-launch can make it running.
@@ -774,6 +851,7 @@ public partial class MainWindowViewModel : ViewModelBase
                 {
                     var health = await _sidecar.GetHealthAsync(ct).ConfigureAwait(false);
                     ApplyDownloadStatus(health);
+                    ApplyServerDevice(health.Device);
                 }
             }
             catch (OperationCanceledException)

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Runtime.InteropServices;
+using Synapic.Avalonia.Models;
 using Synapic.Shared;
 using Synapic.Shared.Contracts;
 
@@ -53,6 +54,15 @@ public interface IInferenceSidecar : IAsyncDisposable
     /// </summary>
     Task<UpscaleResponse> UpscaleAsync(UpscaleRequest request, CancellationToken ct = default)
         => Task.FromException<UpscaleResponse>(new NotSupportedException("This sidecar fake does not implement /upscale."));
+
+    /// <summary>
+    /// PUT /config with the device the run should use. The sidecar builds its
+    /// /tag pipeline from its session device, which is otherwise only set at
+    /// launch, so a change made while the server is already running has to be
+    /// pushed. Defaulted (no-op) so the sidecar-only test fakes need no change;
+    /// only a running server is contacted.
+    /// </summary>
+    Task SetDeviceAsync(string? device, CancellationToken ct = default) => Task.CompletedTask;
     Task<ModelInfo[]> ListModelsAsync(CancellationToken ct = default);
     Task DownloadModelAsync(string modelId, CancellationToken ct = default);
     Task<HealthResponse> GetHealthAsync(CancellationToken ct = default);
@@ -94,15 +104,68 @@ public sealed class InferenceSidecarService : IInferenceSidecar
     private SidecarStatus _status = SidecarStatus.Stopped;
     private int _port;
     private CancellationTokenSource? _livenessCts;
+    private readonly Session? _session;
 
     public event EventHandler<SidecarStatusChangedEventArgs>? StatusChanged;
     public event Action<string>? LogReceived;
 
-    public InferenceSidecarService(HttpClient? httpClient = null)
+    public InferenceSidecarService(HttpClient? httpClient = null, Session? session = null)
     {
         _httpClient = httpClient ?? new HttpClient();
         _api = new InferenceApiClient(_httpClient);
+        _session = session;
     }
+
+    /// <summary>
+    /// The compute device the run is configured for (Step 2's Device combo,
+    /// persisted in the session). It decides which variant gets launched and is
+    /// handed to the sidecar in <see cref="DeviceEnvVar"/>, so selecting CUDA is
+    /// what makes the CUDA build run instead of only being recorded in
+    /// config.json.
+    /// </summary>
+    public string DeviceSelection => NormalizeDevice(_session?.Engine.Device);
+
+    /// <summary>
+    /// Canonical form of a device name, whitelisted because the value comes from
+    /// a config file and ends up in a command line: anything unrecognized is
+    /// CPU.
+    /// </summary>
+    public static string NormalizeDevice(string? device) => (device ?? "").Trim().ToLowerInvariant() switch
+    {
+        "cuda" => "cuda",
+        "mps" => "mps",
+        _ => "cpu",
+    };
+
+    /// <summary>
+    /// RIDs to try, in order, for a requested device. CUDA is a Windows-only
+    /// packaging variant (<c>win-x64-cuda</c>) that otherwise shares this
+    /// machine's RID, and it is only preferred when CUDA was actually asked for:
+    /// the CPU build is the safe default everywhere else.
+    /// </summary>
+    public static IReadOnlyList<string> VariantPreferenceForDevice(string? device)
+    {
+        var preferred = PreferredRid();
+        // Same platform gate as BuildableRids: -cuda only exists for Windows.
+        if (!OperatingSystem.IsWindows())
+            return new[] { preferred };
+        if (!string.Equals(NormalizeDevice(device), "cuda", StringComparison.Ordinal))
+            return new[] { preferred };
+        return new[] { preferred + "-cuda", preferred };
+    }
+
+    /// <summary>
+    /// Environment variable carrying the device to the sidecar it launches.
+    ///
+    /// Deliberately not a command-line argument: an executable built before the
+    /// sidecar learned the flag would refuse to start at all (argparse rejects
+    /// unknown arguments), and an older sidecar must keep working - the app and
+    /// the server are updated independently. An unknown environment variable is
+    /// simply ignored, so the device reaches a current build at boot (the
+    /// warm-up then loads the right model once) and an older one right after via
+    /// <see cref="SetDeviceAsync"/>.
+    /// </summary>
+    public const string DeviceEnvVar = "SYNAPIC_DEVICE";
 
     public SidecarStatus CurrentStatus
     {
@@ -280,6 +343,48 @@ public sealed class InferenceSidecarService : IInferenceSidecar
     }
 
     /// <summary>
+    /// Locates the executable to launch for one device: the CUDA build when CUDA
+    /// was selected and one exists, otherwise the same executable
+    /// <see cref="FindExecutable"/> would have picked. A dev checkout with both
+    /// variants built is the case that matters - it holds both files, and the
+    /// plain lookup below always returns the CPU one.
+    /// </summary>
+    public static string? FindExecutableForDevice(string? device)
+    {
+        foreach (var rid in VariantPreferenceForDevice(device))
+        {
+            var exe = FindExecutableForRid(rid);
+            if (exe is not null) return exe;
+        }
+        return FindExecutable();
+    }
+
+    /// <summary>
+    /// Says so when CUDA is selected but the executable that will run is
+    /// plainly a CPU build. Only the repo checkout can be judged from the path
+    /// (artifacts/&lt;rid&gt;); a bundled executable has no RID in its name, and the
+    /// truth for it comes from the device the server reports - which the status
+    /// bar shows.
+    /// </summary>
+    private static void WarnIfDeviceCannotBeHonoured(string device, string sidecarPath)
+    {
+        if (!string.Equals(device, "cuda", StringComparison.Ordinal)) return;
+
+        var repoRoot = FindRepoRoot();
+        if (repoRoot is null) return;
+
+        var artifactsDir = Path.Combine(repoRoot, "artifacts") + Path.DirectorySeparatorChar;
+        if (!sidecarPath.StartsWith(artifactsDir, StringComparison.OrdinalIgnoreCase)) return;
+
+        var rid = Path.GetFileName(Path.GetDirectoryName(sidecarPath) ?? "");
+        if (rid.EndsWith("-cuda", StringComparison.OrdinalIgnoreCase)) return;
+
+        SynapicLog.Warning(nameof(InferenceSidecarService),
+            $"CUDA is selected in Step 2 but '{sidecarPath}' ({rid}) is a CPU build - " +
+            "tagging will run on the CPU. Build or download the CUDA variant in the setup panel.");
+    }
+
+    /// <summary>
     /// Walks up from the app directory to the repository root (dev checkouts
     /// only; installed apps carry no .sln).
     /// </summary>
@@ -312,7 +417,8 @@ public sealed class InferenceSidecarService : IInferenceSidecar
             }
         }
 
-        var sidecarPath = FindExecutable();
+        var device = DeviceSelection;
+        var sidecarPath = FindExecutableForDevice(device);
         if (sidecarPath is null)
         {
             var exeName = OperatingSystem.IsWindows() ? "synapic-inference.exe" : "synapic-inference";
@@ -321,6 +427,8 @@ public sealed class InferenceSidecarService : IInferenceSidecar
             SetStatus(SidecarStatus.Error, "Sidecar executable not found - build it first");
             throw new FileNotFoundException("Sidecar executable not found. Use Build Server first.");
         }
+
+        WarnIfDeviceCannotBeHonoured(device, sidecarPath);
 
         StaleBuildNotice = DescribeStaleness(sidecarPath, FindRepoRoot());
         if (StaleBuildNotice is not null)
@@ -344,6 +452,7 @@ public sealed class InferenceSidecarService : IInferenceSidecar
             RedirectStandardError = true,
         };
         startInfo.EnvironmentVariables[PortFileEnvVar] = portFile;
+        startInfo.EnvironmentVariables[DeviceEnvVar] = device;
         // Model cache location (spec §6.2): the sidecar's HF_HOME points at
         // the Synapic-managed models directory.
         startInfo.EnvironmentVariables["HF_HOME"] = ModelsRoot();
@@ -390,7 +499,7 @@ public sealed class InferenceSidecarService : IInferenceSidecar
         _ = WatchProcessExitAsync(process, _livenessCts!.Token);
 
         SynapicLog.Info(nameof(InferenceSidecarService),
-            $"Sidecar launched: pid {process.Id}, exe {sidecarPath}, args '{startInfo.Arguments}', port file {portFile}, HF_HOME {startInfo.EnvironmentVariables["HF_HOME"]}");
+            $"Sidecar launched for device '{device}': pid {process.Id}, exe {sidecarPath}, args '{startInfo.Arguments}', port file {portFile}, HF_HOME {startInfo.EnvironmentVariables["HF_HOME"]}");
 
         // Tie the sidecar's lifetime to this app's (spec §2 orphan-free
         // shutdown): when the app exits - even by crash or kill - the OS
@@ -403,6 +512,19 @@ public sealed class InferenceSidecarService : IInferenceSidecar
             var port = await ReadPortFileAsync(portFile, ct).ConfigureAwait(false);
             ConfigurePort(port);
             SynapicLog.Info(nameof(InferenceSidecarService), $"Port file read: port {port}");
+
+            // State the device over HTTP as well, which is how a sidecar built
+            // before the environment variable still learns it. The port file is
+            // written before uvicorn starts, so this lands well inside the
+            // warm-up's grace period. Bounded and non-fatal: a server that
+            // cannot be configured still serves (on the CPU), and the device it
+            // reports is what the status bar shows.
+            using (var devicePush = CancellationTokenSource.CreateLinkedTokenSource(ct))
+            {
+                devicePush.CancelAfter(TimeSpan.FromSeconds(5));
+                await SetDeviceAsync(device, devicePush.Token).ConfigureAwait(false);
+            }
+
             await WaitUntilReadyAsync(ct).ConfigureAwait(false);
             SetStatus(SidecarStatus.Ready);
         }
@@ -692,6 +814,32 @@ public sealed class InferenceSidecarService : IInferenceSidecar
     }
 
     public async Task<HealthResponse> GetHealthAsync(CancellationToken ct = default) => await Api.GetHealthAsync(ct).ConfigureAwait(false);
+
+    /// <summary>
+    /// PUT /config: tell a running server which device the next /tag should use.
+    /// The launch argument already sets the device for a server this app
+    /// started, so this covers a device changed while it runs - the sidecar
+    /// rebuilds its pipeline on the next tag (its cache is keyed by device).
+    /// A stopped server is not contacted: nothing is running to configure, and
+    /// the next launch passes the device on the command line.
+    /// </summary>
+    public async Task SetDeviceAsync(string? device, CancellationToken ct = default)
+    {
+        if (!IsRunning || SidecarPort <= 0) return;
+
+        var requested = NormalizeDevice(device);
+        try
+        {
+            await Api.UpdateConfigAsync(new ConfigDto { Device = requested }, ct).ConfigureAwait(false);
+            SynapicLog.Info(nameof(InferenceSidecarService),
+                $"Sidecar session device set to '{requested}' - the next /tag loads the model there");
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Warning(nameof(InferenceSidecarService),
+                $"Could not set the sidecar device to '{requested}': {e.Message}");
+        }
+    }
 
     public async Task<TagResponse> TagAsync(TagRequest request, CancellationToken ct = default)
     {

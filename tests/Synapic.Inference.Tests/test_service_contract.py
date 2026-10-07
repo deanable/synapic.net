@@ -84,6 +84,85 @@ class TestConfig:
         assert resp.status_code == 422
 
 
+class TestDeviceSelection:
+    """The selected device has to reach the pipeline that /tag builds.
+
+    Regression guard: the host used to keep the Step 2 device in its own config
+    and never send it, so ``_session_config["device"]`` stayed at its "cpu" boot
+    default and every tag ran on the CPU however the UI was set. The host now
+    passes the device at launch (``--device``) and pushes a change with
+    ``PUT /config``; both have to reach ``load_model``.
+    """
+
+    def test_launch_device_becomes_the_session_device(self, monkeypatch):
+        monkeypatch.setitem(service._session_config, "device", "cpu")
+
+        service.apply_launch_device("cuda")
+
+        assert service._session_config["device"] == "cuda"
+
+    def test_device_is_accepted_on_the_command_line(self):
+        args = service._build_arg_parser().parse_args(["--port=0", "--device=cuda"])
+        assert args.device == "cuda"
+
+    def test_the_host_launches_with_an_environment_variable(self):
+        # StartArguments in InferenceSidecarService is only "--port=0": the
+        # device travels in the environment, because a sidecar built before the
+        # flag existed would refuse to start on an unknown argument (the app and
+        # the server are updated independently). Pinned here so the two sides
+        # cannot drift apart silently.
+        import config
+
+        assert config.DEVICE_ENV_VAR == "SYNAPIC_DEVICE"
+
+    def test_unknown_launch_device_is_ignored(self, monkeypatch):
+        monkeypatch.setitem(service._session_config, "device", "cpu")
+
+        # A hand-edited config must not take the server down or reach torch.
+        service.apply_launch_device("gpu")  # type: ignore[arg-type]
+        service.apply_launch_device(None)
+
+        assert service._session_config["device"] == "cpu"
+
+    def test_tag_builds_the_pipeline_on_the_configured_device(self, client, monkeypatch, tmp_path):
+        import inference_engine
+        import model_loader
+        from PIL import Image
+
+        image = tmp_path / "one.png"
+        Image.new("RGB", (16, 16), (1, 2, 3)).save(image)
+
+        seen: list[str] = []
+
+        def fake_load(model_id, task, device="cpu", token=None):
+            seen.append(device)
+            return ("FAKE_PIPELINE", task)
+
+        monkeypatch.setattr(model_loader, "load_model", fake_load)
+        monkeypatch.setattr(
+            inference_engine,
+            "run_inference",
+            lambda *a, **k: {
+                "category": None,
+                "keywords": [],
+                "description": None,
+                "probabilities": None,
+                "scoring": None,
+                "inference_ms": 0,
+                "model_used": "fake",
+            },
+        )
+        monkeypatch.setitem(service._session_config, "device", "cpu")
+
+        # Exactly what the host sends: no device field anywhere in the request.
+        assert client.post("/tag", json={"image_path": str(image), "options": {}}).status_code == 200
+        assert seen == ["cpu"]
+
+        assert client.put("/config", json={"device": "cuda"}).json()["device"] == "cuda"
+        assert client.post("/tag", json={"image_path": str(image), "options": {}}).status_code == 200
+        assert seen[-1] == "cuda"
+
+
 class TestPromptDefaults:
     """GET /prompt: what Step 2 loads into the editable tag-instruction box."""
 
