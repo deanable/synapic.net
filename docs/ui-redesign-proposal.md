@@ -1,8 +1,15 @@
 # Synapic UI Redesign Proposal
 
+> **SUPERSEDED (2026-10-08).** The approved single source of truth for the UI
+> is [`ui-design.md`](ui-design.md), which incorporates the vector mockups in
+> [`mock-up/`](mock-up/) and this document's §4 feature checklist. Where this
+> file and `ui-design.md` disagree (e.g. §2.2.3 settings dialogs → now inline
+> Parameters panels; sidebar proposal → now a 4-panel dashboard), `ui-design.md`
+> wins. Kept for rationale only.
+
 **Document Version:** 1.0
 **Date:** 2026-10-07
-**Status:** Draft — For Discussion Only
+**Status:** Superseded by `ui-design.md` — historical
 
 ---
 

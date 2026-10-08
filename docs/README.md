@@ -6,6 +6,8 @@ phase plan that tracked it.
 
 | Document | What it covers |
 |----------|----------------|
+| [`ui-refactor-plan.md`](ui-refactor-plan.md) | The evaluation + phased plan to get there: presentation-layer drift evidence, the `IOperationViewModel` / `RunStateViewModel` contract, and the three-phase strangler sequence with gates. |
+| [`ui-design.md`](ui-design.md) | **The UI single source of truth.** The dashboard-first information architecture, the shared operation layout (data source → parameters → output), per-mode content, navigation/state rules, and UI acceptance criteria. All other UI docs defer to it. |
 | [`codebase-guide.md`](codebase-guide.md) | **Start here.** Repository layout, how to build/run/test, the two-process architecture, DI wiring, data flow, concurrency, persistence, and a troubleshooting index. |
 | [`architecture.md`](architecture.md) | Short component/process overview and the batch data flow. |
 | [`csharp-reference.md`](csharp-reference.md) | The Avalonia host (`src/Synapic.Main`, `src/Synapic.Shared`): every service, view model, model, and contract. |
