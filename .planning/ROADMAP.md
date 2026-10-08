@@ -81,12 +81,12 @@ duplicate source card and `PrefillDedupSource()`; rewrite the pinned navigation 
   4. `UiLayoutAuditTests` passes at 900×600, 1024×700, 1280×800, 1600×900 for dashboard + all three routes, including the stacked variant
   5. `dotnet build` 0 warnings/errors and the full test suite green (rewritten pins only, no coverage removed)
 
-**Plans:** 5
+**Plans:** 1/5 plans executed
 
 Plans:
 
 **Wave 1**
-- [ ] `02-01` — OperationLayout (three regions) + shared RunStateBar, hosted for the three routes
+- [x] `02-01` — OperationLayout (three regions) + shared RunStateBar, hosted for the three routes
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] `02-02` — DataSourceStrip in Region A; delete dedup's parallel source path (PrefillDedupSource)
