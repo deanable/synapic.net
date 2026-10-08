@@ -3,6 +3,7 @@
              xmlns:vm="using:Synapic.Main.ViewModels"
              xmlns:vms="using:Synapic.Main.ViewModels.Steps"
              xmlns:steps="using:Synapic.Main.Views.Wizard"
+             xmlns:op="using:Synapic.Main.Views.Operation"
              xmlns:help="using:Synapic.Main.Services"
              x:Class="Synapic.Main.Views.MainLayout"
              x:DataType="vm:MainWindowViewModel">
@@ -285,30 +286,15 @@
           </StackPanel>
         </ScrollViewer>
 
+        <!-- The chosen operation renders through the shared template: the same
+             three regions (Data source → Parameters → Output) for tagging, dedup
+             and upscaling, with the mode's current step hosted in the Output
+             region. The step chain itself lives in OperationLayout now, so the
+             sidebar, the Back/Next action bar and the start screen stay exactly
+             as they are (Phase 3 removes them). -->
         <ScrollViewer IsEnabled="{Binding IsWorkspaceEnabled}"
                       IsVisible="{Binding IsWizardVisible}">
-          <ContentControl Content="{Binding Wizard.CurrentStep}">
-            <ContentControl.DataTemplates>
-              <DataTemplate DataType="vms:Step1DatasourceViewModel">
-                <steps:Step1Datasource />
-              </DataTemplate>
-              <DataTemplate DataType="vms:Step2EngineViewModel">
-                <steps:Step2TagSettings />
-              </DataTemplate>
-              <DataTemplate DataType="vms:Step3ProcessViewModel">
-                <steps:Step3Process />
-              </DataTemplate>
-              <DataTemplate DataType="vms:Step4ResultsViewModel">
-                <steps:Step4Results />
-              </DataTemplate>
-              <DataTemplate DataType="vms:StepDedupViewModel">
-                <steps:StepDedup />
-              </DataTemplate>
-              <DataTemplate DataType="vms:StepUpscaleViewModel">
-                <steps:StepUpscale />
-              </DataTemplate>
-            </ContentControl.DataTemplates>
-          </ContentControl>
+          <op:OperationLayout DataContext="{Binding Wizard.CurrentStep}" />
         </ScrollViewer>
       </Grid>
 
