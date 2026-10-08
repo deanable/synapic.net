@@ -43,16 +43,16 @@ untouched. Source: `docs/ui-refactor-plan.md` §3, §4 Phase 1.
   4. `RunStateViewModel` exists in `src/Synapic.Main/ViewModels/Operations/` and Step3 + StepUpscale + dedup scan inherit or compose it
   5. Exactly one implementation of the `while (LogLines.Count > 2000)` cap remains in ViewModels/
 
-**Plans:** 2/4 plans executed
+**Plans:** 3/4 plans executed
 
 Plans:
 
 **Wave 1**
-- [ ] `01-01` — Create RunLog + RunStateViewModel; Step3 and StepUpscale adopt the base
+- [x] `01-01` — Create RunLog + RunStateViewModel; Step3 and StepUpscale adopt the base
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] `01-02` — Dedup adopts the base; MainWindowViewModel log cap delegates to RunLog
-- [ ] `01-03` — IOperationViewModel + three thin adapters + contract test
+- [x] `01-02` — Dedup adopts the base; MainWindowViewModel log cap delegates to RunLog
+- [x] `01-03` — IOperationViewModel + three thin adapters + contract test
 
 **Wave 3** *(blocked on Wave 2 completion)*
 - [ ] `01-04` — Phase gate sweep (build/test/scope/duplication gates + decision coverage)
