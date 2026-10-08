@@ -43,7 +43,7 @@ untouched. Source: `docs/ui-refactor-plan.md` §3, §4 Phase 1.
   4. `RunStateViewModel` exists in `src/Synapic.Main/ViewModels/Operations/` and Step3 + StepUpscale + dedup scan inherit or compose it
   5. Exactly one implementation of the `while (LogLines.Count > 2000)` cap remains in ViewModels/
 
-**Plans:** 4
+**Plans:** 1/4 plans executed
 
 Plans:
 
