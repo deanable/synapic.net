@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-10-08)
 ## Current Position
 
 Phase: 1 of 3 (Extract run state and operation contract)
-Plan: 0 of (TBD) in current phase
+Plan: 0 of 4 in current phase
 Status: Ready to execute
 Last activity: 2026-10-08 -- Phase 3 planning complete
 
