@@ -16,7 +16,7 @@ the legacy navigation. Each phase keeps the app shippable and ends at a hard ver
 
 ## Phases
 
-- [ ] **Phase 1: Extract run state and operation contract** - Pull the copy-pasted run machinery into a shared base; no visible change
+- [x] **Phase 1: Extract run state and operation contract** - Pull the copy-pasted run machinery into a shared base; no visible change
 - [ ] **Phase 2: Add operation template and dashboard** - One shared three-region layout + 4-panel dashboard the app boots to
 - [ ] **Phase 3: Collapse navigation and retire settings dialogs** - Delete the legacy wizard chrome; inline parameters; busy-state fix
 
@@ -43,7 +43,7 @@ untouched. Source: `docs/ui-refactor-plan.md` §3, §4 Phase 1.
   4. `RunStateViewModel` exists in `src/Synapic.Main/ViewModels/Operations/` and Step3 + StepUpscale + dedup scan inherit or compose it
   5. Exactly one implementation of the `while (LogLines.Count > 2000)` cap remains in ViewModels/
 
-**Plans:** 3/4 plans executed
+**Plans:** 4/4 plans executed — phase complete (gate sweep 01-04 green: all five success criteria ✓)
 
 Plans:
 
@@ -55,7 +55,7 @@ Plans:
 - [x] `01-03` — IOperationViewModel + three thin adapters + contract test
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] `01-04` — Phase gate sweep (build/test/scope/duplication gates + decision coverage)
+- [x] `01-04` — Phase gate sweep (build/test/scope/duplication gates + decision coverage)
 
 **Cross-cutting constraints:**
 
