@@ -1,0 +1,50 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ops="using:Synapic.Main.ViewModels.Operations"
+             xmlns:help="using:Synapic.Main.Services"
+             x:Class="Synapic.Main.Views.Operation.RunStateBar"
+             x:DataType="ops:RunStateViewModel">
+
+  <!-- The shared run bar (docs/ui-design.md §4.3, D-05): the run lifecycle of
+       every mode in one place — progress, ETA, the file being worked on, the
+       mode's primary action and the run log. It binds RunStateViewModel only, so
+       it renders the same for tagging, dedup and upscaling. Mode-specific
+       commands the base does not carry (tagging's Pause/Resume/Abort,
+       upscaling's Stop) stay on the mode's own page until Phase 3 moves them. -->
+  <Border Classes="card settingsCard" Padding="16"
+          help:HelpScope.Topic="step3-log.html">
+    <StackPanel Spacing="10">
+      <TextBlock Classes="sectionTitle" Text="Run" />
+
+      <ProgressBar Value="{Binding ProgressPercent}" Maximum="100" Height="18" />
+      <WrapPanel>
+        <TextBlock Text="{Binding ProgressText}" FontWeight="SemiBold" Margin="0,0,16,8" />
+        <TextBlock Text="{Binding EtaText}" Opacity="0.7" Margin="0,0,16,8" />
+        <TextBlock Text="{Binding CurrentFile}" Opacity="0.7" Margin="0,0,16,8"
+                   TextWrapping="Wrap" MaxWidth="520" TextTrimming="CharacterEllipsis" />
+      </WrapPanel>
+
+      <WrapPanel>
+        <!-- The one accent action of the Output region: hidden while a run is in
+             flight (the mode's own page below carries its Stop until Phase 3),
+             enabled whenever the run gate allows it. One label for all three
+             modes: the mode's own CTA copy arrives with the IOperationViewModel
+             wiring (Phase 2 plan 03), when the legacy run pages retire. -->
+        <Button Content="Start" Command="{Binding StartCommand}"
+                Classes="accent" IsVisible="{Binding !IsRunning}"
+                IsEnabled="{Binding IsIdle}" Margin="0,0,8,8" />
+      </WrapPanel>
+
+      <Border Height="180" Padding="8">
+        <ListBox ItemsSource="{Binding LogLines}" x:Name="RunLogList">
+          <ListBox.ItemTemplate>
+            <DataTemplate>
+              <TextBlock Text="{Binding}" FontFamily="Consolas,monospace" FontSize="12"
+                         TextWrapping="Wrap" />
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </Border>
+    </StackPanel>
+  </Border>
+</UserControl>
