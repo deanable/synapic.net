@@ -1,10 +1,8 @@
-using System.Collections.ObjectModel;
-using Avalonia.Threading;
-using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Synapic.Main.Models;
 using Synapic.Main.Services;
 using Synapic.Main.Services.Processing;
+using Synapic.Main.ViewModels.Operations;
 using Synapic.Shared.Contracts;
 
 namespace Synapic.Main.ViewModels.Steps;
@@ -12,16 +10,16 @@ namespace Synapic.Main.ViewModels.Steps;
 /// <summary>
 /// Step 3: Process (port of step3_process.py) — progress bar with ETA, live
 /// log, abort control; builds the TagRequest from Step 2's engine state and
-/// runs the batch through ProcessingOrchestrator.
+/// runs the batch through ProcessingOrchestrator. The run surface
+/// (progress/ETA/log/cancellation) is the shared
+/// <see cref="RunStateViewModel"/>.
 /// </summary>
-public partial class Step3ProcessViewModel : ViewModelBase
+public partial class Step3ProcessViewModel : RunStateViewModel
 {
     private readonly Session _session;
     private readonly IInferenceSidecar _sidecar;
     private readonly Step1DatasourceViewModel _step1;
     private readonly ProcessingOrchestrator _orchestrator;
-    private CancellationTokenSource? _cts;
-    private PauseTokenSource? _pauseSource;
 
     public Step3ProcessViewModel(Session session, IInferenceSidecar sidecar, Step1DatasourceViewModel step1)
     {
@@ -31,54 +29,25 @@ public partial class Step3ProcessViewModel : ViewModelBase
         _orchestrator = new ProcessingOrchestrator(sidecar, maxDegreeOfParallelism: 4);
     }
 
-    public ObservableCollection<string> LogLines { get; } = new();
-
     /// <summary>The sidecar instance the orchestrator uses (Step 4 retries need it).</summary>
     public IInferenceSidecar Sidecar => _sidecar;
 
-    [ObservableProperty]
-    private double _progressPercent;
-
-    [ObservableProperty]
-    private string _progressText = "Idle";
-
-    [ObservableProperty]
-    private string _etaText = "";
-
-    [ObservableProperty]
-    private string _currentFile = "";
-
-    [ObservableProperty]
-    private bool _isRunning;
-
-    [ObservableProperty]
-    private bool _isPaused;
-
-    public bool IsIdle => !IsRunning;
-
-    partial void OnIsRunningChanged(bool value)
+    protected override void NotifyRunCommandsCanExecuteChanged()
     {
-        OnPropertyChanged(nameof(IsIdle));
         StartCommand.NotifyCanExecuteChanged();
         AbortCommand.NotifyCanExecuteChanged();
         PauseCommand.NotifyCanExecuteChanged();
         ResumeCommand.NotifyCanExecuteChanged();
     }
 
-    partial void OnIsPausedChanged(bool value)
-    {
-        PauseCommand.NotifyCanExecuteChanged();
-        ResumeCommand.NotifyCanExecuteChanged();
-    }
+    // Start stays disabled until at least one tag field is selected (Step 2).
+    protected override bool CanStart() => !IsRunning && _session.Engine.HasSelectedTagField;
 
-    [RelayCommand(CanExecute = nameof(CanStart))]
-    private async Task StartAsync(CancellationToken ct)
+    protected override async Task StartCoreAsync(CancellationToken ct)
     {
-        IsRunning = true;
-        IsPaused = false;
+        BeginRun();
+        PauseSource = new PauseTokenSource();
         _session.ResetStats();
-        _cts = new CancellationTokenSource();
-        _pauseSource = new PauseTokenSource();
 
         // Reuse the Step 1 authenticated client — creating a fresh, unauthenticated
         // connection would fail every Daminion fetch and metadata write.
@@ -94,19 +63,7 @@ public partial class Step3ProcessViewModel : ViewModelBase
 
         var progress = new Progress<ProcessProgress>(p =>
         {
-            ProgressPercent = p.Percent;
-            CurrentFile = p.CurrentFile;
-            ProgressText = p.Total == 0 && p.Processed == 0
-                ? "No items matched the current filters"
-                : $"{p.Processed}/{p.Total} ({p.Failed} failed)";
-            // Python parity (step3_process.py): show "ETA … remaining - … per
-            // image" as soon as the first item completes; clear it only when the
-            // batch is done. A null ETA (nothing finished yet) leaves the last
-            // value in place instead of flickering to empty on every start report.
-            if (p.Eta is { } eta && eta > TimeSpan.Zero)
-                EtaText = $"ETA {ProcessProgress.FormatDuration(eta)} remaining — {ProcessProgress.FormatDuration(p.PerItem)} per image";
-            else if (p.Total > 0 && p.Processed >= p.Total)
-                EtaText = "";
+            ApplyProgress(p);
             // Session stats feed Step 4's summary.
             _session.TotalItems = p.Total;
             _session.ProcessedItems = p.Processed;
@@ -121,9 +78,9 @@ public partial class Step3ProcessViewModel : ViewModelBase
                 request,
                 progress,
                 async line => AppendLog(line),
-                _cts.Token,
+                Cts!.Token,
                 _session.Results,
-                _pauseSource.Token,
+                PauseSource!.Token,
                 _session.Engine.ToTagFieldSelection()));
 
             // Local usage counters (opt-in): one line per finished batch.
@@ -144,21 +101,14 @@ public partial class Step3ProcessViewModel : ViewModelBase
         }
         finally
         {
-            _pauseSource = null;
-            IsPaused = false;
-            IsRunning = false;
-            _cts.Dispose();
-            _cts = null;
+            EndRun();
         }
     }
-
-    // Start stays disabled until at least one tag field is selected (Step 2).
-    private bool CanStart() => !IsRunning && _session.Engine.HasSelectedTagField;
 
     [RelayCommand(CanExecute = nameof(CanAbort))]
     private void Abort()
     {
-        _cts?.Cancel();
+        CancelRun();
         AppendLog("Aborting…");
     }
 
@@ -167,8 +117,7 @@ public partial class Step3ProcessViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanPause))]
     private void Pause()
     {
-        _pauseSource?.Pause();
-        IsPaused = true;
+        PauseRun();
         AppendLog("Paused — running items finishing, no new items start");
     }
 
@@ -177,8 +126,7 @@ public partial class Step3ProcessViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanResume))]
     private void Resume()
     {
-        _pauseSource?.Resume();
-        IsPaused = false;
+        ResumeRun();
         AppendLog("Resumed");
     }
 
@@ -207,20 +155,5 @@ public partial class Step3ProcessViewModel : ViewModelBase
                 MaxNewTokens = 512,
             },
         };
-    }
-
-    private void AppendLog(string line)
-    {
-        // The orchestrator invokes this callback from thread-pool threads
-        // (ConfigureAwait(false)); LogLines is bound to the UI, so marshal.
-        // Without this, the first log line of a batch deadlocks or throws
-        // cross-thread on the bound ListBox and kills the batch silently.
-        if (!Dispatcher.UIThread.CheckAccess())
-        {
-            Dispatcher.UIThread.Post(() => AppendLog(line));
-            return;
-        }
-        LogLines.Add($"[{DateTime.Now:HH:mm:ss}] {line}");
-        while (LogLines.Count > 2000) LogLines.RemoveAt(0);
     }
 }
