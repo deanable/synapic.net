@@ -11,7 +11,7 @@ namespace Synapic.Main.ViewModels.Operations;
 /// </summary>
 public static class RunLog
 {
-    /// <summary>Maximum number of lines kept in a run log.</summary>
+    /// <summary>Maximum number of lines kept in a log.</summary>
     public const int MaxLogLines = 2000;
 
     public static void Append(ObservableCollection<string> log, string line)
@@ -25,6 +25,16 @@ public static class RunLog
         }
 
         log.Add($"[{DateTime.Now:HH:mm:ss}] {line}");
+        Trim(log);
+    }
+
+    /// <summary>
+    /// Keep a log collection capped. Used by logs whose entries are richer than
+    /// a plain string (the shell's <c>UiLogEvent</c> list) and by <see cref="Append"/>.
+    /// Call on the UI thread, like the add it follows.
+    /// </summary>
+    public static void Trim<T>(ObservableCollection<T> log)
+    {
         while (log.Count > MaxLogLines) log.RemoveAt(0);
     }
 }

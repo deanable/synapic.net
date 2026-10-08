@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Synapic.Main.Models;
 using Synapic.Main.Services;
+using Synapic.Main.ViewModels.Operations;
 using Synapic.Main.ViewModels.Steps;
 using Synapic.Main.Views;
 using Synapic.Shared.Contracts;
@@ -1015,7 +1016,7 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
         LogEntries.Add(new UiLogEvent(line, Serilog.Events.LogEventLevel.Information));
-        while (LogEntries.Count > 2000) LogEntries.RemoveAt(0);
+        RunLog.Trim(LogEntries);
     }
 
     /// <summary>Attach the sidecar stdout/stderr stream to the UI log.</summary>
@@ -1050,6 +1051,6 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
         LogEntries.Add(evt);
-        while (LogEntries.Count > 2000) LogEntries.RemoveAt(0);
+        RunLog.Trim(LogEntries);
     }
 }
