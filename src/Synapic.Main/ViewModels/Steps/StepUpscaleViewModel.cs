@@ -1,9 +1,8 @@
-using System.Collections.ObjectModel;
-using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Synapic.Main.Services;
 using Synapic.Main.Services.Processing;
+using Synapic.Main.ViewModels.Operations;
 using Synapic.Shared.Contracts;
 
 namespace Synapic.Main.ViewModels.Steps;
@@ -16,13 +15,13 @@ namespace Synapic.Main.ViewModels.Steps;
 /// <see cref="WorkflowRunner"/> kernel; the per-item operation is
 /// <see cref="UpscaleItemHandler"/> (checkout → download → upscale → check-in
 /// for catalog items) and the algorithm itself lives in the sidecar's
-/// POST /upscale — the original app's Swin2SR/Lanczos upscaler.
+/// POST /upscale — the original app's Swin2SR/Lanczos upscaler. The run surface
+/// (progress/ETA/log/stop) is the shared <see cref="RunStateViewModel"/>.
 /// </summary>
-public partial class StepUpscaleViewModel : ViewModelBase
+public partial class StepUpscaleViewModel : RunStateViewModel
 {
     private readonly Step1DatasourceViewModel? _step1;
     private readonly IInferenceSidecar? _sidecar;
-    private CancellationTokenSource? _cts;
 
     /// <param name="step1">Provides the source (connection + scope or folder), like tagging and dedup.</param>
     /// <param name="sidecar">Runs the algorithm via POST /upscale.</param>
@@ -41,8 +40,6 @@ public partial class StepUpscaleViewModel : ViewModelBase
                 OnPropertyChanged(nameof(SourceReady));
             };
     }
-
-    public ObservableCollection<string> LogLines { get; } = new();
 
     // ── Settings (the parameters that differ from the other workflows) ─────
 
@@ -189,41 +186,21 @@ public partial class StepUpscaleViewModel : ViewModelBase
         }
     }
 
-    // ── Run state (mirrors Step 3's progress surface) ──────────────────────
+    // ── Run state (shared with every operation) ─────────────────────────────
 
-    [ObservableProperty]
-    private double _progressPercent;
-
-    [ObservableProperty]
-    private string _progressText = "Idle";
-
-    [ObservableProperty]
-    private string _etaText = "";
-
-    [ObservableProperty]
-    private string _currentFile = "";
-
-    [ObservableProperty]
-    private bool _isRunning;
-
-    public bool IsIdle => !IsRunning;
-
-    partial void OnIsRunningChanged(bool value)
+    protected override void NotifyRunCommandsCanExecuteChanged()
     {
-        OnPropertyChanged(nameof(IsIdle));
         StartCommand.NotifyCanExecuteChanged();
         StopCommand.NotifyCanExecuteChanged();
     }
 
-    private bool CanStart() => !IsRunning && _sidecar is not null && SourceReady;
+    protected override bool CanStart() => !IsRunning && _sidecar is not null && SourceReady;
 
-    [RelayCommand(CanExecute = nameof(CanStart))]
-    private async Task StartAsync()
+    protected override async Task StartCoreAsync(CancellationToken ct)
     {
         var ds = BuildSelection();
         var options = BuildOptions();
-        IsRunning = true;
-        _cts = new CancellationTokenSource();
+        BeginRun();
         ProgressPercent = 0;
         EtaText = "";
         CurrentFile = "";
@@ -247,9 +224,7 @@ public partial class StepUpscaleViewModel : ViewModelBase
         if (_sidecar is null)
         {
             AppendLog("No inference sidecar available — run cancelled.");
-            IsRunning = false;
-            _cts.Dispose();
-            _cts = null;
+            EndRun();
             return;
         }
         if (!_sidecar.IsRunning)
@@ -263,18 +238,7 @@ public partial class StepUpscaleViewModel : ViewModelBase
             MaxDegreeOfParallelism: 1,
             Description: description);
 
-        var progress = new Progress<ProcessProgress>(p =>
-        {
-            ProgressPercent = p.Percent;
-            CurrentFile = p.CurrentFile;
-            ProgressText = p.Total == 0 && p.Processed == 0
-                ? "No items matched the current filters"
-                : $"{p.Processed}/{p.Total} ({p.Failed} failed)";
-            if (p.Eta is { } eta && eta > TimeSpan.Zero)
-                EtaText = $"ETA {ProcessProgress.FormatDuration(eta)} remaining — {ProcessProgress.FormatDuration(p.PerItem)} per image";
-            else if (p.Total > 0 && p.Processed >= p.Total)
-                EtaText = "";
-        });
+        var progress = new Progress<ProcessProgress>(ApplyProgress);
 
         var handler = new UpscaleItemHandler(ds.DaminionClient, _sidecar, options);
         try
@@ -282,7 +246,7 @@ public partial class StepUpscaleViewModel : ViewModelBase
             var summary = await new WorkflowRunner().RunAsync(
                 workflow, ds, handler, progress,
                 line => { AppendLog(line); return Task.CompletedTask; },
-                pause: null, _cts.Token);
+                pause: null, Cts!.Token);
 
             var line = $"Done. Processed {summary.Processed}, succeeded {summary.Succeeded}, failed {summary.Failed}";
             ProgressText = line;
@@ -304,9 +268,7 @@ public partial class StepUpscaleViewModel : ViewModelBase
         }
         finally
         {
-            _cts.Dispose();
-            _cts = null;
-            IsRunning = false;
+            EndRun();
         }
     }
 
@@ -317,20 +279,7 @@ public partial class StepUpscaleViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanStop))]
     private void Stop()
     {
-        _cts?.Cancel();
+        CancelRun();
         AppendLog("Stopping…");
-    }
-
-    private void AppendLog(string line)
-    {
-        // The runner invokes this callback from thread-pool threads; LogLines
-        // is bound to the UI, so marshal (same as Step 3's AppendLog).
-        if (!Dispatcher.UIThread.CheckAccess())
-        {
-            Dispatcher.UIThread.Post(() => AppendLog(line));
-            return;
-        }
-        LogLines.Add($"[{DateTime.Now:HH:mm:ss}] {line}");
-        while (LogLines.Count > 2000) LogLines.RemoveAt(0);
     }
 }
