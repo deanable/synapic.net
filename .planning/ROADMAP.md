@@ -43,11 +43,19 @@ untouched. Source: `docs/ui-refactor-plan.md` §3, §4 Phase 1.
   4. `RunStateViewModel` exists in `src/Synapic.Main/ViewModels/Operations/` and Step3 + StepUpscale + dedup scan inherit or compose it
   5. Exactly one implementation of the `while (LogLines.Count > 2000)` cap remains in ViewModels/
 
-**Plans:** TBD
+**Plans:** 4
 
 Plans:
 
-- [ ] TBD (run /gsd-plan-phase 1 to break down)
+**Wave 1**
+- [ ] `01-01` — Create RunLog + RunStateViewModel; Step3 and StepUpscale adopt the base
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] `01-02` — Dedup adopts the base; MainWindowViewModel log cap delegates to RunLog
+- [ ] `01-03` — IOperationViewModel + three thin adapters + contract test
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] `01-04` — Phase gate sweep (build/test/scope/duplication gates + decision coverage)
 
 **Cross-cutting constraints:**
 
@@ -73,11 +81,22 @@ duplicate source card and `PrefillDedupSource()`; rewrite the pinned navigation 
   4. `UiLayoutAuditTests` passes at 900×600, 1024×700, 1280×800, 1600×900 for dashboard + all three routes, including the stacked variant
   5. `dotnet build` 0 warnings/errors and the full test suite green (rewritten pins only, no coverage removed)
 
-**Plans:** TBD
+**Plans:** 5
 
 Plans:
 
-- [ ] TBD (run /gsd-plan-phase 2 to break down)
+**Wave 1**
+- [ ] `02-01` — OperationLayout (three regions) + shared RunStateBar, hosted for the three routes
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] `02-02` — DataSourceStrip in Region A; delete dedup's parallel source path (PrefillDedupSource)
+- [ ] `02-03` — DashboardView (4 panels) + ShellViewModel.Current; cold start on dashboard
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] `02-04` — Rewrite pinned navigation tests to §10 criteria 1–3; extend layout audit (criterion 5)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [ ] `02-05` — Phase gate sweep (criteria 1, 2, 3, 5, 9 + decision coverage)
 
 ### Phase 3: Collapse navigation and retire settings dialogs
 
@@ -99,8 +118,16 @@ finding #1). Source: `docs/ui-design.md` §5, §6, §9, §10; `docs/ui-refactor-
   4. All nine `ui-design.md` §10 acceptance criteria pass item-by-item
   5. `dotnet build` 0 warnings/errors, full suite green, layout audit green at 4 window sizes × 4 routes
 
-**Plans:** TBD
+**Plans:** 4
 
 Plans:
 
-- [ ] TBD (run /gsd-plan-phase 3 to break down)
+**Wave 1**
+- [ ] `03-01` — Retire the three settings dialogs; params inline in Region B; rewrite dialog pins
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] `03-02` — Delete sidebar/Back-Next/step chain; ShellViewModel.Current is the only navigation
+- [ ] `03-03` — Dedup Apply busy state (IsApplying + Stop) closes UI-REVIEW finding #1
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] `03-04` — Final gate: all nine ui-design §10 criteria + roadmap gates, item-by-item
