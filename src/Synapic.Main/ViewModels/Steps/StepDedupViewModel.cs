@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.Input;
 using Synapic.Main.Services;
 using Synapic.Main.Services.Daminion;
 using Synapic.Main.Services.Processing;
+using Synapic.Main.ViewModels.Operations;
 
 namespace Synapic.Main.ViewModels.Steps;
 
@@ -155,7 +156,7 @@ public partial class DuplicateGroupViewModel : ObservableObject
 /// oldest/newest/smallest/largest auto-select set, and apply a bulk action to
 /// the unchecked duplicates.
 /// </summary>
-public partial class StepDedupViewModel : ViewModelBase
+public partial class StepDedupViewModel : RunStateViewModel
 {
     private readonly IDedupService _dedup;
     private readonly Step1DatasourceViewModel? _step1;
@@ -250,8 +251,16 @@ public partial class StepDedupViewModel : ViewModelBase
     [ObservableProperty]
     private double _threshold = 0.90;
 
-    [ObservableProperty]
-    private bool _isScanning;
+    /// <summary>
+    /// Scan-in-progress flag the dedup view binds. The state itself lives on the
+    /// shared base (<see cref="RunStateViewModel.IsRunning"/>) so all three modes
+    /// expose one run shape — the base's change hook raises this property too.
+    /// </summary>
+    public bool IsScanning
+    {
+        get => IsRunning;
+        set => IsRunning = value;
+    }
 
     [ObservableProperty]
     private string _scanSummary = "";
@@ -878,9 +887,20 @@ public partial class StepDedupViewModel : ViewModelBase
 
     partial void OnFolderPathChanged(string value) => ScanCommand.NotifyCanExecuteChanged();
 
-    partial void OnIsScanningChanged(bool value)
+    /// <summary>
+    /// The dedup view's run controls: the Scan command (also this mode's primary
+    /// run for Phase 2's operation adapter) and Apply, which needs no scan running.
+    /// </summary>
+    protected override void NotifyRunCommandsCanExecuteChanged()
     {
+        OnPropertyChanged(nameof(IsScanning));
+        StartCommand.NotifyCanExecuteChanged();
         ScanCommand.NotifyCanExecuteChanged();
         ApplyCommand.NotifyCanExecuteChanged();
     }
+
+    /// <summary>This mode's primary run is the scan (CONTEXT D-05).</summary>
+    protected override bool CanStart() => CanScan();
+
+    protected override Task StartCoreAsync(CancellationToken ct) => ScanAsync(ct);
 }
