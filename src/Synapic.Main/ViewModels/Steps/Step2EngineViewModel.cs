@@ -336,9 +336,46 @@ public partial class Step2EngineViewModel : ViewModelBase
             ManualModelId = value.Id;
         }
         PushToSession();
+        OnPropertyChanged(nameof(ModelSummary));
     }
 
-    partial void OnManualModelIdChanged(string value) => PushToSession();
+    partial void OnManualModelIdChanged(string value)
+    {
+        PushToSession();
+        OnPropertyChanged(nameof(ModelSummary));
+    }
+
+    /// <summary>
+    /// The model a run would load, in words (the settings summary on step 3
+    /// reports it). Reads the picked model first, then a hand-typed id, so it
+    /// says the same thing the sidecar will be asked for.
+    /// </summary>
+    public string ModelSummary
+    {
+        get
+        {
+            if (SelectedModel is { } picked) return picked.Id;
+            return string.IsNullOrWhiteSpace(ManualModelId)
+                ? "Not chosen yet — pick a model on step 1 or here."
+                : ManualModelId;
+        }
+    }
+
+    /// <summary>How a run scores tags, in words (the settings summary reports it).</summary>
+    public string ProbabilitySummary => ProbabilityMode switch
+    {
+        "Probability only" => "Probability only" + ThresholdSuffix(),
+        "Both" => "LLM + probability" + ThresholdSuffix(),
+        _ => "LLM only (the model's own answer)",
+    };
+
+    private string ThresholdSuffix() =>
+        $" (candidates at {ProbabilityThreshold:0.00}"
+        + (string.IsNullOrWhiteSpace(ProbabilityCandidates) ? ")" : $": {ProbabilityCandidates})");
+
+    /// <summary>Which tag instruction a run sends (the settings summary reports it).</summary>
+    public string PromptSummary =>
+        HasCustomUserPrompt ? "Custom tag instruction" : "Built-in tag instruction";
     /// <summary>
     /// Everything that follows a device change: the <c>Device</c> property, the
     /// session, and the running server. Never called with a null — the setter
@@ -438,9 +475,14 @@ public partial class Step2EngineViewModel : ViewModelBase
     partial void OnProbabilityModeIndexChanged(int value)
     {
         OnPropertyChanged(nameof(ProbabilityMode));
+        OnPropertyChanged(nameof(ProbabilitySummary));
         PushToSession();
     }
-    partial void OnProbabilityThresholdChanged(double value) => PushToSession();
+    partial void OnProbabilityThresholdChanged(double value)
+    {
+        PushToSession();
+        OnPropertyChanged(nameof(ProbabilitySummary));
+    }
     partial void OnSystemPromptChanged(string value)
     {
         PushToSession();
@@ -466,6 +508,7 @@ public partial class Step2EngineViewModel : ViewModelBase
     {
         PushToSession();
         OnPropertyChanged(nameof(HasCustomUserPrompt));
+        OnPropertyChanged(nameof(PromptSummary));
     }
 
 
@@ -474,6 +517,7 @@ public partial class Step2EngineViewModel : ViewModelBase
     partial void OnProbabilityCandidatesChanged(string value)
     {
         PushToSession();
+        OnPropertyChanged(nameof(ProbabilitySummary));
     }
 
     private void PushToSession()
@@ -721,9 +765,32 @@ public partial class Step2EngineViewModel : ViewModelBase
         // existed) is re-stated here, so entering the step always leaves the
         // server and the combo box agreeing.
         await PushDeviceToServerAsync();
-        if (LocalModels.Count == 0 && !IsLoadingModels)
-            await RefreshModelsAsync(CancellationToken.None);
+        await EnsureModelsLoadedAsync();
     }
+
+    /// <summary>
+    /// Load the model list once, if it has not been loaded and nothing else is
+    /// loading it. The model picker is not only on step 2 any more — step 1 and
+    /// the start screen show it too — so the shell calls this when the server
+    /// becomes ready and the list is useful wherever the user happens to be.
+    /// </summary>
+    public async Task EnsureModelsLoadedAsync()
+    {
+        if (LocalModels.Count > 0 || IsLoadingModels) return;
+        await RefreshModelsAsync(CancellationToken.None);
+    }
+
+    // ── The settings dialog (3 · Settings) ──────────────────────────────────
+
+    /// <summary>
+    /// Shell hook: opens this view model's settings dialog. Set by the shell
+    /// (which owns the window), so the step that renders the summary can offer
+    /// the entry point without knowing about windows.
+    /// </summary>
+    public Action? OpenSettingsRequested { get; set; }
+
+    [RelayCommand]
+    private void OpenSettings() => OpenSettingsRequested?.Invoke();
 
 
 }

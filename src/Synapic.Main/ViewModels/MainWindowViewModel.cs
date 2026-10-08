@@ -89,6 +89,13 @@ public partial class MainWindowViewModel : ViewModelBase
             if (e.PropertyName is nameof(Step1DatasourceViewModel.HasUsableSource))
                 OnPropertyChanged(nameof(CanStartRoute));
         };
+
+        // Every operation's settings page offers its own ⚙ entry point; the shell
+        // owns the window, so it is the shell that answers the request. One
+        // command, three possible dialogs, chosen by the route.
+        Wizard.Step2.OpenSettingsRequested = () => OpenSettingsCommand.Execute(null);
+        Wizard.Dedup.OpenSettingsRequested = () => OpenSettingsCommand.Execute(null);
+        Wizard.Upscale.OpenSettingsRequested = () => OpenSettingsCommand.Execute(null);
     }
 
     public WizardViewModel Wizard { get; }
@@ -148,20 +155,18 @@ public partial class MainWindowViewModel : ViewModelBase
     // ── Engine settings as a modal (proposal §2.2.3) ───────────────────
 
     /// <summary>
-    /// Opens the engine settings dialog over whatever is on screen. It hosts a
-    /// second view of <see cref="WizardViewModel.Step2"/> — one view model, two
-    /// views — so an edit in the dialog is the same edit the wizard step shows,
-    /// and every help anchor inside Step2Engine keeps working untouched.
+    /// Opens 3 · Settings for the operation on screen: tagging's engine dialog,
+    /// or the dedup / upscale dialog while that route owns the wizard. Each one
+    /// hosts a second view of the wizard's own view model — one view model, two
+    /// views — so an edit in the dialog is the same edit the pages report, and
+    /// every help anchor inside them keeps working untouched.
     /// </summary>
     [RelayCommand]
     private void OpenSettings()
     {
         try
         {
-            var dialog = new Views.Settings.EngineSettingsDialog
-            {
-                DataContext = Wizard.Step2,
-            };
+            var dialog = CreateSettingsDialog();
 
             // Prefer the running window; fall back to DI (both are unavailable
             // in headless tests, where a non-modal show is the right outcome).
@@ -186,6 +191,19 @@ public partial class MainWindowViewModel : ViewModelBase
             SynapicLog.Warning(nameof(MainWindowViewModel), $"Could not open settings: {e.Message}");
         }
     }
+
+    /// <summary>
+    /// The settings window for the operation on screen. Public so the choice is
+    /// testable without a desktop lifetime to show a modal over: the route
+    /// decides which settings exist, and each dialog holds the wizard's own view
+    /// model for that operation.
+    /// </summary>
+    public Avalonia.Controls.Window CreateSettingsDialog() => Route switch
+    {
+        DedupRoute => new Views.Settings.DedupSettingsDialog { DataContext = Wizard.Dedup },
+        UpscaleRoute => new Views.Settings.UpscaleSettingsDialog { DataContext = Wizard.Upscale },
+        _ => new Views.Settings.EngineSettingsDialog { DataContext = Wizard.Step2 },
+    };
 
     /// <summary>Start screen → the four-step tagging wizard.</summary>
     [RelayCommand]
@@ -488,6 +506,12 @@ public partial class MainWindowViewModel : ViewModelBase
         }
         EnsureHealthPolling(value is ServerUiState.Starting or ServerUiState.Running);
         NotifyCommands();
+
+        // The model picker sits on step 1 and the start screen, not only on the
+        // settings page, so the list is fetched as soon as there is a server to
+        // ask. Failure is the picker's own message; nothing else cares.
+        if (value is ServerUiState.Running)
+            _ = Wizard.Step2.EnsureModelsLoadedAsync();
     }
 
     partial void OnIsBusyChanged(bool value)

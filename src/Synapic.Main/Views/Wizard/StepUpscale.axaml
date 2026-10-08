@@ -5,70 +5,43 @@
              x:Class="Synapic.Main.Views.Wizard.StepUpscale"
              x:DataType="vm:StepUpscaleViewModel">
 
+  <!-- 4 · Upscaling: the run page. The parameters live in 3 · Settings and are
+       reported back here before a batch starts, so the run is never blind. -->
   <StackPanel Spacing="12">
-    <TextBlock Text="Upscaling — Feature enhancement" FontSize="22" FontWeight="Bold" />
-    <TextBlock Text="{Binding SourceSummary}" Opacity="0.75" TextWrapping="Wrap" />
+    <TextBlock Classes="stepTitle" Text="4 · Upscaling" />
+    <TextBlock Text="{Binding SourceSummary}" Opacity="0.75" TextWrapping="Wrap"
+               help:HelpScope.Topic="upscale.html" />
 
-    <!-- Upscale settings: the parameters that differ from the other workflows
-         (port of step_upscale.py's settings frame). -->
-    <Border Classes="card" Padding="12"
-            help:HelpScope.Topic="upscale.html">
-      <Grid ColumnDefinitions="Auto,*,Auto,*,Auto,*" RowDefinitions="Auto,Auto,Auto">
-        <TextBlock Grid.Row="0" Grid.Column="0" Text="Workflow:" VerticalAlignment="Center"
-                   Margin="0,0,6,8" />
-        <ComboBox Grid.Row="0" Grid.Column="1" SelectedIndex="{Binding SelectedWorkflow}"
-                  ItemsSource="{Binding Workflows}" MinWidth="120" Margin="0,0,16,8"
-                  ToolTip.Tip="quality: classical Swin2SR model. balanced: real-world model with denoise blending. fast: Lanczos, no model." />
-        <TextBlock Grid.Row="0" Grid.Column="2" Text="Factor:" VerticalAlignment="Center"
-                   Margin="0,0,6,8" />
-        <ComboBox Grid.Row="0" Grid.Column="3" SelectedIndex="{Binding SelectedFactor}"
-                  ItemsSource="{Binding Factors}" MinWidth="80" Margin="0,0,16,8" />
-        <TextBlock Grid.Row="0" Grid.Column="4" Text="Precision:" VerticalAlignment="Center"
-                   Margin="0,0,6,8" />
-        <ComboBox Grid.Row="0" Grid.Column="5" SelectedIndex="{Binding SelectedPrecision}"
-                  ItemsSource="{Binding Precisions}" MinWidth="90" Margin="0,0,0,8"
-                  IsEnabled="{Binding IsPrecisionEnabled}" />
-
-        <TextBlock Grid.Row="1" Grid.Column="0" Text="Output:" VerticalAlignment="Center"
-                   Margin="0,0,6,8" />
-        <ComboBox Grid.Row="1" Grid.Column="1" SelectedIndex="{Binding SelectedOutputFormat}"
-                  ItemsSource="{Binding OutputFormats}" MinWidth="120" Margin="0,0,16,8" />
-        <TextBlock Grid.Row="1" Grid.Column="2" Text="Quality:" VerticalAlignment="Center"
-                   Margin="0,0,6,8" />
-        <NumericUpDown Grid.Row="1" Grid.Column="3" Value="{Binding JpegQuality}"
-                        Minimum="70" Maximum="100" Increment="1" Width="110"
-                        Margin="0,0,16,8" FormatString="0" />
-        <TextBlock Grid.Row="1" Grid.Column="4" Text="Denoise:" VerticalAlignment="Center"
-                   Margin="0,0,6,8" />
-        <Slider Grid.Row="1" Grid.Column="5" Minimum="0" Maximum="1"
-                Value="{Binding DenoiseStrength}" Margin="0,0,0,8"
-                IsEnabled="{Binding IsDenoiseEnabled}"
-                ToolTip.Tip="Blend the AI result toward plain interpolation (balanced workflow only)." />
-
-        <TextBlock Grid.Row="2" Grid.Column="0" Text="Sharpen:" VerticalAlignment="Center"
-                   Margin="0,0,6,0" />
-        <Slider Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="3" Minimum="0" Maximum="2"
-                Value="{Binding SharpenAmount}" Margin="0,0,16,0"
-                ToolTip.Tip="Unsharp mask after upscaling; 0 = off." />
-        <CheckBox Grid.Row="2" Grid.Column="4" Grid.ColumnSpan="2"
-                  Content="Overwrite existing output" IsChecked="{Binding OverwriteExisting}"
-                  VerticalAlignment="Center" />
-      </Grid>
+    <Border Classes="card settingsCard" Padding="16">
+      <StackPanel Spacing="8">
+        <DockPanel>
+          <Button DockPanel.Dock="Right" Content="⚙ Settings" Margin="12,0,0,0"
+                  Command="{Binding OpenSettingsCommand}"
+                  ToolTip.Tip="Workflow, factor, precision, output format and the post-processing sliders" />
+          <TextBlock Classes="sectionTitle" Text="Upscaling parameters"
+                     VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+        </DockPanel>
+        <TextBlock Classes="hint" Text="{Binding SettingsSummary}" />
+      </StackPanel>
     </Border>
 
-    <ProgressBar Value="{Binding ProgressPercent}" Maximum="100" Height="18" />
-
-    <StackPanel Orientation="Horizontal" Spacing="16">
-      <TextBlock Text="{Binding ProgressText}" FontWeight="SemiBold" />
-      <TextBlock Text="{Binding EtaText}" Opacity="0.7" />
-      <TextBlock Text="{Binding CurrentFile}" Opacity="0.7" />
-    </StackPanel>
-
-    <StackPanel Orientation="Horizontal" Spacing="8">
-      <Button Content="Run Upscale Batch" Command="{Binding StartCommand}"
-              Classes="accent" />
-      <Button Content="Stop" Command="{Binding StopCommand}" />
-    </StackPanel>
+    <Border Classes="card settingsCard" Padding="16" help:HelpScope.Topic="step3-process.html">
+      <StackPanel Spacing="8">
+        <TextBlock Classes="sectionTitle" Text="Run" />
+        <ProgressBar Value="{Binding ProgressPercent}" Maximum="100" Height="18" />
+        <WrapPanel>
+          <TextBlock Text="{Binding ProgressText}" FontWeight="SemiBold" Margin="0,0,16,8" />
+          <TextBlock Text="{Binding EtaText}" Opacity="0.7" Margin="0,0,16,8" />
+          <TextBlock Text="{Binding CurrentFile}" Opacity="0.7" Margin="0,0,16,8"
+                     TextWrapping="Wrap" MaxWidth="520" TextTrimming="CharacterEllipsis" />
+        </WrapPanel>
+        <WrapPanel>
+          <Button Content="Run Upscale Batch" Command="{Binding StartCommand}"
+                  Classes="accent" Margin="0,0,8,8" />
+          <Button Content="Stop" Command="{Binding StopCommand}" Margin="0,0,8,8" />
+        </WrapPanel>
+      </StackPanel>
+    </Border>
 
     <Border Classes="card" Height="300" Padding="8"
             help:HelpScope.Topic="step3-log.html">

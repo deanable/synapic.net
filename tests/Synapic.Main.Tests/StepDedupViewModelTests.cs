@@ -477,7 +477,9 @@ public class StepDedupViewModelTests
     public void ServerHashPicker_IsDaminionOnly_AndBindsBothWays()
     {
         var vm = new StepDedupViewModel { DatasourceType = "local" };
-        var view = new StepDedup { DataContext = vm };
+        // The server-hash picker is one of the scan rules, so it lives on the
+        // settings surface (3 · Settings) rather than on the review page.
+        var view = new DedupSettingsPanel { DataContext = vm };
         var window = new Window { Content = view, Width = 1000, Height = 800 };
         window.Show();
         Dispatcher.UIThread.RunJobs();

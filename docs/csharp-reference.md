@@ -56,10 +56,14 @@ One user control per step. Code-behind is intentionally thin:
 
 | View | Code-behind behaviour |
 |------|-----------------------|
-| `Step1Datasource.axaml.cs` | bare `InitializeComponent`; the source summary (`SourceStatusStrip`) and the processing limits |
+| `Step1Datasource.axaml.cs` | bare `InitializeComponent`; step 1 — Source & model: the source summary (`SourceStatusStrip`), the model picker and the processing limits |
 | `DatasourceSourcePanel.axaml.cs` | `OnBrowseFolder` — OS folder picker writes `vm.LocalPath`; hosts `SourceStatusStrip` |
-| `SourceStatusStrip.axaml.cs` | the two source lights (Daminion / folder), shared by the start screen and Step 1 |
-| `Step2Engine.axaml.cs` | bare `InitializeComponent` |
+| `SourceStatusStrip.axaml.cs` | the two source lights (Daminion / folder), shared by the header, the start screen and Step 1 |
+| `EngineModelPicker.axaml.cs` | the compact model + device picker (step 1 and the start screen), over the engine view model |
+| `Step2TagSettings.axaml.cs` | bare `InitializeComponent`; 3 — Settings as a summary, with the tag-field gates |
+| `Step2Engine.axaml.cs` | the full tagging settings form, hosted by `EngineSettingsDialog`; prompt-preset Delete handling |
+| `DedupSettingsPanel.axaml.cs` | the dedup scan rules, hosted by `DedupSettingsDialog` |
+| `UpscaleSettingsPanel.axaml.cs` | the upscale parameters, hosted by `UpscaleSettingsDialog` |
 | `Step3Process.axaml.cs` | auto-scrolls the log list to the last line |
 | `Step4Results.axaml.cs` | `Refresh` button + auto-scrolls the results grid to the newest row |
 | `StepDedup.axaml.cs` | `OnBrowseFolder` — folder picker writes `vm.FolderPath`; wires `vm.ConfirmAction` to `ConfirmDialogWindow.ShowAsync` for the catalog delete |
@@ -116,6 +120,12 @@ The shell. Owns:
   is cleared once the variant is built or downloaded. Advisory by
   design: failures log and return, nothing blocks startup, and only the real
   desktop launch reaches it (headless test sessions never do).
+- `OpenSettingsCommand` — **3 · Settings**: opens the dialog that owns the
+  settings of the operation on screen (tagging's engine dialog, or the dedup /
+  upscale one) over that operation's own view model. `CreateSettingsDialog()` is
+  the public factory behind it, so the choice is testable without a desktop
+  lifetime. The header, the sidebar entry and the action bar all run this one
+  command.
 - Help: `OpenHelpCommand` (the toolbar **Help** button) opens
   `HelpTopics.Home`; `OpenContextHelpCommand` (<kbd>F1</kbd>, bound in
   `MainWindow.axaml`) opens `ContextHelpTopic` — the sidecar topic while
@@ -133,8 +143,16 @@ Linear navigation with validation gates. Holds the six step view models;
 `CurrentStepTitle`, `NextButtonText`, and tab-enablement properties are derived.
 `IsNavigationLocked` mirrors `Step3.IsRunning || Upscale.IsRunning`.
 
+**The workflow as a sequence**: step 1 is *Source & model* (source summary,
+model picker, limits), the settings page is *3 · Settings* (a summary; the form
+is the operation's dialog), and the run steps follow — *4 · Process*, *5 ·
+Results* for tagging, `4` for the dedup and upscale operations. Step `2 ·
+Operation type` is the start screen, which the shell owns, so the wizard skips
+that number. `Wizard.Step1.Engine` carries the engine view model so the model
+picker on step 1 edits the same state as the settings dialog.
+
 **Route split**: `IsDedupRoute` / `IsUpscaleRoute` flip the wizard between the
-four-step tagging flow and the two two-step flows. In the dedup/upscale routes
+tagging flow and the two shorter ones. In the dedup/upscale routes
 `ShowTaggingTabs` hides Engine/Process/Results, `ShowDatasourceTab` keeps step 1
 on screen, `Next` from step 1 validates the datasource and lands on `Dedup`
 (after `PrefillDedupSource()` copies the Step 1 folder/scope onto the dedup

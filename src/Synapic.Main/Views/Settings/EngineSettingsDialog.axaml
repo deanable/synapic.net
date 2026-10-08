@@ -5,29 +5,41 @@
         xmlns:help="using:Synapic.Main.Services"
         x:Class="Synapic.Main.Views.Settings.EngineSettingsDialog"
         x:DataType="vm:Step2EngineViewModel"
-        Title="Engine Settings"
+        Title="Tagging Settings"
         Icon="/Assets/Icon.ico"
-        Width="960" Height="760"
+        Width="980" Height="760"
+        MinWidth="720" MinHeight="520"
         CanResize="True"
         WindowStartupLocation="CenterOwner"
         help:HelpScope.Topic="step2-engine.html">
 
-  <!-- The settings modal (proposal §2.2.3): every engine setting in one
-       scrollable panel with the action buttons pinned to the bottom. It hosts
-       the existing Step2Engine view over the wizard's own view model, so the
-       23 settings-reference help anchors inside it keep pointing at real
-       topics and an edit here is the same edit the wizard step shows. -->
+  <!-- 3 · Settings for the tagging operation (proposal §2.2.3): every tagging
+       setting in one scrollable panel with the action buttons pinned to the
+       bottom. It hosts the existing Step2Engine view over the wizard's own view
+       model, so the settings-reference help anchors inside it keep pointing at
+       real topics and an edit here is the same edit the wizard steps report. -->
   <Grid RowDefinitions="*,Auto">
 
-    <ScrollViewer Grid.Row="0" Padding="16,16,16,4">
-      <steps:Step2Engine />
+    <!-- The inset lives on the content, not on the ScrollViewer: a ScrollViewer
+         measures its content at the un-padded width and arranges it at the
+         padded one, so a text line sized against the measurement overflows the
+         arrangement by exactly the padding (24px here). The bar is reserved too
+         (AllowAutoHide=False), so measure and arrange agree on the width. -->
+    <ScrollViewer Grid.Row="0" AllowAutoHide="False">
+      <StackPanel Spacing="12" Margin="16,16,16,4">
+        <TextBlock Classes="stepTitle" Text="Tagging settings" />
+        <TextBlock Classes="hint"
+                   Text="Model and device, the fields each run writes, how confident a tag has to be, and the prompts the model sees." />
+        <steps:Step2Engine />
+      </StackPanel>
     </ScrollViewer>
 
     <Border Grid.Row="1" Classes="card" Margin="16,8,16,16" Padding="12,10">
       <Grid ColumnDefinitions="*,Auto,Auto">
         <TextBlock Grid.Column="0"
                    Text="Settings apply to the moment you change them; Apply saves them to config.json as well."
-                   VerticalAlignment="Center" Opacity="0.7" TextWrapping="Wrap" />
+                   VerticalAlignment="Center" Opacity="0.7" TextWrapping="Wrap"
+                   Margin="0,0,8,0" />
         <Button Grid.Column="1" Content="Apply" Classes="accent" Click="OnApply"
                 Margin="0,0,8,0" MinWidth="90" />
         <Button Grid.Column="2" Content="Close" Click="OnClose" MinWidth="90" />

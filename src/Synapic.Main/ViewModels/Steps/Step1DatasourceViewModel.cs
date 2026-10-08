@@ -42,6 +42,15 @@ public partial class Step1DatasourceViewModel : ViewModelBase
     private bool _suppressAutoCount;
 
     /// <summary>
+    /// The engine half of "1 · Source &amp; model": step 1 renders the model
+    /// picker, and it is the same view model the settings dialog edits, so the
+    /// two can never disagree about which model does the work. Wired by
+    /// <see cref="ViewModels.WizardViewModel"/>; null in isolated tests, where
+    /// the card simply does not appear.
+    /// </summary>
+    public Step2EngineViewModel? Engine { get; set; }
+
+    /// <summary>
     /// Pre-fill the connection form from the registry (last successful
     /// connect). Field values are never persisted anywhere else, and only a
     /// successful authentication writes them back out.

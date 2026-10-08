@@ -6,17 +6,23 @@
              x:Class="Synapic.Main.Views.Wizard.Step4Results"
              x:DataType="vm:Step4ResultsViewModel">
 
+  <!-- 5 · Results: what the batch wrote, and the ways out of it (export, retry,
+       verify). The action row wraps — four buttons plus the summary line is more
+       than a 1024px window fits on one line. -->
   <StackPanel Spacing="12">
-    <TextBlock Text="Step 4 — Results" FontSize="22" FontWeight="Bold" />
+    <TextBlock Classes="stepTitle" Text="5 · Results" />
 
-    <StackPanel Orientation="Horizontal" Spacing="12"
-                help:HelpScope.Topic="step4-results.html">
-      <Button Content="Export CSV" Command="{Binding ExportCsvCommand}" />
-      <Button Content="Retry Failed" Command="{Binding RetryFailedCommand}" />
-      <Button Content="Verify Daminion Writes" Command="{Binding VerifyDaminionCommand}" />
-      <Button Content="Refresh" Click="OnRefresh" />
-      <TextBlock Text="{Binding Summary}" VerticalAlignment="Center" Opacity="0.8" />
-    </StackPanel>
+    <Border Classes="card settingsCard" Padding="16" help:HelpScope.Topic="step4-results.html">
+      <StackPanel Spacing="8">
+        <WrapPanel>
+          <Button Content="Export CSV" Command="{Binding ExportCsvCommand}" Margin="0,0,8,8" />
+          <Button Content="Retry Failed" Command="{Binding RetryFailedCommand}" Margin="0,0,8,8" />
+          <Button Content="Verify Daminion Writes" Command="{Binding VerifyDaminionCommand}" Margin="0,0,8,8" />
+          <Button Content="Refresh" Click="OnRefresh" Margin="0,0,8,8" />
+        </WrapPanel>
+        <TextBlock Text="{Binding Summary}" Opacity="0.8" TextWrapping="Wrap" />
+      </StackPanel>
+    </Border>
 
     <dg:DataGrid ItemsSource="{Binding Results}" SelectedItem="{Binding SelectedResult}" x:Name="ResultsGrid"
                  help:HelpScope.Topic="step4-results.html"

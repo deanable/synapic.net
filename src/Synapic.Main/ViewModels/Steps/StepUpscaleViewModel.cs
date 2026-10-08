@@ -92,7 +92,54 @@ public partial class StepUpscaleViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(IsDenoiseEnabled));
         OnPropertyChanged(nameof(IsPrecisionEnabled));
+        OnPropertyChanged(nameof(SettingsSummary));
     }
+
+    partial void OnSelectedFactorChanged(int value) => OnPropertyChanged(nameof(SettingsSummary));
+
+    partial void OnSelectedPrecisionChanged(int value) => OnPropertyChanged(nameof(SettingsSummary));
+
+    partial void OnSelectedOutputFormatChanged(int value) => OnPropertyChanged(nameof(SettingsSummary));
+
+    partial void OnJpegQualityChanged(int value) => OnPropertyChanged(nameof(SettingsSummary));
+
+    partial void OnDenoiseStrengthChanged(double value) => OnPropertyChanged(nameof(SettingsSummary));
+
+    partial void OnSharpenAmountChanged(double value) => OnPropertyChanged(nameof(SettingsSummary));
+
+    partial void OnOverwriteExistingChanged(bool value) => OnPropertyChanged(nameof(SettingsSummary));
+
+    /// <summary>
+    /// Read-back of the parameters for the run page: they live in the settings
+    /// dialog now, and a batch started from parameters nobody can see is a batch
+    /// nobody can explain afterwards.
+    /// </summary>
+    public string SettingsSummary
+    {
+        get
+        {
+            var workflow = Workflows[Math.Clamp(SelectedWorkflow, 0, Workflows.Length - 1)];
+            var factor = Factors[Math.Clamp(SelectedFactor, 0, Factors.Length - 1)];
+            var precision = Precisions[Math.Clamp(SelectedPrecision, 0, Precisions.Length - 1)];
+            var format = OutputFormats[Math.Clamp(SelectedOutputFormat, 0, OutputFormats.Length - 1)];
+
+            var denoise = IsDenoiseEnabled ? $" · denoise {DenoiseStrength:0.00}" : "";
+            var sharpen = SharpenAmount > 0 ? $" · sharpen {SharpenAmount:0.00}" : "";
+            var quality = format is "JPEG" or "WEBP" ? $" · quality {JpegQuality:0}" : "";
+            var overwrite = OverwriteExisting ? " · overwrite output" : " · keep existing output";
+
+            return $"{workflow} · {factor} · precision {precision} · output {format}"
+                + quality + denoise + sharpen + overwrite;
+        }
+    }
+
+    // ── The settings dialog (3 · Settings) ──────────────────────────────────
+
+    /// <summary>Shell hook: opens this view model's settings dialog (set by the shell).</summary>
+    public Action? OpenSettingsRequested { get; set; }
+
+    [RelayCommand]
+    private void OpenSettings() => OpenSettingsRequested?.Invoke();
 
     /// <summary>
     /// The run's parameters as the sidecar contract wants them (port of

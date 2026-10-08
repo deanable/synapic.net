@@ -10,109 +10,126 @@
   <!-- The shell (proposal §2.1): a persistent header carrying the source, a
        sidebar that is the navigation, the content area, and a footer that owns
        the server controls. The log stays a fixed strip at the bottom - §4.5
-       requires the log view to survive the redesign. -->
+       requires the log view to survive the redesign.
+
+       The sidebar is the workflow, in order: 1 Source & model, 2 Operation type,
+       3 Settings (a dialog, one per operation), then the steps that operation
+       runs. Every flow-layout row in this file wraps rather than clips: the
+       window has no minimum width, so a row that only fits at 1280 is a row that
+       loses its last control on a smaller screen. -->
   <Grid RowDefinitions="Auto,*,Auto,Auto">
 
     <!-- ═══════════════ Header: source selector, always on screen ═════════ -->
     <Border Grid.Row="0" Classes="card" Padding="12,8" Margin="8,8,4,0"
             help:HelpScope.Topic="workflow-overview.html">
-      <Grid ColumnDefinitions="Auto,*,Auto">
-        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10">
-          <TextBlock Text="Source" FontWeight="SemiBold" Opacity="0.65"
-                     VerticalAlignment="Center" />
-          <!-- Read-only profile of the chosen source: both lights and the
-               folder/server line, the same widget Step 1 reports with. It has
-               no inputs, so the connect form stays on the start screen only. -->
-          <steps:SourceStatusStrip DataContext="{Binding Wizard.Step1}" />
-        </StackPanel>
+      <!-- The source strip owns the flexible column: a long folder path or a
+           server URL then ellipsizes inside it instead of pushing the count and
+           the settings button off the right edge. -->
+      <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+        <TextBlock Grid.Column="0" Text="Source" FontWeight="SemiBold" Opacity="0.65"
+                   VerticalAlignment="Center" Margin="0,0,10,0" />
 
-        <TextBlock Grid.Column="1" Text="{Binding Wizard.Step1.CountText}"
+        <!-- Read-only profile of the chosen source: both lights and the
+             folder/server line, the same widget Step 1 reports with. It has
+             no inputs, so the connect form stays on the start screen only. -->
+        <steps:SourceStatusStrip Grid.Column="1" DataContext="{Binding Wizard.Step1}"
+                                 MaxWidth="640" HorizontalAlignment="Left" />
+
+        <TextBlock Grid.Column="2" Text="{Binding Wizard.Step1.CountText}"
                    IsVisible="{Binding Wizard.Step1.CountText}"
-                   VerticalAlignment="Center" HorizontalAlignment="Center"
+                   VerticalAlignment="Center" HorizontalAlignment="Right"
                    FontWeight="SemiBold" FontSize="12" Opacity="0.85"
+                   Margin="12,0" TextTrimming="CharacterEllipsis"
                    ToolTip.Tip="Records the current source would be worked on." />
 
-        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
-          <Button Content="⚙ Settings" Command="{Binding OpenSettingsCommand}"
-                  ToolTip.Tip="Engine settings: model, device, tag fields, thresholds and prompts" />
-        </StackPanel>
+        <Button Grid.Column="3" Content="⚙ Settings" Command="{Binding OpenSettingsCommand}"
+                VerticalAlignment="Center"
+                ToolTip.Tip="Settings for the operation you are in: model, tag fields and thresholds, scan rules or upscale options" />
       </Grid>
     </Border>
 
-    <!-- ═══════════════ Sidebar: the navigation (proposal §2.2.2) ═════════ -->
+    <!-- ═══════════════ Sidebar: the workflow, in order (proposal §2.2.2) ═══ -->
     <Border Grid.Row="1" Grid.Column="0" Classes="card" Padding="8" Margin="8,4,0,4"
-            Width="214"
+            Width="232"
             help:HelpScope.Topic="workflow-overview.html">
       <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Spacing="2">
 
-          <Button Classes="navItem" Content="🏠  Dashboard"
-                  Command="{Binding GoHomeCommand}"
+          <TextBlock Classes="navGroup" Text="SETUP" Margin="10,2,10,2" />
+
+          <!-- 1 · Source & model: the same two decisions the start screen opens
+               with, reachable from inside a flow as the first numbered step. -->
+          <Button Classes="navItem" Content="1 · Source &amp; model"
+                  Command="{Binding Wizard.GoToStep1Command}"
                   IsVisible="{Binding IsWizardVisible}"
-                  ToolTip.Tip="Back to the start screen (Tagging / Deduplication / Upscaling)" />
+                  IsEnabled="{Binding IsWorkspaceEnabled}"
+                  Classes.active="{Binding Wizard.IsSourceStepActive}"
+                  ToolTip.Tip="Where the images are, and which model tags them" />
 
-          <!-- Source is shared by all three flows (proposal §2.2.2), so it is
-               one group rather than a copy inside each mode. -->
-          <TextBlock Classes="navGroup" Text="SOURCE"
-                     IsVisible="{Binding IsWizardVisible}" />
-          <StackPanel IsVisible="{Binding IsWizardVisible}"
-                      IsEnabled="{Binding IsWorkspaceEnabled}">
-            <Button Classes="navItem" Content="1 · Datasource"
-                    Command="{Binding Wizard.GoToStep1Command}"
-                    Classes.active="{Binding Wizard.IsSourceStepActive}"
-                    ToolTip.Tip="Which images this run works on" />
-          </StackPanel>
+          <!-- 2 · Operation type: the start screen, which is the chooser. -->
+          <Button Classes="navItem" Content="2 · Operation type"
+                  Command="{Binding GoHomeCommand}"
+                  Classes.active="{Binding IsNavHomeActive}"
+                  ToolTip.Tip="Tagging, deduplication or upscaling — pick one on the start screen" />
 
-          <!-- ── Tagging ─────────────────────────────────────────────────── -->
-          <Button Classes="navMode" Content="🏷  Tagging"
-                  Command="{Binding StartTaggingRouteCommand}"
-                  IsEnabled="{Binding CanStartRoute}"
-                  ToolTip.Tip="Run the AI model over the source" />
-          <StackPanel IsVisible="{Binding IsWizardVisible}"
-                      IsEnabled="{Binding IsWorkspaceEnabled}">
-            <Button Classes="navItem" Content="2 · Engine"
-                    Command="{Binding Wizard.GoToStep2Command}"
-                    IsEnabled="{Binding Wizard.CanGoToStep2Tab}"
-                    IsVisible="{Binding Wizard.ShowTaggingTabs}"
-                    Classes.active="{Binding Wizard.IsEngineStepActive}" />
-            <Button Classes="navItem" Content="3 · Process"
-                    Command="{Binding Wizard.GoToStep3Command}"
-                    IsEnabled="{Binding Wizard.CanGoToStep3Tab}"
-                    IsVisible="{Binding Wizard.ShowTaggingTabs}"
-                    Classes.active="{Binding Wizard.IsProcessStepActive}" />
-            <Button Classes="navItem" Content="4 · Results"
-                    Command="{Binding Wizard.GoToStep4Command}"
-                    IsEnabled="{Binding Wizard.CanGoToStep4Tab}"
-                    IsVisible="{Binding Wizard.ShowTaggingTabs}"
-                    Classes.active="{Binding Wizard.IsResultsStepActive}" />
-          </StackPanel>
+          <!-- 3 · Settings: one dialog per operation, opened from here, from the
+               header, or from the action bar. -->
+          <Button Classes="navItem" Content="3 · Settings…"
+                  Command="{Binding OpenSettingsCommand}"
+                  IsVisible="{Binding IsWizardVisible}"
+                  IsEnabled="{Binding IsWorkspaceEnabled}"
+                  Classes.active="{Binding Wizard.IsEngineStepActive}"
+                  ToolTip.Tip="The settings of the operation you are in, on a dialog" />
 
-          <!-- ── Deduplication ───────────────────────────────────────────── -->
-          <Button Classes="navMode" Content="🧹  Dedup"
-                  Command="{Binding StartDedupRouteCommand}"
-                  IsEnabled="{Binding CanStartRoute}"
-                  ToolTip.Tip="Find duplicates in the source and act on them" />
+          <!-- The steps the chosen operation runs. The mode headers switch
+               operation; the numbered entries are the steps inside it. -->
           <StackPanel IsVisible="{Binding IsWizardVisible}"
-                      IsEnabled="{Binding IsWorkspaceEnabled}">
-            <Button Classes="navItem" Content="🧹 Deduplication"
+                      IsEnabled="{Binding IsWorkspaceEnabled}"
+                      Spacing="2">
+
+            <TextBlock Classes="navGroup" Text="WORKFLOW" Margin="10,10,10,2" />
+
+            <!-- ── Tagging ─────────────────────────────────────────────────── -->
+            <Button Classes="navMode" Content="🏷  Tagging"
+                    Command="{Binding StartTaggingRouteCommand}"
+                    ToolTip.Tip="Run the AI model over the source" />
+            <StackPanel IsVisible="{Binding Wizard.ShowTaggingTabs}" Spacing="2">
+              <Button Classes="navItem" Content="4 · Process"
+                      Command="{Binding Wizard.GoToStep3Command}"
+                      IsEnabled="{Binding Wizard.CanGoToStep3Tab}"
+                      Classes.active="{Binding Wizard.IsProcessStepActive}"
+                      ToolTip.Tip="Run the batch and watch its progress" />
+              <Button Classes="navItem" Content="5 · Results"
+                      Command="{Binding Wizard.GoToStep4Command}"
+                      IsEnabled="{Binding Wizard.CanGoToStep4Tab}"
+                      Classes.active="{Binding Wizard.IsResultsStepActive}"
+                      ToolTip.Tip="What was written, and the export" />
+            </StackPanel>
+
+            <!-- ── Deduplication ───────────────────────────────────────────── -->
+            <Button Classes="navMode" Content="🧹  Dedup"
+                    Command="{Binding StartDedupRouteCommand}"
+                    ToolTip.Tip="Find duplicates in the source and act on them" />
+            <!-- The run steps of an operation appear while that operation is the
+                 one on screen: the mode headers above switch between them, and a
+                 numbered entry for a flow you are not in is only noise. -->
+            <Button Classes="navItem" Content="4 · Deduplication"
                     Command="{Binding Wizard.GoToDedupCommand}"
                     IsEnabled="{Binding Wizard.CanGoToDedupTab}"
-                    IsVisible="{Binding Wizard.ShowDedupTab}"
-                    Classes.active="{Binding Wizard.IsDedupStepActive}" />
-          </StackPanel>
+                    IsVisible="{Binding IsDedupRoute}"
+                    Classes.active="{Binding Wizard.IsDedupStepActive}"
+                    ToolTip.Tip="Scan, review the groups, then apply the action" />
 
-          <!-- ── Upscaling ───────────────────────────────────────────────── -->
-          <Button Classes="navMode" Content="✨  Upscale"
-                  Command="{Binding StartUpscaleRouteCommand}"
-                  IsEnabled="{Binding CanStartRoute}"
-                  ToolTip.Tip="Enhance image resolution over the source (Feature enhancement)" />
-          <StackPanel IsVisible="{Binding IsWizardVisible}"
-                      IsEnabled="{Binding IsWorkspaceEnabled}">
-            <Button Classes="navItem" Content="✨ Upscaling"
+            <!-- ── Upscaling ───────────────────────────────────────────────── -->
+            <Button Classes="navMode" Content="✨  Upscale"
+                    Command="{Binding StartUpscaleRouteCommand}"
+                    ToolTip.Tip="Enhance image resolution over the source (Feature enhancement)" />
+            <Button Classes="navItem" Content="4 · Upscaling"
                     Command="{Binding Wizard.GoToUpscaleCommand}"
                     IsEnabled="{Binding Wizard.CanGoToUpscaleTab}"
-                    IsVisible="{Binding Wizard.ShowUpscaleTab}"
-                    Classes.active="{Binding Wizard.IsUpscaleStepActive}" />
+                    IsVisible="{Binding IsUpscaleRoute}"
+                    Classes.active="{Binding Wizard.IsUpscaleStepActive}"
+                    ToolTip.Tip="Run the upscale batch and watch its progress" />
           </StackPanel>
 
         </StackPanel>
@@ -140,32 +157,37 @@
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="vm:SidecarVariantViewModel">
                 <StackPanel Orientation="Vertical" Margin="0,3">
-                  <StackPanel Orientation="Horizontal" Spacing="8">
+                  <!-- Wraps: a long variant name plus its buttons must not run
+                       off the card on a narrow window. -->
+                  <WrapPanel>
                     <Ellipse Width="10" Height="10" VerticalAlignment="Center"
+                             Margin="0,0,8,6"
                              Fill="{Binding StatusBrush}" />
                     <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"
-                               VerticalAlignment="Center" />
+                               VerticalAlignment="Center" Margin="0,0,8,6" />
                     <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
-                               Opacity="0.8" />
+                               Opacity="0.8" Margin="0,0,8,6" />
                     <TextBlock Text="{Binding Rid}" VerticalAlignment="Center"
-                               Opacity="0.45" FontSize="11" />
+                               Opacity="0.45" FontSize="11" Margin="0,0,8,6" />
                     <ProgressBar IsVisible="{Binding IsBusy}"
                                  IsIndeterminate="{Binding IsBuildIndeterminate}"
                                  Value="{Binding BuildPercent}" Maximum="100"
-                                 Width="170" Height="6" VerticalAlignment="Center" />
+                                 Width="170" Height="6" VerticalAlignment="Center"
+                                 Margin="0,0,8,6" />
                     <Button Content="Build sidecar" Command="{Binding BuildCommand}"
-                            IsVisible="{Binding IsBuildButtonVisible}"
+                            IsVisible="{Binding IsBuildButtonVisible}" Margin="0,0,8,6"
                             ToolTip.Tip="Compile this variant from source; replaces an outdated executable with fresh bytes" />
                     <Button Content="Download" Command="{Binding DownloadCommand}"
-                            IsVisible="{Binding IsDownloadButtonVisible}"
+                            IsVisible="{Binding IsDownloadButtonVisible}" Margin="0,0,8,6"
                             ToolTip.Tip="Fetch the prebuilt executable from the latest GitHub release instead of compiling it; replaces an outdated executable" />
                     <Button Content="Up to date" IsEnabled="False"
-                            IsVisible="{Binding IsUpToDateVisible}"
+                            IsVisible="{Binding IsUpToDateVisible}" Margin="0,0,8,6"
                             ToolTip.Tip="Nothing to do: this executable matches the source it was built from, and the GitHub release carries nothing newer for it." />
                     <TextBlock Text="{Binding BuildStage}" IsVisible="{Binding IsBusy}"
                                VerticalAlignment="Center" Opacity="0.8" FontSize="11"
-                               TextTrimming="CharacterEllipsis" />
-                  </StackPanel>
+                               TextTrimming="CharacterEllipsis" MaxWidth="280"
+                               Margin="0,0,8,6" />
+                  </WrapPanel>
                   <TextBlock Text="{Binding Detail}" Opacity="0.6" FontSize="11"
                              TextWrapping="Wrap" Margin="18,2,0,0" />
                   <TextBlock Text="{Binding StaleText}" IsVisible="{Binding IsStale}"
@@ -181,71 +203,85 @@
         </StackPanel>
       </Border>
 
-      <!-- Body: start screen (mode chooser) or the flow for the chosen mode -->
+      <!-- Body: start screen (setup + operation chooser) or the flow for the
+           chosen operation -->
       <Grid Grid.Row="1">
-        <!-- Start screen: source first, then the workflow. The three route cards
-             stay disabled until the source panel has a usable source (a folder
-             that exists, or a live Daminion session), so no route can be entered
-             without knowing what it would work on. The panel is the wizard's own
-             Step 1 view model, so the choice carries into every route. -->
+        <!-- Start screen, which is the whole numbered setup: 1 Source & model
+             (the source panel and the model picker), 2 Operation type (the three
+             cards). The cards stay disabled until the source panel has a usable
+             source (a folder that exists, or a live Daminion session), so no
+             route can be entered without knowing what it would work on. The
+             panel is the wizard's own Step 1 view model, so the choice carries
+             into every route. -->
         <ScrollViewer IsVisible="{Binding IsHomeVisible}">
-          <StackPanel Spacing="12" Margin="0,20,0,20" help:HelpScope.Topic="workflow-overview.html">
+          <StackPanel Spacing="16" Margin="0,20,0,20" help:HelpScope.Topic="workflow-overview.html">
             <StackPanel HorizontalAlignment="Center" Spacing="6">
-              <TextBlock Text="What do you want to do?" FontSize="22" FontWeight="SemiBold"
+              <TextBlock Text="Set up a workflow" FontSize="22" FontWeight="SemiBold"
                          HorizontalAlignment="Center" />
-              <TextBlock Text="Pick a source first — the three workflows unlock once Synapic knows what to work on."
-                         Opacity="0.7" HorizontalAlignment="Center" />
+              <TextBlock Text="1 connect a source and pick the model, 2 choose the operation, 3 tune its settings — then run it."
+                         Opacity="0.7" HorizontalAlignment="Center" TextWrapping="Wrap" />
             </StackPanel>
 
-            <Border Classes="card" Padding="14" help:HelpScope.Topic="step1-datasource.html">
-              <StackPanel Spacing="10">
-                <TextBlock Text="1 · Where are the images?" FontWeight="SemiBold" FontSize="14" />
+            <Border Classes="card settingsCard" Padding="16" help:HelpScope.Topic="step1-datasource.html">
+              <StackPanel Spacing="12">
+                <TextBlock Text="1 · Source &amp; model" Classes="sectionTitle" />
                 <steps:DatasourceSourcePanel DataContext="{Binding Wizard.Step1}" />
+                <Separator Margin="0,2" />
+                <TextBlock Text="Model" Classes="sectionTitle" />
+                <TextBlock Classes="hint"
+                           Text="Which model tags the images and which device it runs on. Tag fields, thresholds and prompts live under ⚙ Settings." />
+                <steps:EngineModelPicker DataContext="{Binding Wizard.Step2}" />
               </StackPanel>
             </Border>
 
-            <StackPanel Spacing="6" Margin="0,6,0,0">
-              <TextBlock Text="2 · What do you want to do?" FontWeight="SemiBold" FontSize="14"
-                         HorizontalAlignment="Center" />
-              <TextBlock Text="Choose a folder or connect to Daminion first — the three workflows stay disabled until then."
-                         IsVisible="{Binding !CanStartRoute}"
-                         Foreground="{DynamicResource SynapicDangerBrush}" FontSize="12"
-                         TextWrapping="Wrap"
-                         HorizontalAlignment="Center" TextAlignment="Center" />
-            </StackPanel>
+            <Border Classes="card settingsCard" Padding="16"
+                    help:HelpScope.Topic="workflow-overview.html">
+              <StackPanel Spacing="10">
+                <TextBlock Text="2 · Operation type" Classes="sectionTitle" />
+                <TextBlock Classes="hint"
+                           Text="Every operation keeps its settings in a ⚙ dialog, so the run itself stays one screen: pick one to start." />
+                <TextBlock Text="Choose a folder or connect to Daminion first — the three workflows stay disabled until then."
+                           IsVisible="{Binding !CanStartRoute}"
+                           Foreground="{DynamicResource SynapicDangerBrush}" FontSize="12"
+                           TextWrapping="Wrap" />
 
-            <UniformGrid Columns="3">
-              <Button Classes="routeCard" Command="{Binding StartTaggingRouteCommand}"
-                      IsEnabled="{Binding CanStartRoute}"
-                      Margin="3" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
-                <StackPanel Spacing="6" Margin="6">
-                  <TextBlock Text="🏷  Tagging" FontSize="18" FontWeight="SemiBold" />
-                  <TextBlock Text="Run the AI model over a datasource: choose the source, the engine and the fields, process the batch, then review what was written."
-                             TextWrapping="Wrap" Opacity="0.85" />
-                  <TextBlock Text="Datasource → Engine → Process → Results" Opacity="0.55" />
-                </StackPanel>
-              </Button>
-              <Button Classes="routeCard" Command="{Binding StartDedupRouteCommand}"
-                      IsEnabled="{Binding CanStartRoute}"
-                      Margin="3" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
-                <StackPanel Spacing="6" Margin="6">
-                  <TextBlock Text="🧹  Deduplication" FontSize="18" FontWeight="SemiBold" />
-                  <TextBlock Text="Find duplicate images in a local folder or in the Daminion catalog scope, review the groups, then tag, move or delete the extras."
-                             TextWrapping="Wrap" Opacity="0.85" />
-                  <TextBlock Text="Datasource → Deduplication" Opacity="0.55" />
-                </StackPanel>
-              </Button>
-              <Button Classes="routeCard" Command="{Binding StartUpscaleRouteCommand}"
-                      IsEnabled="{Binding CanStartRoute}"
-                      Margin="3" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
-                <StackPanel Spacing="6" Margin="6">
-                  <TextBlock Text="✨  Upscaling" FontSize="18" FontWeight="SemiBold" />
-                  <TextBlock Text="Enhance image resolution — the Daminion Feature enhancement utility: AI (Swin2SR) or fast Lanczos upscaling over the chosen source."
-                             TextWrapping="Wrap" Opacity="0.85" />
-                  <TextBlock Text="Datasource → Upscaling" Opacity="0.55" />
-                </StackPanel>
-              </Button>
-            </UniformGrid>
+                <UniformGrid Columns="3">
+                  <Button Classes="routeCard" Command="{Binding StartTaggingRouteCommand}"
+                          IsEnabled="{Binding CanStartRoute}"
+                          Margin="3" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
+                    <StackPanel Spacing="6" Margin="6">
+                      <TextBlock Text="🏷  Tagging" FontSize="18" FontWeight="SemiBold" />
+                      <TextBlock Text="Run the AI model over a datasource: check the source and the model, tune the tagging settings, process the batch, then review what was written."
+                                 TextWrapping="Wrap" Opacity="0.85" />
+                      <TextBlock Text="Source &amp; model → Settings → Process → Results"
+                                 Opacity="0.55" FontSize="12" TextWrapping="Wrap" />
+                    </StackPanel>
+                  </Button>
+                  <Button Classes="routeCard" Command="{Binding StartDedupRouteCommand}"
+                          IsEnabled="{Binding CanStartRoute}"
+                          Margin="3" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
+                    <StackPanel Spacing="6" Margin="6">
+                      <TextBlock Text="🧹  Deduplication" FontSize="18" FontWeight="SemiBold" />
+                      <TextBlock Text="Find duplicate images in a local folder or in the Daminion catalog scope, review the groups, then tag, move or delete the extras."
+                                 TextWrapping="Wrap" Opacity="0.85" />
+                      <TextBlock Text="Source &amp; model → Settings → Review → Apply"
+                                 Opacity="0.55" FontSize="12" TextWrapping="Wrap" />
+                    </StackPanel>
+                  </Button>
+                  <Button Classes="routeCard" Command="{Binding StartUpscaleRouteCommand}"
+                          IsEnabled="{Binding CanStartRoute}"
+                          Margin="3" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
+                    <StackPanel Spacing="6" Margin="6">
+                      <TextBlock Text="✨  Upscaling" FontSize="18" FontWeight="SemiBold" />
+                      <TextBlock Text="Enhance image resolution — the Daminion Feature enhancement utility: AI (Swin2SR) or fast Lanczos upscaling over the chosen source."
+                                 TextWrapping="Wrap" Opacity="0.85" />
+                      <TextBlock Text="Source &amp; model → Settings → Run batch"
+                                 Opacity="0.55" FontSize="12" TextWrapping="Wrap" />
+                    </StackPanel>
+                  </Button>
+                </UniformGrid>
+              </StackPanel>
+            </Border>
           </StackPanel>
         </ScrollViewer>
 
@@ -257,7 +293,7 @@
                 <steps:Step1Datasource />
               </DataTemplate>
               <DataTemplate DataType="vms:Step2EngineViewModel">
-                <steps:Step2Engine />
+                <steps:Step2TagSettings />
               </DataTemplate>
               <DataTemplate DataType="vms:Step3ProcessViewModel">
                 <steps:Step3Process />
@@ -276,9 +312,9 @@
         </ScrollViewer>
       </Grid>
 
-      <!-- Action bar: the forward/back pair the sidebar cannot carry, plus the
-           validation message and the processing lock hint that used to sit in
-           the old top nav row. -->
+      <!-- Action bar: the forward/back pair the sidebar cannot carry, the
+           settings entry for the operation on screen, the validation message and
+           the processing lock hint that used to sit in the old top nav row. -->
       <Border Grid.Row="2" Classes="card" Padding="10,8" Margin="0,4,0,0"
               IsVisible="{Binding IsWizardVisible}"
               IsEnabled="{Binding IsWorkspaceEnabled}"
@@ -286,17 +322,21 @@
         <StackPanel Orientation="Vertical" Spacing="6">
           <TextBlock Classes="validationError" IsVisible="{Binding Wizard.ValidationError}"
                      Text="{Binding Wizard.ValidationError}" TextWrapping="Wrap" />
-          <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+          <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto">
             <TextBlock Grid.Column="0" Text="{Binding Wizard.NavHintText}"
-                       VerticalAlignment="Center" Opacity="0.7" />
-            <Button Grid.Column="1" Content="↺ Start Over"
+                       VerticalAlignment="Center" Opacity="0.7" TextWrapping="Wrap"
+                       Margin="0,0,8,0" />
+            <Button Grid.Column="1" Content="⚙ Settings" Command="{Binding OpenSettingsCommand}"
+                    Margin="0,0,8,0"
+                    ToolTip.Tip="The settings of the operation you are in, on a dialog" />
+            <Button Grid.Column="2" Content="↺ Start Over"
                     Command="{Binding Wizard.StartOverCommand}"
                     IsVisible="{Binding Wizard.CanStartOver}"
                     Margin="0,0,8,0"
                     ToolTip.Tip="Back to Step 1 with the statistics reset" />
-            <Button Grid.Column="2" Content="← Back" Command="{Binding Wizard.BackCommand}"
+            <Button Grid.Column="3" Content="← Back" Command="{Binding Wizard.BackCommand}"
                     Margin="0,0,8,0" />
-            <Button Grid.Column="3" Content="{Binding Wizard.NextButtonText}"
+            <Button Grid.Column="4" Content="{Binding Wizard.NextButtonText}"
                     Command="{Binding Wizard.NextCommand}" Classes="accent" />
           </Grid>
         </StackPanel>
@@ -310,35 +350,38 @@
     <Border Grid.Row="2" Classes="card" Padding="10,8" Margin="8,4,8,0"
             help:HelpScope.Topic="first-run-sidecar.html">
       <StackPanel Orientation="Vertical" Spacing="4">
-        <Grid ColumnDefinitions="*,Auto">
-          <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10">
-            <Button Content="Start Server" Command="{Binding StartServerCommand}" />
-            <Button Content="Stop Server" Command="{Binding StopServerCommand}" />
-            <Button Content="Build Server" Command="{Binding BuildServerCommand}"
-                    IsVisible="{Binding IsBuildButtonVisible}" />
-            <Ellipse Width="12" Height="12" VerticalAlignment="Center"
-                     Fill="{Binding ServerBrush}" />
-            <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
-                       FontWeight="SemiBold" />
-            <!-- The device /health reports for the loaded model: a silent CPU
-                 fallback is exactly what this makes visible. -->
-            <TextBlock Text="{Binding ServerDeviceText}"
-                       IsVisible="{Binding IsServerDeviceVisible}"
-                       VerticalAlignment="Center" FontSize="11" FontWeight="SemiBold"
-                       Opacity="0.75"
-                       ToolTip.Tip="Compute device the inference server reports for the loaded model." />
-            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"
-                        IsVisible="{Binding IsDownloadVisible}">
-              <ProgressBar Value="{Binding DownloadPercent}" Maximum="100"
-                           Width="150" Height="6" VerticalAlignment="Center" />
-              <TextBlock Text="{Binding DownloadText}" VerticalAlignment="Center" FontSize="11"
-                         Opacity="0.85" />
-            </StackPanel>
+        <!-- Wraps: the server row carries three buttons, two lights and a
+             progress read-out; on a narrow window they move to a second line
+             instead of pushing Help out of the card. -->
+        <WrapPanel>
+          <Button Content="Start Server" Command="{Binding StartServerCommand}"
+                  Margin="0,0,8,6" />
+          <Button Content="Stop Server" Command="{Binding StopServerCommand}"
+                  Margin="0,0,8,6" />
+          <Button Content="Build Server" Command="{Binding BuildServerCommand}"
+                  IsVisible="{Binding IsBuildButtonVisible}" Margin="0,0,8,6" />
+          <Ellipse Width="12" Height="12" VerticalAlignment="Center"
+                   Margin="0,0,8,6" Fill="{Binding ServerBrush}" />
+          <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
+                     FontWeight="SemiBold" Margin="0,0,8,6" />
+          <!-- The device /health reports for the loaded model: a silent CPU
+               fallback is exactly what this makes visible. -->
+          <TextBlock Text="{Binding ServerDeviceText}"
+                     IsVisible="{Binding IsServerDeviceVisible}"
+                     VerticalAlignment="Center" FontSize="11" FontWeight="SemiBold"
+                     Opacity="0.75" Margin="0,0,8,6"
+                     ToolTip.Tip="Compute device the inference server reports for the loaded model." />
+          <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"
+                      IsVisible="{Binding IsDownloadVisible}" Margin="0,0,8,6">
+            <ProgressBar Value="{Binding DownloadPercent}" Maximum="100"
+                         Width="150" Height="6" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding DownloadText}" VerticalAlignment="Center" FontSize="11"
+                       Opacity="0.85" />
           </StackPanel>
-          <Button Grid.Column="1" Content="Help" Command="{Binding OpenHelpCommand}"
+          <Button Content="Help" Command="{Binding OpenHelpCommand}" Margin="0,0,8,6"
                   VerticalAlignment="Center"
                   ToolTip.Tip="Open the Synapic help. F1 opens the topic for what you are looking at." />
-        </Grid>
+        </WrapPanel>
         <!-- What the server reports about the device it is really using, when it
              is not the one selected. Silent otherwise. -->
         <TextBlock Text="{Binding DeviceNotice}"

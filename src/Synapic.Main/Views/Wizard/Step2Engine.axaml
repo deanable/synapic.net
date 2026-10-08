@@ -5,128 +5,190 @@
              x:Class="Synapic.Main.Views.Wizard.Step2Engine"
              x:DataType="vm:Step2EngineViewModel">
 
+  <!-- The tagging settings in full: the content of the settings dialog (3 ·
+       Settings) and the editor behind the summary on the wizard page. Sections
+       are cards so the form reads top-to-bottom in the order a run uses it, and
+       every row of controls wraps — a settings dialog is where a clipped control
+       is hardest to notice, because the thing that fell off the edge is exactly
+       the setting somebody came here to change. -->
   <StackPanel Spacing="12">
-    <TextBlock Text="Step 2 — Tagging Engine (local Python sidecar)" FontSize="22" FontWeight="Bold" />
 
-    <StackPanel Spacing="10">
-      <StackPanel Orientation="Horizontal" Spacing="8"
-                  help:HelpScope.Topic="settings-reference.html#model-id">
-        <Button Content="Refresh local models" Command="{Binding RefreshModelsCommand}" />
-        <Button Content="Download model…" Command="{Binding DownloadSelectedCommand}" />
-        <ProgressBar IsIndeterminate="true" Width="80" IsVisible="{Binding IsLoadingModels}" />
-        <TextBlock Text="{Binding ModelsMessage}" VerticalAlignment="Center" Opacity="0.7" />
+    <Border Classes="card settingsCard" Padding="16"
+            help:HelpScope.Topic="settings-reference.html#model-id">
+      <StackPanel Spacing="8">
+        <TextBlock Classes="sectionTitle" Text="Model" />
+
+        <WrapPanel>
+          <Button Content="Refresh local models" Command="{Binding RefreshModelsCommand}"
+                  Margin="0,0,12,8"
+                  ToolTip.Tip="Ask the server which models are downloaded." />
+          <Button Content="Download model…" Command="{Binding DownloadSelectedCommand}"
+                  Margin="0,0,12,8"
+                  ToolTip.Tip="Download the model id below (or the selected one) from Hugging Face." />
+          <ProgressBar IsIndeterminate="True" Width="90" Height="6"
+                       IsVisible="{Binding IsLoadingModels}"
+                       VerticalAlignment="Center" Margin="0,0,12,8" />
+          <TextBlock Text="{Binding ModelsMessage}" VerticalAlignment="Center"
+                     Opacity="0.7" TextWrapping="Wrap" MaxWidth="420" Margin="0,0,12,8" />
+        </WrapPanel>
+
+        <ListBox ItemsSource="{Binding LocalModels}" SelectedItem="{Binding SelectedModel}"
+                 MaxHeight="180" MinHeight="90">
+          <ListBox.ItemTemplate>
+            <DataTemplate>
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="{Binding Id}" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding Task}" Opacity="0.6" />
+                <TextBlock Text="{Binding SizeMb}" Opacity="0.6" />
+                <TextBlock Text="✓ downloaded" IsVisible="{Binding Downloaded}"
+                           Foreground="{DynamicResource SynapicSuccessBrush}" />
+              </StackPanel>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+
+        <TextBox Watermark="Model id (Hugging Face repo)" Text="{Binding ManualModelId}" />
       </StackPanel>
+    </Border>
 
-      <ListBox ItemsSource="{Binding LocalModels}" SelectedItem="{Binding SelectedModel}" Height="180"
-               help:HelpScope.Topic="settings-reference.html#model-id">
-        <ListBox.ItemTemplate>
-          <DataTemplate>
-            <StackPanel Orientation="Horizontal" Spacing="8">
-              <TextBlock Text="{Binding Id}" FontWeight="SemiBold" />
-              <TextBlock Text="{Binding Task}" Opacity="0.6" />
-              <TextBlock Text="{Binding SizeMb}" Opacity="0.6" />
-              <TextBlock Text="✓ downloaded" IsVisible="{Binding Downloaded}" Foreground="Green" />
-            </StackPanel>
-          </DataTemplate>
-        </ListBox.ItemTemplate>
-      </ListBox>
+    <Border Classes="card settingsCard" Padding="16"
+            help:HelpScope.Topic="settings-reference.html#device">
+      <StackPanel Spacing="8">
+        <TextBlock Classes="sectionTitle" Text="Device" />
 
-      <TextBox Watermark="Model id (Hugging Face repo)" Text="{Binding ManualModelId}"
-               help:HelpScope.Topic="settings-reference.html#model-id" />
-
-      <StackPanel Orientation="Vertical" Spacing="4"
-                  help:HelpScope.Topic="settings-reference.html#device">
-        <StackPanel Orientation="Horizontal" Spacing="16">
-          <TextBlock Text="Device:" VerticalAlignment="Center" />
+        <WrapPanel>
+          <TextBlock Classes="fieldLabel" Text="Device:" Margin="0,0,8,8" />
           <ComboBox SelectedItem="{Binding SelectedDevice}" ItemsSource="{Binding DeviceOptions}"
-                    MinWidth="110" />
-          <TextBlock Text="Task:" VerticalAlignment="Center" />
-          <TextBlock Text="Category + Keywords + Description (multimodal)"
-                     VerticalAlignment="Center" Opacity="0.7"
-                     help:HelpScope.Topic="settings-reference.html#task" />
-        </StackPanel>
+                    MinWidth="120" Margin="0,0,12,8" />
+        </WrapPanel>
+
         <!-- Only devices this machine can run are listed: CUDA is absent when no
              NVIDIA driver was detected, rather than selectable and silently
              serving from the CPU. -->
-        <TextBlock Text="{Binding DeviceAvailabilityNote}"
-                   IsVisible="{Binding HasDeviceAvailabilityNote}"
-                   FontSize="11" Opacity="0.75" TextWrapping="Wrap" />
+        <TextBlock Classes="hint" MaxWidth="640"
+                   Text="{Binding DeviceAvailabilityNote}"
+                   IsVisible="{Binding HasDeviceAvailabilityNote}" />
       </StackPanel>
+    </Border>
 
-      <!-- Which returned fields to tag; the multimodal prompt always yields all
-           three, so this selects the permutation that gets written. -->
-      <StackPanel Orientation="Horizontal" Spacing="16"
-                  help:HelpScope.Topic="step2-tag-fields.html">
-        <TextBlock Text="Tag fields:" VerticalAlignment="Center" />
-        <CheckBox x:Name="TagKeywordsBox" Content="Keywords" IsChecked="{Binding TagKeywords}" />
-        <CheckBox x:Name="TagCategoriesBox" Content="Categories" IsChecked="{Binding TagCategories}" />
-        <CheckBox x:Name="TagDescriptionBox" Content="Description" IsChecked="{Binding TagDescription}" />
-        <TextBlock Text="Select at least one field to continue"
-                   IsVisible="{Binding HasNoTagFieldSelected}"
-                   Foreground="Red" VerticalAlignment="Center" />
+    <Border Classes="card settingsCard" Padding="16"
+            help:HelpScope.Topic="step2-tag-fields.html">
+      <StackPanel Spacing="8">
+        <TextBlock Classes="sectionTitle" Text="Tag fields" />
+        <!-- Which returned fields to tag; the multimodal prompt always yields all
+             three, so this selects the permutation that gets written. -->
+        <WrapPanel>
+          <CheckBox x:Name="TagKeywordsBox" Content="Keywords" IsChecked="{Binding TagKeywords}"
+                    Margin="0,0,16,8" />
+          <CheckBox x:Name="TagCategoriesBox" Content="Categories" IsChecked="{Binding TagCategories}"
+                    Margin="0,0,16,8" />
+          <CheckBox x:Name="TagDescriptionBox" Content="Description" IsChecked="{Binding TagDescription}"
+                    Margin="0,0,16,8" />
+          <TextBlock Text="Select at least one field to continue"
+                     IsVisible="{Binding HasNoTagFieldSelected}"
+                     Foreground="{DynamicResource SynapicDangerBrush}"
+                     VerticalAlignment="Center" Margin="0,0,16,8" TextWrapping="Wrap" />
+        </WrapPanel>
+        <!-- A partial selection only shows up in Daminion as missing fields, so
+             spell out what this run will write while it can still be changed. -->
+        <TextBlock x:Name="TagFieldWarningText" TextWrapping="Wrap"
+                   Foreground="{DynamicResource SynapicWarningBrush}"
+                   IsVisible="{Binding HasPartialTagFieldSelection}"
+                   Text="{Binding TagFieldWarning}" />
       </StackPanel>
-      <!-- A partial selection only shows up in Daminion as missing fields, so
-           spell out what this run will write while it can still be changed. -->
-      <TextBlock x:Name="TagFieldWarningText" TextWrapping="Wrap" Foreground="DarkOrange"
-                 IsVisible="{Binding HasPartialTagFieldSelection}"
-                 Text="{Binding TagFieldWarning}" />
+    </Border>
 
-      <StackPanel Orientation="Horizontal" Spacing="16"
-                  help:HelpScope.Topic="settings-reference.html#scoring">
-        <TextBlock Text="Confidence threshold:" VerticalAlignment="Center" />
-        <NumericUpDown Value="{Binding ConfidenceThreshold}" Minimum="0" Maximum="1" Increment="0.05" Width="110"
-                       help:HelpScope.Topic="settings-reference.html#confidence-threshold" />
-        <TextBlock Text="Probability mode:" VerticalAlignment="Center" />
-        <ComboBox SelectedIndex="{Binding ProbabilityModeIndex}" ItemsSource="{Binding ProbabilityModeOptions}" MinWidth="130"
-                  help:HelpScope.Topic="settings-reference.html#probability-mode" />
-        <TextBlock Text="Prob. threshold:" VerticalAlignment="Center" />
-        <NumericUpDown Value="{Binding ProbabilityThreshold}" Minimum="0" Maximum="1" Increment="0.05" Width="110"
-                       help:HelpScope.Topic="settings-reference.html#probability-threshold" />
-      </StackPanel>
+    <Border Classes="card settingsCard" Padding="16"
+            help:HelpScope.Topic="settings-reference.html#scoring">
+      <StackPanel Spacing="8">
+        <TextBlock Classes="sectionTitle" Text="Scoring" />
 
-      <TextBox Watermark="Candidate labels (comma-separated, for probability/zero-shot)"
-               Text="{Binding ProbabilityCandidates}"
-               help:HelpScope.Topic="settings-reference.html#probability-candidates" />
-      <TextBlock Text="System prompt (optional VLM context)"
-                 FontWeight="SemiBold" Margin="0,4,0,0"
-                 help:HelpScope.Topic="step2-prompts.html" />
-      <TextBlock TextWrapping="Wrap" Opacity="0.75"
-                 Text="Every system prompt you commit is remembered below, so previous wording stays one click away." />
-      <StackPanel Orientation="Horizontal" Spacing="8"
-                  help:HelpScope.Topic="step2-prompts.html">
-        <ComboBox x:Name="SystemPromptPresetBox"
-                  ItemsSource="{Binding SystemPromptPresets}"
-                  SelectedItem="{Binding SelectedSystemPromptPreset}"
-                  MinWidth="260" MaxDropDownHeight="260"
-                  PlaceholderText="Saved system prompts" />
-        <TextBlock Text="Highlight an entry and press Delete to remove it from the saved list"
-                   VerticalAlignment="Center" Opacity="0.75" TextWrapping="Wrap" />
-      </StackPanel>
-      <TextBox x:Name="SystemPromptBox"
-               Watermark="Custom system prompt (VLM) - optional context, must not restate the output format"
-               Text="{Binding SystemPrompt}"
-               AcceptsReturn="True" Height="60"
-               help:HelpScope.Topic="step2-prompts.html" />
-      <TextBlock Text="{Binding SystemPromptMessage}" TextWrapping="Wrap" Opacity="0.75" />
+        <WrapPanel>
+          <TextBlock Classes="fieldLabel" Text="Confidence threshold:" Margin="0,0,8,8" />
+          <Slider x:Name="ConfidenceThresholdSlider" Minimum="0" Maximum="1"
+                  Value="{Binding ConfidenceThreshold, Mode=TwoWay}"
+                  TickFrequency="0.05" IsSnapToTickEnabled="True" Width="200"
+                  VerticalAlignment="Center" Margin="0,0,8,8"
+                  ToolTip.Tip="How confident a keyword has to be to survive: drag right for fewer, safer tags, left to keep candidates."
+                  help:HelpScope.Topic="settings-reference.html#confidence-threshold" />
+          <TextBlock x:Name="ConfidenceThresholdValue"
+                     Text="{Binding ConfidenceThreshold, StringFormat={}{0:0.00}}"
+                     FontWeight="SemiBold" VerticalAlignment="Center"
+                     MinWidth="36" Margin="0,0,16,8" />
+          <TextBlock Classes="fieldLabel" Text="Probability mode:" Margin="0,0,8,8" />
+          <ComboBox SelectedIndex="{Binding ProbabilityModeIndex}"
+                    ItemsSource="{Binding ProbabilityModeOptions}" MinWidth="130"
+                    Margin="0,0,16,8"
+                    help:HelpScope.Topic="settings-reference.html#probability-mode" />
+        </WrapPanel>
 
-      <TextBlock Text="Tag instruction (sent to the model for every image)"
-                 FontWeight="SemiBold" Margin="0,4,0,0"
-                 help:HelpScope.Topic="step2-prompts.html" />
-      <TextBlock TextWrapping="Wrap" Opacity="0.75"
-                 Text="Leave blank to use the built-in instruction, which asks for a JSON object with description, category and keywords. A custom instruction must keep asking for that JSON shape - the app reads those three fields out of the reply, and anything else is stored as a plain-text description." />
-      <TextBox x:Name="UserPromptBox" Text="{Binding UserPrompt}" AcceptsReturn="True" Height="110"
-               TextWrapping="Wrap"
-               Watermark="Blank = built-in instruction"
-               help:HelpScope.Topic="settings-reference.html#tag-instruction" />
-      <StackPanel Orientation="Horizontal" Spacing="8">
-        <Button x:Name="UseBuiltInPromptButton" Content="Use built-in instruction"
-                Command="{Binding UseBuiltInPromptCommand}" />
-        <Button x:Name="ResetUserPromptButton" Content="Reset to built-in"
-                Command="{Binding ResetUserPromptCommand}" />
-        <TextBlock Text="Using a custom instruction" VerticalAlignment="Center"
-                   Foreground="DarkOrange" IsVisible="{Binding HasCustomUserPrompt}" />
+        <WrapPanel>
+          <TextBlock Classes="fieldLabel" Text="Prob. threshold:" Margin="0,0,8,8" />
+          <Slider x:Name="ProbabilityThresholdSlider" Minimum="0" Maximum="1"
+                  Value="{Binding ProbabilityThreshold, Mode=TwoWay}"
+                  TickFrequency="0.05" IsSnapToTickEnabled="True" Width="200"
+                  VerticalAlignment="Center" Margin="0,0,8,8"
+                  ToolTip.Tip="The same cut-off for probability-based scores: drag right for a tighter list."
+                  help:HelpScope.Topic="settings-reference.html#probability-threshold" />
+          <TextBlock x:Name="ProbabilityThresholdValue"
+                     Text="{Binding ProbabilityThreshold, StringFormat={}{0:0.00}}"
+                     FontWeight="SemiBold" VerticalAlignment="Center"
+                     MinWidth="36" Margin="0,0,16,8" />
+        </WrapPanel>
+
+        <TextBox Watermark="Candidate labels (comma-separated, for probability/zero-shot)"
+                 Text="{Binding ProbabilityCandidates}"
+                 help:HelpScope.Topic="settings-reference.html#probability-candidates" />
       </StackPanel>
-      <TextBlock Text="{Binding PromptMessage}" TextWrapping="Wrap" Opacity="0.75" />
-    </StackPanel>
+    </Border>
+
+    <Border Classes="card settingsCard" Padding="16"
+            help:HelpScope.Topic="step2-prompts.html">
+      <StackPanel Spacing="8">
+        <TextBlock Classes="sectionTitle" Text="System prompt (optional VLM context)" />
+        <TextBlock Classes="hint"
+                   Text="Every system prompt you commit is remembered below, so previous wording stays one click away." />
+
+        <WrapPanel>
+          <ComboBox x:Name="SystemPromptPresetBox"
+                    ItemsSource="{Binding SystemPromptPresets}"
+                    SelectedItem="{Binding SelectedSystemPromptPreset}"
+                    MinWidth="240" MaxWidth="420" MaxDropDownHeight="260"
+                    Margin="0,0,12,8"
+                    PlaceholderText="Saved system prompts" />
+          <TextBlock Classes="hint" VerticalAlignment="Center" MaxWidth="360" Margin="0,0,12,8"
+                     Text="Highlight an entry and press Delete to remove it from the saved list" />
+        </WrapPanel>
+
+        <TextBox x:Name="SystemPromptBox"
+                 Watermark="Custom system prompt (VLM) - optional context, must not restate the output format"
+                 Text="{Binding SystemPrompt}"
+                 AcceptsReturn="True" Height="60" TextWrapping="Wrap" />
+        <TextBlock Classes="hint" Text="{Binding SystemPromptMessage}" />
+      </StackPanel>
+    </Border>
+
+    <Border Classes="card settingsCard" Padding="16"
+            help:HelpScope.Topic="step2-prompts.html">
+      <StackPanel Spacing="8">
+        <TextBlock Classes="sectionTitle" Text="Tag instruction (sent to the model for every image)" />
+        <TextBlock Classes="hint"
+                   Text="Leave blank to use the built-in instruction, which asks for a JSON object with description, category and keywords. A custom instruction must keep asking for that JSON shape - the app reads those three fields out of the reply, and anything else is stored as a plain-text description." />
+        <TextBox x:Name="UserPromptBox" Text="{Binding UserPrompt}" AcceptsReturn="True"
+                 Height="110" TextWrapping="Wrap"
+                 Watermark="Blank = built-in instruction"
+                 help:HelpScope.Topic="settings-reference.html#tag-instruction" />
+        <WrapPanel>
+          <Button x:Name="UseBuiltInPromptButton" Content="Use built-in instruction"
+                  Command="{Binding UseBuiltInPromptCommand}" Margin="0,0,12,8" />
+          <Button x:Name="ResetUserPromptButton" Content="Reset to built-in"
+                  Command="{Binding ResetUserPromptCommand}" Margin="0,0,12,8" />
+          <TextBlock Text="Using a custom instruction" VerticalAlignment="Center"
+                     Foreground="{DynamicResource SynapicWarningBrush}"
+                     IsVisible="{Binding HasCustomUserPrompt}" Margin="0,0,12,8" />
+        </WrapPanel>
+        <TextBlock Classes="hint" Text="{Binding PromptMessage}" />
+      </StackPanel>
+    </Border>
   </StackPanel>
 </UserControl>

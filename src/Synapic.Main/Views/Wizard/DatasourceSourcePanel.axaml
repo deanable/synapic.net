@@ -9,26 +9,32 @@
   <!-- The whole "which images?" decision: the source profile, the source
        itself (a folder, or a Daminion login), the catalog scope and filters,
        and the record count that keeps itself current. It lives on the start
-       screen, next to the three workflows it feeds; Step 1 shows the same
-       profile read-only and keeps the processing limits. -->
-  <StackPanel Spacing="10">
+       screen, next to the operations it feeds; Step 1 shows the same profile
+       read-only and keeps the model and the processing limits.
+
+       The Daminion form is stacked rather than one wide row: four controls in a
+       row only fit at 1280 and the connect button was the first thing to be
+       pushed off the edge. -->
+  <StackPanel Spacing="12">
 
     <steps:SourceStatusStrip />
 
-    <StackPanel Orientation="Horizontal" Spacing="12">
-      <RadioButton Content="Local Folder" GroupName="ds" IsChecked="{Binding IsLocalSelected}" />
-      <RadioButton Content="Daminion Server" GroupName="ds" IsChecked="{Binding IsDaminionSelected}" />
-    </StackPanel>
+    <WrapPanel>
+      <RadioButton Content="Local Folder" GroupName="ds" IsChecked="{Binding IsLocalSelected}"
+                   Margin="0,0,16,8" />
+      <RadioButton Content="Daminion Server" GroupName="ds" IsChecked="{Binding IsDaminionSelected}"
+                   Margin="0,0,16,8" />
+    </WrapPanel>
 
     <!-- Local panel -->
-    <Border IsVisible="{Binding IsLocal}" Classes="card" Padding="14"
+    <Border IsVisible="{Binding IsLocal}" Classes="card" Padding="16"
             help:HelpScope.Topic="step1-datasource.html">
       <StackPanel Spacing="8">
-        <TextBlock Text="Folder containing images" FontWeight="SemiBold" />
+        <TextBlock Classes="sectionTitle" Text="Folder containing images" />
         <Grid ColumnDefinitions="*,Auto" help:HelpScope.Topic="settings-reference.html#local-path">
           <TextBox Grid.Column="0" Watermark="C:\Pictures or /home/user/pictures"
                    Text="{Binding LocalPath}" />
-          <Button Grid.Column="1" Content="Browse…" Click="OnBrowseFolder" />
+          <Button Grid.Column="1" Content="Browse…" Click="OnBrowseFolder" Margin="8,0,0,0" />
         </Grid>
         <CheckBox Content="Include subfolders (recursive scan)" IsChecked="{Binding LocalRecursive}"
                   help:HelpScope.Topic="settings-reference.html#local-recursive" />
@@ -36,100 +42,111 @@
     </Border>
 
     <!-- Daminion panel -->
-    <Border IsVisible="{Binding IsDaminion}" Classes="card" Padding="14"
+    <Border IsVisible="{Binding IsDaminion}" Classes="card" Padding="16"
             help:HelpScope.Topic="step1-daminion.html">
       <StackPanel Spacing="8">
-        <Grid ColumnDefinitions="2*,1*,1*,Auto" help:HelpScope.Topic="settings-reference.html#server-url">
-          <TextBox Grid.Column="0" Watermark="Server URL, e.g. http://dam.local/daminion"
-                   Text="{Binding DaminionUrl}" />
-          <TextBox Grid.Column="1" Watermark="Username" Text="{Binding DaminionUser}" />
-          <TextBox Grid.Column="2" Watermark="Password" Text="{Binding DaminionPass}" PasswordChar="*" />
-          <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="6">
+        <TextBlock Classes="sectionTitle" Text="Server" />
+
+        <TextBox Watermark="Server URL, e.g. http://dam.local/daminion"
+                 Text="{Binding DaminionUrl}"
+                 help:HelpScope.Topic="settings-reference.html#server-url" />
+
+        <Grid ColumnDefinitions="*,*,Auto" help:HelpScope.Topic="settings-reference.html#server-url">
+          <TextBox Grid.Column="0" Watermark="Username" Text="{Binding DaminionUser}"
+                   Margin="0,0,8,0" />
+          <TextBox Grid.Column="1" Watermark="Password" Text="{Binding DaminionPass}"
+                   PasswordChar="*" Margin="0,0,8,0" />
+          <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
             <Button Content="Connect" Command="{Binding ConnectCommand}" Classes="accent" />
             <Button Content="Disconnect" Command="{Binding DisconnectCommand}"
                     IsVisible="{Binding IsDaminionConnected}" />
           </StackPanel>
         </Grid>
+
         <!-- The catalog is chosen by the server URL, so there is nothing to fill
              in by hand. Daminion exposes no endpoint that lists a server's
              catalogs, so after connecting we report the one the login landed on. -->
-        <TextBlock Text="{Binding ActiveCatalogText}"
+        <TextBlock Classes="hint" TextWrapping="Wrap"
+                   Text="{Binding ActiveCatalogText}"
                    IsVisible="{Binding HasActiveCatalog}"
-                   Opacity="0.7" FontSize="12" TextWrapping="Wrap"
                    ToolTip.Tip="The catalog this login is bound to, selected by the server URL. Daminion has no API to list a server's catalogs, so this reports the one in use." />
-        <StackPanel Orientation="Horizontal" Spacing="10">
-          <ProgressBar IsIndeterminate="True" Width="90" Height="6"
-                       IsVisible="{Binding IsConnecting}" />
-          <ProgressBar IsIndeterminate="True" Width="90" Height="6"
-                       IsVisible="{Binding IsLoadingCatalog}" />
-          <TextBlock Text="{Binding ConnectionMessage}" Opacity="0.85"
-                     IsVisible="{Binding ConnectionMessage}" />
-        </StackPanel>
 
-        <Separator Margin="0,6" />
+        <WrapPanel>
+          <ProgressBar IsIndeterminate="True" Width="90" Height="6"
+                       IsVisible="{Binding IsConnecting}" Margin="0,0,12,8" />
+          <ProgressBar IsIndeterminate="True" Width="90" Height="6"
+                       IsVisible="{Binding IsLoadingCatalog}" Margin="0,0,12,8" />
+          <TextBlock Text="{Binding ConnectionMessage}" Opacity="0.85" TextWrapping="Wrap"
+                     IsVisible="{Binding ConnectionMessage}" Margin="0,0,12,8" />
+        </WrapPanel>
+
+        <Separator Margin="0,4" />
 
         <Grid ColumnDefinitions="*,16,*">
           <!-- Scope column -->
           <StackPanel Grid.Column="0" Spacing="8"
                       help:HelpScope.Topic="step1-scope-filters.html">
-            <TextBlock Text="Scope" FontWeight="SemiBold" />
+            <TextBlock Classes="sectionTitle" Text="Scope" />
             <ComboBox SelectedIndex="{Binding ScopeIndex}" ItemsSource="{Binding ScopeOptions}"
-                      MinWidth="190" help:HelpScope.Topic="settings-reference.html#daminion-scope" />
+                      MinWidth="190" HorizontalAlignment="Stretch"
+                      help:HelpScope.Topic="settings-reference.html#daminion-scope" />
             <TextBox Watermark="Search term"
                      IsVisible="{Binding IsSearchScope}"
                      Text="{Binding SearchTerm}" />
-            <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsCollectionScope}">
+            <WrapPanel IsVisible="{Binding IsCollectionScope}">
               <ComboBox ItemsSource="{Binding Collections}"
                         SelectedItem="{Binding SelectedCollection}"
                         DisplayMemberBinding="{Binding Name}"
-                        MinWidth="240"
+                        MinWidth="200" Margin="0,0,8,8"
                         IsEnabled="{Binding IsDaminionConnected}" />
-              <TextBox Watermark="Collection id (manual)" Text="{Binding CollectionId}" Width="110" />
-            </StackPanel>
-            <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsSavedSearchScope}">
+              <TextBox Watermark="Collection id (manual)" Text="{Binding CollectionId}"
+                       Width="150" Margin="0,0,8,8" />
+            </WrapPanel>
+            <WrapPanel IsVisible="{Binding IsSavedSearchScope}">
               <ComboBox ItemsSource="{Binding SavedSearches}"
                         SelectedItem="{Binding SelectedSavedSearch}"
                         DisplayMemberBinding="{Binding Name}"
-                        MinWidth="240"
+                        MinWidth="200" Margin="0,0,8,8"
                         IsEnabled="{Binding IsDaminionConnected}" />
-              <TextBox Watermark="Saved search id (manual)" Text="{Binding SavedSearchId}" Width="110" />
-            </StackPanel>
+              <TextBox Watermark="Saved search id (manual)" Text="{Binding SavedSearchId}"
+                       Width="150" Margin="0,0,8,8" />
+            </WrapPanel>
           </StackPanel>
 
           <!-- Filters column -->
           <StackPanel Grid.Column="2" Spacing="8"
                       help:HelpScope.Topic="step1-scope-filters.html">
-            <TextBlock Text="Filters" FontWeight="SemiBold" />
-            <StackPanel Orientation="Horizontal" Spacing="8">
-              <TextBlock Text="Status:" VerticalAlignment="Center" />
+            <TextBlock Classes="sectionTitle" Text="Filters" />
+            <WrapPanel>
+              <TextBlock Classes="fieldLabel" Text="Status:" Margin="0,0,8,8" />
               <ComboBox SelectedIndex="{Binding StatusFilterIndex}"
                         ItemsSource="{Binding StatusFilterOptions}" MinWidth="120"
+                        Margin="0,0,8,8"
                         help:HelpScope.Topic="settings-reference.html#status-filter" />
-            </StackPanel>
+            </WrapPanel>
             <TextBlock Text="Only items with untagged:" Opacity="0.8" />
-            <WrapPanel Orientation="Horizontal" help:HelpScope.Topic="settings-reference.html#untagged-filters">
-              <CheckBox Content="Keywords" IsChecked="{Binding UntaggedKeywords}" />
-              <CheckBox Content="Categories" IsChecked="{Binding UntaggedCategories}" />
-              <CheckBox Content="Description" IsChecked="{Binding UntaggedDescription}" />
+            <WrapPanel help:HelpScope.Topic="settings-reference.html#untagged-filters">
+              <CheckBox Content="Keywords" IsChecked="{Binding UntaggedKeywords}" Margin="0,0,16,8" />
+              <CheckBox Content="Categories" IsChecked="{Binding UntaggedCategories}" Margin="0,0,16,8" />
+              <CheckBox Content="Description" IsChecked="{Binding UntaggedDescription}" Margin="0,0,16,8" />
             </WrapPanel>
             <Button Content="Select all untagged" Command="{Binding SelectAllUntaggedCommand}"
                     HorizontalAlignment="Left" />
           </StackPanel>
         </Grid>
 
-        <Separator Margin="0,6" />
+        <Separator Margin="0,4" />
 
         <!-- Record count: automatic on launch, on connect and on every scope,
              filter or folder change. The button is only a re-ask. -->
-        <StackPanel Orientation="Horizontal" Spacing="10"
-                    help:HelpScope.Topic="step1-scope-filters.html">
+        <WrapPanel help:HelpScope.Topic="step1-scope-filters.html">
           <TextBlock Text="{Binding CountText}" VerticalAlignment="Center" FontWeight="SemiBold"
-                     IsVisible="{Binding CountText}" />
+                     IsVisible="{Binding CountText}" Margin="0,0,12,8" />
           <ProgressBar IsIndeterminate="True" Width="80" Height="6" VerticalAlignment="Center"
-                       IsVisible="{Binding IsCounting}" />
-          <Button Content="Recount" Command="{Binding CountCommand}"
+                       IsVisible="{Binding IsCounting}" Margin="0,0,12,8" />
+          <Button Content="Recount" Command="{Binding CountCommand}" Margin="0,0,12,8"
                   ToolTip.Tip="The count keeps itself current; press this to ask again (the server, or the folder)." />
-        </StackPanel>
+        </WrapPanel>
       </StackPanel>
     </Border>
   </StackPanel>

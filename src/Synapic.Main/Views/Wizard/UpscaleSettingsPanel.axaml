@@ -1,0 +1,59 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Synapic.Main.ViewModels.Steps"
+             xmlns:help="using:Synapic.Main.Services"
+             x:Class="Synapic.Main.Views.Wizard.UpscaleSettingsPanel"
+             x:DataType="vm:StepUpscaleViewModel">
+
+  <!-- The upscale settings (3 · Settings for the upscaling operation): the
+       parameters that differ from the other workflows (port of step_upscale.py's
+       settings frame). Rows wrap instead of running off the card; the run page
+       keeps the progress and the Stop button. -->
+  <StackPanel Spacing="12">
+
+    <Border Classes="card settingsCard" Padding="16" help:HelpScope.Topic="upscale.html">
+      <StackPanel Spacing="8">
+        <TextBlock Classes="sectionTitle" Text="Upscaling" />
+
+        <WrapPanel>
+          <TextBlock Classes="fieldLabel" Text="Workflow:" Margin="0,0,8,8" />
+          <ComboBox SelectedIndex="{Binding SelectedWorkflow}" ItemsSource="{Binding Workflows}"
+                    MinWidth="130" Margin="0,0,16,8"
+                    ToolTip.Tip="quality: classical Swin2SR model. balanced: real-world model with denoise blending. fast: Lanczos, no model." />
+          <TextBlock Classes="fieldLabel" Text="Factor:" Margin="0,0,8,8" />
+          <ComboBox SelectedIndex="{Binding SelectedFactor}" ItemsSource="{Binding Factors}"
+                    MinWidth="90" Margin="0,0,16,8" />
+          <TextBlock Classes="fieldLabel" Text="Precision:" Margin="0,0,8,8" />
+          <ComboBox SelectedIndex="{Binding SelectedPrecision}" ItemsSource="{Binding Precisions}"
+                    MinWidth="100" Margin="0,0,16,8"
+                    IsEnabled="{Binding IsPrecisionEnabled}"
+                    ToolTip.Tip="Only the model-based workflows pick a precision; fast (Lanczos) does not load a model." />
+        </WrapPanel>
+
+        <WrapPanel>
+          <TextBlock Classes="fieldLabel" Text="Output:" Margin="0,0,8,8" />
+          <ComboBox SelectedIndex="{Binding SelectedOutputFormat}" ItemsSource="{Binding OutputFormats}"
+                    MinWidth="130" Margin="0,0,16,8" />
+          <TextBlock Classes="fieldLabel" Text="Quality:" Margin="0,0,8,8" />
+          <NumericUpDown Value="{Binding JpegQuality}" Minimum="70" Maximum="100" Increment="1"
+                         Width="110" Margin="0,0,16,8" FormatString="0"
+                         ToolTip.Tip="JPEG/WEBP quality used when the output format is one of those." />
+          <TextBlock Classes="fieldLabel" Text="Denoise:" Margin="0,0,8,8" />
+          <Slider Minimum="0" Maximum="1" Width="160" Value="{Binding DenoiseStrength}"
+                  VerticalAlignment="Center" Margin="0,0,16,8"
+                  IsEnabled="{Binding IsDenoiseEnabled}"
+                  ToolTip.Tip="Blend the AI result toward plain interpolation (balanced workflow only)." />
+        </WrapPanel>
+
+        <WrapPanel>
+          <TextBlock Classes="fieldLabel" Text="Sharpen:" Margin="0,0,8,8" />
+          <Slider Minimum="0" Maximum="2" Width="240" Value="{Binding SharpenAmount}"
+                  VerticalAlignment="Center" Margin="0,0,16,8"
+                  ToolTip.Tip="Unsharp mask after upscaling; 0 = off." />
+          <CheckBox Content="Overwrite existing output" IsChecked="{Binding OverwriteExisting}"
+                    VerticalAlignment="Center" Margin="0,0,16,8" />
+        </WrapPanel>
+      </StackPanel>
+    </Border>
+  </StackPanel>
+</UserControl>

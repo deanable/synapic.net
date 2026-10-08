@@ -30,9 +30,12 @@ public static class HelpTopics
     /// <summary>Tips and useful info for getting the most out of Synapic.</summary>
     public const string Tips = "tips.html";
 
+    /// <summary>The Feature enhancement utility (the upscaling operation).</summary>
+    public const string Upscale = "upscale.html";
+
     /// <summary>
     /// The topic for a <c>WizardViewModel</c> step index: 0 = Step 1, 1 =
-    /// Step 2, 2 = Step 3, 3 = Step 4, 4 = Deduplication.
+    /// Step 2, 2 = Step 3, 3 = Step 4, 4 = Deduplication, 5 = Upscaling.
     /// </summary>
     public static string ForStepIndex(int stepIndex) => stepIndex switch
     {
@@ -41,6 +44,7 @@ public static class HelpTopics
         2 => "step3-process.html",
         3 => "step4-results.html",
         4 => "dedup.html",
+        5 => Upscale,
         _ => Home,
     };
 }

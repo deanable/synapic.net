@@ -65,7 +65,7 @@ public class UpscaleRouteTests
 
         Assert.Same(vm.Wizard.Upscale, vm.Wizard.CurrentStep);
         Assert.Equal(5, vm.Wizard.CurrentStepIndex);
-        Assert.Equal("Upscaling", vm.Wizard.CurrentStepTitle);
+        Assert.Equal("4 · Upscaling", vm.Wizard.CurrentStepTitle);
         Assert.Equal("Start Over", vm.Wizard.NextButtonText);
         Assert.Null(vm.Wizard.ValidationError);
 
@@ -108,22 +108,26 @@ public class UpscaleRouteTests
             var upscaleCard = buttons.Single(b => b.Command == vm.StartUpscaleRouteCommand && b.Classes.Contains("routeCard"));
             Assert.True(EffectivelyVisible(upscaleCard));
 
-            // Start screen: the nav bar (and its tabs) is collapsed.
-            Assert.False(IsTabVisible(window, "✨ Upscaling"));
+            // Start screen: the sidebar's workflow group is collapsed.
+            Assert.False(IsTabVisible(window, "4 · Upscaling"));
 
             vm.StartDedupRouteCommand.Execute(null);
-            Assert.True(IsTabVisible(window, "🧹 Deduplication"));
-            Assert.False(IsTabVisible(window, "✨ Upscaling"));   // dedup owns the wizard
+            Assert.True(IsTabVisible(window, "4 · Deduplication"));
+            Assert.False(IsTabVisible(window, "4 · Upscaling"));   // dedup owns the wizard
 
             vm.StartUpscaleRouteCommand.Execute(null);
-            Assert.True(IsTabVisible(window, "✨ Upscaling"));
-            Assert.False(IsTabVisible(window, "🧹 Deduplication")); // upscale owns the wizard
-            Assert.False(IsTabVisible(window, "2 · Engine"));
+            Assert.True(IsTabVisible(window, "4 · Upscaling"));
+            Assert.False(IsTabVisible(window, "4 · Deduplication")); // upscale owns the wizard
+            Assert.False(IsTabVisible(window, "4 · Process"));
 
             vm.StartTaggingRouteCommand.Execute(null);
-            Assert.True(IsTabVisible(window, "✨ Upscaling"));     // reachable from Results
-            Assert.True(IsTabVisible(window, "🧹 Deduplication"));
-            Assert.True(IsTabVisible(window, "2 · Engine"));
+            // Switching operation stays one click away (the mode headers), while
+            // the other operations' run steps appear only when they own the wizard.
+            Assert.True(IsTabVisible(window, "✨  Upscale"));
+            Assert.True(IsTabVisible(window, "🧹  Dedup"));
+            Assert.True(IsTabVisible(window, "4 · Process"));
+            Assert.False(IsTabVisible(window, "4 · Upscaling"));
+            Assert.False(IsTabVisible(window, "4 · Deduplication"));
         }
         finally
         {

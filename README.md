@@ -211,17 +211,37 @@ Synapic.Net/
 
 │   │   │   ├── MainWindow.axaml
 
+│   │   │   ├── MainLayout.axaml        # header / sidebar / content / footer / log
+
 │   │   │   ├── Wizard/
 
-│   │   │   │   ├── Step1_Datasource.axaml
+│   │   │   │   ├── Step1Datasource.axaml   # 1 · Source & model
 
-│   │   │   │   ├── Step2_Engine.axaml
+│   │   │   │   ├── EngineModelPicker.axaml # compact model + device picker
 
-│   │   │   │   ├── Step3_Process.axaml
+│   │   │   │   ├── Step2TagSettings.axaml  # 3 · Settings (summary)
 
-│   │   │   │   ├── Step4_Results.axaml
+│   │   │   │   ├── Step2Engine.axaml       # the tagging settings form (dialog)
 
-│   │   │   │   └── StepDedup.axaml
+│   │   │   │   ├── Step3Process.axaml      # 4 · Process
+
+│   │   │   │   ├── Step4Results.axaml      # 5 · Results
+
+│   │   │   │   ├── StepDedup.axaml         # 4 · Deduplication
+
+│   │   │   │   ├── DedupSettingsPanel.axaml
+
+│   │   │   │   ├── StepUpscale.axaml       # 4 · Upscaling
+
+│   │   │   │   └── UpscaleSettingsPanel.axaml
+
+│   │   │   └── Settings/               # the per-operation settings dialogs
+
+│   │   │       ├── EngineSettingsDialog.axaml
+
+│   │   │       ├── DedupSettingsDialog.axaml
+
+│   │   │       └── UpscaleSettingsDialog.axaml
 
 │   │   │   └── Controls/           # Reusable: ProgressRing, LogViewer, ModelPicker, etc.
 

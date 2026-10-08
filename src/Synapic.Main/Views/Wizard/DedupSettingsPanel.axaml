@@ -1,0 +1,63 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Synapic.Main.ViewModels.Steps"
+             xmlns:help="using:Synapic.Main.Services"
+             x:Class="Synapic.Main.Views.Wizard.DedupSettingsPanel"
+             x:DataType="vm:StepDedupViewModel">
+
+  <!-- The deduplication settings: how the scan compares images, and which rule
+       drives the keep-set. They used to sit inline above the results, which
+       pushed the group list down and clipped the rule hint off the card at
+       anything under 1280. The review page keeps the review, the scan and the
+       apply; the rules live here. -->
+  <StackPanel Spacing="12">
+
+    <Border Classes="card settingsCard" Padding="16"
+            help:HelpScope.Topic="settings-reference.html#dedup-algorithm">
+      <StackPanel Spacing="8">
+        <TextBlock Classes="sectionTitle" Text="Scan" />
+
+        <WrapPanel>
+          <TextBlock Classes="fieldLabel" Text="Algorithm:" Margin="0,0,8,8" />
+          <ComboBox SelectedIndex="{Binding SelectedAlgorithm}" ItemsSource="{Binding Algorithms}"
+                    MinWidth="140" Margin="0,0,16,8" />
+          <TextBlock Classes="fieldLabel" Text="Threshold:" Margin="0,0,8,8" />
+          <NumericUpDown Value="{Binding Threshold}" Minimum="0.5" Maximum="1"
+                         Increment="0.01" Width="110" Margin="0,0,16,8"
+                         help:HelpScope.Topic="settings-reference.html#dedup-threshold"
+                         ToolTip.Tip="How close two images have to be to count as duplicates (0.90 = near-identical)." />
+        </WrapPanel>
+
+        <WrapPanel>
+          <TextBlock Classes="fieldLabel" Text="Server hash:" Margin="0,0,8,8"
+                     IsVisible="{Binding IsDaminion}"
+                     help:HelpScope.Topic="settings-reference.html#dedup-server-hash" />
+          <ComboBox SelectedIndex="{Binding SelectedServerHashMatch, Mode=TwoWay}"
+                    ItemsSource="{Binding ServerHashMatches}" MinWidth="140"
+                    Margin="0,0,16,8"
+                    IsVisible="{Binding IsDaminion}"
+                    help:HelpScope.Topic="settings-reference.html#dedup-server-hash" />
+        </WrapPanel>
+
+        <TextBlock Classes="hint" Text="{Binding ServerHashMatchHint}" IsVisible="{Binding IsDaminion}" />
+      </StackPanel>
+    </Border>
+
+    <Border Classes="card settingsCard" Padding="16"
+            help:HelpScope.Topic="settings-reference.html#dedup-autoselect">
+      <StackPanel Spacing="8">
+        <TextBlock Classes="sectionTitle" Text="Keep-set rules" />
+        <TextBlock Classes="hint"
+                   Text="Ticking a rule drives every group's keep checkboxes: checked items are kept, the unchecked duplicates get the action." />
+
+        <!-- Auto-select rules: tick these to drive every group's keep checkboxes. -->
+        <WrapPanel>
+          <CheckBox Content="Oldest" IsChecked="{Binding SelectOldest}" Margin="0,0,16,8" />
+          <CheckBox Content="Newest" IsChecked="{Binding SelectNewest}" Margin="0,0,16,8" />
+          <CheckBox Content="Smallest" IsChecked="{Binding SelectSmallest}" Margin="0,0,16,8" />
+          <CheckBox Content="Largest" IsChecked="{Binding SelectLargest}" Margin="0,0,16,8" />
+        </WrapPanel>
+      </StackPanel>
+    </Border>
+  </StackPanel>
+</UserControl>

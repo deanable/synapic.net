@@ -168,4 +168,49 @@ public class Step2EngineTests
         Assert.True(fields.Category);
         Assert.True(fields.Description);
     }
+
+    /// <summary>
+    /// The model's sensitivity settings are sliders, not number pickers: a drag
+    /// has to write through to the view model (and to the session the run
+    /// reads), and the readout beside the slider has to show the value that was
+    /// dragged to. A OneWay binding would leave the batch tagging at the old
+    /// threshold while the slider shows the new one.
+    /// </summary>
+    [AvaloniaFact]
+    public void Sensitivity_sliders_write_through_to_the_view_model()
+    {
+        var session = new Session();
+        var vm = new Step2EngineViewModel(session, new FakeSidecar());
+        var view = new Step2Engine { DataContext = vm };
+        var window = new Window { Content = view };
+        window.Show();
+        try
+        {
+            var confidence = view.FindControl<Slider>("ConfidenceThresholdSlider");
+            var probability = view.FindControl<Slider>("ProbabilityThresholdSlider");
+            Assert.NotNull(confidence);   // still sliders, not number pickers
+            Assert.NotNull(probability);
+
+            Assert.Equal(0.3, confidence!.Value, 3);    // the session defaults
+            Assert.Equal(0.5, probability!.Value, 3);
+
+            confidence.Value = 0.75;                    // exactly what a drag produces
+            probability.Value = 0.25;
+
+            Assert.Equal(0.75, vm.ConfidenceThreshold, 3);
+            Assert.Equal(0.75, session.Engine.ConfidenceThreshold, 3);
+            Assert.Equal(0.25, vm.ProbabilityThreshold, 3);
+            Assert.Equal(0.25, session.Engine.ProbabilityThreshold, 3);
+
+            // The readout beside each slider reports the value it was set to.
+            Assert.Equal(0.75.ToString("0.00"),
+                view.FindControl<TextBlock>("ConfidenceThresholdValue")!.Text);
+            Assert.Equal(0.25.ToString("0.00"),
+                view.FindControl<TextBlock>("ProbabilityThresholdValue")!.Text);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
 }

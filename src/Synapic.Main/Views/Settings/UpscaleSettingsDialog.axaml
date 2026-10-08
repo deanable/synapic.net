@@ -1,0 +1,39 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Synapic.Main.ViewModels.Steps"
+        xmlns:steps="using:Synapic.Main.Views.Wizard"
+        xmlns:help="using:Synapic.Main.Services"
+        x:Class="Synapic.Main.Views.Settings.UpscaleSettingsDialog"
+        x:DataType="vm:StepUpscaleViewModel"
+        Title="Upscaling Settings"
+        Icon="/Assets/Icon.ico"
+        Width="760" Height="420"
+        MinWidth="600" MinHeight="360"
+        CanResize="True"
+        WindowStartupLocation="CenterOwner"
+        help:HelpScope.Topic="upscale.html">
+
+  <!-- 3 · Settings for the upscaling operation. It hosts the wizard's own
+       StepUpscale view model, so the run page and the dialog cannot disagree;
+       the run page keeps the progress, the Start and the Stop. -->
+  <Grid RowDefinitions="*,Auto">
+
+    <!-- The inset lives on the content (see the tagging settings dialog): a
+         ScrollViewer measures at the un-padded width and arranges at the padded
+         one, and AllowAutoHide=False keeps the bar in the layout on both. -->
+    <ScrollViewer Grid.Row="0" AllowAutoHide="False">
+      <steps:UpscaleSettingsPanel Margin="16,16,16,4" />
+    </ScrollViewer>
+
+    <Border Grid.Row="1" Classes="card" Margin="16,8,16,16" Padding="12,10">
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock Grid.Column="0"
+                   Text="These parameters apply the moment you change them; the run page reports them back before a batch starts."
+                   VerticalAlignment="Center" Opacity="0.7" TextWrapping="Wrap"
+                   Margin="0,0,8,0" />
+        <Button Grid.Column="1" Content="Close" Click="OnClose" MinWidth="90" />
+      </Grid>
+    </Border>
+
+  </Grid>
+</Window>

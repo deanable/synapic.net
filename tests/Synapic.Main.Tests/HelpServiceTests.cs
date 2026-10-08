@@ -546,7 +546,7 @@ public class HelpServiceTests : IDisposable
         yield return HelpTopics.SetupGuide;
         yield return HelpTopics.SettingsReference;
         yield return HelpTopics.Tips;
-        for (var step = 0; step <= 4; step++) yield return HelpTopics.ForStepIndex(step);
+        for (var step = 0; step <= 5; step++) yield return HelpTopics.ForStepIndex(step);
     }
 
     /// <summary>The [FILES] entries of the .hhp - the list that decides what is compiled into the .chm.</summary>

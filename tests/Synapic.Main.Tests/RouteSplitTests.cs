@@ -48,7 +48,7 @@ public class RouteSplitTests
     }
 
     [AvaloniaFact]
-    public void Tagging_route_starts_the_four_step_wizard()
+    public void Tagging_route_starts_the_wizard_at_source_and_model()
     {
         var vm = Shell(SourceSession("local", Path.GetTempPath()));
 
@@ -60,7 +60,7 @@ public class RouteSplitTests
         Assert.Equal("Tagging", vm.RouteTitle);
         Assert.Equal(0, vm.Wizard.CurrentStepIndex);
         Assert.True(vm.Wizard.ShowTaggingTabs);
-        Assert.Equal("Next: Engine \u2192", vm.Wizard.NextButtonText);
+        Assert.Equal("Next: Settings \u2192", vm.Wizard.NextButtonText);
         // Deduplication stays a tail-end step of the tagging wizard.
         Assert.False(vm.Wizard.CanGoToDedupTab);
     }
@@ -146,28 +146,33 @@ public class RouteSplitTests
             // bound to the same route commands by design (the sidebar switches mode).
             var tagCard = buttons.Single(b => b.Command == vm.StartTaggingRouteCommand && b.Classes.Contains("routeCard"));
             var dedupCard = buttons.Single(b => b.Command == vm.StartDedupRouteCommand && b.Classes.Contains("routeCard"));
-            var homeButton = buttons.Single(b => b.Command == vm.GoHomeCommand);
+            var operationEntry = buttons.Single(b => b.Command == vm.GoHomeCommand);
             Assert.True(tagCard.IsVisible);
             Assert.True(dedupCard.IsVisible);
 
-            // Hidden on the start screen, shown once a route is active.
-            Assert.False(EffectivelyVisible(homeButton));
-            Assert.False(IsTabVisible(window, "2 · Engine"));
+            // The operation chooser entry ("2 · Operation type") is the way back
+            // to the start screen from inside a route, so it is on screen always;
+            // the sidebar's workflow group only appears once a route is active.
+            Assert.Equal("2 · Operation type", operationEntry.Content);
+            Assert.True(EffectivelyVisible(operationEntry));
+            Assert.False(IsTabVisible(window, "4 · Process"));
+            Assert.False(IsTabVisible(window, "3 · Settings…"));
 
             vm.StartDedupRouteCommand.Execute(null);
-            Assert.True(EffectivelyVisible(homeButton));
-            Assert.False(IsTabVisible(window, "2 · Engine"));      // dedup route: no tagging steps
-            Assert.False(IsTabVisible(window, "3 · Process"));
-            Assert.False(IsTabVisible(window, "4 · Results"));
-            Assert.True(IsTabVisible(window, "🧹 Deduplication"));
-            // The route reads as Datasource → Deduplication, so step 1 is on screen too.
-            Assert.True(IsTabVisible(window, "1 · Datasource"));
+            Assert.False(IsTabVisible(window, "4 · Process"));      // dedup route: no tagging steps
+            Assert.False(IsTabVisible(window, "5 · Results"));
+            Assert.True(IsTabVisible(window, "4 · Deduplication"));
+            Assert.True(IsTabVisible(window, "3 · Settings…"));
+            // The route reads as Source & model → Deduplication, so step 1 is on screen too.
+            Assert.True(IsTabVisible(window, "1 · Source & model"));
 
             vm.StartTaggingRouteCommand.Execute(null);
-            Assert.True(IsTabVisible(window, "2 · Engine"));
-            Assert.True(IsTabVisible(window, "3 · Process"));
-            Assert.True(IsTabVisible(window, "4 · Results"));
-            Assert.True(IsTabVisible(window, "🧹 Deduplication"));
+            Assert.True(IsTabVisible(window, "4 · Process"));
+            Assert.True(IsTabVisible(window, "5 · Results"));
+            // The other operations stay one click away through their mode
+            // headers; their own run steps appear once they own the wizard.
+            Assert.True(IsTabVisible(window, "🧹  Dedup"));
+            Assert.False(IsTabVisible(window, "4 · Deduplication"));
         }
         finally
         {

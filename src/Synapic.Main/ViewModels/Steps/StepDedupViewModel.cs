@@ -227,6 +227,7 @@ public partial class StepDedupViewModel : ViewModelBase
         SelectedAction = 0;
         OnPropertyChanged(nameof(Actions));
         OnPropertyChanged(nameof(DaminionScopeSummary));
+        OnPropertyChanged(nameof(ScanSettingsSummary));
         ScanCommand.NotifyCanExecuteChanged();
         ApplyCommand.NotifyCanExecuteChanged();
     }
@@ -278,7 +279,48 @@ public partial class StepDedupViewModel : ViewModelBase
         : "Hamming distance at the threshold, the way algorithmic hashes compare.";
 
     partial void OnSelectedServerHashMatchChanged(int value)
-        => OnPropertyChanged(nameof(ServerHashMatchHint));
+    {
+        OnPropertyChanged(nameof(ServerHashMatchHint));
+        OnPropertyChanged(nameof(ScanSettingsSummary));
+    }
+
+    partial void OnSelectedAlgorithmChanged(int value) => OnPropertyChanged(nameof(ScanSettingsSummary));
+
+    partial void OnThresholdChanged(double value) => OnPropertyChanged(nameof(ScanSettingsSummary));
+
+    /// <summary>
+    /// Read-back of the scan rules for the review page: those rules live in the
+    /// settings dialog now, and a scan started from a rule line the user cannot
+    /// see is a scan nobody can explain afterwards.
+    /// </summary>
+    public string ScanSettingsSummary
+    {
+        get
+        {
+            var algorithm = Algorithms[Math.Clamp(SelectedAlgorithm, 0, Algorithms.Length - 1)];
+
+            var keep = new List<string>();
+            if (SelectOldest) keep.Add("oldest");
+            if (SelectNewest) keep.Add("newest");
+            if (SelectSmallest) keep.Add("smallest");
+            if (SelectLargest) keep.Add("largest");
+            var keepText = keep.Count == 0 ? "keep-set by hand" : $"keep {string.Join(" + ", keep)}";
+
+            var server = IsDaminion
+                ? $" · server hash: {ServerHashMatches[Math.Clamp(SelectedServerHashMatch, 0, ServerHashMatches.Length - 1)]}"
+                : "";
+
+            return $"{algorithm} · threshold {Threshold:0.00} · {keepText}{server}";
+        }
+    }
+
+    // ── The settings dialog (3 · Settings) ──────────────────────────────────
+
+    /// <summary>Shell hook: opens this view model's settings dialog (set by the shell).</summary>
+    public Action? OpenSettingsRequested { get; set; }
+
+    [RelayCommand]
+    private void OpenSettings() => OpenSettingsRequested?.Invoke();
 
     public string[] LocalActions { get; } = { "Tag", "Move", "Delete" };
 
@@ -314,13 +356,20 @@ public partial class StepDedupViewModel : ViewModelBase
     [ObservableProperty]
     private bool _selectLargest;
 
-    partial void OnSelectOldestChanged(bool value) => ApplyAutoSelection();
+    partial void OnSelectOldestChanged(bool value) => RuleChanged();
 
-    partial void OnSelectNewestChanged(bool value) => ApplyAutoSelection();
+    partial void OnSelectNewestChanged(bool value) => RuleChanged();
 
-    partial void OnSelectSmallestChanged(bool value) => ApplyAutoSelection();
+    partial void OnSelectSmallestChanged(bool value) => RuleChanged();
 
-    partial void OnSelectLargestChanged(bool value) => ApplyAutoSelection();
+    partial void OnSelectLargestChanged(bool value) => RuleChanged();
+
+    /// <summary>A keep-set rule moved: recompute the checkboxes and the read-back.</summary>
+    private void RuleChanged()
+    {
+        ApplyAutoSelection();
+        OnPropertyChanged(nameof(ScanSettingsSummary));
+    }
 
     /// <summary>
     /// Recompute every group's checkboxes from the active rule set:

@@ -34,14 +34,21 @@ public class MainLayoutShellTests
             var vm = (MainWindowViewModel)window.DataContext!;
             var buttons = window.GetVisualDescendants().OfType<Button>().ToList();
 
-            // Header: the source profile is on screen without entering a flow,
-            // and the settings entry point is there exactly once.
+            // Header: the source profile is on screen without entering a flow.
             Assert.NotEmpty(window.GetVisualDescendants().OfType<SourceStatusStrip>());
-            Assert.Single(buttons, b => b.Command == vm.OpenSettingsCommand);
 
-            // Sidebar: one Dashboard entry, and every mode header reachable both
-            // from the start-screen cards and from the sidebar.
+            // 3 · Settings has three entry points — header, sidebar and the
+            // action bar — and all of them are wired (a broken binding leaves
+            // Command null, which looks fine until somebody clicks it).
+            var settings = buttons.Where(b => b.Command == vm.OpenSettingsCommand).ToList();
+            Assert.Equal(3, settings.Count);
+            Assert.All(settings, b => Assert.NotNull(b.Command));
+
+            // Sidebar: one operation-chooser entry (the way back to the start
+            // screen), and every mode header reachable both from the start-screen
+            // cards and from the sidebar.
             Assert.Single(buttons, b => b.Command == vm.GoHomeCommand);
+            Assert.Equal("2 · Operation type", buttons.Single(b => b.Command == vm.GoHomeCommand).Content);
             Assert.Equal(2, buttons.Count(b => b.Command == vm.StartTaggingRouteCommand));
             Assert.Equal(2, buttons.Count(b => b.Command == vm.StartDedupRouteCommand));
             Assert.Equal(2, buttons.Count(b => b.Command == vm.StartUpscaleRouteCommand));
@@ -86,19 +93,28 @@ public class MainLayoutShellTests
             vm.StartTaggingRouteCommand.Execute(null);
             var buttons = window.GetVisualDescendants().OfType<Button>().ToList();
 
-            var engine = Assert.Single(buttons, b => (b.Content as string) == "2 · Engine");
-            Assert.True(EffectivelyVisible(engine));
-            Assert.DoesNotContain("active", engine.Classes);
+            var sourceEntry = Assert.Single(buttons, b => (b.Content as string) == "1 · Source & model");
+            var settingsEntry = Assert.Single(buttons, b => (b.Content as string) == "3 · Settings…");
+            var process = Assert.Single(buttons, b => (b.Content as string) == "4 · Process");
+            Assert.True(EffectivelyVisible(process));
+            Assert.DoesNotContain("active", process.Classes);
+            Assert.Contains("active", sourceEntry.Classes);   // the route opens on it
 
-            // Enter the engine step: the sidebar entry lights up (§6.4).
+            // Enter the settings page: the sidebar entry for it lights up (§6.4),
+            // source & model stops being the current one, and the run step becomes
+            // reachable (that is the step Next leaves for).
             vm.Wizard.GoToStep2Command.Execute(null);
             Assert.Same(vm.Wizard.Step2, vm.Wizard.CurrentStep);
-            Assert.Contains("active", engine.Classes);
+            Assert.Contains("active", settingsEntry.Classes);
+            Assert.DoesNotContain("active", sourceEntry.Classes);
+            Assert.True(vm.Wizard.CanGoToStep3Tab);
+            Assert.True(process.IsEnabled);
 
             // Leaving it clears the highlight again.
             vm.Wizard.GoToStep1Command.Execute(null);
             Assert.Same(vm.Wizard.Step1, vm.Wizard.CurrentStep);
-            Assert.DoesNotContain("active", engine.Classes);
+            Assert.DoesNotContain("active", settingsEntry.Classes);
+            Assert.Contains("active", sourceEntry.Classes);
         }
         finally
         {

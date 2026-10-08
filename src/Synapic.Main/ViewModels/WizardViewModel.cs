@@ -30,6 +30,10 @@ public partial class WizardViewModel : ViewModelBase
 
         Step1 = new Step1DatasourceViewModel(session, connectionStore);
         Step2 = new Step2EngineViewModel(session, sidecar, engineStore, presetStore);
+        // Step 1 is "1 · Source & model": it renders the model picker over the
+        // engine's own view model, so the picker and the settings dialog edit
+        // one thing.
+        Step1.Engine = Step2;
         Step3 = new Step3ProcessViewModel(session, sidecar, Step1);
         Step4 = new Step4ResultsViewModel(session, Step1, Step3);
         Dedup = new StepDedupViewModel(step1: Step1);
@@ -209,7 +213,13 @@ public partial class WizardViewModel : ViewModelBase
 
     /// <summary>Tab enablement: you can only jump forward to steps you've reached.</summary>
     public bool CanGoToStep2Tab => !IsDedupRoute && CurrentStepIndex >= 1;
-    public bool CanGoToStep3Tab => !IsDedupRoute && CurrentStepIndex >= 2;
+
+    /// <summary>
+    /// Process is reachable from the settings page (step 2 of the tagging flow):
+    /// that is the step Next leaves for, and nothing there needs the run to have
+    /// started already — Start itself is gated on the tag fields instead.
+    /// </summary>
+    public bool CanGoToStep3Tab => !IsDedupRoute && CurrentStepIndex >= 1;
     public bool CanGoToStep4Tab => !IsDedupRoute && CurrentStepIndex >= 3;
     public bool CanStartOver => CurrentStepIndex > 0;
 
@@ -224,7 +234,7 @@ public partial class WizardViewModel : ViewModelBase
     {
         0 => IsDedupRoute ? "Next: Deduplication \u2192"
             : IsUpscaleRoute ? "Next: Upscaling \u2192"
-            : "Next: Engine \u2192",
+            : "Next: Settings \u2192",
         1 => "Next: Process \u2192",
         2 => "Next: Results \u2192",
         _ => "Start Over",
@@ -263,14 +273,21 @@ public partial class WizardViewModel : ViewModelBase
         Step3.StartCommand.NotifyCanExecuteChanged();
     }
 
+    /// <summary>
+    /// The systematic workflow, in order: 1 source &amp; model, 2 operation type
+    /// (the start screen's chooser), 3 the operation's settings, then the steps
+    /// that operation runs. Step 2 is a screen of the shell, not a wizard step,
+    /// so the numbering here reads 1, 3, 4, 5 — which is exactly what the
+    /// sidebar shows beside it.
+    /// </summary>
     public string CurrentStepTitle => CurrentStepIndex switch
     {
-        0 => "1 · Datasource",
-        1 => "2 · Engine",
-        2 => "3 · Process",
-        3 => "4 · Results",
-        4 => "Deduplication",
-        5 => "Upscaling",
+        0 => "1 · Source & model",
+        1 => "3 · Settings",
+        2 => "4 · Process",
+        3 => "5 · Results",
+        4 => "4 · Deduplication",
+        5 => "4 · Upscaling",
         _ => "",
     };
 

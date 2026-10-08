@@ -48,6 +48,40 @@
       <Setter Property="Foreground" Value="{DynamicResource SynapicDangerBrush}" />
     </Style>
 
+    <!-- ── Type and row rhythm ──────────────────────────────────────────────
+         One title per page, one heading per section, one label style for the
+         inline "Label: [control]" rows. The settings rows in this app are
+         deliberately short; the wrapping ones below carry the "wrap instead of
+         clip" rule, so a row that fits at 1280 cannot push its last control out
+         of the card at 1024. -->
+    <Style Selector="TextBlock.stepTitle">
+      <Setter Property="FontSize" Value="22" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="Margin" Value="0,0,0,4" />
+    </Style>
+    <Style Selector="TextBlock.sectionTitle">
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="FontSize" Value="14" />
+    </Style>
+    <Style Selector="TextBlock.fieldLabel">
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Opacity" Value="0.85" />
+    </Style>
+    <Style Selector="TextBlock.hint">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Opacity" Value="0.7" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <!-- A settings row: children wrap onto the next line instead of running off
+         the card. Child spacing lives on the children (Avalonia's WrapPanel has
+         no Spacing of its own). -->
+    <Style Selector="WrapPanel.settingsRow">
+      <Setter Property="Margin" Value="0,0,0,2" />
+    </Style>
+    <Style Selector="Border.settingsCard">
+      <Setter Property="Margin" Value="0,0,0,12" />
+    </Style>
+
     <!-- ── Sidebar navigation (proposal §2.2.2) ──────────────────────────── -->
     <Style Selector="Button.navItem">
       <Setter Property="HorizontalContentAlignment" Value="Stretch" />
