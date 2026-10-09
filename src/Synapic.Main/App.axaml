@@ -82,8 +82,8 @@
       <Setter Property="Margin" Value="0,0,0,12" />
     </Style>
 
-    <!-- The numbered sidebar's styles (navItem / navItem.active / navMode /
-         navGroup) went with the sidebar itself: navigation is Dashboard ⇄
+    <!-- The numbered sidebar's styles — its item, active-item, mode-header and
+         group classes — went with the sidebar itself: navigation is Dashboard ⇄
          operation now, and the mode's own entry is the dashboard panel. A
          re-introduced sidebar entry would need its styling back, which is the
          point — this phase deletes the chrome rather than hiding it. -->
