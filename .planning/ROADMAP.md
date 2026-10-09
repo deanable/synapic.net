@@ -17,7 +17,7 @@ the legacy navigation. Each phase keeps the app shippable and ends at a hard ver
 ## Phases
 
 - [x] **Phase 1: Extract run state and operation contract** - Pull the copy-pasted run machinery into a shared base; no visible change
-- [~] **Phase 2: Add operation template and dashboard** - One shared three-region layout + 4-panel dashboard the app boots to (waves 1–2 done; pins + audit extension outstanding)
+- [x] **Phase 2: Add operation template and dashboard** - One shared three-region layout + 4-panel dashboard the app boots to (5/5 plans — gate sweep green: all five success criteria ✓)
 - [ ] **Phase 3: Collapse navigation and retire settings dialogs** - Delete the legacy wizard chrome; inline parameters; busy-state fix
 
 ## Phase Details
@@ -81,7 +81,7 @@ duplicate source card and `PrefillDedupSource()`; rewrite the pinned navigation 
   4. `UiLayoutAuditTests` passes at 900×600, 1024×700, 1280×800, 1600×900 for dashboard + all three routes, including the stacked variant
   5. `dotnet build` 0 warnings/errors and the full test suite green (rewritten pins only, no coverage removed)
 
-**Plans:** 4/5 plans executed
+**Plans:** 5/5 plans executed — phase complete (gate sweep 02-05 green: all five success criteria ✓)
 
 Plans:
 
@@ -96,7 +96,7 @@ Plans:
 - [x] `02-04` — Rewrite pinned navigation tests to §10 criteria 1–3; extend layout audit (criterion 5) — suite green at 441 passed / 0 failed
 
 **Wave 4** *(blocked on Wave 3 completion)*
-- [ ] `02-05` — Phase gate sweep (criteria 1, 2, 3, 5, 9 + decision coverage)
+- [x] `02-05` — Phase gate sweep (criteria 1, 2, 3, 5, 9 + decision coverage) — build 0/0, suite 441+5+6 / 0 failed, audit 19/19 at four sizes, coverage 7/7
 
 ### Phase 3: Collapse navigation and retire settings dialogs
 
