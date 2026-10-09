@@ -2,12 +2,11 @@ using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Synapic.Main.Models;
 using Synapic.Main.ViewModels;
-using Synapic.Main.ViewModels.Steps;
 using Synapic.Main.Views;
-using Synapic.Main.Views.Settings;
 using Synapic.Main.Views.Wizard;
 using Xunit;
 
@@ -44,10 +43,10 @@ public class MainLayoutShellTests
             Assert.Equal(new[] { "SettingsPanel", "TagPanel", "DedupPanel", "UpscalePanel" },
                 panels.Select(p => p.Name!).ToArray());
 
-            // 3 · Settings has three entry points — header, sidebar and the
-            // action bar — and all of them are wired (a broken binding leaves
+            // The Settings shortcut has three entry points — header, sidebar and
+            // the action bar — and all of them are wired (a broken binding leaves
             // Command null, which looks fine until somebody clicks it).
-            var settings = buttons.Where(b => b.Command == vm.OpenSettingsCommand).ToList();
+            var settings = buttons.Where(b => b.Command == vm.SettingsCommand).ToList();
             Assert.Equal(3, settings.Count);
             Assert.All(settings, b => Assert.NotNull(b.Command));
 
@@ -129,33 +128,50 @@ public class MainLayoutShellTests
         }
     }
 
+    /// <summary>
+    /// ui-design §10 criterion 4 / D3: the three operation settings dialogs are
+    /// retired. They are gone from the built assembly (a re-introduced dialog
+    /// class fails here, not just a grep), and the tagging form those dialogs
+    /// hosted now lives inline in the operation template's Parameters region —
+    /// inside the main window, in the same view model the step renders.
+    /// </summary>
     [AvaloniaFact]
-    public void Settings_dialog_shows_the_engine_view_over_the_wizards_own_view_model()
+    public void Tagging_parameters_are_inline_in_the_parameters_region_not_a_window()
     {
-        var window = new MainWindow { DataContext = NewShell() };
+        // The tagging route needs a usable source before its settings step opens
+        // (the step gate is the session's, exactly as in the app).
+        var session = new Session();
+        session.Datasource.LocalPath = Path.GetTempPath();
+        var window = new MainWindow { DataContext = NewShell(Path.GetTempPath(), session) };
         window.Show();
-        var dialog = new EngineSettingsDialog { DataContext = window.DataContext is MainWindowViewModel vm ? vm.Wizard.Step2 : null };
-        dialog.Show();
         try
         {
-            // One view model, two views: the dialog edits the same instance the
-            // wizard step renders, so nothing can drift between them.
-            Assert.NotNull(dialog.DataContext);
-            Assert.IsType<Step2EngineViewModel>(dialog.DataContext);
+            var assembly = typeof(MainWindowViewModel).Assembly;
+            Assert.Null(assembly.GetType("Synapic.Main.Views.Settings.EngineSettingsDialog"));
+            Assert.Null(assembly.GetType("Synapic.Main.Views.Settings.DedupSettingsDialog"));
+            Assert.Null(assembly.GetType("Synapic.Main.Views.Settings.UpscaleSettingsDialog"));
 
-            var buttons = dialog.GetVisualDescendants().OfType<Button>().ToList();
-            Assert.Single(buttons, b => (b.Content as string) == "Apply");
-            Assert.Single(buttons, b => (b.Content as string) == "Close");
+            var vm = (MainWindowViewModel)window.DataContext!;
+            vm.StartTaggingRouteCommand.Execute(null);
+            vm.Wizard.GoToStep2Command.Execute(null);
+            Assert.Same(vm.Wizard.Step2, vm.Wizard.CurrentStep);
+            Dispatcher.UIThread.RunJobs();
 
-            // The settings controls really are inside the dialog — model picker,
-            // device, tag fields, prompts.
-            Assert.NotEmpty(dialog.GetVisualDescendants().OfType<ComboBox>());
-            Assert.NotEmpty(dialog.GetVisualDescendants().OfType<CheckBox>());
-            Assert.NotEmpty(dialog.GetVisualDescendants().OfType<TextBox>());
+            // The full form — model, device, tag fields, prompts — is inside the
+            // Parameters region of the same window, not a modal of its own.
+            var parameters = Assert.Single(window.GetVisualDescendants().OfType<Border>(),
+                b => b.Classes.Contains("parametersRegion"));
+            var form = Assert.Single(window.GetVisualDescendants().OfType<Step2Engine>());
+            Assert.Same(vm.Wizard.Step2, form.DataContext);
+            Assert.Contains(form, parameters.GetVisualDescendants().OfType<Control>());
+            Assert.Contains(parameters.GetVisualDescendants().OfType<CheckBox>(),
+                c => c.Name == "TagCategoriesBox");
+
+            // And the window owning it is the shell itself.
+            Assert.Same(window, form.GetVisualAncestors().OfType<Window>().Last());
         }
         finally
         {
-            dialog.Close();
             window.Close();
         }
     }

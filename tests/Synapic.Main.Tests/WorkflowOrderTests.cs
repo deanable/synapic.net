@@ -8,7 +8,6 @@ using Synapic.Main.ViewModels;
 using Synapic.Main.ViewModels.Steps;
 using Synapic.Main.Views;
 using Synapic.Main.Views.Operation;
-using Synapic.Main.Views.Settings;
 using Synapic.Main.Views.Wizard;
 using Xunit;
 
@@ -135,38 +134,127 @@ public class WorkflowOrderTests
     }
 
     /// <summary>
-    /// 3 · Settings is per operation: the shell opens the dialog that owns the
-    /// settings of the operation on screen, over that operation's own view model.
+    /// 3 · Settings is app-wide now (ui-design §5/§6.1, D3): the shell's Settings
+    /// entry point lands on the dashboard's Settings panel and never builds a
+    /// window, because every operation's own parameters live inline in the
+    /// Parameters region of its route (pinned by the two facts below).
     /// </summary>
     [AvaloniaFact]
-    public void Settings_opens_the_dialog_of_the_operation_on_screen()
+    public void Settings_entry_point_opens_the_settings_panel_and_never_a_window()
     {
         var shell = Shell("local", Path.GetTempPath());
+        var window = new MainWindow { DataContext = shell };
+        window.Show();
+        try
+        {
+            var buttons = window.GetVisualDescendants().OfType<Button>().ToList();
 
-        // Nothing chosen yet: the chooser defaults to the tagging settings.
-        var onHome = shell.CreateSettingsDialog();
-        Assert.IsType<EngineSettingsDialog>(onHome);
-        Assert.Same(shell.Wizard.Step2, onHome.DataContext);
-        onHome.Close();
+            // On the dashboard exactly one Settings entry is on screen — the
+            // header shortcut — and it is wired (a broken binding leaves Command
+            // null, which looks fine until somebody clicks it).
+            var entry = Assert.Single(buttons.Where(EffectivelyVisible),
+                b => b.Command == shell.SettingsCommand);
+            Assert.NotNull(entry.Command);
+            Assert.True(entry.Command!.CanExecute(null));
 
-        shell.StartTaggingRouteCommand.Execute(null);
-        var tagging = shell.CreateSettingsDialog();
-        Assert.IsType<EngineSettingsDialog>(tagging);
-        Assert.Same(shell.Wizard.Step2, tagging.DataContext);
-        tagging.Close();
+            // From inside an operation the shortcut goes to the same place: the
+            // dashboard's Settings panel — app-wide settings, one home.
+            shell.StartDedupRouteCommand.Execute(null);
+            Assert.True(shell.IsWizardVisible);
 
-        shell.StartDedupRouteCommand.Execute(null);
-        var dedup = shell.CreateSettingsDialog();
-        Assert.IsType<DedupSettingsDialog>(dedup);
-        Assert.Same(shell.Wizard.Dedup, dedup.DataContext);
-        dedup.Close();
+            shell.SettingsCommand.Execute(null);
+            Dispatcher.UIThread.RunJobs();
 
-        shell.StartUpscaleRouteCommand.Execute(null);
-        var upscale = shell.CreateSettingsDialog();
-        Assert.IsType<UpscaleSettingsDialog>(upscale);
-        Assert.Same(shell.Wizard.Upscale, upscale.DataContext);
-        upscale.Close();
+            Assert.True(shell.IsHomeVisible);
+            Assert.Null(shell.Shell.Current);
+            var settingsPanel = Assert.Single(window.GetVisualDescendants().OfType<Control>(),
+                c => c.Name == "SettingsPanel");
+            Assert.True(EffectivelyVisible(settingsPanel));
+        }
+        finally
+        {
+            window.Close();
+        }
     }
+
+    /// <summary>
+    /// ui-design §10 criterion 4 (with D-02): each operation's parameters are
+    /// reachable inline in the Parameters region of its own route — the region
+    /// really holds that mode's form, bound to the mode's own view model, with no
+    /// window of its own. These are the three forms the retired dialogs hosted.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Every_route_renders_its_parameters_inline_in_the_parameters_region()
+    {
+        // Tagging: the whole engine form (model list, device, tag fields, scoring
+        // and prompts) is the Parameters region.
+        var tagging = Shell("local", Path.GetTempPath());
+        var taggingWindow = new MainWindow { DataContext = tagging };
+        taggingWindow.Show();
+        try
+        {
+            tagging.StartTaggingRouteCommand.Execute(null);
+            tagging.Wizard.GoToStep2Command.Execute(null);
+            Dispatcher.UIThread.RunJobs();
+
+            var form = Assert.Single(taggingWindow.GetVisualDescendants().OfType<Step2Engine>());
+            Assert.Same(tagging.Wizard.Step2, form.DataContext);
+            Assert.Contains(form, ParametersRegion(taggingWindow).GetVisualDescendants()
+                .OfType<Control>());
+            Assert.Contains(form.GetVisualDescendants().OfType<CheckBox>(),
+                c => c.Name == "TagCategoriesBox");
+        }
+        finally
+        {
+            taggingWindow.Close();
+        }
+
+        // Deduplication: the scan rules and keep-set rules panel.
+        var dedup = Shell("daminion", Path.GetTempPath());
+        var dedupWindow = new MainWindow { DataContext = dedup };
+        dedupWindow.Show();
+        try
+        {
+            dedup.StartDedupRouteCommand.Execute(null);
+            await dedup.Wizard.NextCommand.ExecuteAsync(null);
+            Dispatcher.UIThread.RunJobs();
+
+            var panel = Assert.Single(dedupWindow.GetVisualDescendants().OfType<DedupSettingsPanel>());
+            Assert.Same(dedup.Wizard.Dedup, panel.DataContext);
+            Assert.Contains(panel, ParametersRegion(dedupWindow).GetVisualDescendants()
+                .OfType<Control>());
+            Assert.NotEmpty(panel.GetVisualDescendants().OfType<NumericUpDown>());
+        }
+        finally
+        {
+            dedupWindow.Close();
+        }
+
+        // Upscaling: the workflow, factor, precision and output panel.
+        var upscale = Shell("daminion", Path.GetTempPath());
+        var upscaleWindow = new MainWindow { DataContext = upscale };
+        upscaleWindow.Show();
+        try
+        {
+            upscale.StartUpscaleRouteCommand.Execute(null);
+            await upscale.Wizard.NextCommand.ExecuteAsync(null);
+            Dispatcher.UIThread.RunJobs();
+
+            var panel = Assert.Single(upscaleWindow.GetVisualDescendants().OfType<UpscaleSettingsPanel>());
+            Assert.Same(upscale.Wizard.Upscale, panel.DataContext);
+            Assert.Contains(panel, ParametersRegion(upscaleWindow).GetVisualDescendants()
+                .OfType<Control>());
+            Assert.Equal(4, panel.GetVisualDescendants().OfType<ComboBox>().Count());
+        }
+        finally
+        {
+            upscaleWindow.Close();
+        }
+    }
+
+    private static Border ParametersRegion(Window window) =>
+        Assert.Single(window.GetVisualDescendants().OfType<Border>(),
+            b => b.Classes.Contains("parametersRegion"));
 
     /// <summary>
     /// 1 · Source &amp; model renders the model picker over the engine's own view
@@ -198,44 +286,43 @@ public class WorkflowOrderTests
     }
 
     /// <summary>
-    /// Settings live on the dialog, and the pages report them back instead of
-    /// re-asking: the tagging settings page carries no engine form (no tag-field
-    /// checkbox, no model list), while the dialog does.
+    /// The settings page reports them back instead of re-asking: it carries no
+    /// engine form of its own (no tag-field checkbox, no text box), while the same
+    /// view model's form is one region up in Parameters — so the summary is never
+    /// the only view of the state it describes.
     /// </summary>
     [AvaloniaFact]
-    public void Tagging_settings_page_is_a_summary_and_the_dialog_holds_the_form()
+    public void Tagging_settings_page_summarizes_the_form_that_lives_in_the_parameters_region()
     {
         var shell = Shell("local", Path.GetTempPath());
         shell.Wizard.Step2.TagCategories = false;
+        shell.StartTaggingRouteCommand.Execute(null);
+        shell.Wizard.GoToStep2Command.Execute(null);
+        Assert.Same(shell.Wizard.Step2, shell.Wizard.CurrentStep);
 
-        var page = new Step2TagSettings { DataContext = shell.Wizard.Step2 };
-        var host = new Window { Content = page, Width = 1000, Height = 700 };
-        host.Show();
+        var window = new MainWindow { DataContext = shell };
+        window.Show();
         try
         {
+            Dispatcher.UIThread.RunJobs();
+
+            var page = Assert.Single(window.GetVisualDescendants().OfType<Step2TagSettings>());
+            Assert.Same(shell.Wizard.Step2, page.DataContext);
             Assert.Empty(page.GetVisualDescendants().OfType<CheckBox>());
             Assert.Empty(page.GetVisualDescendants().OfType<TextBox>());
 
             var summary = shell.Wizard.Step2.TagFieldSummary;
             Assert.Contains(page.GetVisualDescendants().OfType<TextBlock>(),
                 t => t.Text == summary);
-        }
-        finally
-        {
-            host.Close();
-        }
 
-        var dialog = new EngineSettingsDialog { DataContext = shell.Wizard.Step2 };
-        dialog.Show();
-        try
-        {
-            Assert.NotEmpty(dialog.GetVisualDescendants().OfType<CheckBox>());
-            Assert.NotNull(dialog.GetVisualDescendants().OfType<CheckBox>()
-                .SingleOrDefault(c => c.Name == "TagCategoriesBox"));
+            // That same state is editable in the Parameters region of this window.
+            var form = Assert.Single(window.GetVisualDescendants().OfType<Step2Engine>());
+            Assert.Contains(form.GetVisualDescendants().OfType<CheckBox>(),
+                c => c.Name == "TagCategoriesBox");
         }
         finally
         {
-            dialog.Close();
+            window.Close();
         }
     }
 
@@ -392,7 +479,7 @@ public class WorkflowOrderTests
     /// started from rules nobody can see. These read the real bound strings.
     /// </summary>
     [AvaloniaFact]
-    public void Run_pages_report_the_settings_that_moved_to_the_dialog()
+    public void Run_pages_report_the_settings_that_moved_to_the_parameters_region()
     {
         var shell = Shell("local", Path.GetTempPath());
 

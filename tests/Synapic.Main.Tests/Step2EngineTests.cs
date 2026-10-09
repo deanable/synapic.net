@@ -4,7 +4,6 @@ using Synapic.Main.Models;
 using Synapic.Main.ViewModels.Steps;
 using Synapic.Main.ViewModels;
 using Synapic.Main.Views;
-using Synapic.Main.Views.Settings;
 using Synapic.Main.Views.Wizard;
 using Xunit;
 
@@ -68,35 +67,45 @@ public class Step2EngineTests
     }
 
     /// <summary>
-    /// The settings dialog is a *second* view of the same view model, so the
-    /// device combo now exists twice. Whichever of the three moments pushes a
-    /// null selection (opening, refreshing, closing), the view model must not
-    /// hand a null to <c>get_Device()</c>.
+    /// The engine form is a second host of the same view model inside the shell:
+    /// the compact picker on "1 · Source &amp; model" binds it, then the Parameters
+    /// region's full form binds it, then the form is torn down while the view
+    /// model is still the wizard's. Whichever of those moments pushes a null
+    /// selection (binding, refreshing, unbinding), the view model must not hand a
+    /// null to <c>get_Device()</c>. Replaces the retired settings-dialog pin — the
+    /// dialog was the third host, and it is gone (ui-design D3).
     /// </summary>
     [AvaloniaFact]
-    public void SettingsDialogView_NeverNullsTheDeviceSelection()
+    public void EngineFormInTheOperationTemplate_NeverNullsTheDeviceSelection()
     {
         var session = new Session();
-        var vm = new Step2EngineViewModel(session, new FakeSidecar());
-        var owner = new Window { Content = new Step2Engine { DataContext = vm } };
-        owner.Show();
-
-        var dialog = new EngineSettingsDialog { DataContext = vm };
-        dialog.Show();
+        session.Datasource.LocalPath = System.IO.Path.GetTempPath();
+        var shell = new MainWindowViewModel(new FakeSidecar(), new FakeBuildService(), session,
+            () => null, null, null, _ => null);
+        var window = new MainWindow { DataContext = shell };
+        window.Show();
         try
         {
-            Assert.Equal("cpu", vm.Device);              // after opening
+            var vm = shell.Wizard.Step2;
+            shell.StartTaggingRouteCommand.Execute(null);
+            Assert.Equal("cpu", vm.Device);              // the picker is bound
 
             vm.RefreshDeviceOptions();
             Assert.Equal("cpu", vm.Device);              // after a refresh
+
+            shell.Wizard.GoToStep2Command.Execute(null);
+            Assert.Equal("cpu", vm.Device);              // the full form is bound
+            vm.RefreshDeviceOptions();
+            Assert.Equal("cpu", vm.Device);
+            Assert.NotNull(vm.SelectedDevice);
+
+            shell.Wizard.GoToStep1Command.Execute(null);
+            Assert.Equal("cpu", vm.Device);              // form torn down, picker back
         }
         finally
         {
-            dialog.Close();
+            window.Close();
         }
-
-        Assert.Equal("cpu", vm.Device);                  // after closing
-        owner.Close();
     }
 
     /// <summary>

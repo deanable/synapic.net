@@ -8,7 +8,6 @@ using Avalonia.VisualTree;
 using Synapic.Main.Models;
 using Synapic.Main.ViewModels;
 using Synapic.Main.Views;
-using Synapic.Main.Views.Settings;
 using Xunit;
 
 namespace Synapic.Main.Tests;
@@ -317,17 +316,38 @@ public class UiLayoutAuditTests
         }
     }
 
-    /// <summary>3 · Settings: every operation's dialog is a dense form of its own.</summary>
-    [AvaloniaFact]
-    public void Operation_settings_dialogs_have_no_overlapping_or_clipped_controls()
+    /// <summary>
+    /// The three operation settings dialogs' forms, audited where they live now
+    /// (ui-design D3 / §10 criterion 4): inline in the Parameters region of each
+    /// route, inside the real shell at every audited size. The dialogs were
+    /// audited at the one size each was authored for; inline they have to survive
+    /// all four, beside the two regions under and above them.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData(1600, 900)]
+    [InlineData(1280, 800)]
+    [InlineData(1024, 700)]
+    [InlineData(900, 600)]
+    public async Task Inline_parameters_have_no_overlapping_or_clipped_controls(
+        double width, double height)
     {
-        var shell = Shell("daminion", Path.GetTempPath());
+        // Tagging: the full engine form is the Parameters region.
+        var tagging = Shell("local", Path.GetTempPath());
+        tagging.StartTaggingRouteCommand.Execute(null);
+        tagging.Wizard.GoToStep2Command.Execute(null);
+        Assert.Equal(1, tagging.Wizard.CurrentStepIndex);
+        AuditWindow(new MainWindow { DataContext = tagging }, "Tagging parameters", width, height);
 
-        AuditWindow(new EngineSettingsDialog { DataContext = shell.Wizard.Step2 },
-            "Tagging settings dialog", 980, 760);
-        AuditWindow(new DedupSettingsDialog { DataContext = shell.Wizard.Dedup },
-            "Deduplication settings dialog", 720, 560);
-        AuditWindow(new UpscaleSettingsDialog { DataContext = shell.Wizard.Upscale },
-            "Upscaling settings dialog", 760, 420);
+        // Deduplication: the scan and keep-set rules.
+        var dedup = Shell("local", Path.GetTempPath());
+        dedup.StartDedupRouteCommand.Execute(null);
+        await dedup.Wizard.NextCommand.ExecuteAsync(null);
+        AuditWindow(new MainWindow { DataContext = dedup }, "Dedup parameters", width, height);
+
+        // Upscaling: workflow, factor, precision, output.
+        var upscale = Shell("local", Path.GetTempPath());
+        upscale.StartUpscaleRouteCommand.Execute(null);
+        await upscale.Wizard.NextCommand.ExecuteAsync(null);
+        AuditWindow(new MainWindow { DataContext = upscale }, "Upscale parameters", width, height);
     }
 }
