@@ -175,15 +175,31 @@ public partial class StepDedupViewModel : RunStateViewModel
         _step1 = step1;
         ConfirmAction = confirm;
 
-        // Step 1 connects / re-scopes while the dedup tab may be showing:
-        // re-evaluate Scan/Apply and the scope summary on any Step 1 change.
+        // Step 1 owns the source while the shell hosts both: anything that moves
+        // there (type, folder, connection, scope) moves this step's own gate and
+        // read-backs too.
         if (_step1 is not null)
-            _step1.PropertyChanged += (_, _) =>
-            {
-                ScanCommand.NotifyCanExecuteChanged();
-                ApplyCommand.NotifyCanExecuteChanged();
-                OnPropertyChanged(nameof(DaminionScopeSummary));
-            };
+            _step1.PropertyChanged += (_, e) => OnSharedSourceChanged(e.PropertyName);
+    }
+
+    /// <summary>
+    /// Mirror a shared-source change into this step's gate and read-backs, so a
+    /// source configured anywhere is the source the scan would use (D-02).
+    /// </summary>
+    private void OnSharedSourceChanged(string? propertyName)
+    {
+        switch (propertyName)
+        {
+            case nameof(Step1DatasourceViewModel.DatasourceType):
+                OnDatasourceTypeChanged();
+                break;
+            case nameof(Step1DatasourceViewModel.LocalPath):
+                OnPropertyChanged(nameof(FolderPath));
+                break;
+        }
+        ScanCommand.NotifyCanExecuteChanged();
+        ApplyCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(DaminionScopeSummary));
     }
 
     /// <summary>Modal confirmation hook (message → confirmed?). Set by the view;
@@ -191,14 +207,31 @@ public partial class StepDedupViewModel : RunStateViewModel
     /// file delete alike) — fail closed.</summary>
     public Func<string, Task<bool>>? ConfirmAction { get; set; }
 
-    // ── Source (local vs Daminion — same radio pattern as Step 1) ───────────
+    // ── Source (local vs Daminion) ──────────────────────────────────────────
+    // The source is shared, not dedup's own: with a Step 1 in the shell every
+    // read and write below goes through that one instance (D-02 — one source of
+    // truth, the same one the Region A strip shows). The private fields here are
+    // only the standalone fallback for hosts that have no Step 1 (unit tests).
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsLocal))]
-    [NotifyPropertyChangedFor(nameof(IsDaminion))]
-    [NotifyPropertyChangedFor(nameof(IsLocalSelected))]
-    [NotifyPropertyChangedFor(nameof(IsDaminionSelected))]
     private string _datasourceType = "local";
+
+    /// <summary>The shared source's type; writes go through to Step 1.</summary>
+    public string DatasourceType
+    {
+        get => _step1?.DatasourceType ?? _datasourceType;
+        set
+        {
+            if (_step1 is not null)
+            {
+                // Step 1's own change notification runs OnSharedSourceChanged.
+                _step1.DatasourceType = value;
+                return;
+            }
+            if (_datasourceType == value) return;
+            _datasourceType = value;
+            OnDatasourceTypeChanged();
+        }
+    }
 
     public bool IsLocal => DatasourceType == "local";
 
@@ -223,8 +256,14 @@ public partial class StepDedupViewModel : RunStateViewModel
         }
     }
 
-    partial void OnDatasourceTypeChanged(string value)
+    /// <summary>Everything that depends on which source the scan would read.</summary>
+    private void OnDatasourceTypeChanged()
     {
+        OnPropertyChanged(nameof(DatasourceType));
+        OnPropertyChanged(nameof(IsLocal));
+        OnPropertyChanged(nameof(IsDaminion));
+        OnPropertyChanged(nameof(IsLocalSelected));
+        OnPropertyChanged(nameof(IsDaminionSelected));
         SelectedAction = 0;
         OnPropertyChanged(nameof(Actions));
         OnPropertyChanged(nameof(DaminionScopeSummary));
@@ -242,8 +281,26 @@ public partial class StepDedupViewModel : RunStateViewModel
 
     // ── Scan settings ───────────────────────────────────────────────────────
 
-    [ObservableProperty]
     private string _folderPath = "";
+
+    /// <summary>The shared folder (Step 1's local path); writes go through to it.</summary>
+    public string FolderPath
+    {
+        get => _step1?.LocalPath ?? _folderPath;
+        set
+        {
+            if (_step1 is not null)
+            {
+                // Step 1's own change notification runs OnSharedSourceChanged.
+                _step1.LocalPath = value;
+                return;
+            }
+            if (_folderPath == value) return;
+            _folderPath = value;
+            OnPropertyChanged(nameof(FolderPath));
+            ScanCommand.NotifyCanExecuteChanged();
+        }
+    }
 
     [ObservableProperty]
     private int _selectedAlgorithm; // index into Algorithms
@@ -884,8 +941,6 @@ public partial class StepDedupViewModel : RunStateViewModel
     /// <summary>Human label of the local action for log lines (Tag/Move/Delete).</summary>
     private string SelectedActionLabel() =>
         LocalActions[Math.Clamp(SelectedAction, 0, LocalActions.Length - 1)];
-
-    partial void OnFolderPathChanged(string value) => ScanCommand.NotifyCanExecuteChanged();
 
     /// <summary>
     /// The dedup view's run controls: the Scan command (also this mode's primary

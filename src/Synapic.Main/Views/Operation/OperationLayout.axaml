@@ -6,6 +6,7 @@
              xmlns:steps="using:Synapic.Main.Views.Wizard"
              xmlns:help="using:Synapic.Main.Services"
              x:Class="Synapic.Main.Views.Operation.OperationLayout"
+             x:Name="OperationLayoutRoot"
              x:DataType="vm:ViewModelBase">
 
   <!-- One layout for every mode (docs/ui-design.md §2.2/§3, D-01): three regions
@@ -18,16 +19,23 @@
   <StackPanel Spacing="12" Classes="operationLayout">
 
     <!-- ── Region A · Data source (full-width, top of the form) ────────────── -->
-    <!-- An empty slot until the shared DataSourceStrip lands (plan 02-02): the
-         strip becomes the one place the source is shown and edited, and the
-         legacy per-step source panels go away with it. -->
+    <!-- One shared source, passed in by the host (SharedSource) and rendered by
+         the same strip on every route: the source configured once is the source
+         every mode shows and runs on (D-02/D4). -->
     <Border Classes="card settingsCard dataSourceRegion" Padding="16"
             help:HelpScope.Topic="step1-datasource.html">
       <StackPanel Spacing="8">
         <TextBlock Classes="sectionTitle" Text="Data source" />
         <TextBlock Classes="hint" TextWrapping="Wrap"
                    Text="Local folder or Daminion catalog, its scope and the record count — one source for every operation." />
-        <ContentControl x:Name="DataSourceHost" />
+        <ContentControl x:Name="DataSourceHost"
+                        Content="{Binding #OperationLayoutRoot.SharedSource}">
+          <ContentControl.DataTemplates>
+            <DataTemplate DataType="vms:Step1DatasourceViewModel">
+              <op:DataSourceStrip />
+            </DataTemplate>
+          </ContentControl.DataTemplates>
+        </ContentControl>
       </StackPanel>
     </Border>
 

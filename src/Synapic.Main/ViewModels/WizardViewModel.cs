@@ -182,19 +182,6 @@ public partial class WizardViewModel : ViewModelBase
         GoToUpscaleCommand.NotifyCanExecuteChanged();
     }
 
-    /// <summary>
-    /// Push the Step 1 source choice onto the dedup step so the route carries
-    /// what the user just picked: Daminion → catalog source, local → the folder
-    /// (an existing folder typed straight into the dedup step is never clobbered).
-    /// </summary>
-    private void PrefillDedupSource()
-    {
-        var daminion = string.Equals(_session.Datasource.Type, "daminion", StringComparison.OrdinalIgnoreCase);
-        Dedup.DatasourceType = daminion ? "daminion" : "local";
-        if (!daminion && !string.IsNullOrWhiteSpace(_session.Datasource.LocalPath))
-            Dedup.FolderPath = _session.Datasource.LocalPath;
-    }
-
     [ObservableProperty]
     private ObservableObject _currentStep;
 
@@ -341,8 +328,8 @@ public partial class WizardViewModel : ViewModelBase
                 if (IsDedupRoute)
                 {
                     // Deduplication route: the datasource step exists purely to
-                    // feed the dedup scan, so Next skips Engine/Process/Results.
-                    PrefillDedupSource();
+                    // feed the dedup scan, and the scan reads the shared source
+                    // straight off Step 1 — nothing to copy over (D-02).
                     await EnterStepAsync(Dedup);
                     break;
                 }
@@ -438,10 +425,10 @@ public partial class WizardViewModel : ViewModelBase
         if (IsDedupRoute)
         {
             // Same gate as Next on Step 1: the dedup step needs a source, and
-            // the scope it uses is the one chosen right here.
+            // the scope it uses is the one chosen right here — read straight off
+            // the shared source, no copy to keep in sync (D-02).
             var (valid, error) = _session.ValidateForStep2();
             if (!valid) { ValidationError = error; return; }
-            PrefillDedupSource();
         }
         _ = EnterStepAsync(Dedup);
     }

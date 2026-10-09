@@ -294,7 +294,8 @@
              as they are (Phase 3 removes them). -->
         <ScrollViewer IsEnabled="{Binding IsWorkspaceEnabled}"
                       IsVisible="{Binding IsWizardVisible}">
-          <op:OperationLayout DataContext="{Binding Wizard.CurrentStep}" />
+          <op:OperationLayout DataContext="{Binding Wizard.CurrentStep}"
+                              SharedSource="{Binding Wizard.Step1}" />
         </ScrollViewer>
       </Grid>
 

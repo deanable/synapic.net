@@ -14,32 +14,9 @@
     <TextBlock Classes="hint"
                Text="Scan rules and the keep-set rule live in ⚙ Settings; the scan, the review and the apply happen here." />
 
-    <!-- Source: local folder vs the Step 1 Daminion scope (the same choice as
-         step 1 makes, offered here so a scan can cover a different folder). -->
-    <Border Classes="card settingsCard" Padding="16" help:HelpScope.Topic="dedup.html">
-      <StackPanel Spacing="8">
-        <TextBlock Classes="sectionTitle" Text="Source to scan" />
-
-        <WrapPanel>
-          <RadioButton Content="Local Folder" GroupName="dedupds"
-                       IsChecked="{Binding IsLocalSelected}" Margin="0,0,16,8" />
-          <RadioButton Content="Daminion Catalog" GroupName="dedupds"
-                       IsChecked="{Binding IsDaminionSelected}" Margin="0,0,16,8" />
-        </WrapPanel>
-
-        <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding IsLocal}"
-              help:HelpScope.Topic="settings-reference.html#dedup-folder">
-          <TextBox Watermark="Folder to scan" Text="{Binding FolderPath}" />
-          <Button Grid.Column="1" Content="Browse…" Click="OnBrowseFolder" Margin="8,0,0,0" />
-        </Grid>
-
-        <StackPanel Spacing="4" IsVisible="{Binding IsDaminion}">
-          <TextBlock Text="{Binding DaminionScopeSummary}" FontWeight="SemiBold" TextWrapping="Wrap" />
-          <TextBlock Classes="hint"
-                     Text="The catalog scope is chosen in 1 · Source &amp; model — items the catalog already hashed are compared without downloading; the rest are downloaded one at a time and hashed." />
-        </StackPanel>
-      </StackPanel>
-    </Border>
+    <!-- The source the scan runs on comes from the shared data-source strip
+         (Region A): one source, configured once, shown identically in every
+         mode — this page no longer offers a second, dedup-only source. -->
 
     <!-- The scan, with its rules read back from the settings dialog. -->
     <Border Classes="card settingsCard" Padding="16">

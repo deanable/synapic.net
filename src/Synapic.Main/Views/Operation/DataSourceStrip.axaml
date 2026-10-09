@@ -1,0 +1,44 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Synapic.Main.ViewModels.Steps"
+             xmlns:steps="using:Synapic.Main.Views.Wizard"
+             xmlns:help="using:Synapic.Main.Services"
+             x:Class="Synapic.Main.Views.Operation.DataSourceStrip"
+             x:DataType="vm:Step1DatasourceViewModel"
+             help:HelpScope.Topic="step1-datasource.html">
+
+  <!-- Region A of the operation template (docs/ui-design.md §4.1, decisions
+       D-02/D4): the one shared source, shown identically in every mode. It is a
+       read-back, not a second source: there is exactly one instance of this
+       state in the app, it is configured once (dashboard → Settings), and these
+       are direct bindings onto that same view model — nothing is copied, cached
+       or re-asked here.
+
+       A source that is not usable yet says so in the profile lines (the two
+       lights and their text), which is where §4.1 requires source problems to
+       surface: the Resync button simply stays disabled until there is something
+       to ask. -->
+  <Grid ColumnDefinitions="*,Auto">
+
+    <StackPanel Grid.Column="0" Spacing="4" Margin="0,0,12,0">
+      <steps:SourceStatusStrip MaxWidth="640" HorizontalAlignment="Left" />
+      <TextBlock Classes="hint" IsVisible="{Binding IsDaminion}"
+                 TextTrimming="CharacterEllipsis"
+                 Text="{Binding ScopeDescription, StringFormat='Scope: {0}'}" />
+    </StackPanel>
+
+    <!-- Record count in scope (ui-design §4.1: "record count in scope (Resync)").
+         The count keeps itself current on launch, on connect and on every scope,
+         filter or folder change, so the button is only a re-ask. -->
+    <WrapPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right">
+      <ProgressBar IsIndeterminate="True" Width="80" Height="6" VerticalAlignment="Center"
+                   IsVisible="{Binding IsCounting}" Margin="0,0,12,0" />
+      <TextBlock Text="{Binding CountText}" VerticalAlignment="Center" FontSize="12"
+                 FontWeight="SemiBold" MaxWidth="260" TextTrimming="CharacterEllipsis"
+                 IsVisible="{Binding CountText}" Margin="0,0,12,0" />
+      <Button Content="Resync" Command="{Binding CountCommand}"
+              VerticalAlignment="Center"
+              ToolTip.Tip="The count keeps itself current; press this to ask the source again." />
+    </WrapPanel>
+  </Grid>
+</UserControl>
