@@ -7,10 +7,16 @@ namespace Synapic.Main.ViewModels.Operations;
 
 /// <summary>
 /// The shell's navigation state (CONTEXT D-03): <see cref="Current"/> is null on
-/// the dashboard and names the one open operation otherwise. It is deliberately
-/// the only answer to "which operation is open" — the dashboard's panels, the
-/// existing route commands and the help scope all read the same value, so the
-/// strangler window cannot grow a second navigation model.
+/// the dashboard and names the one open operation otherwise, so a second
+/// navigation model cannot grow during the strangler window.
+///
+/// Who writes and who reads, as it stands: the route machine is still the entry
+/// point — <c>MainWindowViewModel</c>'s route methods call <see cref="SetCurrent"/>,
+/// and the dashboard panels bind those same route commands — while the readers
+/// today are the navigation pins in the tests. <see cref="Open"/> and
+/// <see cref="Home"/> are the surface Phase 3 renders the panels and the Home
+/// entry through once the sidebar it duplicates is deleted; nothing binds them
+/// yet, and the help scope reads <c>ContextHelpTopic</c>, not this state.
 /// </summary>
 public partial class ShellViewModel : ViewModelBase
 {
@@ -51,7 +57,8 @@ public partial class ShellViewModel : ViewModelBase
 
     /// <summary>
     /// Opens an operation the way a dashboard panel does: through the existing
-    /// route machine, which is also what sets <see cref="Current"/>.
+    /// route machine, which is also what sets <see cref="Current"/>. Reserved for
+    /// Phase 3 — today's panels bind the route commands directly.
     /// </summary>
     public void Open(string key)
     {

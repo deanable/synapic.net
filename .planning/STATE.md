@@ -80,11 +80,13 @@ Recent decisions affecting current work:
 - [Phase 02]: Navigation pins are renames-with-increases, not silent rewrites — each old fact name maps to its replacement in 02-04-SUMMARY.md, and the invalidated D6 gating fact is replaced by one asserting both halves (entry free, run gated with a reason)
 - [Phase 02]: Region order is pinned twice — document order in the functional tests (criterion 2), geometry in the audit facts — because document order alone cannot catch a region laid out in the wrong place
 - [Phase 02]: The gate sweep's `PrefillDedupSource` check is recorded source-only (`--include=*.cs --include=*.axaml`): the bare grep also matches stale gitignored DLLs under `bin/obj/`, which are build outputs, not code — Phase 3's chrome-deletion greps should refine the same way and say so
+- [Phase 02]: A `ContentControl` whose content matches no `DataTemplate` prints the content's `ToString()`, so every region host ends with a last, inheritance-matching empty `DataTemplate` (region hosts may render nothing, never a type name) — a new step view model that lands without a template now fails `No_step_renders_a_view_model_type_name_as_text` instead of shipping
+- [Phase 02]: `ShellViewModel.Open`/`Home`/`Operations` have no caller yet (the panels bind the route commands; help reads `ContextHelpTopic`) — they are Phase 3's rendered-navigation surface, and `Shell.Current` is written by the route machine, so Phase 3 should make Shell the entry point and let `Route` go
 
 ## Session Continuity
 
-Last session: 2026-10-09T16:05:00.000Z
-Stopped at: Completed 02-05-PLAN.md (Phase 2 complete)
+Last session: 2026-10-09T16:40:00.000Z
+Stopped at: Completed 02-05-PLAN.md (Phase 2 complete) + 02-REVIEW.md code review (1 Critical, 1 Warning fixed; 6 Info noted)
 Resume file: None
 
 Next: Phase 3 — collapse navigation and retire the three settings dialogs (delete the legacy wizard chrome the still-passing sidebar/step-tab/dialog facts describe; inline parameters; dedup Apply busy state). Carried deviations: the dashboard's wide 2×2 breakpoint form is not implemented.
