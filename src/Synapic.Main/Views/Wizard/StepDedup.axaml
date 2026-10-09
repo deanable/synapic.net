@@ -28,6 +28,11 @@
                       Margin="12,0,0,0">
             <Button Content="Scan" Command="{Binding ScanCommand}" Classes="accent"
                     ToolTip.Tip="Scan the source for duplicate groups." />
+            <!-- UI-REVIEW #1, scan half: a long scan is cancellable, whichever
+                 entry point started it (this button or the shared run bar). -->
+            <Button Content="Stop" Command="{Binding StopScanCommand}"
+                    IsVisible="{Binding IsScanning}"
+                    ToolTip.Tip="Cancel the scan in progress." />
           </StackPanel>
           <TextBlock Classes="sectionTitle" Text="Scan for duplicates"
                      VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
@@ -92,8 +97,18 @@
           <ComboBox SelectedIndex="{Binding SelectedAction}" ItemsSource="{Binding Actions}"
                     MinWidth="180" Margin="0,0,16,8" />
           <Button Content="Apply" Command="{Binding ApplyCommand}" Classes="accent"
-                  Margin="0,0,16,8" />
+                  IsEnabled="{Binding !IsApplying}" Margin="0,0,16,8" />
+          <!-- UI-REVIEW #1, apply half: the operation is indeterminate for its
+               whole duration, Apply is off while it runs, and Stop stays live —
+               a multi-minute catalog delete is never a silently greyed button. -->
+          <Button Content="Stop" Command="{Binding StopApplyCommand}"
+                  IsVisible="{Binding IsApplying}" IsEnabled="{Binding IsApplying}"
+                  Margin="0,0,16,8"
+                  ToolTip.Tip="Cancel the apply in progress; what it already changed stays changed." />
         </WrapPanel>
+        <ProgressBar IsIndeterminate="True" Height="6" IsVisible="{Binding IsApplying}" />
+        <TextBlock Classes="hint" IsVisible="{Binding IsApplying}"
+                   Text="Applying to the unchecked duplicates — Stop cancels the rest of the batch." />
         <TextBlock Classes="hint"
                    Text="Checked items are kept; the action runs on every unchecked duplicate across all groups — each destructive action asks first." />
       </StackPanel>

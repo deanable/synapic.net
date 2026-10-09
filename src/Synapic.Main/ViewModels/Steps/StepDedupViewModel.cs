@@ -846,11 +846,45 @@ public partial class StepDedupViewModel : RunStateViewModel
 
     // ── Apply ───────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// True for exactly as long as the destructive call is in flight (UI-REVIEW
+    /// carried-forward finding #1, ui-design §10 criterion 6): the apply view
+    /// shows an indeterminate bar off it, disables Apply and offers Stop, so a
+    /// multi-minute catalog delete is never a silently greyed button. Set before
+    /// the operation's first await and cleared in a <c>finally</c>, so success,
+    /// cancellation and a thrown error all settle it.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isApplying;
+
+    partial void OnIsApplyingChanged(bool value)
+    {
+        ApplyCommand.NotifyCanExecuteChanged();
+        StopApplyCommand.NotifyCanExecuteChanged();
+    }
+
     private bool CanApply() =>
+        !IsApplying &&
         !IsScanning &&
         Groups.Count > 0 &&
         SelectedForActionCount > 0 &&
         (IsLocal || DaminionReady);
+
+    /// <summary>Cancels the Apply in flight; enabled exactly while it is running.</summary>
+    [RelayCommand(CanExecute = nameof(IsApplying))]
+    private void StopApply() => ApplyCommand.Cancel();
+
+    /// <summary>
+    /// Cancels the scan in flight, whichever entry point started it: the page's
+    /// Scan command or the shared run bar's Start (both run the same scan body on
+    /// their own token). UI-REVIEW #1's scan half — a long scan had no Stop.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(IsScanning))]
+    private void StopScan()
+    {
+        ScanCommand.Cancel();
+        if (IsRunning) CancelRun();
+    }
 
     [RelayCommand(CanExecute = nameof(CanApply))]
     private async Task ApplyAsync(CancellationToken ct)
@@ -868,14 +902,19 @@ public partial class StepDedupViewModel : RunStateViewModel
                   $"ids [{string.Join(", ", targets.Where(t => t.DaminionId is not null).Select(t => t.DaminionId))}]"
                 : $"Apply requested — {SelectedActionLabel()} on {targets.Count} duplicate file(s)");
 
-        bool ok;
-        string summary;
+        var client = IsDaminion ? _step1?.ConnectedClient : null;
+        if (IsDaminion && client is null) return;
 
-        if (IsDaminion)
+        var ids = client is not null
+            ? targets.Where(t => t.DaminionId is not null).Select(t => t.DaminionId!.Value).ToList()
+            : new List<int>();
+        var action = (DedupAction)Math.Clamp(SelectedAction, 0, LocalActions.Length - 1);
+
+        // The prompts are the user's decision, not the operation: they settle
+        // before the busy state starts, so the bar measures the work itself (and
+        // a declined prompt never flashes one).
+        if (client is not null)
         {
-            var client = _step1?.ConnectedClient;
-            if (client is null) return;
-
             // Fail closed: no confirmation hook wired = no catalog delete.
             if (ConfirmAction is null ||
                 !await ConfirmAction($"Delete {targets.Count} item(s) from the Daminion catalog? This cannot be undone."))
@@ -884,33 +923,43 @@ public partial class StepDedupViewModel : RunStateViewModel
                 SynapicLog.Info(nameof(StepDedupViewModel), "Daminion catalog delete cancelled");
                 return;
             }
-
-            var ids = targets.Where(t => t.DaminionId is not null).Select(t => t.DaminionId!.Value).ToList();
-            ok = await client.DeleteItemsAsync(ids, ct);
-            summary = ok
-                ? $"Deleted {ids.Count} item(s) from the Daminion catalog"
-                : "Catalog delete failed — see log";
         }
-        else
+        // Local delete is as permanent as the catalog one (no Recycle Bin), so it
+        // gets the same fail-closed gate: no prompt wired = no delete. Tag and
+        // Move are reversible and never prompt.
+        else if (action == DedupAction.Delete &&
+                 (ConfirmAction is null ||
+                  !await ConfirmAction($"Permanently delete {targets.Count} duplicate file(s)? This cannot be undone.")))
         {
-            var action = (DedupAction)Math.Clamp(SelectedAction, 0, LocalActions.Length - 1);
+            ScanSummary = "Delete cancelled";
+            SynapicLog.Info(nameof(StepDedupViewModel), "Local duplicate delete cancelled");
+            return;
+        }
 
-            // Local delete is as permanent as the catalog one (no Recycle Bin),
-            // so it gets the same fail-closed gate: no prompt wired = no delete.
-            // Tag and Move are reversible and never prompt.
-            if (action == DedupAction.Delete &&
-                (ConfirmAction is null ||
-                 !await ConfirmAction($"Permanently delete {targets.Count} duplicate file(s)? This cannot be undone.")))
+        bool ok;
+        string summary;
+
+        IsApplying = true;
+        try
+        {
+            if (client is not null)
             {
-                ScanSummary = "Delete cancelled";
-                SynapicLog.Info(nameof(StepDedupViewModel), "Local duplicate delete cancelled");
-                return;
+                ok = await client.DeleteItemsAsync(ids, ct);
+                summary = ok
+                    ? $"Deleted {ids.Count} item(s) from the Daminion catalog"
+                    : "Catalog delete failed — see log";
             }
-
-            ok = await _dedup.ApplyToPathsAsync(targets.Select(t => t.Key), action, ct);
-            summary = ok
-                ? $"{action} applied to {targets.Count} duplicate(s)"
-                : $"{action} completed with errors — see log";
+            else
+            {
+                ok = await _dedup.ApplyToPathsAsync(targets.Select(t => t.Key), action, ct);
+                summary = ok
+                    ? $"{action} applied to {targets.Count} duplicate(s)"
+                    : $"{action} completed with errors — see log";
+            }
+        }
+        finally
+        {
+            IsApplying = false;
         }
 
         ScanSummary = summary;
@@ -943,7 +992,9 @@ public partial class StepDedupViewModel : RunStateViewModel
         OnPropertyChanged(nameof(IsScanning));
         StartCommand.NotifyCanExecuteChanged();
         ScanCommand.NotifyCanExecuteChanged();
+        StopScanCommand.NotifyCanExecuteChanged();
         ApplyCommand.NotifyCanExecuteChanged();
+        StopApplyCommand.NotifyCanExecuteChanged();
     }
 
     /// <summary>This mode's primary run is the scan (CONTEXT D-05).</summary>

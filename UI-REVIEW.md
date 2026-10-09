@@ -73,13 +73,14 @@ The request was two things: the controls overlap in places, and the workflow sho
 - **The systematic workflow is now the navigation.** The sidebar is the numbered pipeline; `2 · Operation type` is the start screen (the operation chooser) and doubles as the way back from inside a flow; `3 · Settings…` opens the dialog for the operation on screen and lights up while the settings page is showing. An operation's own run steps appear only while that operation owns the wizard — the mode headers switch between them.
 - **Contextual settings:** the header, the sidebar entry and the action bar all run one `OpenSettingsCommand`, which opens the dialog belonging to the current route (`CreateSettingsDialog()` is public so the choice is testable without a desktop lifetime).
 - **Gates preserved:** routes stay disabled until the source is usable; Next from step 1 validates the datasource; the tag-field gate moved onto the settings page and still blocks Start; navigation locks while a batch runs.
-- **GAP (carried forward):** dedup `ApplyAsync` still has no `IsApplying` state and the scan's `IAsyncRelayCommand` is never cancelled from the UI, so a multi-minute catalog delete greys the button with no progress and a long scan has no Stop.
+- **CLOSED (2026-10-09):** dedup `ApplyAsync` now carries `IsApplying` for the whole operation (indeterminate bar, Apply off, live Stop) and both long-running dedup actions are cancellable from the UI — see carried-forward finding #1.
 
 ---
 
-## Carried-forward findings (open)
+## Carried-forward findings
 
 1. **WARNING — no busy or cancel affordance during dedup apply and long scans** (`StepDedupViewModel.ApplyAsync` / `ScanAsync`). Add `IsApplying` + an indeterminate bar beside Apply, and a `Stop` button bound to `ScanCommand.Cancel()`.
+   - ✅ **RESOLVED 2026-10-09.** `StepDedupViewModel.IsApplying` is set before the destructive call's first await and cleared in a `finally`, `Apply` is gated off while it is true (`CanApply`), and the apply card shows an indeterminate bar plus a Stop bound to the new `StopApplyCommand`; the scan's Stop (`StopScanCommand`) cancels whichever entry point started it. Pinned by `tests/Synapic.Main.Tests/ApplyBusyStateTests.cs` (5 facts: busy lifecycle, refused re-entry, cancel-clears-busy, idle state, and the rendered card).
 2. **WARNING — a scan that finds nothing has no guidance copy.** Append "No duplicates found — try a lower threshold or another algorithm" when `Groups.Count == 0`, and a pre-scan hint in `ScanSummary`.
 3. **NIT — the muted-text ladder** (8 opacity values) wants one more named class, see pillar 3.
 4. **NIT — the help corpus outside `workflow-overview.html`** still numbers the old steps ("Step 2 — Engine" etc. in `setup-guide.html`, `getting-started.html`, `step*-*.html`). The new prose is on the page the shell links from every HelpScope; the rest is a wording sweep, not a functional gap.
