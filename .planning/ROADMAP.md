@@ -118,7 +118,7 @@ finding #1). Source: `docs/ui-design.md` §5, §6, §9, §10; `docs/ui-refactor-
   4. All nine `ui-design.md` §10 acceptance criteria pass item-by-item
   5. `dotnet build` 0 warnings/errors, full suite green, layout audit green at 4 window sizes × 4 routes
 
-**Plans:** 3/4 plans executed
+**Plans:** 3/4 plans executed (03-01, 03-02, 03-03), plus the unplanned §5 settings view recorded below
 
 Plans:
 
@@ -131,3 +131,20 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 - [ ] `03-04` — Final gate: all nine ui-design §10 criteria + roadmap gates, item-by-item
+
+**Unplanned work delivered during Phase 3** *(no plan in this roadmap owns these — 03-04 sweeps them as extra items)*
+
+- [x] **Settings view (§5)** — the dashboard's Settings panel is the real app-wide settings view (inference
+  server: status, Start/Stop/Build, auto-launch, per-platform variants, fallback warning; appearance: theme;
+  logging: level, open log folder, diagnostics toggle; defaults: device, tagging confidence, max items;
+  about: version, links), replacing Phase 2's placeholder (which had hosted the source form and the model
+  picker — both moved to their one home, Region A and Tagging's Parameters). Delivered as untracked files
+  that 03-01 left behind and that `MainWindowViewModel` then depended on, so they landed in 03-02's commit
+  (`d79917c`): `ViewModels/SettingsViewModel.cs`, `Views/Dashboard/SettingsPanel.axaml(.cs)`,
+  `tests/Synapic.Main.Tests/SettingsViewTests.cs`, `ConfigService.UiSettings` defaults,
+  `SynapicLog.SetMinimumLevel`/`CurrentMinimumLevel`, and the persisted theme applied at startup.
+  Pins: 8 facts in `SettingsViewTests` plus the layout audit walking the new sections at four sizes.
+  **Status: implemented and suite-green, but owned by no plan** — 03-01's plan retired the dialogs and inlined
+  the parameters, and the Phase 3 goal only implies §5 via its source list. 03-04 should verify §5 item by
+  item (five sections present and in order, nothing configured in two places, settings persist) before the
+  phase is called complete, or a plan should be added to the phase to own it.
