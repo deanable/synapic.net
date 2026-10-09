@@ -1,11 +1,13 @@
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Synapic.Main.Models;
 using Synapic.Main.ViewModels;
 using Synapic.Main.ViewModels.Steps;
 using Synapic.Main.Views;
+using Synapic.Main.Views.Operation;
 using Synapic.Main.Views.Settings;
 using Synapic.Main.Views.Wizard;
 using Xunit;
@@ -222,6 +224,106 @@ public class WorkflowOrderTests
         finally
         {
             dialog.Close();
+        }
+    }
+
+    /// <summary>
+    /// ui-design §10 criterion 2 — one layout, three modes: walking Tag, Dedup and
+    /// Upscale finds the same three regions in the same order, Data source →
+    /// Parameters → Output, and the source Region A renders is the one shared
+    /// instance on every route.
+    /// </summary>
+    [AvaloniaFact]
+    public void All_three_modes_render_the_same_three_regions_in_order()
+    {
+        var shell = Shell("local", Path.GetTempPath());
+        var window = new MainWindow { DataContext = shell };
+        window.Show();
+        try
+        {
+            foreach (var (mode, enter) in new (string, Action)[]
+                     {
+                         ("Tag", () => shell.StartTaggingRouteCommand.Execute(null)),
+                         ("Dedup", () => shell.StartDedupRouteCommand.Execute(null)),
+                         ("Upscale", () => shell.StartUpscaleRouteCommand.Execute(null)),
+                     })
+            {
+                enter();
+                // The route just became visible: let the template realize its
+                // regions before reading the tree.
+                Dispatcher.UIThread.RunJobs();
+
+                var tree = window.GetVisualDescendants().ToList();
+                var dataSource = Assert.Single(tree.OfType<Border>(),
+                    b => b.Classes.Contains("dataSourceRegion"));
+                var parameters = Assert.Single(tree.OfType<Border>(),
+                    b => b.Classes.Contains("parametersRegion"));
+                var output = Assert.Single(tree.OfType<Border>(),
+                    b => b.Classes.Contains("outputRegion"));
+
+                // Order, not mere existence (criterion 2 says in order, on every route).
+                Assert.True(tree.IndexOf(dataSource) < tree.IndexOf(parameters),
+                    $"{mode}: the data source region is not before the parameters region");
+                Assert.True(tree.IndexOf(parameters) < tree.IndexOf(output),
+                    $"{mode}: the parameters region is not before the output region");
+
+                // Region A is the one shared source on every mode, not a per-mode copy.
+                Assert.Same(shell.Wizard.Step1, Assert.Single(
+                    window.GetVisualDescendants().OfType<DataSourceStrip>()).DataContext);
+            }
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    /// <summary>
+    /// CONTEXT D-05: the shared run bar is one surface for all three modes and
+    /// binds the Phase 1 run state by name — progress, ETA, the file being worked
+    /// on, the run log and the primary action all really come from the view model
+    /// (a mistyped binding path is silent in Avalonia).
+    /// </summary>
+    [AvaloniaFact]
+    public void RunStateBar_renders_the_run_state_it_binds()
+    {
+        var step = Shell("local", Path.GetTempPath()).Wizard.Step3;
+        step.ProgressPercent = 42;
+        step.ProgressText = "21/50 (1 failed)";
+        step.EtaText = "ETA 00:01:30 remaining";
+        step.CurrentFile = "IMG_0007.CR2";
+        step.LogLines.Add("a line from this run");
+
+        var host = new Window
+        {
+            Content = new RunStateBar { DataContext = step },
+            Width = 900,
+            Height = 600,
+        };
+        host.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs();
+
+            var texts = host.GetVisualDescendants().OfType<TextBlock>()
+                .Select(t => t.Text).ToList();
+            Assert.Contains("21/50 (1 failed)", texts);
+            Assert.Contains("ETA 00:01:30 remaining", texts);
+            Assert.Contains("IMG_0007.CR2", texts);
+            Assert.Contains("a line from this run", texts);
+
+            var progress = Assert.Single(host.GetVisualDescendants().OfType<ProgressBar>());
+            Assert.Equal(42, progress.Value);
+
+            // The one accent action of the region is this step's own Start command,
+            // and it is offered while the run is idle.
+            var start = Assert.Single(host.GetVisualDescendants().OfType<Button>(),
+                b => b.Command == step.StartCommand);
+            Assert.True(start.IsVisible);
+        }
+        finally
+        {
+            host.Close();
         }
     }
 

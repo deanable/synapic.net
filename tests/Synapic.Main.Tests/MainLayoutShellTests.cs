@@ -37,6 +37,13 @@ public class MainLayoutShellTests
             // Header: the source profile is on screen without entering a flow.
             Assert.NotEmpty(window.GetVisualDescendants().OfType<SourceStatusStrip>());
 
+            // The home route is the dashboard (ui-design §2.1): four panels, the
+            // way into every operation and into the settings content.
+            var panels = window.GetVisualDescendants().OfType<Control>()
+                .Where(c => c.Classes.Contains("dashboardPanel")).ToList();
+            Assert.Equal(new[] { "SettingsPanel", "TagPanel", "DedupPanel", "UpscalePanel" },
+                panels.Select(p => p.Name!).ToArray());
+
             // 3 · Settings has three entry points — header, sidebar and the
             // action bar — and all of them are wired (a broken binding leaves
             // Command null, which looks fine until somebody clicks it).
@@ -44,9 +51,9 @@ public class MainLayoutShellTests
             Assert.Equal(3, settings.Count);
             Assert.All(settings, b => Assert.NotNull(b.Command));
 
-            // Sidebar: one operation-chooser entry (the way back to the start
-            // screen), and every mode header reachable both from the start-screen
-            // cards and from the sidebar.
+            // Sidebar: one dashboard entry (the way back to the dashboard from
+            // inside an operation), and every mode header reachable both from the
+            // dashboard panels and from the sidebar.
             Assert.Single(buttons, b => b.Command == vm.GoHomeCommand);
             Assert.Equal("2 · Operation type", buttons.Single(b => b.Command == vm.GoHomeCommand).Content);
             Assert.Equal(2, buttons.Count(b => b.Command == vm.StartTaggingRouteCommand));

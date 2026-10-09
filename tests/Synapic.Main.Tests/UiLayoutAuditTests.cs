@@ -135,6 +135,7 @@ public class UiLayoutAuditTests
         }
     }
 
+    /// <summary>The home route is the dashboard now (docs/ui-design.md D1/D2).</summary>
     [AvaloniaTheory]
     [InlineData(1600, 900)]
     [InlineData(1280, 800)]
@@ -143,7 +144,7 @@ public class UiLayoutAuditTests
     public void Home_screen_has_no_overlapping_or_clipped_controls(double width, double height)
     {
         AuditWindow(new MainWindow { DataContext = Shell("daminion") },
-            "Home (Daminion form)", width, height);
+            "Home (dashboard, Daminion form)", width, height);
     }
 
     /// <summary>The four tagging steps: source &amp; model, settings, process, results.</summary>
@@ -188,6 +189,129 @@ public class UiLayoutAuditTests
         upscale.StartUpscaleRouteCommand.Execute(null);
         await upscale.Wizard.NextCommand.ExecuteAsync(null);
         AuditWindow(new MainWindow { DataContext = upscale }, "Upscaling step", width, height);
+    }
+
+    /// <summary>
+    /// The operation template through each of the three routes at every audited
+    /// size: the same three regions in reading order (top to bottom — the stacked
+    /// form Avalonia renders without a breakpoint), nothing clipped or
+    /// overlapping. ui-design §10 criteria 2 and 5, on the template itself.
+    /// </summary>
+    private static void AuditRegions(Window window, string screen, double width, double height)
+    {
+        window.Width = width;
+        window.Height = height;
+        window.Show();
+        for (var i = 0; i < 3; i++)
+            Dispatcher.UIThread.RunJobs();
+        try
+        {
+            Assert.Equal(width, window.ClientSize.Width);
+            Assert.Equal(height, window.ClientSize.Height);
+
+            var tree = window.GetVisualDescendants().ToList();
+            var dataSource = Assert.Single(tree.OfType<Border>(),
+                b => b.Classes.Contains("dataSourceRegion"));
+            var parameters = Assert.Single(tree.OfType<Border>(),
+                b => b.Classes.Contains("parametersRegion"));
+            var output = Assert.Single(tree.OfType<Border>(),
+                b => b.Classes.Contains("outputRegion"));
+
+            var sourceTop = dataSource.TranslatePoint(new Point(0, 0), window)!.Value.Y;
+            var parametersTop = parameters.TranslatePoint(new Point(0, 0), window)!.Value.Y;
+            var outputTop = output.TranslatePoint(new Point(0, 0), window)!.Value.Y;
+            Assert.True(sourceTop < parametersTop,
+                $"{screen}: the data source region is not above the parameters region");
+            Assert.True(parametersTop < outputTop,
+                $"{screen}: the parameters region is not above the output region");
+
+            var report = Audit(window);
+            Assert.True(_panelsAudited > 10,
+                $"{screen}: only {_panelsAudited} flow panels found - the audit is not walking the real tree");
+            Assert.True(report.Length == 0,
+                $"{screen} at {width}x{height} ({_panelsAudited} panels):\n{report}");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaTheory]
+    [InlineData(1600, 900)]
+    [InlineData(1280, 800)]
+    [InlineData(1024, 700)]
+    [InlineData(900, 600)]
+    public async Task Operation_routes_audit_clean_with_the_three_regions_in_order(
+        double width, double height)
+    {
+        var tagging = Shell("local", Path.GetTempPath());
+        tagging.StartTaggingRouteCommand.Execute(null);
+        AuditRegions(new MainWindow { DataContext = tagging }, "Tagging route", width, height);
+
+        var dedup = Shell("local", Path.GetTempPath());
+        dedup.StartDedupRouteCommand.Execute(null);
+        await dedup.Wizard.NextCommand.ExecuteAsync(null);
+        AuditRegions(new MainWindow { DataContext = dedup }, "Dedup route", width, height);
+
+        var upscale = Shell("local", Path.GetTempPath());
+        upscale.StartUpscaleRouteCommand.Execute(null);
+        await upscale.Wizard.NextCommand.ExecuteAsync(null);
+        AuditRegions(new MainWindow { DataContext = upscale }, "Upscale route", width, height);
+    }
+
+    /// <summary>
+    /// The dashboard's narrow form: the Settings panel sits above the three
+    /// operation panels, and those read left to right — the same order the wide
+    /// arrangement will keep when 02-04's audit extension pins it — with nothing
+    /// clipped at the smallest audited size.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData(1024, 700)]
+    [InlineData(900, 600)]
+    public void Dashboard_panels_read_in_order_and_audit_clean(double width, double height)
+    {
+        var window = new MainWindow { DataContext = Shell("daminion") };
+        window.Width = width;
+        window.Height = height;
+        window.Show();
+        for (var i = 0; i < 3; i++)
+            Dispatcher.UIThread.RunJobs();
+        try
+        {
+            Assert.Equal(width, window.ClientSize.Width);
+            Assert.Equal(height, window.ClientSize.Height);
+
+            var panels = window.GetVisualDescendants().OfType<Control>()
+                .Where(c => c.Classes.Contains("dashboardPanel")).ToList();
+            Assert.Equal(4, panels.Count);
+
+            double Top(Control c) => c.TranslatePoint(new Point(0, 0), window)!.Value.Y;
+            double Left(Control c) => c.TranslatePoint(new Point(0, 0), window)!.Value.X;
+
+            var settings = panels.Single(p => p.Name == "SettingsPanel");
+            var operations = new[] { "TagPanel", "DedupPanel", "UpscalePanel" }
+                .Select(name => panels.Single(p => p.Name == name)).ToList();
+
+            Assert.All(operations, p => Assert.True(Top(p) > Top(settings),
+                $"{p.Name} is not below the Settings panel at {width}x{height}"));
+
+            var rowTop = Top(operations[0]);
+            Assert.All(operations, p => Assert.True(System.Math.Abs(Top(p) - rowTop) < Tolerance,
+                $"the operation panels are not on one row at {width}x{height}: " +
+                string.Join(", ", operations.Select(p => $"{p.Name}={Top(p)}"))));
+            Assert.True(Left(operations[0]) < Left(operations[1]) &&
+                        Left(operations[1]) < Left(operations[2]),
+                $"the operation panels are not in reading order at {width}x{height}");
+
+            var report = Audit(window);
+            Assert.True(report.Length == 0,
+                $"Dashboard at {width}x{height} ({_panelsAudited} panels):\n{report}");
+        }
+        finally
+        {
+            window.Close();
+        }
     }
 
     /// <summary>3 · Settings: every operation's dialog is a dense form of its own.</summary>
