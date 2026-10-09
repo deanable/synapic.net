@@ -81,7 +81,7 @@ duplicate source card and `PrefillDedupSource()`; rewrite the pinned navigation 
   4. `UiLayoutAuditTests` passes at 900×600, 1024×700, 1280×800, 1600×900 for dashboard + all three routes, including the stacked variant
   5. `dotnet build` 0 warnings/errors and the full test suite green (rewritten pins only, no coverage removed)
 
-**Plans:** 3/5 plans executed
+**Plans:** 4/5 plans executed
 
 Plans:
 
@@ -92,10 +92,8 @@ Plans:
 - [x] `02-02` — DataSourceStrip in Region A; delete dedup's parallel source path (PrefillDedupSource)
 - [x] `02-03` — DashboardView (4 panels) + ShellViewModel.Current; cold start on dashboard
 
-**Known invalidated pin (rewritten by 02-04):** `RouteSplitTests.Start_screen_gates_the_workflow_cards_on_a_usable_source` pins the old `CanStartRoute` card gating, superseded by ui-design D6 (entry is free, actions are gated).
-
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] `02-04` — Rewrite pinned navigation tests to §10 criteria 1–3; extend layout audit (criterion 5)
+- [x] `02-04` — Rewrite pinned navigation tests to §10 criteria 1–3; extend layout audit (criterion 5) — suite green at 441 passed / 0 failed
 
 **Wave 4** *(blocked on Wave 3 completion)*
 - [ ] `02-05` — Phase gate sweep (criteria 1, 2, 3, 5, 9 + decision coverage)
