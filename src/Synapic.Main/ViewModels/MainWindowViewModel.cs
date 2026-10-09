@@ -89,6 +89,10 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             if (e.PropertyName is nameof(Step1DatasourceViewModel.HasUsableSource))
                 OnPropertyChanged(nameof(CanStartRoute));
+            // The dashboard panels' status line is the shared record count, so it
+            // redraws when the count moves (never a stale number on a panel).
+            if (e.PropertyName is nameof(Step1DatasourceViewModel.CountText))
+                OnPropertyChanged(nameof(SourceCountText));
         };
 
         // Every operation's settings page offers its own ⚙ entry point; the shell
@@ -97,9 +101,47 @@ public partial class MainWindowViewModel : ViewModelBase
         Wizard.Step2.OpenSettingsRequested = () => OpenSettingsCommand.Execute(null);
         Wizard.Dedup.OpenSettingsRequested = () => OpenSettingsCommand.Execute(null);
         Wizard.Upscale.OpenSettingsRequested = () => OpenSettingsCommand.Execute(null);
+
+        // The three operation adapters (phase 1) and the shell's one navigation
+        // state (D-03): a dashboard panel and the existing route commands both
+        // funnel through Shell, so "which operation is open" has exactly one
+        // answer during the strangler window. The route machine stays the entry
+        // point — Shell only records where it landed.
+        TagOperation = new TagOperationViewModel(Wizard.Step3, Wizard.Step4);
+        DedupOperation = new DedupOperationViewModel(Wizard.Dedup);
+        UpscaleOperation = new UpscaleOperationViewModel(Wizard.Upscale);
+        Shell = new ShellViewModel(
+            new IOperationViewModel[] { TagOperation, DedupOperation, UpscaleOperation },
+            openRoute: key =>
+            {
+                switch (key)
+                {
+                    case "tag": StartTaggingRouteCommand.Execute(null); break;
+                    case "dedup": StartDedupRouteCommand.Execute(null); break;
+                    case "upscale": StartUpscaleRouteCommand.Execute(null); break;
+                }
+            },
+            goHome: () => GoHomeCommand.Execute(null));
     }
 
     public WizardViewModel Wizard { get; }
+
+    /// <summary>The tagging operation as the shared template sees it (phase 1 adapter).</summary>
+    public TagOperationViewModel TagOperation { get; }
+
+    /// <summary>The deduplication operation as the shared template sees it (phase 1 adapter).</summary>
+    public DedupOperationViewModel DedupOperation { get; }
+
+    /// <summary>The upscaling operation as the shared template sees it (phase 1 adapter).</summary>
+    public UpscaleOperationViewModel UpscaleOperation { get; }
+
+    /// <summary>
+    /// Dashboard ⇄ operation navigation (D-03): <see cref="ShellViewModel.Current"/>
+    /// null means the dashboard, non-null names the open operation. Every route
+    /// command keeps <see cref="ShellViewModel.Current"/> in sync, so during the
+    /// strangler window it and <see cref="Route"/> never disagree.
+    /// </summary>
+    public ShellViewModel Shell { get; }
 
     // ── Routes: the app opens on a start screen with three entry points ──
 
@@ -121,6 +163,15 @@ public partial class MainWindowViewModel : ViewModelBase
     /// would work on.
     /// </summary>
     public bool CanStartRoute => Wizard.Step1.HasUsableSource;
+
+    /// <summary>
+    /// The dashboard panels' status line (ui-design §3): the shared source's
+    /// record count, or the neutral hint until a source is configured — never a
+    /// made-up number.
+    /// </summary>
+    public string SourceCountText => string.IsNullOrWhiteSpace(Wizard.Step1.CountText)
+        ? "no source configured yet"
+        : Wizard.Step1.CountText!;
 
     public bool IsWizardVisible => Route != HomeRoute;
 
@@ -212,6 +263,7 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         Route = TaggingRoute;
         Wizard.EnterTaggingRoute();
+        Shell.SetCurrent("tag");
         SynapicLog.Info(nameof(MainWindowViewModel), "Route selected: Tagging");
     }
 
@@ -221,6 +273,7 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         Route = DedupRoute;
         Wizard.EnterDedupRoute();
+        Shell.SetCurrent("dedup");
         SynapicLog.Info(nameof(MainWindowViewModel), "Route selected: Deduplication");
     }
 
@@ -230,6 +283,7 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         Route = UpscaleRoute;
         Wizard.EnterUpscaleRoute();
+        Shell.SetCurrent("upscale");
         SynapicLog.Info(nameof(MainWindowViewModel), "Route selected: Upscaling");
     }
 
@@ -238,7 +292,8 @@ public partial class MainWindowViewModel : ViewModelBase
     private void GoHome()
     {
         Route = HomeRoute;
-        SynapicLog.Info(nameof(MainWindowViewModel), "Returned to the start screen");
+        Shell.SetCurrent(null);
+        SynapicLog.Info(nameof(MainWindowViewModel), "Returned to the dashboard");
     }
 
     // ── Help (docs/help; see HelpService) ──────────────────────────────────

@@ -22,6 +22,14 @@ public partial class MainLayout : UserControl
             if (DataContext is MainWindowViewModel vm)
             {
                 _vm = vm;
+
+                // The operation template's Region A takes the one shared data
+                // source (docs/ui-design.md D4) from here: the element's own
+                // DataContext is the mode's step view model, so a binding
+                // written on it could never reach Wizard.Step1. Handing the
+                // instance over keeps it the same object every mode binds.
+                WizardHost.SharedSource = vm.Wizard.Step1;
+
                 vm.LogEntries.CollectionChanged -= OnLogEntriesChanged;
                 vm.LogEntries.CollectionChanged += OnLogEntriesChanged;
             }

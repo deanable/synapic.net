@@ -4,6 +4,7 @@
              xmlns:vms="using:Synapic.Main.ViewModels.Steps"
              xmlns:steps="using:Synapic.Main.Views.Wizard"
              xmlns:op="using:Synapic.Main.Views.Operation"
+             xmlns:dash="using:Synapic.Main.Views.Dashboard"
              xmlns:help="using:Synapic.Main.Services"
              x:Class="Synapic.Main.Views.MainLayout"
              x:DataType="vm:MainWindowViewModel">
@@ -204,86 +205,16 @@
         </StackPanel>
       </Border>
 
-      <!-- Body: start screen (setup + operation chooser) or the flow for the
+      <!-- Body: the dashboard (the app's starting screen) or the flow for the
            chosen operation -->
       <Grid Grid.Row="1">
-        <!-- Start screen, which is the whole numbered setup: 1 Source & model
-             (the source panel and the model picker), 2 Operation type (the three
-             cards). The cards stay disabled until the source panel has a usable
-             source (a folder that exists, or a live Daminion session), so no
-             route can be entered without knowing what it would work on. The
-             panel is the wizard's own Step 1 view model, so the choice carries
-             into every route. -->
+        <!-- The dashboard (docs/ui-design.md §2.1, decisions D1/D2): four panels
+             — Settings, Tag, Dedup, Upscale — each opening its view. Entering an
+             operation is free (D6); only its run is gated, which is the
+             operation template's business. The numbered setup pipeline and the
+             chooser cards this screen used to be are gone. -->
         <ScrollViewer IsVisible="{Binding IsHomeVisible}">
-          <StackPanel Spacing="16" Margin="0,20,0,20" help:HelpScope.Topic="workflow-overview.html">
-            <StackPanel HorizontalAlignment="Center" Spacing="6">
-              <TextBlock Text="Set up a workflow" FontSize="22" FontWeight="SemiBold"
-                         HorizontalAlignment="Center" />
-              <TextBlock Text="1 connect a source and pick the model, 2 choose the operation, 3 tune its settings — then run it."
-                         Opacity="0.7" HorizontalAlignment="Center" TextWrapping="Wrap" />
-            </StackPanel>
-
-            <Border Classes="card settingsCard" Padding="16" help:HelpScope.Topic="step1-datasource.html">
-              <StackPanel Spacing="12">
-                <TextBlock Text="1 · Source &amp; model" Classes="sectionTitle" />
-                <steps:DatasourceSourcePanel DataContext="{Binding Wizard.Step1}" />
-                <Separator Margin="0,2" />
-                <TextBlock Text="Model" Classes="sectionTitle" />
-                <TextBlock Classes="hint"
-                           Text="Which model tags the images and which device it runs on. Tag fields, thresholds and prompts live under ⚙ Settings." />
-                <steps:EngineModelPicker DataContext="{Binding Wizard.Step2}" />
-              </StackPanel>
-            </Border>
-
-            <Border Classes="card settingsCard" Padding="16"
-                    help:HelpScope.Topic="workflow-overview.html">
-              <StackPanel Spacing="10">
-                <TextBlock Text="2 · Operation type" Classes="sectionTitle" />
-                <TextBlock Classes="hint"
-                           Text="Every operation keeps its settings in a ⚙ dialog, so the run itself stays one screen: pick one to start." />
-                <TextBlock Text="Choose a folder or connect to Daminion first — the three workflows stay disabled until then."
-                           IsVisible="{Binding !CanStartRoute}"
-                           Foreground="{DynamicResource SynapicDangerBrush}" FontSize="12"
-                           TextWrapping="Wrap" />
-
-                <UniformGrid Columns="3">
-                  <Button Classes="routeCard" Command="{Binding StartTaggingRouteCommand}"
-                          IsEnabled="{Binding CanStartRoute}"
-                          Margin="3" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
-                    <StackPanel Spacing="6" Margin="6">
-                      <TextBlock Text="🏷  Tagging" FontSize="18" FontWeight="SemiBold" />
-                      <TextBlock Text="Run the AI model over a datasource: check the source and the model, tune the tagging settings, process the batch, then review what was written."
-                                 TextWrapping="Wrap" Opacity="0.85" />
-                      <TextBlock Text="Source &amp; model → Settings → Process → Results"
-                                 Opacity="0.55" FontSize="12" TextWrapping="Wrap" />
-                    </StackPanel>
-                  </Button>
-                  <Button Classes="routeCard" Command="{Binding StartDedupRouteCommand}"
-                          IsEnabled="{Binding CanStartRoute}"
-                          Margin="3" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
-                    <StackPanel Spacing="6" Margin="6">
-                      <TextBlock Text="🧹  Deduplication" FontSize="18" FontWeight="SemiBold" />
-                      <TextBlock Text="Find duplicate images in a local folder or in the Daminion catalog scope, review the groups, then tag, move or delete the extras."
-                                 TextWrapping="Wrap" Opacity="0.85" />
-                      <TextBlock Text="Source &amp; model → Settings → Review → Apply"
-                                 Opacity="0.55" FontSize="12" TextWrapping="Wrap" />
-                    </StackPanel>
-                  </Button>
-                  <Button Classes="routeCard" Command="{Binding StartUpscaleRouteCommand}"
-                          IsEnabled="{Binding CanStartRoute}"
-                          Margin="3" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
-                    <StackPanel Spacing="6" Margin="6">
-                      <TextBlock Text="✨  Upscaling" FontSize="18" FontWeight="SemiBold" />
-                      <TextBlock Text="Enhance image resolution — the Daminion Feature enhancement utility: AI (Swin2SR) or fast Lanczos upscaling over the chosen source."
-                                 TextWrapping="Wrap" Opacity="0.85" />
-                      <TextBlock Text="Source &amp; model → Settings → Run batch"
-                                 Opacity="0.55" FontSize="12" TextWrapping="Wrap" />
-                    </StackPanel>
-                  </Button>
-                </UniformGrid>
-              </StackPanel>
-            </Border>
-          </StackPanel>
+          <dash:DashboardView />
         </ScrollViewer>
 
         <!-- The chosen operation renders through the shared template: the same
@@ -294,8 +225,12 @@
              as they are (Phase 3 removes them). -->
         <ScrollViewer IsEnabled="{Binding IsWorkspaceEnabled}"
                       IsVisible="{Binding IsWizardVisible}">
-          <op:OperationLayout DataContext="{Binding Wizard.CurrentStep}"
-                              SharedSource="{Binding Wizard.Step1}" />
+          <!-- The one shared source is handed to Region A in code-behind
+               (MainLayout.axaml.cs): a binding written on this element resolves
+               against the element's *own* DataContext (the mode's step view
+               model), which has no Wizard to reach the source through. -->
+          <op:OperationLayout x:Name="WizardHost"
+                              DataContext="{Binding Wizard.CurrentStep}" />
         </ScrollViewer>
       </Grid>
 

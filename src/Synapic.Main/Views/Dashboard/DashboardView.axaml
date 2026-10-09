@@ -1,0 +1,128 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Synapic.Main.ViewModels"
+             xmlns:steps="using:Synapic.Main.Views.Wizard"
+             xmlns:help="using:Synapic.Main.Services"
+             x:Class="Synapic.Main.Views.Dashboard.DashboardView"
+             x:DataType="vm:MainWindowViewModel">
+
+  <!-- The dashboard (docs/ui-design.md §2.1/§3, decisions D1/D2/D3): the app's
+       starting screen — four panels, Settings + the three operations, each
+       opening its view. Entering an operation is free (D6): only a run is
+       gated, and the gate is stated in the region that is blocked, so the
+       dashboard is never a dead end. Every status line here reads shared state
+       and nothing is invented: the record count comes from the one source, the
+       server state from the sidecar.
+
+       Layout: the Settings panel is full width because it hosts the source
+       form until §5's settings view lands (Phase 3), and the three operation
+       panels share the equal-columns row the chooser used, which the layout
+       audit already walks at every size. Avalonia has no XAML breakpoint, so
+       the full 2x2 arrangement and its switch point are the layout-audit
+       extension's business (plan 02-04) — the same standoff the operation
+       template records for its regions. -->
+  <StackPanel Spacing="16" Margin="0,20,0,20" help:HelpScope.Topic="workflow-overview.html">
+
+    <StackPanel HorizontalAlignment="Center" Spacing="6">
+      <TextBlock Text="Set up a workflow" FontSize="22" FontWeight="SemiBold"
+                 HorizontalAlignment="Center" />
+      <TextBlock Text="1 connect a source and pick the model, 2 choose the operation, 3 tune its settings — then run it."
+                 Opacity="0.7" HorizontalAlignment="Center" TextWrapping="Wrap" />
+    </StackPanel>
+
+    <!-- ── Panel 1 · Settings ─────────────────────────────────────────────────
+         The app-level settings content that exists today — the source every
+         operation runs on, and the model that does the tagging — with the
+         inference server's live state beside the title. §5's sectioned settings
+         view arrives with Phase 3; until then this panel is where the shared
+         source is configured once, which is what makes Region A read the same
+         on Tag, Dedup and Upscale. -->
+    <Border Classes="card settingsCard dashboardPanel" x:Name="SettingsPanel"
+            Padding="16" help:HelpScope.Topic="step1-datasource.html">
+      <StackPanel Spacing="12">
+        <DockPanel>
+          <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6"
+                      VerticalAlignment="Center" Margin="12,0,0,0">
+            <Ellipse Width="12" Height="12" VerticalAlignment="Center"
+                     Fill="{Binding ServerBrush}" />
+            <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
+                       FontWeight="SemiBold" FontSize="12" />
+          </StackPanel>
+          <StackPanel Spacing="2">
+            <TextBlock Text="Settings" Classes="sectionTitle" />
+            <TextBlock Classes="hint"
+                       Text="The source every operation runs on, and the model that tags it. Server controls live in the footer." />
+          </StackPanel>
+        </DockPanel>
+
+        <steps:DatasourceSourcePanel DataContext="{Binding Wizard.Step1}" />
+
+        <Separator Margin="0,2" />
+
+        <TextBlock Text="Model" Classes="sectionTitle"
+                   help:HelpScope.Topic="step2-settings.html" />
+        <TextBlock Classes="hint"
+                   Text="Which model tags the images and which device it runs on. Tag fields, thresholds and prompts live under ⚙ Settings." />
+        <steps:EngineModelPicker DataContext="{Binding Wizard.Step2}" />
+      </StackPanel>
+    </Border>
+
+    <!-- ── Panels 2–4 · the three operations ──────────────────────────────────
+         One accent action per panel, and it is the panel: the whole card opens
+         the operation through the same route command the sidebar's mode header
+         uses, so there is one entry point per operation in each place. The
+         status line is the shared record count, or the neutral hint until a
+         source exists — never a number nobody can back up. -->
+    <UniformGrid Columns="3">
+
+      <Border Classes="card settingsCard dashboardPanel" x:Name="TagPanel"
+              Padding="8" Margin="4">
+        <Button Classes="routeCard" Command="{Binding StartTaggingRouteCommand}"
+                HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                help:HelpScope.Topic="workflow-overview.html"
+                ToolTip.Tip="Open Tagging: run the AI model over the shared source">
+          <StackPanel Spacing="6" Margin="6">
+            <TextBlock Text="🏷  Tagging" FontSize="18" FontWeight="SemiBold" />
+            <TextBlock Text="Run the AI model over a datasource: check the source and the model, tune the tagging settings, process the batch, then review what was written."
+                       TextWrapping="Wrap" Opacity="0.85" />
+            <TextBlock Text="{Binding SourceCountText}" Opacity="0.55" FontSize="12"
+                       TextWrapping="Wrap" />
+          </StackPanel>
+        </Button>
+      </Border>
+
+      <Border Classes="card settingsCard dashboardPanel" x:Name="DedupPanel"
+              Padding="8" Margin="4">
+        <Button Classes="routeCard" Command="{Binding StartDedupRouteCommand}"
+                HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                help:HelpScope.Topic="dedup.html"
+                ToolTip.Tip="Open Deduplication: scan the shared source for duplicate groups">
+          <StackPanel Spacing="6" Margin="6">
+            <TextBlock Text="🧹  Deduplication" FontSize="18" FontWeight="SemiBold" />
+            <TextBlock Text="Find duplicate images in a local folder or in the Daminion catalog scope, review the groups, then tag, move or delete the extras."
+                       TextWrapping="Wrap" Opacity="0.85" />
+            <TextBlock Text="{Binding SourceCountText}" Opacity="0.55" FontSize="12"
+                       TextWrapping="Wrap" />
+          </StackPanel>
+        </Button>
+      </Border>
+
+      <Border Classes="card settingsCard dashboardPanel" x:Name="UpscalePanel"
+              Padding="8" Margin="4">
+        <Button Classes="routeCard" Command="{Binding StartUpscaleRouteCommand}"
+                HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                help:HelpScope.Topic="upscale.html"
+                ToolTip.Tip="Open Upscaling: enhance the resolution of the shared source">
+          <StackPanel Spacing="6" Margin="6">
+            <TextBlock Text="✨  Upscaling" FontSize="18" FontWeight="SemiBold" />
+            <TextBlock Text="Enhance image resolution — the Daminion Feature enhancement utility: AI (Swin2SR) or fast Lanczos upscaling over the chosen source."
+                       TextWrapping="Wrap" Opacity="0.85" />
+            <TextBlock Text="{Binding SourceCountText}" Opacity="0.55" FontSize="12"
+                       TextWrapping="Wrap" />
+          </StackPanel>
+        </Button>
+      </Border>
+
+    </UniformGrid>
+  </StackPanel>
+</UserControl>
