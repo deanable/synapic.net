@@ -118,7 +118,7 @@ finding #1). Source: `docs/ui-design.md` §5, §6, §9, §10; `docs/ui-refactor-
   4. All nine `ui-design.md` §10 acceptance criteria pass item-by-item
   5. `dotnet build` 0 warnings/errors, full suite green, layout audit green at 4 window sizes × 4 routes
 
-**Plans:** 4
+**Plans:** 1/4 plans executed
 
 Plans:
 

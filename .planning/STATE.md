@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-05-PLAN.md (Phase 2 complete)
-last_updated: "2026-10-09T17:20:00.000Z"
-last_activity: 2026-10-09 -- Phase 2 pin audit (02-REVIEW.md addendum): 2 name/assertion contradictions + 4 gaps fixed; Main 442/442
+stopped_at: Completed 03-01-PLAN.md
+last_updated: "2026-10-09T08:30:51.696Z"
+last_activity: 2026-10-09
 progress:
   total_phases: 3
   completed_phases: 2
   total_plans: 13
-  completed_plans: 9
-  percent: 69
+  completed_plans: 10
+  percent: 67
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-08)
 
 **Core value:** Pick a source, run Tag/Dedup/Upscale, get correct results written back — without fighting the UI.
-**Current focus:** UI refactor — presentation-layer standardization (roadmap Phases 1–3)
+**Current focus:** Phase 03 — collapse-navigation-and-retire-settings-dialogs
 
 ## Current Position
 
-Phase: 2 of 3 (Add operation template and dashboard)
-Plan: 5 of 5 in current phase
-Status: Phase 2 complete — gate sweep 02-05 green (criteria 1, 2, 3, 5, 9 + decision coverage 7/7); ready to plan Phase 3 (collapse navigation, retire settings dialogs)
-Last activity: 2026-10-09 -- Phase 2 pin audit (02-REVIEW.md addendum): the four rewritten test files audited name-first, 2 contradictions and 4 gaps fixed; build 0/0, Main 442/442
+Phase: 03 (collapse-navigation-and-retire-settings-dialogs) — EXECUTING
+Plan: 2 of 4
+Status: Ready to execute
+Last activity: 2026-10-09
 
-Progress: [█████████░] 69%
+Progress: [████████░░] 77%
 
 **Suite is fully green:** `dotnet test Synapic.Net.sln -c Release` → Shared 6/6, Integration 5/5, Main 441/441 (0 failed, 0 skipped). Gate sweep evidence: build `0 Warning(s) 0 Error(s)` (also `--no-incremental`), audit 19/19 at 900×600 / 1024×700 / 1280×800 / 1600×900 for dashboard + all three routes, decision coverage passed 7/7, no fact deleted (02-04 mapping table accounts for all six removed names).
 
@@ -53,6 +53,7 @@ Progress: [█████████░] 69%
 **Phase 1 gate sweep (01-04):** all five ROADMAP success criteria ✓ — build 0/0, full solution 442 passed / 0 failed / 0 skipped, 0 `.axaml` and 0 `Services/` diffs, one log-cap file, three inheritors
 
 **Phase 2 gate sweep (02-05):** all five ROADMAP success criteria ✓ — build 0/0 (incl. `--no-incremental`), suite Shared 6/5+0, Integration 5/0, Main 441/0, audit 19/19 at four sizes incl. stacked, decision coverage passed 7/7, `PrefillDedupSource` absent from source, mapping table accounts for all six removed test names
+| Phase 03 P01 | 42 min | 2 tasks | 25 files |
 
 ## Accumulated Context
 
@@ -86,8 +87,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-10-09T17:20:00.000Z
-Stopped at: Completed 02-05-PLAN.md (Phase 2 complete) + 02-REVIEW.md code review (1 Critical, 1 Warning fixed; 6 Info noted) + its pin-audit addendum (2 name/assertion contradictions, 4 gaps fixed — Main 442/442)
+Last session: 2026-10-09T08:30:51.688Z
+Stopped at: Completed 03-01-PLAN.md
 Resume file: None
 
 Next: Phase 3 — collapse navigation and retire the three settings dialogs (delete the legacy wizard chrome the still-passing sidebar/step-tab/dialog facts describe; inline parameters; dedup Apply busy state). Carried deviations: the dashboard's wide 2×2 breakpoint form is not implemented.
