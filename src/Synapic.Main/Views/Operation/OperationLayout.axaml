@@ -59,6 +59,17 @@
             <DataTemplate DataType="vms:StepUpscaleViewModel">
               <steps:UpscaleSettingsPanel />
             </DataTemplate>
+            <!-- The steps that have no parameters panel of their own (tagging's
+                 engine panel arrives with Phase 3; a setup, run or result step
+                 has nothing to parameterize) must render nothing at all. A
+                 ContentControl whose content matches no template draws the
+                 content's ToString() instead — i.e. the view model's type name
+                 as visible text — so "Region B stays empty until Phase 3" needs
+                 this explicit empty template, and it needs to be the last one so
+                 every mode above wins. -->
+            <DataTemplate DataType="vm:ViewModelBase">
+              <Panel />
+            </DataTemplate>
           </ContentControl.DataTemplates>
         </ContentControl>
       </StackPanel>
@@ -85,6 +96,12 @@
             </DataTemplate>
             <DataTemplate DataType="vms:StepUpscaleViewModel">
               <op:RunStateBar />
+            </DataTemplate>
+            <!-- Only steps that own a run get the bar (see above). A step with
+                 no bar renders nothing: without this template the unstyled
+                 fallback prints the view model's type name on screen. -->
+            <DataTemplate DataType="vm:ViewModelBase">
+              <Panel />
             </DataTemplate>
           </ContentControl.DataTemplates>
         </ContentControl>

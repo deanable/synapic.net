@@ -279,6 +279,54 @@ public class WorkflowOrderTests
     }
 
     /// <summary>
+    /// The unmatched-content trap: a ContentControl whose content matches no
+    /// DataTemplate draws the content's ToString() — a raw
+    /// <c>Synapic.Main.ViewModels.Steps.…</c> type name as visible UI text. The
+    /// Parameters region and the run-bar host legitimately stay empty for the
+    /// steps that have no panel yet, so this walks every step of all three routes
+    /// and fails on any rendered text that is a type name. A future step view
+    /// model that lands without a template fails here instead of shipping.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task No_step_renders_a_view_model_type_name_as_text()
+    {
+        var shell = Shell("local", Path.GetTempPath());
+        var window = new MainWindow { DataContext = shell };
+        window.Show();
+        try
+        {
+            var visits = new List<(string Step, Func<Task> Go)>
+            {
+                ("Tag step 1", () => Task.CompletedTask),
+                ("Tag step 2", () => { shell.Wizard.GoToStep2Command.Execute(null); return Task.CompletedTask; }),
+                ("Tag step 3", () => { shell.Wizard.GoToStep3Command.Execute(null); return Task.CompletedTask; }),
+                ("Dedup step 1", () => { shell.StartDedupRouteCommand.Execute(null); return Task.CompletedTask; }),
+                ("Dedup step 2", () => shell.Wizard.NextCommand.ExecuteAsync(null)),
+                ("Upscale step 1", () => { shell.StartUpscaleRouteCommand.Execute(null); return Task.CompletedTask; }),
+                ("Upscale step 2", () => shell.Wizard.NextCommand.ExecuteAsync(null)),
+            };
+
+            shell.StartTaggingRouteCommand.Execute(null);
+            foreach (var (step, go) in visits)
+            {
+                await go();
+                Dispatcher.UIThread.RunJobs();
+
+                var typeNames = window.GetVisualDescendants().OfType<TextBlock>()
+                    .Select(t => t.Text)
+                    .Where(t => t is not null && t.StartsWith("Synapic.", StringComparison.Ordinal))
+                    .ToList();
+
+                Assert.Empty(typeNames);
+            }
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    /// <summary>
     /// CONTEXT D-05: the shared run bar is one surface for all three modes and
     /// binds the Phase 1 run state by name — progress, ETA, the file being worked
     /// on, the run log and the primary action all really come from the view model
