@@ -43,7 +43,7 @@ public partial class Step1DatasourceViewModel : ViewModelBase
 
     /// <summary>
     /// The engine half of "1 · Source &amp; model": step 1 renders the model
-    /// picker, and it is the same view model the settings dialog edits, so the
+    /// picker, and it is the same view model the Parameters region edits, so the
     /// two can never disagree about which model does the work. Wired by
     /// <see cref="ViewModels.WizardViewModel"/>; null in isolated tests, where
     /// the card simply does not appear.

@@ -31,7 +31,7 @@ public partial class WizardViewModel : ViewModelBase
         Step1 = new Step1DatasourceViewModel(session, connectionStore);
         Step2 = new Step2EngineViewModel(session, sidecar, engineStore, presetStore);
         // Step 1 is "1 · Source & model": it renders the model picker over the
-        // engine's own view model, so the picker and the settings dialog edit
+        // engine's own view model, so the picker and the Parameters region edit
         // one thing.
         Step1.Engine = Step2;
         Step3 = new Step3ProcessViewModel(session, sidecar, Step1);

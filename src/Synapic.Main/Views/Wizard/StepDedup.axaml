@@ -7,18 +7,18 @@
 
   <!-- 4 · Deduplication: what the scan works on, the scan itself, the review of
        the groups and the apply. The rule settings (algorithm, threshold, server
-       hashing, keep-set rules) live in 3 · Settings, and the page reports them
-       back on the rule line so the scan is never started blind. -->
+       hashing, keep-set rules) live in the Parameters region above, and the page
+       reports them back on the rule line so the scan is never started blind. -->
   <StackPanel Spacing="12">
     <TextBlock Classes="stepTitle" Text="4 · Deduplication" />
     <TextBlock Classes="hint"
-               Text="Scan rules and the keep-set rule live in ⚙ Settings; the scan, the review and the apply happen here." />
+               Text="Scan rules and the keep-set rule live in the Parameters region above; the scan, the review and the apply happen here." />
 
     <!-- The source the scan runs on comes from the shared data-source strip
          (Region A): one source, configured once, shown identically in every
          mode — this page no longer offers a second, dedup-only source. -->
 
-    <!-- The scan, with its rules read back from the settings dialog. -->
+    <!-- The scan, with its rules read back from the Parameters region. -->
     <Border Classes="card settingsCard" Padding="16">
       <StackPanel Spacing="8">
         <DockPanel>
@@ -26,8 +26,6 @@
                ellipsizes instead of pushing them out of the card. -->
           <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8"
                       Margin="12,0,0,0">
-            <Button Content="⚙ Settings" Command="{Binding OpenSettingsCommand}"
-                    ToolTip.Tip="Algorithm, threshold, server hashing and the keep-set rules" />
             <Button Content="Scan" Command="{Binding ScanCommand}" Classes="accent"
                     ToolTip.Tip="Scan the source for duplicate groups." />
           </StackPanel>

@@ -48,25 +48,29 @@
                    Text="The settings this operation runs with." />
         <ContentControl Content="{Binding}">
           <ContentControl.DataTemplates>
-            <!-- The dedup and upscale parameter panels, reused verbatim: one view
-                 model, one view. Their dialogs stay until Phase 3 retires them.
-                 Tagging's engine panel joins them at the same time: it carries
-                 the one EngineModelPicker the pinned step-1 test requires to
-                 stay unique on screen. -->
+            <!-- Every mode's parameters, inline: one view model, one view. These
+                 were the contents of the three modal settings dialogs, which
+                 ui-design D3 retired — nothing here builds a window, and the
+                 form is the same instance the run and the read-back line use.
+                 Tagging's whole engine form (model, device, tag fields, scoring,
+                 prompts) is its Parameters region; the compact model picker on
+                 "1 · Source & model" stays the step-1 entry point and rides the
+                 same view model. -->
+            <DataTemplate DataType="vms:Step2EngineViewModel">
+              <steps:Step2Engine />
+            </DataTemplate>
             <DataTemplate DataType="vms:StepDedupViewModel">
               <steps:DedupSettingsPanel />
             </DataTemplate>
             <DataTemplate DataType="vms:StepUpscaleViewModel">
               <steps:UpscaleSettingsPanel />
             </DataTemplate>
-            <!-- The steps that have no parameters panel of their own (tagging's
-                 engine panel arrives with Phase 3; a setup, run or result step
-                 has nothing to parameterize) must render nothing at all. A
-                 ContentControl whose content matches no template draws the
-                 content's ToString() instead — i.e. the view model's type name
-                 as visible text — so "Region B stays empty until Phase 3" needs
-                 this explicit empty template, and it needs to be the last one so
-                 every mode above wins. -->
+            <!-- The steps that have no parameters panel of their own (a setup,
+                 run or result step has nothing to parameterize) must render
+                 nothing at all. A ContentControl whose content matches no
+                 template draws the content's ToString() instead — i.e. the view
+                 model's type name as visible text — so this explicit empty
+                 template has to be the last one, so every mode above wins. -->
             <DataTemplate DataType="vm:ViewModelBase">
               <Panel />
             </DataTemplate>

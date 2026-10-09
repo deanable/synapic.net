@@ -6,15 +6,15 @@
              x:DataType="vm:Step2EngineViewModel">
 
   <!-- 3 · Settings, as a page: the summary of what the tagging run will use,
-       with the full form one click away in the settings dialog (the shell owns
-       that entry point: header, sidebar and action bar all open it). The page
-       exists because the run's two guard rails live here — at least one tag
-       field has to be ticked, and a partial selection has to be visible before
-       the batch starts, not after Daminion shows half-empty records. -->
+       with the full form directly above in the Parameters region — one view
+       model, so the summary follows every edit. The page exists because the
+       run's two guard rails live here — at least one tag field has to be
+       ticked, and a partial selection has to be visible before the batch
+       starts, not after Daminion shows half-empty records. -->
   <StackPanel Spacing="12">
     <TextBlock Classes="stepTitle" Text="3 · Settings" />
     <TextBlock Classes="hint"
-               Text="What the tagging run will write. Change any of it with ⚙ Settings — the dialog edits this same state, so the summary here updates with it." />
+               Text="What the tagging run will write. Change any of it in the Parameters region above — it edits this same state, so the summary here updates with it." />
 
     <Border Classes="card settingsCard" Padding="16" help:HelpScope.Topic="step2-settings.html">
       <StackPanel Spacing="10">

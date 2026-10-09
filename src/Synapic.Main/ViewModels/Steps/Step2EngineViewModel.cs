@@ -780,19 +780,6 @@ public partial class Step2EngineViewModel : ViewModelBase
         await RefreshModelsAsync(CancellationToken.None);
     }
 
-    // ── The settings dialog (3 · Settings) ──────────────────────────────────
-
-    /// <summary>
-    /// Shell hook: opens this view model's settings dialog. Set by the shell
-    /// (which owns the window), so the step that renders the summary can offer
-    /// the entry point without knowing about windows.
-    /// </summary>
-    public Action? OpenSettingsRequested { get; set; }
-
-    [RelayCommand]
-    private void OpenSettings() => OpenSettingsRequested?.Invoke();
-
-
 }
 
 /// <summary>

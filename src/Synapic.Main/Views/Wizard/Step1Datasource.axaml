@@ -9,7 +9,7 @@
   <StackPanel Spacing="12">
     <TextBlock Classes="stepTitle" Text="1 · Source &amp; model" />
     <TextBlock Classes="hint"
-               Text="What this run works on, and which model does the work. The settings of the operation itself live in the ⚙ dialog." />
+               Text="What this run works on, and which model does the work. The settings of the operation itself live in its Parameters region." />
 
     <!-- The source and the scope are chosen on the start screen — that is where
          the three workflows are picked, so it is where "which images?" belongs.
@@ -25,8 +25,8 @@
       </StackPanel>
     </Border>
 
-    <!-- The model half of step 1. It is the same view model the settings dialog
-         edits, so the two can never disagree. -->
+    <!-- The model half of step 1. It is the same view model the Parameters
+         region edits, so the two can never disagree. -->
     <Border Classes="card settingsCard" Padding="16"
             help:HelpScope.Topic="step2-settings.html">
       <StackPanel Spacing="8">

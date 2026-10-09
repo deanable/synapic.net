@@ -5,12 +5,12 @@
              x:Class="Synapic.Main.Views.Wizard.Step2Engine"
              x:DataType="vm:Step2EngineViewModel">
 
-  <!-- The tagging settings in full: the content of the settings dialog (3 ·
-       Settings) and the editor behind the summary on the wizard page. Sections
-       are cards so the form reads top-to-bottom in the order a run uses it, and
-       every row of controls wraps — a settings dialog is where a clipped control
-       is hardest to notice, because the thing that fell off the edge is exactly
-       the setting somebody came here to change. -->
+  <!-- The tagging settings in full: the tagging operation's Parameters region
+       (3 · Settings is the read-back summary of it). Sections are cards so the
+       form reads top-to-bottom in the order a run uses it, and every row of
+       controls wraps — a narrow window is where a clipped control is hardest to
+       notice, because the thing that fell off the edge is exactly the setting
+       somebody came here to change. -->
   <StackPanel Spacing="12">
 
     <Border Classes="card settingsCard" Padding="16"

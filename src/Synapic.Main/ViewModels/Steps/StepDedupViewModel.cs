@@ -356,7 +356,7 @@ public partial class StepDedupViewModel : RunStateViewModel
 
     /// <summary>
     /// Read-back of the scan rules for the review page: those rules live in the
-    /// settings dialog now, and a scan started from a rule line the user cannot
+    /// Parameters region now, and a scan started from a rule line the user cannot
     /// see is a scan nobody can explain afterwards.
     /// </summary>
     public string ScanSettingsSummary
@@ -379,14 +379,6 @@ public partial class StepDedupViewModel : RunStateViewModel
             return $"{algorithm} · threshold {Threshold:0.00} · {keepText}{server}";
         }
     }
-
-    // ── The settings dialog (3 · Settings) ──────────────────────────────────
-
-    /// <summary>Shell hook: opens this view model's settings dialog (set by the shell).</summary>
-    public Action? OpenSettingsRequested { get; set; }
-
-    [RelayCommand]
-    private void OpenSettings() => OpenSettingsRequested?.Invoke();
 
     public string[] LocalActions { get; } = { "Tag", "Move", "Delete" };
 

@@ -8,7 +8,6 @@ using Synapic.Main.Models;
 using Synapic.Main.Services;
 using Synapic.Main.ViewModels.Operations;
 using Synapic.Main.ViewModels.Steps;
-using Synapic.Main.Views;
 using Synapic.Shared.Contracts;
 
 namespace Synapic.Main.ViewModels;
@@ -94,13 +93,6 @@ public partial class MainWindowViewModel : ViewModelBase
             if (e.PropertyName is nameof(Step1DatasourceViewModel.CountText))
                 OnPropertyChanged(nameof(SourceCountText));
         };
-
-        // Every operation's settings page offers its own ⚙ entry point; the shell
-        // owns the window, so it is the shell that answers the request. One
-        // command, three possible dialogs, chosen by the route.
-        Wizard.Step2.OpenSettingsRequested = () => OpenSettingsCommand.Execute(null);
-        Wizard.Dedup.OpenSettingsRequested = () => OpenSettingsCommand.Execute(null);
-        Wizard.Upscale.OpenSettingsRequested = () => OpenSettingsCommand.Execute(null);
 
         // The three operation adapters (phase 1) and the shell's one navigation
         // state (D-03): a dashboard panel and the existing route commands both
@@ -206,58 +198,17 @@ public partial class MainWindowViewModel : ViewModelBase
     /// <summary>Which sidebar entry reads as the current one on the start screen.</summary>
     public bool IsNavHomeActive => Route == HomeRoute;
 
-    // ── Engine settings as a modal (proposal §2.2.3) ───────────────────
+    // ── Settings (ui-design §5/§6.1, D3) ─────────────────────────────────
 
     /// <summary>
-    /// Opens 3 · Settings for the operation on screen: tagging's engine dialog,
-    /// or the dedup / upscale dialog while that route owns the wizard. Each one
-    /// hosts a second view of the wizard's own view model — one view model, two
-    /// views — so an edit in the dialog is the same edit the pages report, and
-    /// every help anchor inside them keeps working untouched.
+    /// The shell's Settings shortcut (ui-design §6.1): app-wide settings live on
+    /// the dashboard's Settings panel, so the shortcut goes there. Every
+    /// per-operation parameter is inline in the operation template's Parameters
+    /// region instead — the three modal settings dialogs are retired (D3/D-02),
+    /// so nothing here builds a window any more.
     /// </summary>
     [RelayCommand]
-    private void OpenSettings()
-    {
-        try
-        {
-            var dialog = CreateSettingsDialog();
-
-            // Prefer the running window; fall back to DI (both are unavailable
-            // in headless tests, where a non-modal show is the right outcome).
-            var owner = (Application.Current?.ApplicationLifetime
-                    as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)
-                ?.MainWindow as MainWindow;
-
-            if (owner is null)
-            {
-                try { owner = App.Services.GetService(typeof(MainWindow)) as MainWindow; }
-                catch { /* App.Services is not built yet */ }
-            }
-
-            if (owner is not null)
-                _ = dialog.ShowDialog(owner);
-            else
-                dialog.Show();
-        }
-        catch (Exception e)
-        {
-            // Never let a missing application lifetime break the shell.
-            SynapicLog.Warning(nameof(MainWindowViewModel), $"Could not open settings: {e.Message}");
-        }
-    }
-
-    /// <summary>
-    /// The settings window for the operation on screen. Public so the choice is
-    /// testable without a desktop lifetime to show a modal over: the route
-    /// decides which settings exist, and each dialog holds the wizard's own view
-    /// model for that operation.
-    /// </summary>
-    public Avalonia.Controls.Window CreateSettingsDialog() => Route switch
-    {
-        DedupRoute => new Views.Settings.DedupSettingsDialog { DataContext = Wizard.Dedup },
-        UpscaleRoute => new Views.Settings.UpscaleSettingsDialog { DataContext = Wizard.Upscale },
-        _ => new Views.Settings.EngineSettingsDialog { DataContext = Wizard.Step2 },
-    };
+    private void Settings() => GoHomeCommand.Execute(null);
 
     /// <summary>Start screen → the four-step tagging wizard.</summary>
     [RelayCommand]

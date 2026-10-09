@@ -107,8 +107,8 @@ public partial class StepUpscaleViewModel : RunStateViewModel
     partial void OnOverwriteExistingChanged(bool value) => OnPropertyChanged(nameof(SettingsSummary));
 
     /// <summary>
-    /// Read-back of the parameters for the run page: they live in the settings
-    /// dialog now, and a batch started from parameters nobody can see is a batch
+    /// Read-back of the parameters for the run page: they live in the Parameters
+    /// region now, and a batch started from parameters nobody can see is a batch
     /// nobody can explain afterwards.
     /// </summary>
     public string SettingsSummary
@@ -129,14 +129,6 @@ public partial class StepUpscaleViewModel : RunStateViewModel
                 + quality + denoise + sharpen + overwrite;
         }
     }
-
-    // ── The settings dialog (3 · Settings) ──────────────────────────────────
-
-    /// <summary>Shell hook: opens this view model's settings dialog (set by the shell).</summary>
-    public Action? OpenSettingsRequested { get; set; }
-
-    [RelayCommand]
-    private void OpenSettings() => OpenSettingsRequested?.Invoke();
 
     /// <summary>
     /// The run's parameters as the sidecar contract wants them (port of

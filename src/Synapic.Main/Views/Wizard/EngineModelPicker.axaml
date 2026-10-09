@@ -6,8 +6,8 @@
              x:DataType="vm:Step2EngineViewModel">
 
   <!-- The model half of "1 · Source & model": which model tags the images and
-       which device it runs on. It is the compact form of what the settings
-       dialog shows in full (the dialog lists every local model with its task and
+       which device it runs on. It is the compact form of what the Parameters
+       region shows in full (that form lists every local model with its task and
        size; tag fields, thresholds and prompts live there too), so the setup
        screen answers "who does the work" without a wall of options.
 

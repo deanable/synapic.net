@@ -15,8 +15,8 @@
        requires the log view to survive the redesign.
 
        The sidebar is the workflow, in order: 1 Source & model, 2 Operation type,
-       3 Settings (a dialog, one per operation), then the steps that operation
-       runs. Every flow-layout row in this file wraps rather than clips: the
+       3 Settings (app-wide; per-operation parameters are inline in the shared
+       operation template), then the steps that operation runs. Every flow-layout row in this file wraps rather than clips: the
        window has no minimum width, so a row that only fits at 1280 is a row that
        loses its last control on a smaller screen. -->
   <Grid RowDefinitions="Auto,*,Auto,Auto">
@@ -44,9 +44,9 @@
                    Margin="12,0" TextTrimming="CharacterEllipsis"
                    ToolTip.Tip="Records the current source would be worked on." />
 
-        <Button Grid.Column="3" Content="⚙ Settings" Command="{Binding OpenSettingsCommand}"
+        <Button Grid.Column="3" Content="⚙ Settings" Command="{Binding SettingsCommand}"
                 VerticalAlignment="Center"
-                ToolTip.Tip="Settings for the operation you are in: model, tag fields and thresholds, scan rules or upscale options" />
+                ToolTip.Tip="App settings, on the dashboard's Settings panel. The open operation's own parameters are inline in its Parameters region." />
       </Grid>
     </Border>
 
@@ -74,14 +74,15 @@
                   Classes.active="{Binding IsNavHomeActive}"
                   ToolTip.Tip="Tagging, deduplication or upscaling — pick one on the start screen" />
 
-          <!-- 3 · Settings: one dialog per operation, opened from here, from the
-               header, or from the action bar. -->
+          <!-- 3 · Settings: app-wide settings, on the dashboard's Settings panel
+               (the open operation's parameters are inline in its Parameters
+               region, so this entry is not per-operation any more). -->
           <Button Classes="navItem" Content="3 · Settings…"
-                  Command="{Binding OpenSettingsCommand}"
+                  Command="{Binding SettingsCommand}"
                   IsVisible="{Binding IsWizardVisible}"
                   IsEnabled="{Binding IsWorkspaceEnabled}"
                   Classes.active="{Binding Wizard.IsEngineStepActive}"
-                  ToolTip.Tip="The settings of the operation you are in, on a dialog" />
+                  ToolTip.Tip="App settings, on the dashboard's Settings panel" />
 
           <!-- The steps the chosen operation runs. The mode headers switch
                operation; the numbered entries are the steps inside it. -->
@@ -248,9 +249,9 @@
             <TextBlock Grid.Column="0" Text="{Binding Wizard.NavHintText}"
                        VerticalAlignment="Center" Opacity="0.7" TextWrapping="Wrap"
                        Margin="0,0,8,0" />
-            <Button Grid.Column="1" Content="⚙ Settings" Command="{Binding OpenSettingsCommand}"
+            <Button Grid.Column="1" Content="⚙ Settings" Command="{Binding SettingsCommand}"
                     Margin="0,0,8,0"
-                    ToolTip.Tip="The settings of the operation you are in, on a dialog" />
+                    ToolTip.Tip="App settings, on the dashboard's Settings panel" />
             <Button Grid.Column="2" Content="↺ Start Over"
                     Command="{Binding Wizard.StartOverCommand}"
                     IsVisible="{Binding Wizard.CanStartOver}"

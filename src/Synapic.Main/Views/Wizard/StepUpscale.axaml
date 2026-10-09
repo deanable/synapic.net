@@ -5,8 +5,9 @@
              x:Class="Synapic.Main.Views.Wizard.StepUpscale"
              x:DataType="vm:StepUpscaleViewModel">
 
-  <!-- 4 · Upscaling: the run page. The parameters live in 3 · Settings and are
-       reported back here before a batch starts, so the run is never blind. -->
+  <!-- 4 · Upscaling: the run page. The parameters live in the Parameters region
+       and are reported back here before a batch starts, so the run is never
+       blind. -->
   <StackPanel Spacing="12">
     <TextBlock Classes="stepTitle" Text="4 · Upscaling" />
     <TextBlock Text="{Binding SourceSummary}" Opacity="0.75" TextWrapping="Wrap"
@@ -14,13 +15,8 @@
 
     <Border Classes="card settingsCard" Padding="16">
       <StackPanel Spacing="8">
-        <DockPanel>
-          <Button DockPanel.Dock="Right" Content="⚙ Settings" Margin="12,0,0,0"
-                  Command="{Binding OpenSettingsCommand}"
-                  ToolTip.Tip="Workflow, factor, precision, output format and the post-processing sliders" />
-          <TextBlock Classes="sectionTitle" Text="Upscaling parameters"
-                     VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-        </DockPanel>
+        <TextBlock Classes="sectionTitle" Text="Upscaling parameters"
+                   TextTrimming="CharacterEllipsis" />
         <TextBlock Classes="hint" Text="{Binding SettingsSummary}" />
       </StackPanel>
     </Border>
