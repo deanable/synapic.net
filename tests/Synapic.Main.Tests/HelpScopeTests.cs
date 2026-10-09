@@ -99,8 +99,8 @@ public partial class HelpScopeTests
     public async Task F1_opens_the_scope_of_the_focused_control_instead_of_the_fallback_topic()
     {
         // The Help button sits inside the toolbar, which is annotated with the
-        // sidecar topic. With a server detected, the unscoped fallback would
-        // be the Step 1 topic - so this proves the focus scope really wins.
+        // sidecar topic. With a server detected on the dashboard, the unscoped
+        // fallback would be the help home - so this proves the focus scope wins.
         var help = new FakeHelpService();
         var vm = NewViewModel(help, Exe);
         var window = new MainWindow { DataContext = vm };
@@ -110,7 +110,7 @@ public partial class HelpScopeTests
         var helpButton = window.GetVisualDescendants().OfType<Button>()
             .Single(b => (b.Content as string) == "Help");
         Assert.True(helpButton.Focus());
-        Assert.Equal("step1-datasource.html", vm.ContextHelpTopic);
+        Assert.Equal(HelpTopics.Home, vm.ContextHelpTopic);
 
         window.KeyPressQwerty(PhysicalKey.F1, RawInputModifiers.None);
 

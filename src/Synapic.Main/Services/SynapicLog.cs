@@ -30,6 +30,13 @@ public static class SynapicLog
     private static Logger? _logger;
     private static UiLogSink? _uiSink;
 
+    /// <summary>
+    /// Live minimum level of the UI sink (Settings → Logging). A level switch
+    /// rather than a captured value, so changing the level takes effect on the
+    /// next event instead of needing a restart.
+    /// </summary>
+    private static readonly LoggingLevelSwitch UiLevelSwitch = new(LogEventLevel.Information);
+
     public static UiLogSink UiSink => _uiSink ?? throw new InvalidOperationException("SynapicLog not initialized");
 
     public static string LogFilePath { get; private set; } = "";
@@ -79,7 +86,7 @@ public static class SynapicLog
             var archiveNote = ArchivePreviousRun();
 
             _uiSink ??= new UiLogSink(MaxBufferedEvents);
-            var uiLevel = ParseLevel(minimumLevel);
+            UiLevelSwitch.MinimumLevel = ParseLevel(minimumLevel);
 
             _logger = new LoggerConfiguration()
                 // The file always gets full detail; the UI sink is filtered below.
@@ -89,7 +96,7 @@ public static class SynapicLog
                     rollingInterval: RollingInterval.Infinite,
                     restrictedToMinimumLevel: LogEventLevel.Debug,
                     outputTemplate: "{Timestamp:HH:mm:ss.fff} [{Level:u4}] {SourceContext}: {Message:lj}{NewLine}{Exception}")
-                .WriteTo.Sink(_uiSink, restrictedToMinimumLevel: uiLevel)
+                .WriteTo.Sink(_uiSink, levelSwitch: UiLevelSwitch)
                 .CreateLogger();
 
             Log.Logger = _logger;
@@ -199,6 +206,16 @@ public static class SynapicLog
             _initialized = false;
         }
     }
+
+    /// <summary>
+    /// UI log level for the rest of this run (Settings → Logging). The file log
+    /// is deliberately unaffected: it keeps Debug-and-up so a support request can
+    /// still be diagnosed after the fact.
+    /// </summary>
+    public static void SetMinimumLevel(string level) => UiLevelSwitch.MinimumLevel = ParseLevel(level);
+
+    /// <summary>Canonical name of the current UI level ("info", "debug", …).</summary>
+    public static string CurrentMinimumLevel => UiLevelSwitch.MinimumLevel.ToString().ToLowerInvariant();
 
     public static ILogger For(string sourceContext) => (_logger ?? Log.Logger).ForContext("SourceContext", sourceContext);
 

@@ -1,0 +1,50 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Synapic.Main.ViewModels.Steps"
+             xmlns:help="using:Synapic.Main.Services"
+             x:Class="Synapic.Main.Views.Operation.SourceLimitsPanel"
+             x:DataType="vm:Step1DatasourceViewModel"
+             help:HelpScope.Topic="step1-limits.html">
+
+  <!-- The processing limits (ui-design §8: "Max items / pagination → Data source
+       strip (shared limits row)"): how many items a run works on, and how much of
+       each image. They live with the shared source because every mode reads them
+       from there — tagging, dedup and upscaling all stop at the same count.
+
+       The two rows wrap: one row of six controls only fit at 1280 and clipped its
+       last checkbox below that. -->
+  <StackPanel Spacing="8">
+    <TextBlock Classes="sectionTitle" Text="How many items, and how much of each image" />
+
+    <WrapPanel Classes="settingsRow">
+      <TextBlock Classes="fieldLabel" Text="Max items:" Margin="0,0,8,8" />
+      <NumericUpDown Value="{Binding MaxItems}" Minimum="0" Maximum="1000000"
+                     Increment="50" Width="120" Margin="0,0,12,8"
+                     IsEnabled="{Binding !ProcessAll}"
+                     help:HelpScope.Topic="settings-reference.html#max-items" />
+      <CheckBox Content="Process all (page until empty)"
+                IsChecked="{Binding ProcessAll}" VerticalAlignment="Center"
+                Margin="0,0,12,8"
+                help:HelpScope.Topic="settings-reference.html#process-all"
+                ToolTip.Tip="Ignore the max-items limit and keep requesting pages until the server returns no more results (use for catalogs larger than one API response)." />
+    </WrapPanel>
+
+    <WrapPanel Classes="settingsRow">
+      <TextBlock Classes="fieldLabel" Text="AI image scale:" Margin="0,0,8,8" />
+      <!-- The fixed 200px thumbnail replaces the image outright, so the scale
+           has no effect while it is on. The chosen value is kept, not reset:
+           unchecking the box brings it back exactly as it was, and
+           ProcessingOrchestrator ignores ResizeScale when the override is on. -->
+      <ComboBox SelectedIndex="{Binding ResizeScaleIndex}"
+                ItemsSource="{Binding ResizeScaleOptions}" MinWidth="90"
+                Margin="0,0,12,8"
+                IsEnabled="{Binding !UseThumbnailOverride}"
+                ToolTip.Tip="Off while the fixed 200px thumbnail is on - the thumbnail replaces the scaled image. Untick it to choose a scale again."
+                help:HelpScope.Topic="settings-reference.html#resize-scale" />
+      <CheckBox Content="Use fixed 200px thumbnail (fast)"
+                IsChecked="{Binding UseThumbnailOverride}" VerticalAlignment="Center"
+                Margin="0,0,12,8"
+                help:HelpScope.Topic="settings-reference.html#thumbnail-override" />
+    </WrapPanel>
+  </StackPanel>
+</UserControl>

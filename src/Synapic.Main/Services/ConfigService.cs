@@ -96,6 +96,23 @@ public sealed class UiSettings
     // app. Set to false only for manual Start/Stop usage.
     public bool AutoLaunchSidecar { get; set; } = true;
     public bool TelemetryEnabled { get; set; }
+
+    /// <summary>
+    /// Diagnostics drawer (docs/ui-design.md §5 Logging, D7): shows the in-app
+    /// log view in the shell. Off by default - the design keeps no
+    /// always-visible log strip; run logs live in an operation's Output region
+    /// and this is where the full feed is switched on.
+    /// </summary>
+    public bool ShowDiagnostics { get; set; }
+
+    /// <summary>Default device for a session with no saved engine state ("" = leave the shipped default).</summary>
+    public string DefaultDevice { get; set; } = "";
+
+    /// <summary>Default tagging confidence for a new session (0 = leave the shipped default).</summary>
+    public double DefaultConfidenceThreshold { get; set; }
+
+    /// <summary>Default max items for a new session (0 = leave the shipped default).</summary>
+    public int DefaultMaxItems { get; set; }
 }
 
 /// <summary>

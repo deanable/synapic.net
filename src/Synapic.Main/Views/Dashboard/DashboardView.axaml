@@ -1,7 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Synapic.Main.ViewModels"
-             xmlns:steps="using:Synapic.Main.Views.Wizard"
+             xmlns:dash="using:Synapic.Main.Views.Dashboard"
              xmlns:help="using:Synapic.Main.Services"
              x:Class="Synapic.Main.Views.Dashboard.DashboardView"
              x:DataType="vm:MainWindowViewModel">
@@ -31,40 +31,16 @@
     </StackPanel>
 
     <!-- ── Panel 1 · Settings ─────────────────────────────────────────────────
-         The app-level settings content that exists today — the source every
-         operation runs on, and the model that does the tagging — with the
-         inference server's live state beside the title. §5's sectioned settings
-         view arrives with Phase 3; until then this panel is where the shared
-         source is configured once, which is what makes Region A read the same
-         on Tag, Dedup and Upscale. -->
+         The app-wide settings view (docs/ui-design.md §5): inference server,
+         appearance, logging, defaults, about. It is the one home for app-level
+         settings (D3) - the source and the model that used to sit here were the
+         Phase 2 placeholder, and they live where the design puts them now: the
+         shared source in every operation's Data source region (one source for
+         every mode, D4) and the model picker on the operation's source step and
+         in Tagging's Parameters region. -->
     <Border Classes="card settingsCard dashboardPanel" x:Name="SettingsPanel"
-            Padding="16" help:HelpScope.Topic="step1-datasource.html">
-      <StackPanel Spacing="12">
-        <DockPanel>
-          <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6"
-                      VerticalAlignment="Center" Margin="12,0,0,0">
-            <Ellipse Width="12" Height="12" VerticalAlignment="Center"
-                     Fill="{Binding ServerBrush}" />
-            <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
-                       FontWeight="SemiBold" FontSize="12" />
-          </StackPanel>
-          <StackPanel Spacing="2">
-            <TextBlock Text="Settings" Classes="sectionTitle" />
-            <TextBlock Classes="hint"
-                       Text="The source every operation runs on, and the model that tags it. Server controls live in the footer." />
-          </StackPanel>
-        </DockPanel>
-
-        <steps:DatasourceSourcePanel DataContext="{Binding Wizard.Step1}" />
-
-        <Separator Margin="0,2" />
-
-        <TextBlock Text="Model" Classes="sectionTitle"
-                   help:HelpScope.Topic="step2-settings.html" />
-        <TextBlock Classes="hint"
-                   Text="Which model tags the images and which device it runs on. Tag fields, thresholds and prompts live under ⚙ Settings." />
-        <steps:EngineModelPicker DataContext="{Binding Wizard.Step2}" />
-      </StackPanel>
+            Padding="16" help:HelpScope.Topic="settings-reference.html">
+      <dash:SettingsPanel DataContext="{Binding AppSettings}" />
     </Border>
 
     <!-- ── Panels 2–4 · the three operations ──────────────────────────────────

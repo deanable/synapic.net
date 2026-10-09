@@ -62,7 +62,8 @@ public partial class MainWindowViewModel : ViewModelBase
         Func<string, string?>? sidecarVariantLocator = null,
         SystemPromptPresetStore? presetStore = null,
         ISidecarDownloadService? download = null,
-        IHelpService? help = null)
+        IHelpService? help = null,
+        ConfigService? configService = null)
     {
         _sidecar = sidecar;
         _build = build;
@@ -79,44 +80,111 @@ public partial class MainWindowViewModel : ViewModelBase
         SynapicLog.UiSink.Emitted -= OnUiLogEmitted;
         SynapicLog.UiSink.Emitted += OnUiLogEmitted;
 
-        Wizard = new WizardViewModel(_session, _sidecar, connectionStore, engineStore, presetStore);
-
-        // The start screen's three route cards are gated on the source panel
-        // having something usable to work on; the panel lives on Step 1, so its
-        // readiness has to travel up to the shell's binding.
-        Wizard.Step1.PropertyChanged += (_, e) =>
+        // The app-wide settings view (ui-design §5), built *before* the wizard:
+        // its Defaults section seeds a session that has no saved engine state,
+        // and the step view models read the session as they are constructed.
+        // Everything else in it is a live view over config.json, so a change
+        // takes effect on the run in progress (theme, log level, diagnostics).
+        AppSettings = new SettingsViewModel(
+            _session,
+            configProvider: () => configService ?? ResolveConfigService());
+        AppSettings.Shell = this;
+        AppSettings.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName is nameof(Step1DatasourceViewModel.HasUsableSource))
-                OnPropertyChanged(nameof(CanStartRoute));
-            // The dashboard panels' status line is the shared record count, so it
-            // redraws when the count moves (never a stale number on a panel).
+            if (e.PropertyName is nameof(SettingsViewModel.ShowDiagnostics))
+                OnPropertyChanged(nameof(IsDiagnosticsVisible));
+        };
+        if (engineStore?.Load() is null) AppSettings.ApplyDefaultsToNewSession();
+
+        Operations = new OperationShellViewModel(_session, _sidecar, connectionStore, engineStore, presetStore);
+        Operations.NavigationLockChanged += (_, _) => OnPropertyChanged(nameof(IsNavigationLocked));
+
+        // The shared source is the dashboard panels' status line and the header
+        // profile: the record count redraws wherever it moves, never a stale
+        // number on a panel.
+        Operations.Source.PropertyChanged += (_, e) =>
+        {
             if (e.PropertyName is nameof(Step1DatasourceViewModel.CountText))
                 OnPropertyChanged(nameof(SourceCountText));
         };
 
         // The three operation adapters (phase 1) and the shell's one navigation
-        // state (D-03): a dashboard panel and the existing route commands both
-        // funnel through Shell, so "which operation is open" has exactly one
-        // answer during the strangler window. The route machine stays the entry
-        // point — Shell only records where it landed.
-        TagOperation = new TagOperationViewModel(Wizard.Step3, Wizard.Step4);
-        DedupOperation = new DedupOperationViewModel(Wizard.Dedup);
-        UpscaleOperation = new UpscaleOperationViewModel(Wizard.Upscale);
+        // state (D-03/D5): the dashboard panels and the mode commands all funnel
+        // through Shell.Open, so "which operation is open" has exactly one
+        // answer. There is no second route machine any more — the delegate below
+        // *is* the entry point, and Current is the state it writes.
+        TagOperation = new TagOperationViewModel(Operations.TagRun, Operations.TagReport);
+        DedupOperation = new DedupOperationViewModel(Operations.Dedup);
+        UpscaleOperation = new UpscaleOperationViewModel(Operations.Upscale);
         Shell = new ShellViewModel(
             new IOperationViewModel[] { TagOperation, DedupOperation, UpscaleOperation },
-            openRoute: key =>
-            {
-                switch (key)
-                {
-                    case "tag": StartTaggingRouteCommand.Execute(null); break;
-                    case "dedup": StartDedupRouteCommand.Execute(null); break;
-                    case "upscale": StartUpscaleRouteCommand.Execute(null); break;
-                }
-            },
-            goHome: () => GoHomeCommand.Execute(null));
+            openRoute: OpenOperation,
+            goHome: GoHomeCore);
     }
 
-    public WizardViewModel Wizard { get; }
+    /// <summary>
+    /// The one entry point for opening a mode (ui-design §6.2): the dashboard
+    /// panels, the mode commands and <see cref="ShellViewModel.Open"/> all land
+    /// here, so entering a mode has a single implementation and a single piece of
+    /// state. Throws away nothing — the configured source and the mode's own
+    /// parameters survive the trip (the template always shows them).
+    /// </summary>
+    private void OpenOperation(string key)
+    {
+        Operations.EnterMode(key, Shell.Current?.Key);
+        Shell.SetCurrent(key);
+        NotifyNavigationChanged();
+    }
+
+    /// <summary>Back to the dashboard: commit the mode being left, then clear Current.</summary>
+    private void GoHomeCore()
+    {
+        Operations.LeaveMode(Shell.Current?.Key);
+        Shell.SetCurrent(null);
+        NotifyNavigationChanged();
+    }
+
+    /// <summary>
+    /// The app-wide settings view (ui-design §5): the dashboard's Settings panel
+    /// renders this, and it is the only home for app-level settings (D3). Its
+    /// Inference server section reaches the server through
+    /// <see cref="SettingsViewModel.Shell"/>, which this shell sets.
+    /// (Named AppSettings because the shell already has a Settings *command* —
+    /// the shortcut that opens this view.)
+    /// </summary>
+    public SettingsViewModel AppSettings { get; }
+
+    /// <summary>
+    /// Diagnostics drawer (ui-design D7): the in-app log view is hidden unless
+    /// Settings → Logging turns it on, because no always-visible log strip is
+    /// part of the design — an operation's run log lives in its Output region.
+    /// </summary>
+    public bool IsDiagnosticsVisible => AppSettings.ShowDiagnostics;
+
+    /// <summary>
+    /// The app's ConfigService from the DI container, or null when there is none
+    /// (tests build the shell directly). Resolved defensively and lazily: the
+    /// settings view must not need the container to exist.
+    /// </summary>
+    private static ConfigService? ResolveConfigService()
+    {
+        try
+        {
+            return App.Services?.GetService(typeof(ConfigService)) as ConfigService;
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Debug(nameof(MainWindowViewModel), $"No ConfigService in the container: {e.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The operation host: it owns the view models the shared template renders
+    /// and hands each mode its Parameters/Run/Report content. Navigation lives
+    /// on <see cref="Shell"/>, not here (D5 — there is no step chain).
+    /// </summary>
+    public OperationShellViewModel Operations { get; }
 
     /// <summary>The tagging operation as the shared template sees it (phase 1 adapter).</summary>
     public TagOperationViewModel TagOperation { get; }
@@ -128,75 +196,60 @@ public partial class MainWindowViewModel : ViewModelBase
     public UpscaleOperationViewModel UpscaleOperation { get; }
 
     /// <summary>
-    /// Dashboard ⇄ operation navigation (D-03): <see cref="ShellViewModel.Current"/>
-    /// null means the dashboard, non-null names the open operation. Every route
-    /// command keeps <see cref="ShellViewModel.Current"/> in sync, so during the
-    /// strangler window it and <see cref="Route"/> never disagree.
+    /// Dashboard ⇄ operation navigation (D-03/D5): <see cref="ShellViewModel.Current"/>
+    /// null means the dashboard, non-null names the open operation. It is the
+    /// only navigation state in the app — the route strings, the Is*Route
+    /// booleans and the wizard's current step are all gone.
     /// </summary>
     public ShellViewModel Shell { get; }
 
-    // ── Routes: the app opens on a start screen with three entry points ──
+    // ── Dashboard ⇄ operation, derived from Shell.Current ─────────────────
 
-    public const string HomeRoute = "home";
-    public const string TaggingRoute = "tagging";
-    public const string DedupRoute = "dedup";
-    public const string UpscaleRoute = "upscale";
+    /// <summary>The dashboard is what is on screen (nothing is open).</summary>
+    public bool IsDashboardVisible => Shell.Current is null;
 
-    /// <summary>Which entry point is active: home (chooser), tagging, dedup or upscale.</summary>
-    [ObservableProperty]
-    private string _route = HomeRoute;
-
-    public bool IsHomeVisible => Route == HomeRoute;
+    /// <summary>An operation is open, so the template is what is on screen.</summary>
+    public bool IsOperationVisible => Shell.Current is not null;
 
     /// <summary>
-    /// Retired gate — ui-design D6 replaced the "cards stay disabled until the
-    /// source panel has a usable source" rule with "entering a mode is free, only
-    /// a run is gated", so no view binds this any more (the dashboard panels are
-    /// always enabled, and the run carries its own
-    /// <see cref="IOperationViewModel.IsRunEnabled"/> plus its reason). Kept only
-    /// so Phase 3 can delete it deliberately.
+    /// The open operation's name, or an empty string on the dashboard
+    /// (ui-design §6.1 breadcrumb: app title · Dashboard / Tag).
     /// </summary>
-    public bool CanStartRoute => Wizard.Step1.HasUsableSource;
+    public string OperationTitle => Shell.Current?.Title ?? "";
+
+    /// <summary>The shell chrome's breadcrumb text (§6.1).</summary>
+    public string Breadcrumb => Shell.Current is null ? "Dashboard" : $"Dashboard / {Shell.Current.Title}";
+
+    /// <summary>
+    /// Run lock (ui-design §6.3): while a batch runs, leaving the mode is
+    /// locked — the dashboard entry is disabled and says why. Entering the mode
+    /// is free (D6); only the exit is held until the run finishes or is stopped.
+    /// </summary>
+    public bool IsNavigationLocked => Operations.IsRunning;
 
     /// <summary>
     /// The dashboard panels' status line (ui-design §3): the shared source's
     /// record count, or the neutral hint until a source is configured — never a
     /// made-up number.
     /// </summary>
-    public string SourceCountText => string.IsNullOrWhiteSpace(Wizard.Step1.CountText)
+    public string SourceCountText => string.IsNullOrWhiteSpace(Operations.Source.CountText)
         ? "no source configured yet"
-        : Wizard.Step1.CountText!;
+        : Operations.Source.CountText!;
 
-    public bool IsWizardVisible => Route != HomeRoute;
-
-    public bool IsTaggingRoute => Route == TaggingRoute;
-
-    public bool IsDedupRoute => Route == DedupRoute;
-
-    public bool IsUpscaleRoute => Route == UpscaleRoute;
-
-    /// <summary>Route name shown in the nav bar so you always know which workflow you're in.</summary>
-    public string RouteTitle => Route switch
+    /// <summary>
+    /// Everything that used to hang off <c>Route</c> now hangs off
+    /// <see cref="ShellViewModel.Current"/>: the chrome (dashboard vs template),
+    /// the title and the help topic are all derived, so a mode change is one
+    /// write (<see cref="ShellViewModel.SetCurrent"/>) and every surface follows.
+    /// </summary>
+    private void NotifyNavigationChanged()
     {
-        TaggingRoute => "Tagging",
-        DedupRoute => "Deduplication",
-        UpscaleRoute => "Upscaling",
-        _ => "",
-    };
-
-    partial void OnRouteChanged(string value)
-    {
-        OnPropertyChanged(nameof(IsHomeVisible));
-        OnPropertyChanged(nameof(IsWizardVisible));
-        OnPropertyChanged(nameof(IsTaggingRoute));
-        OnPropertyChanged(nameof(IsDedupRoute));
-        OnPropertyChanged(nameof(IsUpscaleRoute));
-        OnPropertyChanged(nameof(RouteTitle));
-        OnPropertyChanged(nameof(IsNavHomeActive));
+        OnPropertyChanged(nameof(IsDashboardVisible));
+        OnPropertyChanged(nameof(IsOperationVisible));
+        OnPropertyChanged(nameof(OperationTitle));
+        OnPropertyChanged(nameof(Breadcrumb));
+        OnPropertyChanged(nameof(ContextHelpTopic));
     }
-
-    /// <summary>Which sidebar entry reads as the current one on the start screen.</summary>
-    public bool IsNavHomeActive => Route == HomeRoute;
 
     // ── Settings (ui-design §5/§6.1, D3) ─────────────────────────────────
 
@@ -208,44 +261,41 @@ public partial class MainWindowViewModel : ViewModelBase
     /// so nothing here builds a window any more.
     /// </summary>
     [RelayCommand]
-    private void Settings() => GoHomeCommand.Execute(null);
+    private void Settings() => Shell.Home();
 
-    /// <summary>Start screen → the four-step tagging wizard.</summary>
+    /// <summary>Dashboard → the tagging operation (one template, no step chain).</summary>
     [RelayCommand]
     private void StartTaggingRoute()
     {
-        Route = TaggingRoute;
-        Wizard.EnterTaggingRoute();
-        Shell.SetCurrent("tag");
-        SynapicLog.Info(nameof(MainWindowViewModel), "Route selected: Tagging");
+        Shell.Open(OperationShellViewModel.TagKey);
+        SynapicLog.Info(nameof(MainWindowViewModel), "Mode opened: Tagging");
     }
 
-    /// <summary>Start screen → Datasource, then the deduplication step.</summary>
+    /// <summary>Dashboard → the deduplication operation.</summary>
     [RelayCommand]
     private void StartDedupRoute()
     {
-        Route = DedupRoute;
-        Wizard.EnterDedupRoute();
-        Shell.SetCurrent("dedup");
-        SynapicLog.Info(nameof(MainWindowViewModel), "Route selected: Deduplication");
+        Shell.Open(OperationShellViewModel.DedupKey);
+        SynapicLog.Info(nameof(MainWindowViewModel), "Mode opened: Deduplication");
     }
 
-    /// <summary>Start screen → Datasource, then the upscaling step (Feature enhancement).</summary>
+    /// <summary>Dashboard → the upscaling operation (Feature enhancement).</summary>
     [RelayCommand]
     private void StartUpscaleRoute()
     {
-        Route = UpscaleRoute;
-        Wizard.EnterUpscaleRoute();
-        Shell.SetCurrent("upscale");
-        SynapicLog.Info(nameof(MainWindowViewModel), "Route selected: Upscaling");
+        Shell.Open(OperationShellViewModel.UpscaleKey);
+        SynapicLog.Info(nameof(MainWindowViewModel), "Mode opened: Upscaling");
     }
 
-    /// <summary>Back to the dashboard. The configured state (the source, the operation settings) survives the trip, but entering a route always opens at its source step — <see cref="WizardViewModel.EnterTaggingRoute"/> and its siblings reset the step, so nothing resumes mid-flow.</summary>
+    /// <summary>
+    /// Back to the dashboard (ui-design §6.2: always available, and it resumes
+    /// where you left off — the configured source, the mode's own parameters and
+    /// its last output all survive the trip).
+    /// </summary>
     [RelayCommand]
     private void GoHome()
     {
-        Route = HomeRoute;
-        Shell.SetCurrent(null);
+        Shell.Home();
         SynapicLog.Info(nameof(MainWindowViewModel), "Returned to the dashboard");
     }
 
@@ -261,11 +311,12 @@ public partial class MainWindowViewModel : ViewModelBase
 
     /// <summary>
     /// F1 fallback: the topic for the state of the app - the sidecar topic while
-    /// that panel is what is gating them, otherwise the wizard step on screen.
-    /// The window's key handler asks <see cref="Synapic.Main.Services.HelpScope"/>
-    /// first, so focus inside an annotated scope (a section, or one setting)
-    /// opens that scope's topic instead; this is what applies when focus sits
-    /// in nothing annotated.
+    /// that panel is what is gating them, otherwise the open operation's own
+    /// topic from the operation contract (<see cref="IOperationViewModel.HelpTopic"/>),
+    /// and the help home on the dashboard. The window's key handler asks
+    /// <see cref="Synapic.Main.Services.HelpScope"/> first, so focus inside an
+    /// annotated scope (a section, or one setting) opens that scope's topic
+    /// instead; this is what applies when focus sits in nothing annotated.
     /// </summary>
     [RelayCommand]
     private void OpenContextHelp() => OpenTopic(ContextHelpTopic);
@@ -273,7 +324,7 @@ public partial class MainWindowViewModel : ViewModelBase
     /// <summary>The topic <see cref="OpenContextHelpCommand"/> resolves to for the current state.</summary>
     public string ContextHelpTopic => IsSidecarRequired
         ? HelpTopics.FirstRunSidecar
-        : HelpTopics.ForStepIndex(Wizard.CurrentStepIndex);
+        : Shell.Current?.HelpTopic ?? HelpTopics.Home;
 
     /// <summary>
     /// Snapshot the current wizard+engine state to config.json (Session is the
@@ -516,11 +567,11 @@ public partial class MainWindowViewModel : ViewModelBase
         EnsureHealthPolling(value is ServerUiState.Starting or ServerUiState.Running);
         NotifyCommands();
 
-        // The model picker sits on step 1 and the start screen, not only on the
-        // settings page, so the list is fetched as soon as there is a server to
-        // ask. Failure is the picker's own message; nothing else cares.
+        // The model list lives in Tagging's Parameters region, so it is fetched
+        // as soon as there is a server to ask. Failure is the form's own message;
+        // nothing else cares.
         if (value is ServerUiState.Running)
-            _ = Wizard.Step2.EnsureModelsLoadedAsync();
+            _ = Operations.TagParameters.EnsureModelsLoadedAsync();
     }
 
     partial void OnIsBusyChanged(bool value)

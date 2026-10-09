@@ -7,6 +7,7 @@ using Avalonia.VisualTree;
 using Synapic.Main.Models;
 using Synapic.Main.ViewModels;
 using Synapic.Main.Views;
+using Synapic.Main.Views.Dashboard;
 using Synapic.Main.Views.Operation;
 using Synapic.Main.Views.Wizard;
 using Xunit;
@@ -18,9 +19,10 @@ namespace Synapic.Main.Tests;
 /// The entry point as the redesign defines it (docs/ui-design.md §2.1, §10
 /// criteria 1 and 3, decisions D1/D2/D3/D6): the app opens on the dashboard —
 /// four panels, Settings + Tag + Dedup + Upscale — entering an operation is
-/// free while its run stays gated, and one shared source is what every route
-/// shows. The strangler-window navigation facts (route booleans, sidebar
-/// entries, Back/Next) still hold here until Phase 3 collapses them.
+/// free while its run stays gated, and one shared source is what every mode
+/// shows. A mode opens straight onto the three-region template: the route
+/// booleans, the sidebar entries and the Back/Next chain are gone, and
+/// Shell.Current is the only navigation state (Phase 3 plan 02).
 /// AvaloniaFact boots the real App headlessly, which is what initializes the
 /// process-global SynapicLog the shell subscribes to (same as ServerDetectionTests).
 /// </summary>
@@ -46,16 +48,14 @@ public class RouteSplitTests
             .ToList();
 
     [AvaloniaFact]
-    public void App_opens_on_the_dashboard_with_no_route_selected()
+    public void App_opens_on_the_dashboard_with_nothing_open()
     {
         var vm = Shell(SourceSession("local", Path.GetTempPath()));
 
-        Assert.Equal(MainWindowViewModel.HomeRoute, vm.Route);
-        Assert.True(vm.IsHomeVisible);
-        Assert.False(vm.IsWizardVisible);
-        Assert.False(vm.IsTaggingRoute);
-        Assert.False(vm.IsDedupRoute);
-        Assert.Equal("", vm.RouteTitle);
+        Assert.True(vm.IsDashboardVisible);
+        Assert.False(vm.IsOperationVisible);
+        Assert.Equal("Dashboard", vm.Breadcrumb);
+        Assert.Equal("", vm.OperationTitle);
 
         // D-03: the dashboard means nothing is open.
         Assert.Null(vm.Shell.Current);
@@ -82,9 +82,9 @@ public class RouteSplitTests
             Assert.All(panels, p => Assert.True(EffectivelyVisible(p),
                 $"{p.Name} is not on screen when the app starts"));
 
-            // The three operation panels open their mode through the same command
-            // the sidebar's mode header uses — one entry point per operation here,
-            // one in the sidebar.
+            // The three operation panels open their mode through the route
+            // command, and this is the only place that command is bound now — the
+            // sidebar's duplicate mode headers went with the chrome (D5).
             var buttons = window.GetVisualDescendants().OfType<Button>().ToList();
             foreach (var command in new[]
                      {
@@ -101,86 +101,91 @@ public class RouteSplitTests
     }
 
     [AvaloniaFact]
-    public void Tagging_route_starts_the_wizard_at_source_and_model()
+    public void Tagging_route_opens_the_template_on_the_tagging_mode()
     {
         var vm = Shell(SourceSession("local", Path.GetTempPath()));
 
         vm.StartTaggingRouteCommand.Execute(null);
 
-        Assert.Equal(MainWindowViewModel.TaggingRoute, vm.Route);
-        Assert.True(vm.IsWizardVisible);
-        Assert.False(vm.IsHomeVisible);
-        Assert.Equal("Tagging", vm.RouteTitle);
-        Assert.Equal(0, vm.Wizard.CurrentStepIndex);
-        Assert.True(vm.Wizard.ShowTaggingTabs);
-        Assert.Equal("Next: Settings \u2192", vm.Wizard.NextButtonText);
-        // Deduplication stays a tail-end step of the tagging wizard.
-        Assert.False(vm.Wizard.CanGoToDedupTab);
+        Assert.True(vm.IsOperationVisible);
+        Assert.False(vm.IsDashboardVisible);
+        Assert.Equal("Tagging", vm.OperationTitle);
+        Assert.Equal("Dashboard / Tagging", vm.Breadcrumb);
         // D-03: the open operation is the tagging adapter.
         Assert.Same(vm.TagOperation, vm.Shell.Current);
         Assert.Equal("tag", vm.Shell.Current!.Key);
+
+        // Straight onto the three-region template: the mode's own content is in
+        // its regions the moment it opens — there is no step to advance to (D5).
+        var host = vm.Operations;
+        Assert.Same(host.TagParameters, host.ParametersFor("tag"));
+        Assert.Same(host.TagRun, host.RunFor("tag"));
+        Assert.Same(host.TagReport, host.ReportFor("tag"));
+        Assert.False(host.IsRunning);
     }
 
     [AvaloniaFact]
-    public void Dedup_route_offers_only_Datasource_and_Deduplication()
+    public void Dedup_route_opens_the_template_on_the_dedup_mode()
     {
         var vm = Shell(SourceSession("local", Path.GetTempPath()));
 
         vm.StartDedupRouteCommand.Execute(null);
 
-        Assert.Equal(MainWindowViewModel.DedupRoute, vm.Route);
-        Assert.True(vm.IsDedupRoute);
-        Assert.Equal("Deduplication", vm.RouteTitle);
-        Assert.Equal(0, vm.Wizard.CurrentStepIndex);
-        Assert.False(vm.Wizard.ShowTaggingTabs);   // Engine/Process/Results hidden
-        Assert.False(vm.Wizard.CanGoToStep2Tab);
-        Assert.False(vm.Wizard.CanGoToStep3Tab);
-        Assert.False(vm.Wizard.CanGoToStep4Tab);
-        Assert.True(vm.Wizard.CanGoToDedupTab);    // reachable straight from Step 1
-        Assert.Equal("Next: Deduplication \u2192", vm.Wizard.NextButtonText);
+        Assert.True(vm.IsOperationVisible);
+        Assert.Equal("Deduplication", vm.OperationTitle);
         Assert.Same(vm.DedupOperation, vm.Shell.Current);
+
+        // One layout, three modes: the template's Parameters and Output slots are
+        // the dedup view model, and no tagging step stands between them (D5).
+        var host = vm.Operations;
+        Assert.Same(host.Dedup, host.ParametersFor("dedup"));
+        Assert.Same(host.Dedup, host.RunFor("dedup"));
+        Assert.Null(host.ReportFor("dedup"));   // dedup reviews its groups inside its own page
+        Assert.NotSame(host.TagParameters, host.ParametersFor("dedup"));
+        Assert.NotSame(host.TagRun, host.RunFor("dedup"));
     }
 
     [AvaloniaFact]
-    public async Task Dedup_route_Next_skips_the_wizard_and_lands_on_Dedup_with_the_source()
+    public async Task Dedup_mode_reads_the_shared_source_with_no_step_in_between()
     {
         var folder = Path.GetTempPath();
         var vm = Shell(SourceSession("local", folder));
 
         vm.StartDedupRouteCommand.Execute(null);
-        await vm.Wizard.NextCommand.ExecuteAsync(null);
+        await vm.Operations.Source.RefreshCountAsync();
 
-        Assert.Same(vm.Wizard.Dedup, vm.Wizard.CurrentStep);
-        Assert.Equal(4, vm.Wizard.CurrentStepIndex);
-        Assert.Equal(folder, vm.Wizard.Dedup.FolderPath);   // the shared source carries over
-        Assert.True(vm.Wizard.Dedup.IsLocal);
-        Assert.Null(vm.Wizard.ValidationError);
+        // The mode reads the shared source directly: opening it is all it takes,
+        // and with a folder that exists the run is ready.
+        Assert.Equal(folder, vm.Operations.Dedup.FolderPath);   // the shared source carries over
+        Assert.True(vm.Operations.Dedup.IsLocal);
+        Assert.True(vm.DedupOperation.IsRunEnabled);
+        Assert.Null(vm.DedupOperation.RunDisabledReason);
     }
 
     [AvaloniaFact]
-    public async Task Dedup_route_refuses_to_leave_Datasource_without_a_source()
+    public void Dedup_run_is_gated_without_a_source_and_says_why()
     {
         var vm = Shell(SourceSession("local", localPath: ""));
 
+        // Entering the mode without a source is free (D6) — the gate belongs to
+        // the run, not to navigation.
         vm.StartDedupRouteCommand.Execute(null);
-        await vm.Wizard.NextCommand.ExecuteAsync(null);
+        Assert.True(vm.IsOperationVisible);
 
-        Assert.Equal(0, vm.Wizard.CurrentStepIndex);
-        Assert.NotNull(vm.Wizard.ValidationError);
-        Assert.Contains("folder", vm.Wizard.ValidationError, StringComparison.OrdinalIgnoreCase);
+        Assert.False(vm.DedupOperation.IsRunEnabled);
+        Assert.NotNull(vm.DedupOperation.RunDisabledReason);
+        Assert.Contains("folder", vm.DedupOperation.RunDisabledReason, StringComparison.OrdinalIgnoreCase);
     }
 
     [AvaloniaFact]
-    public async Task Dedup_route_selects_the_catalog_source_on_the_dedup_step()
+    public void Dedup_mode_reads_the_catalog_source_from_the_shared_source()
     {
         var vm = Shell(SourceSession("daminion", localPath: ""));
 
         vm.StartDedupRouteCommand.Execute(null);
-        await vm.Wizard.NextCommand.ExecuteAsync(null);
 
-        Assert.Same(vm.Wizard.Dedup, vm.Wizard.CurrentStep);
-        Assert.True(vm.Wizard.Dedup.IsDaminion);
-        Assert.False(vm.Wizard.Dedup.IsLocal);
+        Assert.True(vm.Operations.Dedup.IsDaminion);
+        Assert.False(vm.Operations.Dedup.IsLocal);
     }
 
     /// <summary>
@@ -193,8 +198,8 @@ public class RouteSplitTests
     {
         var folder = Path.GetTempPath();
         var vm = Shell(SourceSession("local", folder));
-        await vm.Wizard.Step1.RefreshCountAsync();
-        var count = vm.Wizard.Step1.CountText;
+        await vm.Operations.Source.RefreshCountAsync();
+        var count = vm.Operations.Source.CountText;
         Assert.False(string.IsNullOrWhiteSpace(count),
             "the shared source has no record count, so criterion 3 cannot be checked");
 
@@ -212,18 +217,18 @@ public class RouteSplitTests
                 enter();
                 Dispatcher.UIThread.RunJobs();   // the route is visible now: let the template realize Region A
 
-                var strip = Assert.Single(window.GetVisualDescendants().OfType<DataSourceStrip>());
-                Assert.Same(vm.Wizard.Step1, strip.DataContext);
+                var strip = Assert.Single(window.GetVisualDescendants().OfType<DatasourceSourcePanel>());
+                Assert.Same(vm.Operations.Source, strip.DataContext);
                 Assert.True(EffectivelyVisible(strip), $"{route}: Region A is not on screen");
 
                 var texts = strip.GetVisualDescendants().OfType<TextBlock>()
                     .Select(t => t.Text).ToList();
                 Assert.Contains(count, texts);
-                Assert.Contains(vm.Wizard.Step1.LocalSourceText, texts);
+                Assert.Contains(vm.Operations.Source.LocalSourceText, texts);
 
                 // The modes read that same source rather than a copy of it.
-                Assert.Equal(folder, vm.Wizard.Dedup.FolderPath);
-                Assert.Contains(folder, vm.Wizard.Upscale.SourceSummary);
+                Assert.Equal(folder, vm.Operations.Dedup.FolderPath);
+                Assert.Contains(folder, vm.Operations.Upscale.SourceSummary);
             }
         }
         finally
@@ -234,12 +239,12 @@ public class RouteSplitTests
 
     /// <summary>
     /// The real compiled XAML: the dashboard panels must carry their commands,
-    /// and switching routes must show/hide the nav bar and the tagging tabs.
-    /// A mistyped binding path is silent in Avalonia, so this asserts the wired
-    /// state instead of only the view model.
+    /// and entering a mode must swap the two content views and hand the template
+    /// the open mode's regions. A mistyped binding path is silent in Avalonia, so
+    /// this asserts the wired state instead of only the view model.
     /// </summary>
     [AvaloniaFact]
-    public void Dashboard_panels_and_route_visibility_are_bound_in_the_real_window()
+    public void Dashboard_panels_and_mode_visibility_are_bound_in_the_real_window()
     {
         var window = new MainWindow { DataContext = Shell(SourceSession("local", Path.GetTempPath())) };
         window.Show();
@@ -248,39 +253,42 @@ public class RouteSplitTests
             var vm = (MainWindowViewModel)window.DataContext!;
             var buttons = window.GetVisualDescendants().OfType<Button>().ToList();
 
-            // The dashboard panels, not the sidebar's mode headers: both are
-            // bound to the same route commands by design (the sidebar switches mode).
+            // The dashboard panels carry their commands — one card per operation.
             var tagCard = buttons.Single(b => b.Command == vm.StartTaggingRouteCommand && b.Classes.Contains("routeCard"));
             var dedupCard = buttons.Single(b => b.Command == vm.StartDedupRouteCommand && b.Classes.Contains("routeCard"));
-            var operationEntry = buttons.Single(b => b.Command == vm.GoHomeCommand);
-            Assert.True(tagCard.IsVisible);
-            Assert.True(dedupCard.IsVisible);
             var upscaleCard = buttons.Single(b => b.Command == vm.StartUpscaleRouteCommand && b.Classes.Contains("routeCard"));
-            Assert.True(upscaleCard.IsVisible);
+            Assert.True(EffectivelyVisible(tagCard));
+            Assert.True(EffectivelyVisible(dedupCard));
+            Assert.True(EffectivelyVisible(upscaleCard));
 
-            // The dashboard entry ("2 · Operation type") is the way back to the
-            // dashboard from inside a route, so it is on screen always;
-            // the sidebar's workflow group only appears once a route is active.
-            Assert.Equal("2 · Operation type", operationEntry.Content);
-            Assert.True(EffectivelyVisible(operationEntry));
-            Assert.False(IsTabVisible(window, "4 · Process"));
-            Assert.False(IsTabVisible(window, "3 · Settings…"));
+            // Exactly one of the two content views is on screen: the dashboard now,
+            // with the header's Dashboard entry off screen because it is not needed.
+            Assert.True(EffectivelyVisible(Assert.Single(
+                window.GetVisualDescendants().OfType<DashboardView>())));
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<OperationLayout>(), EffectivelyVisible);
+            Assert.False(EffectivelyVisible(Assert.Single(buttons, b => b.Command == vm.GoHomeCommand)));
 
-            vm.StartDedupRouteCommand.Execute(null);
-            Assert.False(IsTabVisible(window, "4 · Process"));      // dedup route: no tagging steps
-            Assert.False(IsTabVisible(window, "5 · Results"));
-            Assert.True(IsTabVisible(window, "4 · Deduplication"));
-            Assert.True(IsTabVisible(window, "3 · Settings…"));
-            // The route reads as Source & model → Deduplication, so step 1 is on screen too.
-            Assert.True(IsTabVisible(window, "1 · Source & model"));
+            // Each mode brings the template on screen with its own regions, takes
+            // the dashboard off it, and lights up the header entry that goes back.
+            foreach (var (mode, enter, parameters, run) in new (string, Action, object, object)[]
+                     {
+                         ("dedup", () => vm.StartDedupRouteCommand.Execute(null), vm.Operations.Dedup, vm.Operations.Dedup),
+                         ("upscale", () => vm.StartUpscaleRouteCommand.Execute(null), vm.Operations.Upscale, vm.Operations.Upscale),
+                         ("tag", () => vm.StartTaggingRouteCommand.Execute(null), vm.Operations.TagParameters, vm.Operations.TagRun),
+                     })
+            {
+                enter();
+                Dispatcher.UIThread.RunJobs();
 
-            vm.StartTaggingRouteCommand.Execute(null);
-            Assert.True(IsTabVisible(window, "4 · Process"));
-            Assert.True(IsTabVisible(window, "5 · Results"));
-            // The other operations stay one click away through their mode
-            // headers; their own run steps appear once they own the wizard.
-            Assert.True(IsTabVisible(window, "🧹  Dedup"));
-            Assert.False(IsTabVisible(window, "4 · Deduplication"));
+                var layout = Assert.Single(window.GetVisualDescendants().OfType<OperationLayout>());
+                Assert.True(EffectivelyVisible(layout), $"{mode}: the template is not on screen");
+                Assert.Same(parameters, layout.Parameters);
+                Assert.Same(run, layout.Run);
+
+                Assert.DoesNotContain(window.GetVisualDescendants().OfType<DashboardView>(), EffectivelyVisible);
+                Assert.True(EffectivelyVisible(Assert.Single(buttons, b => b.Command == vm.GoHomeCommand)));
+                Assert.Equal($"Dashboard / {vm.OperationTitle}", vm.Breadcrumb);
+            }
         }
         finally
         {
@@ -334,7 +342,7 @@ public class RouteSplitTests
             Assert.Equal(Colors.Red, ((ISolidColorBrush)lights[1].Fill!).Color);
 
             var folder = Path.GetTempPath();
-            vm.Wizard.Step1.LocalPath = folder;
+            vm.Operations.Source.LocalPath = folder;
 
             // …green once it does, and with a usable source the run opens up.
             Assert.Equal(Colors.ForestGreen, ((ISolidColorBrush)lights[1].Fill!).Color);
@@ -352,30 +360,33 @@ public class RouteSplitTests
     }
 
     /// <summary>
-    /// The dashboard has to stay usable with the source panel on it: the panel is
-    /// laid out above the three operation panels, and they keep a real size
-    /// instead of being pushed out of the window. Headless layout runs the real
-    /// measure/arrange, so this catches a panel that swallowed the viewport.
+    /// Region A holds the whole source form now, so the region below it has to
+    /// keep a real size: the source is laid out above Parameters and Output, and
+    /// the dense form does not swallow the viewport. Headless layout runs the
+    /// real measure/arrange, so this catches a panel that did.
     /// </summary>
     [AvaloniaFact]
-    public void Dashboard_lays_the_source_panel_out_above_the_operation_panels()
+    public void Operation_regions_lay_the_source_form_out_above_the_parameters_region()
     {
         var window = new MainWindow { DataContext = Shell(SourceSession("daminion", localPath: "")) };
         window.Show();
         try
         {
             var vm = (MainWindowViewModel)window.DataContext!;
-            var panel = window.GetVisualDescendants().OfType<DatasourceSourcePanel>().First();
-            var card = window.GetVisualDescendants().OfType<Button>()
-                .Single(b => b.Command == vm.StartTaggingRouteCommand && b.Classes.Contains("routeCard"));
+            vm.StartDedupRouteCommand.Execute(null);
+            Dispatcher.UIThread.RunJobs();
 
-            Assert.True(panel.Bounds.Height > 0, "the source panel did not lay out");
-            Assert.True(card.Bounds.Width > 0 && card.Bounds.Height > 0, "the operation panels did not lay out");
+            var panel = Assert.Single(window.GetVisualDescendants().OfType<DatasourceSourcePanel>());
+            var parameters = Assert.Single(window.GetVisualDescendants().OfType<Border>(),
+                b => b.Classes.Contains("parametersRegion"));
 
-            var panelTop = panel.TranslatePoint(new Point(0, 0), window)!.Value;
-            var cardTop = card.TranslatePoint(new Point(0, 0), window)!.Value;
-            Assert.True(cardTop.Y >= panelTop.Y + panel.Bounds.Height,
-                $"the panels overlap the source panel (panel ends at {panelTop.Y + panel.Bounds.Height}, card starts at {cardTop.Y})");
+            Assert.True(panel.Bounds.Height > 0, "the source form did not lay out");
+            Assert.True(parameters.Bounds.Height > 0, "the Parameters region did not lay out");
+
+            var panelEnd = panel.TranslatePoint(new Point(0, panel.Bounds.Height), window)!.Value.Y;
+            var parametersTop = parameters.TranslatePoint(new Point(0, 0), window)!.Value.Y;
+            Assert.True(parametersTop >= panelEnd,
+                $"the Parameters region overlaps the source form (source ends at {panelEnd}, Parameters starts at {parametersTop})");
         }
         finally
         {
@@ -384,28 +395,42 @@ public class RouteSplitTests
     }
 
     /// <summary>
-    /// The Daminion connect form is on the dashboard and only there — inside its
-    /// Settings panel, not on an operation panel — and Step 1 reports the source
-    /// instead of asking for it a second time.
+    /// The Daminion connect form has exactly one home: the Data source region of
+    /// the operation template (ui-design §8 — local folder, Daminion login,
+    /// scope and filters all land there). The dashboard's Settings panel belongs
+    /// to app-wide settings now (§5) and carries no source form at all, so the
+    /// source cannot be configured in two places.
     /// </summary>
     [AvaloniaFact]
-    public void Daminion_connect_form_lives_on_the_dashboard_Settings_panel_only()
+    public void Daminion_connect_form_lives_in_the_data_source_region_only()
     {
         var window = new MainWindow { DataContext = Shell(SourceSession("daminion", localPath: "")) };
         window.Show();
         try
         {
             var vm = (MainWindowViewModel)window.DataContext!;
+
+            // The dashboard is what is on top, and its Settings panel is the §5
+            // settings view: no source form on it.
+            Assert.True(vm.IsDashboardVisible);
+            Assert.False(vm.IsOperationVisible);
+            var settingsPanel = Assert.Single(window.GetVisualDescendants().OfType<Control>(),
+                c => c.Name == "SettingsPanel");
+            Assert.Empty(settingsPanel.GetVisualDescendants().OfType<DatasourceSourcePanel>());
+
+            // Inside an operation the one shared source is configured in Region A,
+            // and that is the only copy of the form in the window.
+            vm.StartDedupRouteCommand.Execute(null);
+            Dispatcher.UIThread.RunJobs();
+
+            var source = Assert.Single(window.GetVisualDescendants().OfType<DatasourceSourcePanel>());
+            Assert.Same(vm.Operations.Source, source.DataContext);
+
             var connect = Assert.Single(window.GetVisualDescendants().OfType<Button>(),
-                b => b.Command == vm.Wizard.Step1.ConnectCommand);
-
-            Assert.True(vm.IsHomeVisible);          // the dashboard is what is on top
-            Assert.False(vm.IsWizardVisible);
+                b => b.Command == vm.Operations.Source.ConnectCommand);
             Assert.True(EffectivelyVisible(connect));
-
-            var panel = connect.GetVisualAncestors().OfType<Control>()
-                .First(c => c.Classes.Contains("dashboardPanel"));
-            Assert.Equal("SettingsPanel", panel.Name);
+            Assert.Contains(connect.GetVisualAncestors().OfType<Control>(),
+                c => c.Classes.Contains("dataSourceRegion"));
         }
         finally
         {
@@ -414,41 +439,33 @@ public class RouteSplitTests
     }
 
     [AvaloniaFact]
-    public void Home_returns_to_the_dashboard_and_another_route_opens_at_the_source()
+    public void Home_returns_to_the_dashboard_and_another_mode_opens_on_the_shared_source()
     {
-        var vm = Shell(SourceSession("local", Path.GetTempPath()));
+        var folder = Path.GetTempPath();
+        var vm = Shell(SourceSession("local", folder));
 
         vm.StartDedupRouteCommand.Execute(null);
-        vm.Wizard.NextCommand.Execute(null);   // datasource → dedup
         Assert.Same(vm.DedupOperation, vm.Shell.Current);
 
         vm.GoHomeCommand.Execute(null);
 
-        Assert.Equal(MainWindowViewModel.HomeRoute, vm.Route);
-        Assert.True(vm.IsHomeVisible);
-        Assert.False(vm.IsWizardVisible);
+        Assert.True(vm.IsDashboardVisible);
+        Assert.False(vm.IsOperationVisible);
+        Assert.Equal("Dashboard", vm.Breadcrumb);
         Assert.Null(vm.Shell.Current);          // D-03: the dashboard means nothing is open
 
-        // Picking another route later opens it at the Datasource step: Enter*Route
-        // resets the step, so nothing resumes mid-flow — what survives the trip is
-        // the configured source and settings, not the step position.
+        // Picking another mode later opens it on the same shared source: there is
+        // no step position to resume mid-flow, and what survives the trip is the
+        // configured source and settings.
         vm.StartTaggingRouteCommand.Execute(null);
-        Assert.Equal(MainWindowViewModel.TaggingRoute, vm.Route);
-        Assert.Equal(0, vm.Wizard.CurrentStepIndex);
-        Assert.True(vm.Wizard.ShowTaggingTabs);
         Assert.Same(vm.TagOperation, vm.Shell.Current);
+        Assert.Equal("Tagging", vm.OperationTitle);
+        Assert.Equal(folder, vm.Operations.Dedup.FolderPath);   // still the one source (D4)
     }
 
     /// <summary>Effective visibility: a control whose own flag is on is still
-    /// hidden while the nav bar (its ancestor) is collapsed on the dashboard.</summary>
+    /// hidden while the content view it lives in is collapsed on the dashboard.</summary>
     private static bool EffectivelyVisible(Control control) =>
         control.IsVisible &&
         control.GetVisualAncestors().OfType<Control>().All(ancestor => ancestor.IsVisible);
-
-    private static bool IsTabVisible(Window window, string content)
-    {
-        var button = window.GetVisualDescendants().OfType<Button>()
-            .FirstOrDefault(b => b.Content is string text && text == content);
-        return button is not null && EffectivelyVisible(button);
-    }
 }

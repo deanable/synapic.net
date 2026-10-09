@@ -1,0 +1,225 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Synapic.Main.ViewModels"
+             xmlns:help="using:Synapic.Main.Services"
+             x:Class="Synapic.Main.Views.Dashboard.SettingsPanel"
+             x:DataType="vm:SettingsViewModel">
+
+  <!-- The app-wide settings view (docs/ui-design.md §5, decision D3). It lives
+       on the dashboard's Settings panel because §5 says app-wide settings have
+       exactly one home, and the dashboard is where the app starts (D1), so the
+       panel is reachable without entering an operation at all.
+
+       Every section is always in the tree (a single scrolling column, the form
+       §5 allows for narrow windows): the layout audit walks this panel at every
+       window size and must be able to measure each section, which a tab control
+       would not allow. Rows wrap rather than clip - the window has no minimum
+       width, so a dense row that only fits at 1280 is a row that loses its last
+       control on a smaller screen.
+
+       The Inference server section binds the shell (SettingsViewModel.Shell) for
+       the server it controls: status, Start/Stop/Build, the per-platform variant
+       rows and the device fallback warning. The shell keeps only the status
+       indicator (§6.1/D7), so there is one place that *operates* the server. -->
+  <StackPanel Spacing="12">
+
+    <StackPanel Spacing="2">
+      <TextBlock Text="Settings" Classes="sectionTitle" />
+      <TextBlock Classes="hint" TextWrapping="Wrap"
+                 Text="App-wide settings. Each operation's own parameters are inline in its Parameters region, and the shared data source is in the Data source region of every operation." />
+    </StackPanel>
+
+    <!-- ── §5 · Inference server ─────────────────────────────────────────── -->
+    <Border Classes="card settingsCard settingsSection" x:Name="SectionInferenceServer"
+            Padding="16" help:HelpScope.Topic="first-run-sidecar.html">
+      <StackPanel Spacing="8">
+        <TextBlock Text="Inference server" Classes="sectionTitle" />
+        <TextBlock Classes="hint" TextWrapping="Wrap"
+                   Text="The local sidecar that runs the models. Nothing can be tagged until one is ready; the rest of the application stays disabled until then." />
+
+        <WrapPanel>
+          <Ellipse Width="12" Height="12" VerticalAlignment="Center" Margin="0,0,8,8"
+                   Fill="{Binding Shell.ServerBrush}" />
+          <TextBlock Text="{Binding Shell.StatusText}" VerticalAlignment="Center"
+                     FontWeight="SemiBold" FontSize="12" Margin="0,0,12,8"
+                     TextWrapping="Wrap" />
+          <TextBlock Text="{Binding Shell.ServerDeviceText}"
+                     IsVisible="{Binding Shell.IsServerDeviceVisible}"
+                     VerticalAlignment="Center" FontSize="11" FontWeight="SemiBold"
+                     Opacity="0.75" Margin="0,0,12,8"
+                     ToolTip.Tip="Compute device the inference server reports for the loaded model." />
+        </WrapPanel>
+
+        <WrapPanel>
+          <Button Content="Start Server" Command="{Binding Shell.StartServerCommand}"
+                  Margin="0,0,8,8" />
+          <Button Content="Stop Server" Command="{Binding Shell.StopServerCommand}"
+                  Margin="0,0,8,8" />
+          <Button Content="Build Server" Command="{Binding Shell.BuildServerCommand}"
+                  IsVisible="{Binding Shell.IsBuildButtonVisible}" Margin="0,0,8,8" />
+          <CheckBox Content="Start the server with the app"
+                    IsChecked="{Binding AutoLaunchSidecar}" VerticalAlignment="Center"
+                    Margin="0,0,8,8"
+                    ToolTip.Tip="On: the sidecar starts with the app and stops with it. Off: Start/Stop only, by hand." />
+        </WrapPanel>
+
+        <!-- What the server reports about the device it is really using, when it
+             is not the one selected. Silent otherwise. -->
+        <TextBlock Text="{Binding Shell.DeviceNotice}"
+                   IsVisible="{Binding Shell.IsDeviceNoticeVisible}"
+                   FontSize="11" Foreground="{DynamicResource SynapicWarningBrush}"
+                   TextWrapping="Wrap" />
+
+        <StackPanel Orientation="Horizontal" Spacing="6"
+                    IsVisible="{Binding Shell.IsDownloadVisible}">
+          <ProgressBar Value="{Binding Shell.DownloadPercent}" Maximum="100"
+                       Width="150" Height="6" VerticalAlignment="Center" />
+          <TextBlock Text="{Binding Shell.DownloadText}" VerticalAlignment="Center"
+                     FontSize="11" Opacity="0.85" TextWrapping="Wrap" />
+        </StackPanel>
+
+        <Separator Margin="0,2" />
+
+        <!-- One row per buildable variant (CPU / CUDA): build it from source, or
+             fetch the prebuilt one from the release. Mirrors the shell's own
+             setup panel, which this section replaces (nothing is configured in
+             two places - §5). -->
+        <TextBlock Text="Platform variants" FontWeight="SemiBold" FontSize="12" />
+        <ItemsControl ItemsSource="{Binding Shell.SidecarVariants}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:SidecarVariantViewModel">
+              <StackPanel Orientation="Vertical" Margin="0,3">
+                <WrapPanel>
+                  <Ellipse Width="10" Height="10" VerticalAlignment="Center"
+                           Margin="0,0,8,6" Fill="{Binding StatusBrush}" />
+                  <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"
+                             VerticalAlignment="Center" Margin="0,0,8,6" />
+                  <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
+                             Opacity="0.8" Margin="0,0,8,6" />
+                  <TextBlock Text="{Binding Rid}" VerticalAlignment="Center"
+                             Opacity="0.45" FontSize="11" Margin="0,0,8,6" />
+                  <ProgressBar IsVisible="{Binding IsBusy}"
+                               IsIndeterminate="{Binding IsBuildIndeterminate}"
+                               Value="{Binding BuildPercent}" Maximum="100"
+                               Width="170" Height="6" VerticalAlignment="Center"
+                               Margin="0,0,8,6" />
+                  <Button Content="Build sidecar" Command="{Binding BuildCommand}"
+                          IsVisible="{Binding IsBuildButtonVisible}" Margin="0,0,8,6"
+                          ToolTip.Tip="Compile this variant from source; replaces an outdated executable with fresh bytes" />
+                  <Button Content="Download" Command="{Binding DownloadCommand}"
+                          IsVisible="{Binding IsDownloadButtonVisible}" Margin="0,0,8,6"
+                          ToolTip.Tip="Fetch the prebuilt executable from the latest GitHub release instead of compiling it; replaces an outdated executable" />
+                  <Button Content="Up to date" IsEnabled="False"
+                          IsVisible="{Binding IsUpToDateVisible}" Margin="0,0,8,6"
+                          ToolTip.Tip="Nothing to do: this executable matches the source it was built from, and the GitHub release carries nothing newer for it." />
+                  <TextBlock Text="{Binding BuildStage}" IsVisible="{Binding IsBusy}"
+                             VerticalAlignment="Center" Opacity="0.8" FontSize="11"
+                             TextTrimming="CharacterEllipsis" MaxWidth="280"
+                             Margin="0,0,8,6" />
+                </WrapPanel>
+                <TextBlock Text="{Binding Detail}" Opacity="0.6" FontSize="11"
+                           TextWrapping="Wrap" Margin="18,2,0,0" />
+                <TextBlock Text="{Binding StaleText}" IsVisible="{Binding IsStale}"
+                           Foreground="{DynamicResource SynapicWarningBrush}"
+                           FontSize="11" TextWrapping="Wrap" Margin="18,2,0,0" />
+                <TextBlock Text="{Binding GitHubUpdateText}" IsVisible="{Binding IsGitHubUpdate}"
+                           Foreground="{DynamicResource SynapicWarningBrush}"
+                           FontSize="11" TextWrapping="Wrap" Margin="18,2,0,0" />
+              </StackPanel>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+    </Border>
+
+    <!-- ── §5 · Appearance ──────────────────────────────────────────────── -->
+    <Border Classes="card settingsCard settingsSection" x:Name="SectionAppearance"
+            Padding="16" help:HelpScope.Topic="settings-reference.html">
+      <StackPanel Spacing="8">
+        <TextBlock Text="Appearance" Classes="sectionTitle" />
+
+        <WrapPanel Classes="settingsRow">
+          <TextBlock Classes="fieldLabel" Text="Theme:" Margin="0,0,8,8" />
+          <ComboBox SelectedIndex="{Binding ThemeIndex}" ItemsSource="{Binding ThemeOptionList}"
+                    MinWidth="140" Margin="0,0,12,8"
+                    ToolTip.Tip="System follows the operating system's light/dark setting." />
+          <TextBlock Classes="hint" VerticalAlignment="Center" Margin="0,0,0,8"
+                     Text="Density is fixed: the same 2/4/8/12/16 rhythm everywhere." />
+        </WrapPanel>
+      </StackPanel>
+    </Border>
+
+    <!-- ── §5 · Logging ─────────────────────────────────────────────────── -->
+    <Border Classes="card settingsCard settingsSection" x:Name="SectionLogging"
+            Padding="16" help:HelpScope.Topic="step3-log.html">
+      <StackPanel Spacing="8">
+        <TextBlock Text="Logging" Classes="sectionTitle" />
+
+        <WrapPanel Classes="settingsRow">
+          <TextBlock Classes="fieldLabel" Text="Log level:" Margin="0,0,8,8" />
+          <ComboBox SelectedIndex="{Binding LogLevelIndex}" ItemsSource="{Binding LogLevelOptionList}"
+                    MinWidth="140" Margin="0,0,12,8"
+                    ToolTip.Tip="Level shown in the in-app log view. The log file always keeps Debug and above, so a support question can still be answered afterwards." />
+          <Button Content="Open log folder" Command="{Binding OpenLogFolderCommand}"
+                  Margin="0,0,12,8" />
+          <CheckBox Content="Show diagnostics" IsChecked="{Binding ShowDiagnostics}"
+                    VerticalAlignment="Center" Margin="0,0,0,8"
+                    ToolTip.Tip="Show the in-app log view in the window. Off by default: an operation's run log lives in its Output region." />
+        </WrapPanel>
+
+        <TextBlock Classes="hint" TextWrapping="Wrap"
+                   Text="{Binding LogFilePath, StringFormat='This run: {0}'}" />
+      </StackPanel>
+    </Border>
+
+    <!-- ── §5 · Defaults ────────────────────────────────────────────────── -->
+    <Border Classes="card settingsCard settingsSection" x:Name="SectionDefaults"
+            Padding="16" help:HelpScope.Topic="settings-reference.html">
+      <StackPanel Spacing="8">
+        <TextBlock Text="Defaults" Classes="sectionTitle" />
+        <TextBlock Classes="hint" TextWrapping="Wrap"
+                   Text="What a new session starts from. Once a session has saved its own engine settings, those win - these are the first run's values, not an override of the current one." />
+
+        <WrapPanel Classes="settingsRow">
+          <TextBlock Classes="fieldLabel" Text="Device:" Margin="0,0,8,8" />
+          <ComboBox SelectedIndex="{Binding DefaultDeviceIndex}"
+                    ItemsSource="{Binding DefaultDeviceOptionList}" MinWidth="120"
+                    Margin="0,0,12,8"
+                    ToolTip.Tip="Compute device a new session starts on; the engine form can still change it per session." />
+        </WrapPanel>
+
+        <WrapPanel Classes="settingsRow">
+          <TextBlock Classes="fieldLabel" Text="Tagging confidence:" Margin="0,0,8,8" />
+          <NumericUpDown Value="{Binding DefaultConfidenceThreshold}" Minimum="0" Maximum="1"
+                         Increment="0.05" FormatString="0.00" Width="120" Margin="0,0,12,8" />
+          <TextBlock Classes="fieldLabel" Text="Max items:" Margin="0,0,8,8" />
+          <NumericUpDown Value="{Binding DefaultMaxItems}" Minimum="0" Maximum="1000000"
+                         Increment="50" Width="120" Margin="0,0,12,8" />
+        </WrapPanel>
+      </StackPanel>
+    </Border>
+
+    <!-- ── §5 · About ───────────────────────────────────────────────────── -->
+    <Border Classes="card settingsCard settingsSection" x:Name="SectionAbout"
+            Padding="16" help:HelpScope.Topic="index.html">
+      <StackPanel Spacing="8">
+        <TextBlock Text="About" Classes="sectionTitle" />
+
+        <WrapPanel>
+          <TextBlock Text="{Binding VersionText, StringFormat='Synapic {0}'}"
+                     VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,12,8" />
+          <Button Content="Help home" Command="{Binding Shell.OpenHelpCommand}"
+                  Margin="0,0,8,8"
+                  ToolTip.Tip="The help's home page. F1 opens the topic for what you are looking at." />
+          <Button Content="Repository" Command="{Binding OpenRepositoryCommand}"
+                  Margin="0,0,8,8"
+                  ToolTip.Tip="The project's source and releases, on GitHub." />
+        </WrapPanel>
+
+        <TextBlock Classes="hint" TextWrapping="Wrap"
+                   Text="{Binding ConfigFilePath, StringFormat='Settings file: {0}'}" />
+      </StackPanel>
+    </Border>
+
+  </StackPanel>
+</UserControl>

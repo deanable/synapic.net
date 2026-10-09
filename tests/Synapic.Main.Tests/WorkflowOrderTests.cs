@@ -5,7 +5,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Synapic.Main.Models;
 using Synapic.Main.ViewModels;
-using Synapic.Main.ViewModels.Steps;
+using Synapic.Main.ViewModels.Operations;
 using Synapic.Main.Views;
 using Synapic.Main.Views.Operation;
 using Synapic.Main.Views.Wizard;
@@ -14,10 +14,12 @@ using Xunit;
 namespace Synapic.Main.Tests;
 
 /// <summary>
-/// The workflow as a systematic sequence, which is the whole point of the
-/// redesign: 1 source &amp; model, 2 operation type, 3 the operation's settings
-/// (on a dialog), then the steps that operation runs. These drive the real
-/// compiled XAML — a mistyped binding path is silent in Avalonia.
+/// The shell's structure after the navigation collapse (ui-design §6, decision
+/// D5): the dashboard is the entry point, an operation opens straight onto the
+/// three-region template, and the old numbered sequence (1 source &amp; model,
+/// 2 operation type, 3 settings, then the operation's steps) exists nowhere —
+/// neither as a sidebar nor as an action bar. These drive the real compiled
+/// XAML, because a mistyped binding path is silent in Avalonia.
 /// </summary>
 public class WorkflowOrderTests
 {
@@ -36,65 +38,75 @@ public class WorkflowOrderTests
             () => null, null, null, _ => null);
     }
 
-    private static List<string> SidebarEntries(Window window) =>
+    /// <summary>
+    /// The chrome D-01 deletes: the numbered sidebar (navItem/navMode) and the
+    /// Back/Next/StartOver action bar. The absence is the invariant now — a
+    /// re-introduced sidebar entry fails here rather than shipping.
+    /// </summary>
+    private static List<Button> DeletedChrome(Window window) =>
         window.GetVisualDescendants().OfType<Button>()
-            .Where(b => b.Classes.Contains("navItem") || b.Classes.Contains("navMode"))
-            .Where(EffectivelyVisible)
-            .Select(b => b.Content as string ?? "")
+            .Where(b => b.Classes.Contains("navItem")
+                        || b.Classes.Contains("navMode")
+                        || (b.Content as string) is "← Back" or "Next →" or "Start Over")
+            .ToList();
+
+    private static List<Button> RouteCards(Window window) =>
+        window.GetVisualDescendants().OfType<Button>()
+            .Where(b => b.Classes.Contains("routeCard") && EffectivelyVisible(b))
             .ToList();
 
     private static bool EffectivelyVisible(Control control) =>
         control.IsVisible &&
         control.GetVisualAncestors().OfType<Control>().All(ancestor => ancestor.IsVisible);
 
+    /// <summary>
+    /// The dashboard reads as Settings plus the three operations, and the
+    /// numbered sidebar that used to spell out "1 · Source &amp; model →
+    /// 2 · Operation type → the steps of the chosen operation" is gone from the
+    /// window at every point in the flow (ui-design §6, D5).
+    /// </summary>
     [AvaloniaFact]
-    public void Sidebar_reads_as_the_numbered_setup_then_the_steps_of_the_chosen_operation()
+    public void Dashboard_reads_as_settings_then_the_three_operations_with_no_sidebar()
     {
         var shell = Shell("local", Path.GetTempPath());
         var window = new MainWindow { DataContext = shell };
         window.Show();
         try
         {
-            // On the start screen the setup pipeline is on screen (as the page
-            // itself), and no operation has been chosen yet.
-            Assert.Equal(new[] { "2 · Operation type" }, SidebarEntries(window));
+            // On the dashboard: the Settings panel on screen, no operation open.
+            Assert.True(shell.IsDashboardVisible);
+            Assert.Null(shell.Shell.Current);
+            Assert.Empty(DeletedChrome(window));
 
-            shell.StartTaggingRouteCommand.Execute(null);
-            Assert.Equal(new[]
-            {
-                "1 · Source & model",
-                "2 · Operation type",
-                "3 · Settings…",
-                "🏷  Tagging",
-                "4 · Process",
-                "5 · Results",
-                "🧹  Dedup",
-                "✨  Upscale",
-            }, SidebarEntries(window));
+            var cards = RouteCards(window);
+            Assert.Equal(3, cards.Count);
 
-            shell.StartDedupRouteCommand.Execute(null);
-            Assert.Equal(new[]
-            {
-                "1 · Source & model",
-                "2 · Operation type",
-                "3 · Settings…",
-                "🏷  Tagging",
-                "🧹  Dedup",
-                "4 · Deduplication",
-                "✨  Upscale",
-            }, SidebarEntries(window));
+            // The Settings panel is one of the dashboard's panels, and the
+            // operations are the other three: Tags, Dedup, Upscale.
+            var panels = window.GetVisualDescendants().OfType<Control>()
+                .Where(c => c.Classes.Contains("dashboardPanel")).ToList();
+            Assert.Equal(4, panels.Count);
+            Assert.Single(panels, p => p.Name == "SettingsPanel");
+            Assert.Single(panels, p => p.Name == "TagPanel");
+            Assert.Single(panels, p => p.Name == "DedupPanel");
+            Assert.Single(panels, p => p.Name == "UpscalePanel");
 
-            shell.StartUpscaleRouteCommand.Execute(null);
-            Assert.Equal(new[]
+            // Every mode still opens from its own panel, and the sidebar stays
+            // absent inside the operation too — the template is the whole body.
+            foreach (var (mode, enter) in new (string, Action)[]
+                     {
+                         ("tag", () => shell.StartTaggingRouteCommand.Execute(null)),
+                         ("dedup", () => shell.StartDedupRouteCommand.Execute(null)),
+                         ("upscale", () => shell.StartUpscaleRouteCommand.Execute(null)),
+                     })
             {
-                "1 · Source & model",
-                "2 · Operation type",
-                "3 · Settings…",
-                "🏷  Tagging",
-                "🧹  Dedup",
-                "✨  Upscale",
-                "4 · Upscaling",
-            }, SidebarEntries(window));
+                enter();
+                Dispatcher.UIThread.RunJobs();
+
+                Assert.True(shell.IsOperationVisible, $"{mode}: the mode did not open");
+                Assert.Equal($"Dashboard / {shell.OperationTitle}", shell.Breadcrumb);
+                Assert.Empty(DeletedChrome(window));
+            }
         }
         finally
         {
@@ -103,33 +115,56 @@ public class WorkflowOrderTests
     }
 
     /// <summary>
-    /// 2 · Operation type is the way back to the dashboard, from every step of
-    /// the operation on screen — the dashboard is one click away wherever the
-    /// user is, and the entry is marked as the one they are on.
+    /// The way back is the header's Dashboard entry, from every mode, and it
+    /// lands on the dashboard with the mode's state intact (ui-design §6.2: the
+    /// dashboard resumes where you left off — the configured source and the
+    /// mode's own parameters survive the trip; there is no step position to
+    /// survive, because there is no chain).
     /// </summary>
     [AvaloniaFact]
-    public void Operation_entry_returns_to_the_dashboard_from_any_step()
+    public void Dashboard_entry_returns_from_every_mode_and_keeps_the_modes_state()
     {
         var shell = Shell("local", Path.GetTempPath());
-        var steps = new (string Name, int Index, Action<WizardViewModel> Go)[]
+        var window = new MainWindow { DataContext = shell };
+        window.Show();
+        try
         {
-            ("step 1 source & model", 0, _ => { }),
-            ("step 2 settings", 1, w => w.GoToStep2Command.Execute(null)),
-            ("step 3 process", 2, w => w.GoToStep3Command.Execute(null)),
-            ("step 4 results", 3, w => w.GoToStep4Command.Execute(null)),
-        };
+            foreach (var (mode, enter) in new (string, Action)[]
+                     {
+                         ("tag", () => shell.StartTaggingRouteCommand.Execute(null)),
+                         ("dedup", () => shell.StartDedupRouteCommand.Execute(null)),
+                         ("upscale", () => shell.StartUpscaleRouteCommand.Execute(null)),
+                     })
+            {
+                enter();
+                Dispatcher.UIThread.RunJobs();
 
-        foreach (var (name, index, go) in steps)
-        {
+                var entry = Assert.Single(window.GetVisualDescendants().OfType<Button>(),
+                    b => b.Command == shell.GoHomeCommand);
+                Assert.True(EffectivelyVisible(entry), $"{mode}: no way back to the dashboard");
+                Assert.True(entry.IsEnabled, $"{mode}: the dashboard entry is disabled while idle");
+
+                entry.Command!.Execute(null);
+                Dispatcher.UIThread.RunJobs();
+
+                Assert.True(shell.IsDashboardVisible, $"{mode}: the entry did not return to the dashboard");
+                Assert.False(shell.IsOperationVisible, $"{mode}: the operation is still on screen");
+                Assert.Null(shell.Shell.Current);   // D-03: the dashboard means nothing is open
+            }
+
+            // State survives the trip: a parameter set inside the mode is the
+            // same parameter when the mode is re-entered (resume, not reset).
             shell.StartTaggingRouteCommand.Execute(null);
-            go(shell.Wizard);
-            Assert.Equal(index, shell.Wizard.CurrentStepIndex);   // the fact really left the source step
-
+            shell.Operations.TagParameters.TagCategories = false;
             shell.GoHomeCommand.Execute(null);
+            shell.StartTaggingRouteCommand.Execute(null);
 
-            Assert.True(shell.IsHomeVisible, $"{name}: the operation entry did not return to the dashboard");
-            Assert.False(shell.IsWizardVisible, $"{name}: the wizard is still on screen after the operation entry");
-            Assert.True(shell.IsNavHomeActive, $"{name}: the dashboard entry is not marked active");
+            Assert.False(shell.Operations.TagParameters.TagCategories);
+            Assert.Same(shell.TagOperation, shell.Shell.Current);
+        }
+        finally
+        {
+            window.Close();
         }
     }
 
@@ -160,12 +195,12 @@ public class WorkflowOrderTests
             // From inside an operation the shortcut goes to the same place: the
             // dashboard's Settings panel — app-wide settings, one home.
             shell.StartDedupRouteCommand.Execute(null);
-            Assert.True(shell.IsWizardVisible);
+            Assert.True(shell.IsOperationVisible);
 
             shell.SettingsCommand.Execute(null);
             Dispatcher.UIThread.RunJobs();
 
-            Assert.True(shell.IsHomeVisible);
+            Assert.True(shell.IsDashboardVisible);
             Assert.Null(shell.Shell.Current);
             var settingsPanel = Assert.Single(window.GetVisualDescendants().OfType<Control>(),
                 c => c.Name == "SettingsPanel");
@@ -181,10 +216,11 @@ public class WorkflowOrderTests
     /// ui-design §10 criterion 4 (with D-02): each operation's parameters are
     /// reachable inline in the Parameters region of its own route — the region
     /// really holds that mode's form, bound to the mode's own view model, with no
-    /// window of its own. These are the three forms the retired dialogs hosted.
+    /// window of its own. Entering the mode is enough to see it: the mode has no
+    /// settings step to walk through first (D5).
     /// </summary>
     [AvaloniaFact]
-    public async Task Every_route_renders_its_parameters_inline_in_the_parameters_region()
+    public void Every_route_renders_its_parameters_inline_in_the_parameters_region()
     {
         // Tagging: the whole engine form (model list, device, tag fields, scoring
         // and prompts) is the Parameters region.
@@ -194,11 +230,10 @@ public class WorkflowOrderTests
         try
         {
             tagging.StartTaggingRouteCommand.Execute(null);
-            tagging.Wizard.GoToStep2Command.Execute(null);
             Dispatcher.UIThread.RunJobs();
 
             var form = Assert.Single(taggingWindow.GetVisualDescendants().OfType<Step2Engine>());
-            Assert.Same(tagging.Wizard.Step2, form.DataContext);
+            Assert.Same(tagging.Operations.TagParameters, form.DataContext);
             Assert.Contains(form, ParametersRegion(taggingWindow).GetVisualDescendants()
                 .OfType<Control>());
             Assert.Contains(form.GetVisualDescendants().OfType<CheckBox>(),
@@ -216,11 +251,10 @@ public class WorkflowOrderTests
         try
         {
             dedup.StartDedupRouteCommand.Execute(null);
-            await dedup.Wizard.NextCommand.ExecuteAsync(null);
             Dispatcher.UIThread.RunJobs();
 
             var panel = Assert.Single(dedupWindow.GetVisualDescendants().OfType<DedupSettingsPanel>());
-            Assert.Same(dedup.Wizard.Dedup, panel.DataContext);
+            Assert.Same(dedup.Operations.Dedup, panel.DataContext);
             Assert.Contains(panel, ParametersRegion(dedupWindow).GetVisualDescendants()
                 .OfType<Control>());
             Assert.NotEmpty(panel.GetVisualDescendants().OfType<NumericUpDown>());
@@ -237,11 +271,10 @@ public class WorkflowOrderTests
         try
         {
             upscale.StartUpscaleRouteCommand.Execute(null);
-            await upscale.Wizard.NextCommand.ExecuteAsync(null);
             Dispatcher.UIThread.RunJobs();
 
             var panel = Assert.Single(upscaleWindow.GetVisualDescendants().OfType<UpscaleSettingsPanel>());
-            Assert.Same(upscale.Wizard.Upscale, panel.DataContext);
+            Assert.Same(upscale.Operations.Upscale, panel.DataContext);
             Assert.Contains(panel, ParametersRegion(upscaleWindow).GetVisualDescendants()
                 .OfType<Control>());
             Assert.Equal(4, panel.GetVisualDescendants().OfType<ComboBox>().Count());
@@ -257,27 +290,38 @@ public class WorkflowOrderTests
             b => b.Classes.Contains("parametersRegion"));
 
     /// <summary>
-    /// 1 · Source &amp; model renders the model picker over the engine's own view
-    /// model: the start screen and step 1 both do, so a model chosen anywhere is
-    /// the model a run loads.
+    /// The model picker belongs to the operation that loads a model (ui-design §8:
+    /// the model picker lands in Tag), not to the dashboard: the app-wide Settings
+    /// panel carries no model choice, and the tagging Parameters region is the one
+    /// place a model is chosen — over the engine's own view model, so the model
+    /// chosen there is the model a run loads. (The compact picker that used to sit
+    /// on step 1 duplicated this form and is gone.)
     /// </summary>
     [AvaloniaFact]
-    public void Source_and_model_step_renders_the_model_picker_over_the_engine_view_model()
+    public void Tagging_model_picker_lives_in_the_parameters_region_not_the_dashboard()
     {
         var shell = Shell("local", Path.GetTempPath());
         var window = new MainWindow { DataContext = shell };
         window.Show();
         try
         {
-            // Start screen: the picker is inside the "1 · Source & model" card.
-            var onHome = window.GetVisualDescendants().OfType<EngineModelPicker>().ToList();
-            Assert.Single(onHome);
-            Assert.Same(shell.Wizard.Step2, onHome[0].DataContext);
+            // Dashboard: no model list anywhere — the model is an operation
+            // parameter, and the Settings panel is app-wide settings only.
+            var settingsPanel = Assert.Single(window.GetVisualDescendants().OfType<Control>(),
+                c => c.Name == "SettingsPanel");
+            Assert.Empty(settingsPanel.GetVisualDescendants().OfType<ListBox>());
 
             shell.StartTaggingRouteCommand.Execute(null);
-            var onStep1 = window.GetVisualDescendants().OfType<EngineModelPicker>().ToList();
-            Assert.Single(onStep1);
-            Assert.Same(shell.Wizard.Step2, onStep1[0].DataContext);
+            Dispatcher.UIThread.RunJobs();
+
+            // The tagging Parameters region hosts it: a model list bound to the
+            // one engine view model (the same view model the run loads from).
+            var form = Assert.Single(window.GetVisualDescendants().OfType<Step2Engine>());
+            Assert.Same(shell.Operations.TagParameters, form.DataContext);
+
+            var list = Assert.Single(form.GetVisualDescendants().OfType<ListBox>());
+            Assert.Same(shell.Operations.TagParameters.LocalModels, list.ItemsSource);
+            Assert.Contains(list, ParametersRegion(window).GetVisualDescendants().OfType<Control>());
         }
         finally
         {
@@ -286,19 +330,17 @@ public class WorkflowOrderTests
     }
 
     /// <summary>
-    /// The settings page reports them back instead of re-asking: it carries no
-    /// engine form of its own (no tag-field checkbox, no text box), while the same
-    /// view model's form is one region up in Parameters — so the summary is never
-    /// the only view of the state it describes.
+    /// The engine form has exactly one home: the Parameters region. The run
+    /// region reports the run and never re-asks for the settings — no tag-field
+    /// checkbox, no model list, no prompt box — so the form is never the only
+    /// view of the state it describes nor a second editable copy of it.
     /// </summary>
     [AvaloniaFact]
-    public void Tagging_settings_page_summarizes_the_form_that_lives_in_the_parameters_region()
+    public void The_engine_form_has_one_editable_home_in_the_parameters_region()
     {
         var shell = Shell("local", Path.GetTempPath());
-        shell.Wizard.Step2.TagCategories = false;
+        shell.Operations.TagParameters.TagCategories = false;
         shell.StartTaggingRouteCommand.Execute(null);
-        shell.Wizard.GoToStep2Command.Execute(null);
-        Assert.Same(shell.Wizard.Step2, shell.Wizard.CurrentStep);
 
         var window = new MainWindow { DataContext = shell };
         window.Show();
@@ -306,19 +348,16 @@ public class WorkflowOrderTests
         {
             Dispatcher.UIThread.RunJobs();
 
-            var page = Assert.Single(window.GetVisualDescendants().OfType<Step2TagSettings>());
-            Assert.Same(shell.Wizard.Step2, page.DataContext);
-            Assert.Empty(page.GetVisualDescendants().OfType<CheckBox>());
-            Assert.Empty(page.GetVisualDescendants().OfType<TextBox>());
-
-            var summary = shell.Wizard.Step2.TagFieldSummary;
-            Assert.Contains(page.GetVisualDescendants().OfType<TextBlock>(),
-                t => t.Text == summary);
-
-            // That same state is editable in the Parameters region of this window.
+            // Editable in Parameters…
             var form = Assert.Single(window.GetVisualDescendants().OfType<Step2Engine>());
+            Assert.Same(shell.Operations.TagParameters, form.DataContext);
             Assert.Contains(form.GetVisualDescendants().OfType<CheckBox>(),
                 c => c.Name == "TagCategoriesBox");
+
+            // …and the run region shows no second copy of that form.
+            var run = Assert.Single(window.GetVisualDescendants().OfType<Step3Process>());
+            Assert.Same(shell.Operations.TagRun, run.DataContext);
+            Assert.Empty(run.GetVisualDescendants().OfType<CheckBox>());
         }
         finally
         {
@@ -367,8 +406,8 @@ public class WorkflowOrderTests
                     $"{mode}: the parameters region is not before the output region");
 
                 // Region A is the one shared source on every mode, not a per-mode copy.
-                Assert.Same(shell.Wizard.Step1, Assert.Single(
-                    window.GetVisualDescendants().OfType<DataSourceStrip>()).DataContext);
+                Assert.Same(shell.Operations.Source, Assert.Single(
+                    window.GetVisualDescendants().OfType<DatasourceSourcePanel>()).DataContext);
             }
         }
         finally
@@ -381,34 +420,27 @@ public class WorkflowOrderTests
     /// The unmatched-content trap: a ContentControl whose content matches no
     /// DataTemplate draws the content's ToString() — a raw
     /// <c>Synapic.Main.ViewModels.Steps.…</c> type name as visible UI text. The
-    /// Parameters region and the run-bar host legitimately stay empty for the
-    /// steps that have no panel yet, so this walks every step of all three routes
-    /// and fails on any rendered text that is a type name. A future step view
-    /// model that lands without a template fails here instead of shipping.
+    /// Parameters region and the run-bar host legitimately stay empty for content
+    /// that has no view yet, so this walks all three modes and fails on any
+    /// rendered text that is a type name. A mode that opens with content and no
+    /// template fails here instead of shipping.
     /// </summary>
     [AvaloniaFact]
-    public async Task No_step_renders_a_view_model_type_name_as_text()
+    public void No_mode_renders_a_view_model_type_name_as_text()
     {
         var shell = Shell("local", Path.GetTempPath());
         var window = new MainWindow { DataContext = shell };
         window.Show();
         try
         {
-            var visits = new List<(string Step, Func<Task> Go)>
+            foreach (var (mode, enter) in new (string, Action)[]
+                     {
+                         ("Tag", () => shell.StartTaggingRouteCommand.Execute(null)),
+                         ("Dedup", () => shell.StartDedupRouteCommand.Execute(null)),
+                         ("Upscale", () => shell.StartUpscaleRouteCommand.Execute(null)),
+                     })
             {
-                ("Tag step 1", () => Task.CompletedTask),
-                ("Tag step 2", () => { shell.Wizard.GoToStep2Command.Execute(null); return Task.CompletedTask; }),
-                ("Tag step 3", () => { shell.Wizard.GoToStep3Command.Execute(null); return Task.CompletedTask; }),
-                ("Dedup step 1", () => { shell.StartDedupRouteCommand.Execute(null); return Task.CompletedTask; }),
-                ("Dedup step 2", () => shell.Wizard.NextCommand.ExecuteAsync(null)),
-                ("Upscale step 1", () => { shell.StartUpscaleRouteCommand.Execute(null); return Task.CompletedTask; }),
-                ("Upscale step 2", () => shell.Wizard.NextCommand.ExecuteAsync(null)),
-            };
-
-            shell.StartTaggingRouteCommand.Execute(null);
-            foreach (var (step, go) in visits)
-            {
-                await go();
+                enter();
                 Dispatcher.UIThread.RunJobs();
 
                 var typeNames = window.GetVisualDescendants().OfType<TextBlock>()
@@ -434,7 +466,7 @@ public class WorkflowOrderTests
     [AvaloniaFact]
     public void RunStateBar_renders_the_run_state_it_binds()
     {
-        var step = Shell("local", Path.GetTempPath()).Wizard.Step3;
+        var step = Shell("local", Path.GetTempPath()).Operations.TagRun;
         step.ProgressPercent = 42;
         step.ProgressText = "21/50 (1 failed)";
         step.EtaText = "ETA 00:01:30 remaining";
@@ -475,8 +507,9 @@ public class WorkflowOrderTests
     }
 
     /// <summary>
-    /// The pages that lost their settings report them back, so a run is never
-    /// started from rules nobody can see. These read the real bound strings.
+    /// The run surfaces report the settings that moved into Parameters, so a run
+    /// is never started from rules nobody can see. These read the real bound
+    /// strings.
     /// </summary>
     [AvaloniaFact]
     public void Run_pages_report_the_settings_that_moved_to_the_parameters_region()
@@ -484,13 +517,13 @@ public class WorkflowOrderTests
         var shell = Shell("local", Path.GetTempPath());
 
         // Tagging.
-        shell.Wizard.Step2.ManualModelId = "LiquidAI/LFM2.5-VL-450M";
-        Assert.Contains("LiquidAI/LFM2.5-VL-450M", shell.Wizard.Step2.ModelSummary);
-        Assert.Equal("Built-in tag instruction", shell.Wizard.Step2.PromptSummary);
-        Assert.Contains("LLM only", shell.Wizard.Step2.ProbabilitySummary);
+        shell.Operations.TagParameters.ManualModelId = "LiquidAI/LFM2.5-VL-450M";
+        Assert.Contains("LiquidAI/LFM2.5-VL-450M", shell.Operations.TagParameters.ModelSummary);
+        Assert.Equal("Built-in tag instruction", shell.Operations.TagParameters.PromptSummary);
+        Assert.Contains("LLM only", shell.Operations.TagParameters.ProbabilitySummary);
 
         // Deduplication: the rule line reads algorithm, threshold and keep-set.
-        var dedup = shell.Wizard.Dedup;
+        var dedup = shell.Operations.Dedup;
         dedup.SelectedAlgorithm = 1;   // DHash
         dedup.Threshold = 0.85;
         dedup.SelectOldest = true;
@@ -501,7 +534,7 @@ public class WorkflowOrderTests
         Assert.Contains("keep oldest + newest", dedup.ScanSettingsSummary);
 
         // Upscaling.
-        var upscale = shell.Wizard.Upscale;
+        var upscale = shell.Operations.Upscale;
         upscale.SelectedWorkflow = 2;   // fast
         upscale.SelectedFactor = 1;     // 4x
         Assert.Contains("fast", upscale.SettingsSummary);

@@ -8,9 +8,11 @@
 
   <!-- The whole "which images?" decision: the source profile, the source
        itself (a folder, or a Daminion login), the catalog scope and filters,
-       and the record count that keeps itself current. It lives on the start
-       screen, next to the operations it feeds; Step 1 shows the same profile
-       read-only and keeps the model and the processing limits.
+       and the record count that keeps itself current. It is the body of the
+       operation template's Data source region (ui-design §8) and renders the one
+       shell-owned source on every mode — there is no second copy of this form
+       anywhere, so the source cannot be configured twice; Step 1 reports the
+       same profile read-only and keeps the model and the processing limits.
 
        The Daminion form is stacked rather than one wide row: four controls in a
        row only fit at 1280 and the connect button was the first thing to be

@@ -146,32 +146,22 @@ public class UiLayoutAuditTests
             "Home (dashboard, Daminion form)", width, height);
     }
 
-    /// <summary>The four tagging steps: source &amp; model, settings, process, results.</summary>
+    /// <summary>
+    /// The tagging mode — the whole form and its run on one page now that the
+    /// step chain is gone (D5): every region the mode renders has to lay out
+    /// cleanly at every audited size.
+    /// </summary>
     [AvaloniaTheory]
     [InlineData(1600, 900)]
     [InlineData(1280, 800)]
     [InlineData(1024, 700)]
     [InlineData(900, 600)]
-    public void Tagging_steps_have_no_overlapping_or_clipped_controls(double width, double height)
+    public void Tagging_mode_has_no_overlapping_or_clipped_controls(double width, double height)
     {
-        foreach (var (name, index, goTo) in new (string Name, int Index, Action<WizardViewModel> Go)[]
-                 {
-                     ("step 1 source & model", 0, w => w.GoToStep1Command.Execute(null)),
-                     ("step 2 settings", 1, w => w.GoToStep2Command.Execute(null)),
-                     ("step 3 process", 2, w => w.GoToStep3Command.Execute(null)),
-                     ("step 4 results", 3, w => w.GoToStep4Command.Execute(null)),
-                 })
-        {
-            var shell = Shell("local", Path.GetTempPath());
-            shell.StartTaggingRouteCommand.Execute(null);
-            goTo(shell.Wizard);
-            // The case audits the step it names: a gate that silently refused the
-            // move would otherwise audit the source step four times over.
-            Assert.Equal(index, shell.Wizard.CurrentStepIndex);
+        var shell = Shell("local", Path.GetTempPath());
+        shell.StartTaggingRouteCommand.Execute(null);
 
-            AuditWindow(new MainWindow { DataContext = shell },
-                $"Tagging {name}", width, height);
-        }
+        AuditWindow(new MainWindow { DataContext = shell }, "Tagging mode", width, height);
     }
 
     [AvaloniaTheory]
@@ -179,18 +169,16 @@ public class UiLayoutAuditTests
     [InlineData(1280, 800)]
     [InlineData(1024, 700)]
     [InlineData(900, 600)]
-    public async Task Dedup_and_upscale_steps_have_no_overlapping_or_clipped_controls(
+    public void Dedup_and_upscale_modes_have_no_overlapping_or_clipped_controls(
         double width, double height)
     {
         var dedup = Shell("local", Path.GetTempPath());
         dedup.StartDedupRouteCommand.Execute(null);
-        await dedup.Wizard.NextCommand.ExecuteAsync(null);
-        AuditWindow(new MainWindow { DataContext = dedup }, "Deduplication step", width, height);
+        AuditWindow(new MainWindow { DataContext = dedup }, "Deduplication mode", width, height);
 
         var upscale = Shell("local", Path.GetTempPath());
         upscale.StartUpscaleRouteCommand.Execute(null);
-        await upscale.Wizard.NextCommand.ExecuteAsync(null);
-        AuditWindow(new MainWindow { DataContext = upscale }, "Upscaling step", width, height);
+        AuditWindow(new MainWindow { DataContext = upscale }, "Upscaling mode", width, height);
     }
 
     /// <summary>
@@ -244,22 +232,20 @@ public class UiLayoutAuditTests
     [InlineData(1280, 800)]
     [InlineData(1024, 700)]
     [InlineData(900, 600)]
-    public async Task Operation_routes_audit_clean_with_the_three_regions_in_order(
+    public void Operation_modes_audit_clean_with_the_three_regions_in_order(
         double width, double height)
     {
         var tagging = Shell("local", Path.GetTempPath());
         tagging.StartTaggingRouteCommand.Execute(null);
-        AuditRegions(new MainWindow { DataContext = tagging }, "Tagging route", width, height);
+        AuditRegions(new MainWindow { DataContext = tagging }, "Tagging mode", width, height);
 
         var dedup = Shell("local", Path.GetTempPath());
         dedup.StartDedupRouteCommand.Execute(null);
-        await dedup.Wizard.NextCommand.ExecuteAsync(null);
-        AuditRegions(new MainWindow { DataContext = dedup }, "Dedup route", width, height);
+        AuditRegions(new MainWindow { DataContext = dedup }, "Dedup mode", width, height);
 
         var upscale = Shell("local", Path.GetTempPath());
         upscale.StartUpscaleRouteCommand.Execute(null);
-        await upscale.Wizard.NextCommand.ExecuteAsync(null);
-        AuditRegions(new MainWindow { DataContext = upscale }, "Upscale route", width, height);
+        AuditRegions(new MainWindow { DataContext = upscale }, "Upscale mode", width, height);
     }
 
     /// <summary>
@@ -317,37 +303,34 @@ public class UiLayoutAuditTests
     }
 
     /// <summary>
-    /// The three operation settings dialogs' forms, audited where they live now
+    /// The three operations' parameter forms, audited where they live now
     /// (ui-design D3 / §10 criterion 4): inline in the Parameters region of each
-    /// route, inside the real shell at every audited size. The dialogs were
-    /// audited at the one size each was authored for; inline they have to survive
-    /// all four, beside the two regions under and above them.
+    /// mode, inside the real shell at every audited size — no step to walk to, so
+    /// every case audits the mode as it opens. The dialogs were audited at the one
+    /// size each was authored for; inline they have to survive all four, beside
+    /// the two regions under and above them.
     /// </summary>
     [AvaloniaTheory]
     [InlineData(1600, 900)]
     [InlineData(1280, 800)]
     [InlineData(1024, 700)]
     [InlineData(900, 600)]
-    public async Task Inline_parameters_have_no_overlapping_or_clipped_controls(
+    public void Inline_parameters_have_no_overlapping_or_clipped_controls(
         double width, double height)
     {
         // Tagging: the full engine form is the Parameters region.
         var tagging = Shell("local", Path.GetTempPath());
         tagging.StartTaggingRouteCommand.Execute(null);
-        tagging.Wizard.GoToStep2Command.Execute(null);
-        Assert.Equal(1, tagging.Wizard.CurrentStepIndex);
         AuditWindow(new MainWindow { DataContext = tagging }, "Tagging parameters", width, height);
 
         // Deduplication: the scan and keep-set rules.
         var dedup = Shell("local", Path.GetTempPath());
         dedup.StartDedupRouteCommand.Execute(null);
-        await dedup.Wizard.NextCommand.ExecuteAsync(null);
         AuditWindow(new MainWindow { DataContext = dedup }, "Dedup parameters", width, height);
 
         // Upscaling: workflow, factor, precision, output.
         var upscale = Shell("local", Path.GetTempPath());
         upscale.StartUpscaleRouteCommand.Execute(null);
-        await upscale.Wizard.NextCommand.ExecuteAsync(null);
         AuditWindow(new MainWindow { DataContext = upscale }, "Upscale parameters", width, height);
     }
 }

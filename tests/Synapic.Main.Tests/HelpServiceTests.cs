@@ -5,7 +5,6 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
-using CommunityToolkit.Mvvm.ComponentModel;
 using Synapic.Main.Models;
 using Synapic.Main.Services;
 using Synapic.Main.ViewModels;
@@ -461,31 +460,36 @@ public class HelpServiceTests : IDisposable
     }
 
     [AvaloniaFact]
-    public async Task F1_opens_the_topic_for_the_step_on_screen()
+    public async Task F1_opens_the_topic_for_the_mode_on_screen()
     {
         var help = new FakeHelpService();
         var vm = NewViewModel(help, Exe);
         await vm.DetectServerAsync(); // finds the executable, so the sidecar panel is not gating
 
-        var steps = new (ObservableObject Step, string Topic)[]
+        // The dashboard has no mode, so F1 falls back to the help home.
+        Assert.Equal(HelpTopics.Home, vm.ContextHelpTopic);
+
+        var modes = new (string Mode, Action Enter, string Topic)[]
         {
-            (vm.Wizard.Step1, "step1-datasource.html"),
-            (vm.Wizard.Step2, "step2-engine.html"),
-            (vm.Wizard.Step3, "step3-process.html"),
-            (vm.Wizard.Step4, "step4-results.html"),
-            (vm.Wizard.Dedup, "dedup.html"),
+            ("tag", () => vm.StartTaggingRouteCommand.Execute(null), "step3-process.html"),
+            ("dedup", () => vm.StartDedupRouteCommand.Execute(null), "dedup.html"),
+            ("upscale", () => vm.StartUpscaleRouteCommand.Execute(null), HelpTopics.Upscale),
         };
 
-        foreach (var (step, topic) in steps)
+        foreach (var (mode, enter, topic) in modes)
         {
-            vm.Wizard.CurrentStep = step;
+            enter();
             Assert.Equal(topic, vm.ContextHelpTopic);
 
             vm.OpenContextHelpCommand.Execute(null);
             Assert.Equal(topic, help.OpenedTopics[^1]);
         }
 
-        Assert.Equal(steps.Length, help.OpenedTopics.Count);
+        // Back on the dashboard the topic follows the navigation state again.
+        vm.GoHomeCommand.Execute(null);
+        Assert.Equal(HelpTopics.Home, vm.ContextHelpTopic);
+
+        Assert.Equal(modes.Length, help.OpenedTopics.Count);
     }
 
     [AvaloniaFact]

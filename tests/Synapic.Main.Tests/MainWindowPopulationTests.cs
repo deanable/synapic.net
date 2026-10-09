@@ -3,6 +3,7 @@ using Avalonia.Media;
 using Synapic.Main.Models;
 using Synapic.Main.Services;
 using Synapic.Main.ViewModels;
+using Synapic.Main.ViewModels.Operations;
 using Synapic.Main.Views;
 using Synapic.Main.Views.Wizard;
 using Xunit;
@@ -46,21 +47,34 @@ public class MainWindowPopulationTests
     }
 
     [AvaloniaFact]
-    public void Wizard_navigates_and_all_step_views_populate()
+    public void Every_operation_view_populates_itself_from_the_host_content()
     {
-        var wizard = new WizardViewModel(new Session(), new InferenceSidecarService());
+        var host = new OperationShellViewModel(new Session(), new InferenceSidecarService());
 
-        // Every step view must populate its compiled XAML without throwing.
-        var step1 = new Step1Datasource { DataContext = wizard.Step1 };
-        var step2 = new Step2Engine { DataContext = wizard.Step2 };
-        var step3 = new Step3Process { DataContext = wizard.Step3 };
-        var step4 = new Step4Results { DataContext = wizard.Step4 };
-        var dedup = new StepDedup { DataContext = wizard.Dedup };
+        // Every mode view must populate its compiled XAML without throwing, and
+        // each renders off the host's own view model — there is no step chain to
+        // walk any more, so the content is whatever the host hands the template.
+        var source = new DatasourceSourcePanel { DataContext = host.Source };
+        var parameters = new Step2Engine { DataContext = host.TagParameters };
+        var run = new Step3Process { DataContext = host.TagRun };
+        var report = new Step4Results { DataContext = host.TagReport };
+        var dedup = new StepDedup { DataContext = host.Dedup };
+        var upscale = new StepUpscale { DataContext = host.Upscale };
 
-        Assert.Same(wizard.Step1, step1.DataContext);
-        Assert.Same(wizard.Step1, wizard.CurrentStep);
+        Assert.Same(host.Source, source.DataContext);
+        Assert.Same(host.TagParameters, parameters.DataContext);
+        Assert.Same(host.TagRun, run.DataContext);
+        Assert.Same(host.TagReport, report.DataContext);
+        Assert.Same(host.Dedup, dedup.DataContext);
+        Assert.Same(host.Upscale, upscale.DataContext);
 
-        wizard.StartOverCommand.Execute(null);
-        Assert.Same(wizard.Step1, wizard.CurrentStep);
+        // And the region lookups the template binds hand out those same
+        // instances: Region A is shared, B/C follow the open mode.
+        Assert.Same(host.TagParameters, host.ParametersFor(OperationShellViewModel.TagKey));
+        Assert.Same(host.TagRun, host.RunFor(OperationShellViewModel.TagKey));
+        Assert.Same(host.TagReport, host.ReportFor(OperationShellViewModel.TagKey));
+        Assert.Same(host.Dedup, host.ParametersFor(OperationShellViewModel.DedupKey));
+        Assert.Same(host.Dedup, host.RunFor(OperationShellViewModel.DedupKey));
+        Assert.Null(host.ReportFor(OperationShellViewModel.DedupKey));
     }
 }

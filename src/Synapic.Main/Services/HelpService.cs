@@ -34,8 +34,10 @@ public static class HelpTopics
     public const string Upscale = "upscale.html";
 
     /// <summary>
-    /// The topic for a <c>WizardViewModel</c> step index: 0 = Step 1, 1 =
-    /// Step 2, 2 = Step 3, 3 = Step 4, 4 = Deduplication, 5 = Upscaling.
+    /// The topic for a legacy wizard step index — the naming the compiled help
+    /// still carries: 0 = Step 1, 1 = Step 2, 2 = Step 3, 3 = Step 4,
+    /// 4 = Deduplication, 5 = Upscaling. The operation adapters name the entry
+    /// their mode maps to.
     /// </summary>
     public static string ForStepIndex(int stepIndex) => stepIndex switch
     {

@@ -82,43 +82,11 @@
       <Setter Property="Margin" Value="0,0,0,12" />
     </Style>
 
-    <!-- ── Sidebar navigation (proposal §2.2.2) ──────────────────────────── -->
-    <Style Selector="Button.navItem">
-      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-      <Setter Property="Padding" Value="10,7" />
-      <Setter Property="Margin" Value="0,1" />
-      <Setter Property="CornerRadius" Value="6" />
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="FontSize" Value="13" />
-    </Style>
-    <!-- The entry that is on screen right now (proposal §6.4: selected item
-         carries the accent and an indicator). -->
-    <Style Selector="Button.navItem.active">
-      <Setter Property="Background" Value="{DynamicResource SynapicAccentBrush}" />
-      <Setter Property="Foreground" Value="White" />
-      <Setter Property="FontWeight" Value="SemiBold" />
-    </Style>
-    <Style Selector="Button.navItem.active /template/ ContentPresenter">
-      <Setter Property="TextElement.Foreground" Value="White" />
-    </Style>
-
-    <!-- Mode headers: they both group the sidebar and switch mode. -->
-    <Style Selector="Button.navMode">
-      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-      <Setter Property="Padding" Value="10,8,10,4" />
-      <Setter Property="Margin" Value="0,8,0,2" />
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="FontSize" Value="13" />
-      <Setter Property="HorizontalAlignment" Value="Stretch" />
-    </Style>
-
-    <Style Selector="TextBlock.navGroup">
-      <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="FontSize" Value="11" />
-      <Setter Property="Opacity" Value="0.55" />
-      <Setter Property="Margin" Value="10,10,10,2" />
-    </Style>
+    <!-- The numbered sidebar's styles (navItem / navItem.active / navMode /
+         navGroup) went with the sidebar itself: navigation is Dashboard ⇄
+         operation now, and the mode's own entry is the dashboard panel. A
+         re-introduced sidebar entry would need its styling back, which is the
+         point — this phase deletes the chrome rather than hiding it. -->
   </Application.Styles>
 
   <Application.Resources>

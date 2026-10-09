@@ -118,16 +118,16 @@ finding #1). Source: `docs/ui-design.md` §5, §6, §9, §10; `docs/ui-refactor-
   4. All nine `ui-design.md` §10 acceptance criteria pass item-by-item
   5. `dotnet build` 0 warnings/errors, full suite green, layout audit green at 4 window sizes × 4 routes
 
-**Plans:** 2/4 plans executed
+**Plans:** 3/4 plans executed
 
 Plans:
 
 **Wave 1**
-- [ ] `03-01` — Retire the three settings dialogs; params inline in Region B; rewrite dialog pins
+- [x] `03-01` — Retire the three settings dialogs; params inline in Region B; rewrite dialog pins
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] `03-02` — Delete sidebar/Back-Next/step chain; ShellViewModel.Current is the only navigation
-- [ ] `03-03` — Dedup Apply busy state (IsApplying + Stop) closes UI-REVIEW finding #1
+- [x] `03-02` — Delete sidebar/Back-Next/step chain; ShellViewModel.Current is the only navigation — build 0/0, suite 460/460, criterion-7 fact added, 32 facts migrated
+- [x] `03-03` — Dedup Apply busy state (IsApplying + Stop) closes UI-REVIEW finding #1
 
 **Wave 3** *(blocked on Wave 2 completion)*
 - [ ] `03-04` — Final gate: all nine ui-design §10 criteria + roadmap gates, item-by-item

@@ -6,6 +6,7 @@ using Synapic.Main.Models;
 using Synapic.Main.Services;
 using Synapic.Main.Services.Processing;
 using Synapic.Main.ViewModels;
+using Synapic.Main.ViewModels.Operations;
 using Synapic.Main.ViewModels.Steps;
 using Synapic.Main.Views.Wizard;
 using Xunit;
@@ -458,15 +459,15 @@ public class StepDedupViewModelTests
     [AvaloniaFact]
     public void DedupView_WiresConfirmHook_AndStep1Scope()
     {
-        var wizard = new WizardViewModel(new Session(), new InferenceSidecarService());
-        var dedup = new StepDedup { DataContext = wizard.Dedup };
-        Assert.NotNull(dedup);
+        var host = new OperationShellViewModel(new Session(), new InferenceSidecarService());
+        var dedup = new StepDedup { DataContext = host.Dedup };
+        Assert.Same(host.Dedup, dedup.DataContext);
 
         // The view attaches the modal confirm on DataContext change…
-        Assert.NotNull(wizard.Dedup.ConfirmAction);
-        // …and the wizard hands Step 1 in for the Daminion scope summary.
-        Assert.NotEqual("No datasource step available", wizard.Dedup.DaminionScopeSummary);
-        Assert.Contains("Step 1", wizard.Dedup.DaminionScopeSummary);
+        Assert.NotNull(host.Dedup.ConfirmAction);
+        // …and the host hands the shared source in for the Daminion scope summary.
+        Assert.NotEqual("No datasource step available", host.Dedup.DaminionScopeSummary);
+        Assert.Contains("Step 1", host.Dedup.DaminionScopeSummary);
     }
 
     /// <summary>The Server hash picker exists only for the catalog source and is

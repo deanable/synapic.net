@@ -539,8 +539,12 @@ public class ServerDetectionTests
     public void Reported_device_matching_the_selection_is_shown_without_a_warning()
     {
         var session = new Session();
-        session.Engine.Device = "cuda";
         var vm = new MainWindowViewModel(new FakeSidecar(), new FakeBuildService(), session, () => Exe, null, null, _ => Exe);
+        // The device this run asked for, stated after the shell is built: the
+        // engine form refuses a device this machine cannot offer, so naming it
+        // before construction would leave the fixture on the CPU. The subject
+        // here is ApplyServerDevice's comparison, not that rule.
+        session.Engine.Device = "cuda";
 
         vm.ApplyServerDevice("cuda");
 
@@ -557,8 +561,10 @@ public class ServerDetectionTests
         // build, no usable CUDA) and everything tagged on the CPU with nothing
         // on screen saying so.
         var session = new Session();
-        session.Engine.Device = "cuda";
         var vm = new MainWindowViewModel(new FakeSidecar(), new FakeBuildService(), session, () => Exe, null, null, _ => Exe);
+        // CUDA asked for, stated after the shell is built (see the matching-device
+        // fact above for why the order matters on a CPU-only machine).
+        session.Engine.Device = "cuda";
 
         vm.ApplyServerDevice("cpu");
 

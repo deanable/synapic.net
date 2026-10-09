@@ -67,16 +67,15 @@ public class Step2EngineTests
     }
 
     /// <summary>
-    /// The engine form is a second host of the same view model inside the shell:
-    /// the compact picker on "1 · Source &amp; model" binds it, then the Parameters
-    /// region's full form binds it, then the form is torn down while the view
-    /// model is still the wizard's. Whichever of those moments pushes a null
-    /// selection (binding, refreshing, unbinding), the view model must not hand a
-    /// null to <c>get_Device()</c>. Replaces the retired settings-dialog pin — the
-    /// dialog was the third host, and it is gone (ui-design D3).
+    /// The engine form is the Parameters region's host of the same view model
+    /// inside the shell: opening the tagging mode binds it, and a device refresh
+    /// can happen with the combo box attached, so the view model must never hand a
+    /// null to <c>get_Device()</c>. Replaces the retired settings-dialog pin (the
+    /// dialog was the third host, gone with ui-design D3) and the step-1 picker
+    /// (a duplicate of this form, gone with D5).
     /// </summary>
     [AvaloniaFact]
-    public void EngineFormInTheOperationTemplate_NeverNullsTheDeviceSelection()
+    public void EngineFormInTheParametersRegion_NeverNullsTheDeviceSelection()
     {
         var session = new Session();
         session.Datasource.LocalPath = System.IO.Path.GetTempPath();
@@ -86,21 +85,13 @@ public class Step2EngineTests
         window.Show();
         try
         {
-            var vm = shell.Wizard.Step2;
+            var vm = shell.Operations.TagParameters;
             shell.StartTaggingRouteCommand.Execute(null);
-            Assert.Equal("cpu", vm.Device);              // the picker is bound
+            Assert.Equal("cpu", vm.Device);              // the form is bound
 
             vm.RefreshDeviceOptions();
             Assert.Equal("cpu", vm.Device);              // after a refresh
-
-            shell.Wizard.GoToStep2Command.Execute(null);
-            Assert.Equal("cpu", vm.Device);              // the full form is bound
-            vm.RefreshDeviceOptions();
-            Assert.Equal("cpu", vm.Device);
             Assert.NotNull(vm.SelectedDevice);
-
-            shell.Wizard.GoToStep1Command.Execute(null);
-            Assert.Equal("cpu", vm.Device);              // form torn down, picker back
         }
         finally
         {
@@ -109,11 +100,12 @@ public class Step2EngineTests
     }
 
     /// <summary>
-    /// Same guard for the third moment: leaving the step tears the combo box
-    /// down while the view model is still the one the wizard holds.
+    /// Same guard for the other moment: leaving the mode for the dashboard tears
+    /// the combo box down while the view model is still the host's, and entering
+    /// the mode again builds it back up.
     /// </summary>
     [AvaloniaFact]
-    public void LeavingTheStep_WithTheViewLive_NeverNullsTheDeviceSelection()
+    public void LeavingTheMode_WithTheViewLive_NeverNullsTheDeviceSelection()
     {
         var session = new Session();
         session.Datasource.LocalPath = System.IO.Path.GetTempPath();
@@ -124,23 +116,20 @@ public class Step2EngineTests
         try
         {
             shell.StartTaggingRouteCommand.Execute(null);
-            shell.Wizard.GoToStep2Command.Execute(null);
-            Assert.Same(shell.Wizard.Step2, shell.Wizard.CurrentStep);
-            Assert.Equal("cpu", shell.Wizard.Step2.Device);
+            Assert.Equal("cpu", shell.Operations.TagParameters.Device);
 
-            shell.Wizard.GoToStep1Command.Execute(null);   // tears the combo box down
-            Assert.Same(shell.Wizard.Step1, shell.Wizard.CurrentStep);
-            Assert.Equal("cpu", shell.Wizard.Step2.Device);
+            shell.GoHomeCommand.Execute(null);            // tears the combo box down
+            Assert.Equal("cpu", shell.Operations.TagParameters.Device);
 
-            shell.Wizard.GoToStep2Command.Execute(null);   // and comes back
-            Assert.Equal("cpu", shell.Wizard.Step2.Device);
+            shell.StartTaggingRouteCommand.Execute(null); // and builds it again
+            Assert.Equal("cpu", shell.Operations.TagParameters.Device);
         }
         finally
         {
             window.Close();
         }
 
-        Assert.Equal("cpu", shell.Wizard.Step2.Device);   // after the window closes
+        Assert.Equal("cpu", shell.Operations.TagParameters.Device);   // after the window closes
     }
     [Fact]
     public void PinsMultimodalTask_AndCorrectsStaleSessionValue()

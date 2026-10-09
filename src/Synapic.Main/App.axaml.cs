@@ -30,6 +30,11 @@ public partial class App : Application
         // Crash reporting (P6.1, local-only): install before anything else so
         // even early-startup failures are captured. Reports land in the log
         // directory's crashes/ folder; nothing is ever sent over the network.
+        // Appearance (ui-design §5): apply the persisted theme before any window
+        // exists, so the first frame is already in the chosen theme instead of
+        // flashing the default one.
+        ViewModels.SettingsViewModel.ApplyTheme(config.Ui.Theme, this);
+
         var crashReporter = new CrashReporterService();
         crashReporter.Install();
         crashReporter.CrashCaptured += report =>
@@ -203,7 +208,7 @@ public partial class App : Application
     {
         try
         {
-            await vm.Wizard.Step1.InitializeAsync();
+            await vm.Operations.Source.InitializeAsync();
         }
         catch (Exception e)
         {
