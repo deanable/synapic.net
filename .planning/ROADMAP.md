@@ -17,7 +17,7 @@ the legacy navigation. Each phase keeps the app shippable and ends at a hard ver
 ## Phases
 
 - [x] **Phase 1: Extract run state and operation contract** - Pull the copy-pasted run machinery into a shared base; no visible change
-- [ ] **Phase 2: Add operation template and dashboard** - One shared three-region layout + 4-panel dashboard the app boots to
+- [~] **Phase 2: Add operation template and dashboard** - One shared three-region layout + 4-panel dashboard the app boots to (waves 1–2 done; pins + audit extension outstanding)
 - [ ] **Phase 3: Collapse navigation and retire settings dialogs** - Delete the legacy wizard chrome; inline parameters; busy-state fix
 
 ## Phase Details
@@ -81,7 +81,7 @@ duplicate source card and `PrefillDedupSource()`; rewrite the pinned navigation 
   4. `UiLayoutAuditTests` passes at 900×600, 1024×700, 1280×800, 1600×900 for dashboard + all three routes, including the stacked variant
   5. `dotnet build` 0 warnings/errors and the full test suite green (rewritten pins only, no coverage removed)
 
-**Plans:** 1/5 plans executed
+**Plans:** 3/5 plans executed
 
 Plans:
 
@@ -89,8 +89,10 @@ Plans:
 - [x] `02-01` — OperationLayout (three regions) + shared RunStateBar, hosted for the three routes
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] `02-02` — DataSourceStrip in Region A; delete dedup's parallel source path (PrefillDedupSource)
-- [ ] `02-03` — DashboardView (4 panels) + ShellViewModel.Current; cold start on dashboard
+- [x] `02-02` — DataSourceStrip in Region A; delete dedup's parallel source path (PrefillDedupSource)
+- [x] `02-03` — DashboardView (4 panels) + ShellViewModel.Current; cold start on dashboard
+
+**Known invalidated pin (rewritten by 02-04):** `RouteSplitTests.Start_screen_gates_the_workflow_cards_on_a_usable_source` pins the old `CanStartRoute` card gating, superseded by ui-design D6 (entry is free, actions are gated).
 
 **Wave 3** *(blocked on Wave 2 completion)*
 - [ ] `02-04` — Rewrite pinned navigation tests to §10 criteria 1–3; extend layout audit (criterion 5)
