@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Win32;
 
 namespace Synapic.Main.Services;
@@ -81,8 +82,17 @@ public sealed class EngineSettingsStore
             var userPrompt = key.GetValue(UserPromptValue) as string ?? "";
 
             // Doubles: stored as REG_SZ strings (lossless, exact round-trip).
+            // Read invariantly, with a comma accepted as the decimal separator:
+            // the registry outlives any one process culture, and builds before
+            // this wrote the value with whatever regional format was current
+            // ("0,25" on a comma-decimal machine), so the stored text has to mean
+            // the same number on every machine. Nothing here ever writes group
+            // separators, so a comma in a saved value can only be a decimal one.
             double ParseDouble(string? v, double fallback) =>
-                double.TryParse(v, out var d) ? d : fallback;
+                double.TryParse((v ?? "").Replace(',', '.'), NumberStyles.Float,
+                    CultureInfo.InvariantCulture, out var d)
+                    ? d
+                    : fallback;
 
             var confidenceThreshold = ParseDouble(
                 key.GetValue(ConfidenceThresholdValue) as string, DefaultConfidenceThreshold);
@@ -122,9 +132,14 @@ public sealed class EngineSettingsStore
             key.SetValue(ModelIdValue, params_.ModelId, RegistryValueKind.String);
             key.SetValue(TaskValue, params_.Task, RegistryValueKind.String);
             key.SetValue(DeviceValue, params_.Device, RegistryValueKind.String);
-            key.SetValue(ConfidenceThresholdValue, params_.ConfidenceThreshold.ToString(), RegistryValueKind.String);
+            // Invariant, so the value means the same number to a later run on a
+            // machine with a different regional format (and to the reader above,
+            // which also takes the comma-decimal spelling earlier builds wrote).
+            key.SetValue(ConfidenceThresholdValue,
+                params_.ConfidenceThreshold.ToString(CultureInfo.InvariantCulture), RegistryValueKind.String);
             key.SetValue(ProbabilityModeValue, params_.ProbabilityMode, RegistryValueKind.String);
-            key.SetValue(ProbabilityThresholdValue, params_.ProbabilityThreshold.ToString(), RegistryValueKind.String);
+            key.SetValue(ProbabilityThresholdValue,
+                params_.ProbabilityThreshold.ToString(CultureInfo.InvariantCulture), RegistryValueKind.String);
             key.SetValue(ProbabilityCandidatesValue,
                 string.Join(",", params_.ProbabilityCandidates), RegistryValueKind.String);
             key.SetValue(SystemPromptValue, params_.SystemPrompt, RegistryValueKind.String);

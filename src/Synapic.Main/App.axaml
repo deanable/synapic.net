@@ -28,6 +28,29 @@
       <Setter Property="HorizontalContentAlignment" Value="Stretch" />
     </Style>
 
+    <!-- The operation view's mode rail (ui-design §2.2/§6.2): one button per
+         mode on the left of the template, the open one lit. "active" is derived
+         from Shell.Current (MainWindowViewModel.Is*ModeActive), so the rail has
+         no selection state of its own and pressing the open mode's button keeps
+         it open rather than toggling the view empty. -->
+    <Style Selector="Button.modeTab">
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+      <Setter Property="Padding" Value="12,8" />
+      <Setter Property="CornerRadius" Value="6" />
+    </Style>
+    <Style Selector="Button.modeTab.active">
+      <Setter Property="Background" Value="{DynamicResource SynapicAccentBrush}" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="Button.modeTab.active /template/ ContentPresenter">
+      <Setter Property="TextElement.Foreground" Value="White" />
+    </Style>
+    <Style Selector="Button.modeTab.active:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource SynapicAccentHoverBrush}" />
+    </Style>
+
     <!-- Primary action (proposal §5.2: one obvious primary action per view). -->
     <Style Selector="Button.accent">
       <Setter Property="Padding" Value="14,6" />

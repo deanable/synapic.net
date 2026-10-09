@@ -220,6 +220,26 @@ public partial class MainWindowViewModel : ViewModelBase
     /// <summary>An operation is open, so the template is what is on screen.</summary>
     public bool IsOperationVisible => Shell.Current is not null;
 
+    // ── The mode rail (ui-design §2.2/§6.2) ───────────────────────────────
+
+    /// <summary>
+    /// The operation view's mode rail: which of the three mode buttons is the one
+    /// that is open, so the rail can show it as activated. Derived from
+    /// <see cref="Shell.Current"/> like every other piece of navigation (D-03/D5)
+    /// — the rail stores no selection of its own, so pressing another button
+    /// moves the light because this is computed, not remembered, and there is no
+    /// second answer to "which mode is open".
+    /// </summary>
+    public bool IsTagModeActive => IsModeOpen(OperationShellViewModel.TagKey);
+
+    /// <summary>See <see cref="IsTagModeActive"/>.</summary>
+    public bool IsDedupModeActive => IsModeOpen(OperationShellViewModel.DedupKey);
+
+    /// <summary>See <see cref="IsTagModeActive"/>.</summary>
+    public bool IsUpscaleModeActive => IsModeOpen(OperationShellViewModel.UpscaleKey);
+
+    private bool IsModeOpen(string key) => Shell.Current?.Key == key;
+
     /// <summary>
     /// The open operation's name, or an empty string on the dashboard
     /// (ui-design §6.1 breadcrumb: app title · Dashboard / Tag).
@@ -258,6 +278,12 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(OperationTitle));
         OnPropertyChanged(nameof(Breadcrumb));
         OnPropertyChanged(nameof(ContextHelpTopic));
+        // The mode rail's lit button follows the same one write as the rest of
+        // the chrome: a rail that kept its own selection would be a second
+        // answer to which mode is open.
+        OnPropertyChanged(nameof(IsTagModeActive));
+        OnPropertyChanged(nameof(IsDedupModeActive));
+        OnPropertyChanged(nameof(IsUpscaleModeActive));
     }
 
     // ── Settings (ui-design §5/§6.1, D3) ─────────────────────────────────

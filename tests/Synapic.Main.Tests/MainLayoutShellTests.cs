@@ -70,11 +70,13 @@ public class MainLayoutShellTests
             Assert.DoesNotContain(buttons, b =>
                 (b.Content as string) is "← Back" or "Next →" or "Start Over");
 
-            // Each operation is entered from exactly one place now: its dashboard
-            // panel. (The sidebar's duplicate mode headers are gone.)
-            Assert.Single(buttons, b => b.Command == vm.StartTaggingRouteCommand);
-            Assert.Single(buttons, b => b.Command == vm.StartDedupRouteCommand);
-            Assert.Single(buttons, b => b.Command == vm.StartUpscaleRouteCommand);
+            // On the dashboard each operation is entered from exactly one place:
+            // its panel. The operation view's mode rail binds these same commands,
+            // and it is off screen here, so the count is over what is on screen —
+            // the entry points, not every binding of the command.
+            Assert.Single(buttons.Where(EffectivelyVisible), b => b.Command == vm.StartTaggingRouteCommand);
+            Assert.Single(buttons.Where(EffectivelyVisible), b => b.Command == vm.StartDedupRouteCommand);
+            Assert.Single(buttons.Where(EffectivelyVisible), b => b.Command == vm.StartUpscaleRouteCommand);
 
             // The Dashboard entry lives in the header and is off screen while the
             // dashboard is what is on screen (§6.2: it is the way back from a mode).

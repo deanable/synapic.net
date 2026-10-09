@@ -39,6 +39,10 @@ public partial class MainLayout : UserControl
             // The one shared data source (docs/ui-design.md D4) is the same
             // instance every mode binds, so Region A reads identically everywhere.
             OperationHost.SharedSource = vm.Operations.Source;
+            // The mode rail's buttons bind the shell's route commands and its
+            // derived active flags, which live on the shell and not on the
+            // template's own DataContext.
+            OperationHost.ModeRail = vm;
             ApplyModeContent();
 
             vm.Shell.PropertyChanged += OnShellPropertyChanged;

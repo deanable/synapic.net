@@ -22,6 +22,17 @@ public partial class Step2EngineViewModel : ViewModelBase
     private readonly SystemPromptPresetStore? _presetStore;
     private readonly Func<ComputeAvailability> _availability;
 
+    /// <summary>
+    /// True while the constructor loads the session's state into the form. Every
+    /// property-changed hook below writes the whole engine state to the session,
+    /// and during loading most of those properties still hold their own field
+    /// defaults — a push from there replaces a session the Settings → Defaults
+    /// section has just seeded (or one the engine store hydrated) with the
+    /// shipped values. Loading therefore pushes nothing; the constructor pushes
+    /// the loaded, corrected state once, at the end.
+    /// </summary>
+    private bool _loading = true;
+
     [ObservableProperty]
     private string _manualModelId = "LiquidAI/LFM2.5-VL-450M";
 
@@ -127,33 +138,59 @@ public partial class Step2EngineViewModel : ViewModelBase
         _availability = availabilityProbe ?? ComputeAvailability.Detect;
         // The list must exist before anything hydrates into it.
         RefreshDeviceOptions();
-        HydrateFromStore();
+
+        // One source for the form's state, not two: this machine's last run when
+        // the store has one, the session otherwise. The session's values are read
+        // only when the store is empty — reading them back over a hydration would
+        // discard it, and the device correction below would hide that, because it
+        // re-selects against whichever device the form is left holding.
+        var hydrated = HydrateFromStore();
         var engine = session.Engine;
-        ManualModelId = engine.ModelId;
+
+        if (!hydrated)
+        {
+            ManualModelId = engine.ModelId;
+            ConfidenceThreshold = engine.ConfidenceThreshold;
+            ProbabilityModeIndex = ProbabilityModeStringToIndex(engine.ProbabilityMode);
+            ProbabilityThreshold = engine.ProbabilityThreshold;
+            ProbabilityCandidates = string.Join(", ", engine.ProbabilityCandidates);
+            SystemPrompt = engine.SystemPrompt;
+            UserPrompt = engine.UserPrompt;
+            EmbeddingRescueEnabled = engine.EmbeddingRescueEnabled;
+            TagKeywords = engine.TagKeywords;
+            TagCategories = engine.TagCategories;
+            TagDescription = engine.TagDescription;
+
+            // The session asked for this device; a hydration has already selected
+            // the store's own through the same correction below.
+            TrySelectDevice(engine.Device);
+        }
+
         // Correct any stale per-field task persisted by an older session.
         engine.Task = MultimodalTask;
-        TrySelectDevice(engine.Device);
-        ConfidenceThreshold = engine.ConfidenceThreshold;
-        ProbabilityModeIndex = ProbabilityModeStringToIndex(engine.ProbabilityMode);
-        ProbabilityThreshold = engine.ProbabilityThreshold;
-        ProbabilityCandidates = string.Join(", ", engine.ProbabilityCandidates);
-        SystemPrompt = engine.SystemPrompt;
-        UserPrompt = engine.UserPrompt;
-        EmbeddingRescueEnabled = engine.EmbeddingRescueEnabled;
-        TagKeywords = engine.TagKeywords;
-        TagCategories = engine.TagCategories;
-        TagDescription = engine.TagDescription;
         LoadSystemPromptPresets();
+
+        // Loading is done: from here a change is the user's, and it writes the
+        // whole engine state to the session. This single write publishes the
+        // loaded, corrected state — so a session the Settings → Defaults section
+        // has just seeded keeps its values, and a store's last run becomes the
+        // session's.
+        _loading = false;
+        PushToSession();
     }
 
-    /// <summary>Pre-fill the Step 2 form from the registry (last run's engine settings).</summary>
-    private void HydrateFromStore()
+    /// <summary>
+    /// Pre-fill the Step 2 form from the registry (last run's engine settings).
+    /// True when the store had settings to pre-fill with, so the caller knows the
+    /// form's state came from there rather than from the session.
+    /// </summary>
+    private bool HydrateFromStore()
     {
-        if (_engineStore is null) return;
+        if (_engineStore is null) return false;
         try
         {
             var saved = _engineStore.Load();
-            if (saved is null) return;
+            if (saved is null) return false;
 
             // Model + task.
             ManualModelId = saved.ModelId;
@@ -179,11 +216,13 @@ public partial class Step2EngineViewModel : ViewModelBase
 
             SynapicLog.Info(nameof(Step2EngineViewModel),
                 $"Pre-filled Step 2 engine settings from registry: model={saved.ModelId}, device={saved.Device}");
+            return true;
         }
         catch (Exception e)
         {
             SynapicLog.Warning(nameof(Step2EngineViewModel),
                 $"Failed to pre-fill engine settings from registry: {e.Message}");
+            return false;
         }
     }
 
@@ -522,6 +561,9 @@ public partial class Step2EngineViewModel : ViewModelBase
 
     private void PushToSession()
     {
+        // Nothing the constructor does is a user edit: see _loading.
+        if (_loading) return;
+
         var engine = _session.Engine;
         engine.ModelId = ManualModelId;
         engine.Task = MultimodalTask;

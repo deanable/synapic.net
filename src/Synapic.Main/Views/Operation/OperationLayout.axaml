@@ -60,44 +60,98 @@
       </StackPanel>
     </Border>
 
-    <!-- ── Region B · Parameters ───────────────────────────────────────────── -->
-    <Border Classes="card settingsCard parametersRegion" Padding="16"
+    <!-- ── The mode rail, then Region B · Parameters ───────────────────────── -->
+    <!-- The two columns the layout asks for: the three operations on the left,
+         the open one's settings on the right. Pressing a mode button switches
+         the mode through the same route command the dashboard panels carry, so
+         the settings, the run surface and the report all arrive together, and
+         the lit button is computed from Shell.Current (MainWindowViewModel's
+         IsTagModeActive/IsDedupModeActive/IsUpscaleModeActive) rather than
+         remembered by the rail — pressing the open mode's own button therefore
+         keeps it open instead of toggling the view empty.
+
+         The shared Data source keeps the full width above this row because it is
+         one source for every mode (D4, not a per-mode setting), and Output keeps
+         the full width below it because a run log and a results grid need the
+         room; only the mode's own settings belong in the per-mode column. -->
+    <!-- The rail is a fixed 200 px rather than Auto: an Auto column is measured
+         with infinite width, so the rail's wrapping hint line would take the room
+         it wanted and leave the settings column whatever was left over (measured
+         at 144 px at a 900 px window, which clipped the tagging form's sliders).
+         A fixed rail keeps the settings column the rest of the row at every
+         size, and the hint wraps inside it. -->
+    <Grid ColumnDefinitions="200,*">
+
+      <Border Grid.Column="0" Classes="card settingsCard modeRail" Padding="12"
+              Margin="0,0,12,0" help:HelpScope.Topic="workflow-overview.html">
+        <StackPanel Spacing="6">
+          <TextBlock Classes="sectionTitle" Text="Operation" />
+          <!-- The shell's own view model, handed in by the host (ModeRail): the
+               buttons need the route commands and the derived active flags, and
+               they live on the shell, not on this element's DataContext (the
+               mode's step view model). -->
+          <ContentControl x:Name="ModeRailHost"
+                          Content="{Binding #OperationLayoutRoot.ModeRail}">
+            <ContentControl.DataTemplates>
+              <DataTemplate DataType="vm:MainWindowViewModel">
+                <StackPanel Spacing="6">
+                  <Button Classes="modeTab" Classes.active="{Binding IsTagModeActive}"
+                          Command="{Binding StartTaggingRouteCommand}" Content="🏷  Tagging"
+                          ToolTip.Tip="Tagging: run the AI model over the shared source." />
+                  <Button Classes="modeTab" Classes.active="{Binding IsDedupModeActive}"
+                          Command="{Binding StartDedupRouteCommand}" Content="🧹  Deduplication"
+                          ToolTip.Tip="Deduplication: find and resolve duplicate groups." />
+                  <Button Classes="modeTab" Classes.active="{Binding IsUpscaleModeActive}"
+                          Command="{Binding StartUpscaleRouteCommand}" Content="✨  Upscaling"
+                          ToolTip.Tip="Upscaling: enhance resolution over the shared source." />
+                  <TextBlock Classes="hint" TextWrapping="Wrap" Margin="0,4,0,0"
+                             Text="Switching keeps the other modes' settings and the shared source." />
+                </StackPanel>
+              </DataTemplate>
+            </ContentControl.DataTemplates>
+          </ContentControl>
+        </StackPanel>
+      </Border>
+
+      <Border Grid.Column="1" Classes="card settingsCard parametersRegion" Padding="16"
             help:HelpScope.Topic="settings-reference.html">
-      <StackPanel Spacing="8">
-        <TextBlock Classes="sectionTitle" Text="Parameters" />
-        <TextBlock Classes="hint" TextWrapping="Wrap"
-                   Text="The settings this operation runs with." />
-        <ContentControl x:Name="ParametersHost"
-                        Content="{Binding #OperationLayoutRoot.Parameters}">
-          <ContentControl.DataTemplates>
-            <!-- Every mode's parameters, inline: one view model, one view. These
-                 were the contents of the three modal settings dialogs (retired by
-                 ui-design D3) and of the wizard's numbered steps (retired by D5) —
-                 nothing here builds a window and nothing here is a second copy.
-                 Tagging's whole engine form (model, device, tag fields, scoring,
-                 prompts) is its Parameters region; the compact picker that used
-                 to duplicate it on step 1 is gone. -->
-            <DataTemplate DataType="vms:Step2EngineViewModel">
-              <steps:Step2Engine />
-            </DataTemplate>
-            <DataTemplate DataType="vms:StepDedupViewModel">
-              <steps:DedupSettingsPanel />
-            </DataTemplate>
-            <DataTemplate DataType="vms:StepUpscaleViewModel">
-              <steps:UpscaleSettingsPanel />
-            </DataTemplate>
-            <!-- A step that has no parameters of its own (or a mode with none
-                 selected) must render nothing at all. A ContentControl whose
-                 content matches no template draws the content's ToString() —
-                 i.e. the view model's type name as visible text — so this empty
-                 template has to be the last one, so every mode above wins. -->
-            <DataTemplate DataType="vm:ViewModelBase">
-              <Panel />
-            </DataTemplate>
-          </ContentControl.DataTemplates>
-        </ContentControl>
-      </StackPanel>
-    </Border>
+        <StackPanel Spacing="8">
+          <TextBlock Classes="sectionTitle" Text="Parameters" />
+          <TextBlock Classes="hint" TextWrapping="Wrap"
+                     Text="The settings this operation runs with." />
+          <ContentControl x:Name="ParametersHost"
+                          Content="{Binding #OperationLayoutRoot.Parameters}">
+            <ContentControl.DataTemplates>
+              <!-- Every mode's parameters, inline: one view model, one view. These
+                   were the contents of the three modal settings dialogs (retired by
+                   ui-design D3) and of the wizard's numbered steps (retired by D5) —
+                   nothing here builds a window and nothing here is a second copy.
+                   Tagging's whole engine form (model, device, tag fields, scoring,
+                   prompts) is its Parameters region; the compact picker that used
+                   to duplicate it on step 1 is gone. -->
+              <DataTemplate DataType="vms:Step2EngineViewModel">
+                <steps:Step2Engine />
+              </DataTemplate>
+              <DataTemplate DataType="vms:StepDedupViewModel">
+                <steps:DedupSettingsPanel />
+              </DataTemplate>
+              <DataTemplate DataType="vms:StepUpscaleViewModel">
+                <steps:UpscaleSettingsPanel />
+              </DataTemplate>
+              <!-- A step that has no parameters of its own (or a mode with none
+                   selected) must render nothing at all. A ContentControl whose
+                   content matches no template draws the content's ToString() —
+                   i.e. the view model's type name as visible text — so this empty
+                   template has to be the last one, so every mode above wins. -->
+              <DataTemplate DataType="vm:ViewModelBase">
+                <Panel />
+              </DataTemplate>
+            </ContentControl.DataTemplates>
+          </ContentControl>
+        </StackPanel>
+      </Border>
+
+    </Grid>
 
     <!-- ── Region C · Output / report ──────────────────────────────────────── -->
     <Border Classes="card settingsCard outputRegion" Padding="16"

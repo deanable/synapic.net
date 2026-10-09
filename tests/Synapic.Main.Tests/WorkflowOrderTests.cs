@@ -1,4 +1,5 @@
 using System.Linq;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
@@ -107,6 +108,87 @@ public class WorkflowOrderTests
                 Assert.Equal($"Dashboard / {shell.OperationTitle}", shell.Breadcrumb);
                 Assert.Empty(DeletedChrome(window));
             }
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    /// <summary>
+    /// The operation view's mode rail (ui-design §2.2/§6.2): the three operations
+    /// as buttons down the left of the template, the open one's settings filling
+    /// the column on the right. Pressing a button switches the mode — the same
+    /// route command the dashboard panels carry, so the settings, the run surface
+    /// and the report all arrive together — and only the open mode's button is
+    /// lit, because the lit state is derived from Shell.Current rather than
+    /// remembered by the rail (pressing the open mode's own button keeps it open
+    /// instead of toggling the view empty).
+    /// </summary>
+    [AvaloniaFact]
+    public void Mode_rail_switches_the_mode_and_lights_only_the_open_one()
+    {
+        var shell = Shell("local", Path.GetTempPath());
+        var window = new MainWindow { DataContext = shell };
+        window.Show();
+        try
+        {
+            // The rail's buttons carry the modeTab class; the dashboard panels
+            // carry the same commands under routeCard, which is what tells the
+            // two bindings of a command apart.
+            List<Button> Rail() => window.GetVisualDescendants().OfType<Button>()
+                .Where(b => b.Classes.Contains("modeTab")).ToList();
+
+            shell.StartTaggingRouteCommand.Execute(null);
+            Dispatcher.UIThread.RunJobs();
+
+            var parameters = Assert.Single(window.GetVisualDescendants().OfType<Border>(),
+                b => b.Classes.Contains("parametersRegion"));
+            double LeftOf(Control c) => c.TranslatePoint(new Point(0, 0), window)!.Value.X;
+
+            // Three buttons on screen, to the left of the settings column.
+            var rail = Rail();
+            Assert.Equal(3, rail.Count);
+            Assert.All(rail, b => Assert.True(EffectivelyVisible(b),
+                $"{b.Content} is not on screen in an open mode"));
+            Assert.All(rail, b => Assert.True(LeftOf(b) < LeftOf(parameters),
+                $"{b.Content} is not left of the settings column"));
+
+            // The open mode's button is the lit one, and its settings are what the
+            // right-hand column holds.
+            var lit = Assert.Single(rail, b => b.Classes.Contains("active"));
+            Assert.Equal(shell.StartTaggingRouteCommand, lit.Command);
+            Assert.Contains(Assert.Single(window.GetVisualDescendants().OfType<Step2Engine>()),
+                parameters.GetVisualDescendants().OfType<Control>());
+
+            // Press another mode: the mode, the settings and the light all move.
+            var dedup = Assert.Single(rail, b => b.Command == shell.StartDedupRouteCommand);
+            dedup.Command!.Execute(null);
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Same(shell.DedupOperation, shell.Shell.Current);
+            Assert.True(shell.IsOperationVisible);
+            lit = Assert.Single(Rail(), b => b.Classes.Contains("active"));
+            Assert.Equal(shell.StartDedupRouteCommand, lit.Command);
+
+            var dedupForm = Assert.Single(window.GetVisualDescendants().OfType<DedupSettingsPanel>());
+            Assert.Same(shell.Operations.Dedup, dedupForm.DataContext);
+            Assert.Contains(dedupForm, parameters.GetVisualDescendants().OfType<Control>());
+            Assert.Empty(window.GetVisualDescendants().OfType<Step2Engine>());
+
+            // The rail selects; it does not toggle the open mode off.
+            lit.Command!.Execute(null);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Same(shell.DedupOperation, shell.Shell.Current);
+            Assert.Single(Rail(), b => b.Classes.Contains("active"));
+
+            // Back on the dashboard the rail is off screen, because nothing is
+            // open: the activated button marks the open mode and there is none.
+            shell.GoHomeCommand.Execute(null);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(shell.IsDashboardVisible);
+            Assert.All(Rail(), b => Assert.False(EffectivelyVisible(b),
+                "the mode rail is on screen while the dashboard is: nothing is open"));
         }
         finally
         {

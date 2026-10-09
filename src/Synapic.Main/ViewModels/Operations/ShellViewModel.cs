@@ -10,13 +10,14 @@ namespace Synapic.Main.ViewModels.Operations;
 /// the dashboard and names the one open operation otherwise, so a second
 /// navigation model cannot grow during the strangler window.
 ///
-/// Who writes and who reads, as it stands: the route machine is still the entry
-/// point — <c>MainWindowViewModel</c>'s route methods call <see cref="SetCurrent"/>,
-/// and the dashboard panels bind those same route commands — while the readers
-/// today are the navigation pins in the tests. <see cref="Open"/> and
-/// <see cref="Home"/> are the surface Phase 3 renders the panels and the Home
-/// entry through once the sidebar it duplicates is deleted; nothing binds them
-/// yet, and the help scope reads <c>ContextHelpTopic</c>, not this state.
+/// Who writes and who reads: <c>MainWindowViewModel</c>'s route methods call
+/// <see cref="SetCurrent"/>, and everything that renders navigation binds those
+/// same route commands — the dashboard panels and, since D9, the mode rail
+/// inside the operation view — so the readers are the chrome and the navigation
+/// pins in the tests. <see cref="Open"/> and <see cref="Home"/> are the same two
+/// moves with no command to bind: Phase 3 landed the panels through the route
+/// commands rather than through these, so nothing binds them, and the help scope
+/// reads <c>ContextHelpTopic</c>, not this state.
 /// </summary>
 public partial class ShellViewModel : ViewModelBase
 {
@@ -57,8 +58,8 @@ public partial class ShellViewModel : ViewModelBase
 
     /// <summary>
     /// Opens an operation the way a dashboard panel does: through the existing
-    /// route machine, which is also what sets <see cref="Current"/>. Reserved for
-    /// Phase 3 — today's panels bind the route commands directly.
+    /// route machine, which is also what sets <see cref="Current"/>. Nothing binds
+    /// this — the panels and the mode rail both use the route commands.
     /// </summary>
     public void Open(string key)
     {

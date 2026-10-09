@@ -56,22 +56,36 @@ From `UI Flow - Dash.svg` — a 2×2 grid of four equal panels:
 
 ### 2.2 Operation layout (shared by Tag, Dedup, Upscale)
 
-From `UI Flow - Operation.svg` — every mode renders the **same** form:
+From `UI Flow - Operation.svg` — every mode renders the **same** form, with the
+mode switch as its left column (D9):
 
 ```
 ┌───────────────────────────────────────────────────────────────────┐
 │  DATA SOURCE  (full-width strip, top of form)                     │
 │  local folder / Daminion · scope & filters · record count         │
-├──────────────────────────────┬────────────────────────────────────┤
-│                              │                                    │
-│  PARAMETERS                  │  OUTPUT / REPORT                   │
-│  (bottom-left)               │  (bottom-right)                    │
-│                              │                                    │
-│  mode-specific configurable  │  run controls, progress, log,      │
-│  settings                    │  results, mode-specific actions    │
-│                              │                                    │
-└──────────────────────────────┴────────────────────────────────────┘
+├───────────────┬───────────────────────────────────────────────────┤
+│  OPERATION    │  PARAMETERS                                       │
+│  Tag          │  (right of the mode rail)                         │
+│  Dedup        │                                                   │
+│  Upscale      │  mode-specific configurable settings              │
+│  (open one    │                                                   │
+│   lit)        │                                                   │
+├───────────────┴───────────────────────────────────────────────────┤
+│  OUTPUT / REPORT  (full-width, bottom)                            │
+│  run controls, progress, log, results, mode-specific actions      │
+└───────────────────────────────────────────────────────────────────┘
 ```
+
+The left column is the mode switch: the three operations as buttons, the open
+one lit. Pressing one switches the mode — its settings, its run surface and its
+report arrive together, through the same entry point the dashboard panels use —
+and the lit state is derived from the shell's current mode, so the rail stores
+no selection of its own and pressing the open mode's button keeps it open. The
+shared Data source stays full width above the row because it is one source for
+every mode (D4, not a per-mode setting), and Output stays full width below it
+because a run log and a results grid need the room; only the mode's own settings
+belong in the per-mode column, which is why the rail is a fixed-width column and
+the settings take the rest of the row at every audited size.
 
 Reading order is deliberate: **what to work on → how to work on it → what
 happened**. The three regions are the same controls-in-the-same-places in all
@@ -256,8 +270,11 @@ document adopts them as requirements:
 - **Spacing:** 2/4/8/12/16 rhythm, wrapping rows, no child past its panel —
   layout audit must pass 900×600, 1024×700, 1280×800, 1600×900.
 - **Responsive:** below ~1000 px the operation layout stacks vertically in
-  reading order (Data source → Parameters → Output); the dashboard grid
-  becomes 2×1 then 1×4.
+  reading order (Data source → Parameters → Output); the dashboard grid drops
+  to one full-width column in reading order (2×2 → 1×4) as soon as a two-column
+  panel would fall under 600 px wide — below roughly 1200 px of dashboard width
+  (D8). There is no 2×1 step for four panels: two columns and one row would
+  show only half of them.
 - **Keyboard:** Tab cycles with visible focus ring; Esc closes transient
   overlays; Alt+Home → dashboard; F1 context help per route.
 - **Copy:** every status is a sentence with a next action; no bare counts
@@ -349,6 +366,8 @@ The redesign is done when all of these are verifiable:
 | D5 | Navigation is Dashboard ⇄ mode; no numbered steps, no wizard chain. | Decided (user) |
 | D6 | Entering a mode is free; only *actions* are gated, with the gate shown in the blocked region. Replaces `CanStartRoute` card gating. | Decided (design) |
 | D7 | No always-visible global log strip; run logs live in Output, diagnostics in Settings. | Decided (design) — confirm during review |
+| D8 | The dashboard is the 2×2 grid of four panels while each panel keeps 600 px of width, and stacks into one reading-order column below that. §7's "~1000 px" is a window figure: applied to the dashboard's own width it would leave a two-column panel ~490 px wide, under what the settings form and the operation cards need. Dropped from §7: the 2×1 step. | Decided (implementation, 2026-10-10) |
+| D9 | The operation layout's left column is the mode switch: Tag, Dedup and Upscale as buttons, the open one lit, its settings in the column beside it and Output full width below. The rail is a mode *switch*, not the retired sidebar — no numbering, no step chain, and its lit state is derived from the shell's current mode rather than stored. | Decided (user, 2026-10-10) |
 
 ## 12. Open questions
 

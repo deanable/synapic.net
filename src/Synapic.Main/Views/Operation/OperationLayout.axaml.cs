@@ -46,6 +46,18 @@ public partial class OperationLayout : UserControl
     public static readonly StyledProperty<object?> ReportProperty =
         AvaloniaProperty.Register<OperationLayout, object?>(nameof(Report));
 
+    /// <summary>
+    /// The shell's own view model, for the mode rail's three buttons: their
+    /// commands (the route commands the dashboard panels carry, so entering a
+    /// mode has one implementation) and their derived active flags
+    /// (<c>IsTagModeActive</c> …). Handed in for the same reason the four content
+    /// slots are: a binding written on this element resolves against the
+    /// element's own DataContext, which is the mode's step view model, not the
+    /// shell.
+    /// </summary>
+    public static readonly StyledProperty<object?> ModeRailProperty =
+        AvaloniaProperty.Register<OperationLayout, object?>(nameof(ModeRail));
+
     public OperationLayout()
     {
         InitializeComponent();
@@ -73,5 +85,12 @@ public partial class OperationLayout : UserControl
     {
         get => GetValue(ReportProperty);
         set => SetValue(ReportProperty, value);
+    }
+
+    /// <summary>The shell view model behind the mode rail (see <see cref="ModeRailProperty"/>).</summary>
+    public object? ModeRail
+    {
+        get => GetValue(ModeRailProperty);
+        set => SetValue(ModeRailProperty, value);
     }
 }

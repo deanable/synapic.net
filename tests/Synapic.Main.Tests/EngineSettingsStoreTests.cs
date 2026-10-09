@@ -1,3 +1,4 @@
+using System.Globalization;
 using Synapic.Main.Models;
 using Synapic.Main.Services;
 using Synapic.Main.ViewModels.Steps;
@@ -59,6 +60,67 @@ public class EngineSettingsStoreTests : IDisposable
         Assert.True(loaded.TagKeywords);
         Assert.False(loaded.TagCategories);
         Assert.True(loaded.TagDescription);
+    }
+
+    /// <summary>
+    /// The registry is machine-wide; the process culture is not. A threshold
+    /// written while the app ran in one regional format has to come back as the
+    /// same number when it runs in another — otherwise the stored text itself is
+    /// the bug, since a dot-decimal culture reads the comma of "0,42" as a group
+    /// separator, never as the decimal point it was written to mean.
+    ///
+    /// The fact pins both ends, because the machine it runs on is only one of
+    /// them: the stored text is asserted locale-independent, the read is done
+    /// under the other culture, and a value already in the registry from a build
+    /// that wrote comma decimals still reads as that number.
+    /// </summary>
+    [Fact]
+    public void Saved_thresholds_survive_a_culture_change()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+
+        var original = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo("de-DE");   // comma decimals
+            _store.Save(new EngineSettingsParams(
+                ModelId: "some/model", Task: "image-text-to-text", Device: "cpu",
+                ConfidenceThreshold: 0.42, ProbabilityMode: "both",
+                ProbabilityThreshold: 0.66, ProbabilityCandidates: Array.Empty<string>(),
+                SystemPrompt: "", UserPrompt: "", EmbeddingRescueEnabled: false,
+                TagKeywords: true, TagCategories: true, TagDescription: true));
+
+            using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(_keyPath))
+            {
+                Assert.NotNull(key);
+                Assert.Equal("0.42", key!.GetValue("ConfidenceThreshold") as string);
+                Assert.Equal("0.66", key.GetValue("ProbabilityThreshold") as string);
+            }
+
+            CultureInfo.CurrentCulture = new CultureInfo("en-US");   // dot decimals
+            var loaded = _store.Load();
+            Assert.NotNull(loaded);
+            Assert.Equal(0.42, loaded.ConfidenceThreshold, 6);
+            Assert.Equal(0.66, loaded.ProbabilityThreshold, 6);
+
+            // An install that already holds a comma-decimal value (written by a
+            // build before this was invariant) keeps meaning that number.
+            using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(_keyPath, writable: true))
+            {
+                Assert.NotNull(key);
+                key!.SetValue("ConfidenceThreshold", "0,42", Microsoft.Win32.RegistryValueKind.String);
+                key.SetValue("ProbabilityThreshold", "0,66", Microsoft.Win32.RegistryValueKind.String);
+            }
+
+            var legacy = _store.Load();
+            Assert.NotNull(legacy);
+            Assert.Equal(0.42, legacy.ConfidenceThreshold, 6);
+            Assert.Equal(0.66, legacy.ProbabilityThreshold, 6);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = original;
+        }
     }
 
     [Fact]
