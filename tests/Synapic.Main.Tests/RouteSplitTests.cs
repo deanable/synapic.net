@@ -63,7 +63,9 @@ public class RouteSplitTests
 
     /// <summary>
     /// ui-design §10 criterion 1: cold start lands on the dashboard with exactly
-    /// four panels — Settings, Tag, Dedup, Upscale — and each one opens its view.
+    /// four panels — Settings, Tag, Dedup, Upscale — and each operation panel
+    /// opens its mode. The Settings panel renders its content in place; there is
+    /// nothing for it to open (that is §5's settings view, Phase 3).
     /// </summary>
     [AvaloniaFact]
     public void Dashboard_shows_exactly_four_panels_named_Settings_Tag_Dedup_Upscale()
@@ -212,6 +214,7 @@ public class RouteSplitTests
 
                 var strip = Assert.Single(window.GetVisualDescendants().OfType<DataSourceStrip>());
                 Assert.Same(vm.Wizard.Step1, strip.DataContext);
+                Assert.True(EffectivelyVisible(strip), $"{route}: Region A is not on screen");
 
                 var texts = strip.GetVisualDescendants().OfType<TextBlock>()
                     .Select(t => t.Text).ToList();
@@ -252,6 +255,8 @@ public class RouteSplitTests
             var operationEntry = buttons.Single(b => b.Command == vm.GoHomeCommand);
             Assert.True(tagCard.IsVisible);
             Assert.True(dedupCard.IsVisible);
+            var upscaleCard = buttons.Single(b => b.Command == vm.StartUpscaleRouteCommand && b.Classes.Contains("routeCard"));
+            Assert.True(upscaleCard.IsVisible);
 
             // The dashboard entry ("2 · Operation type") is the way back to the
             // dashboard from inside a route, so it is on screen always;
@@ -288,6 +293,9 @@ public class RouteSplitTests
     /// enabled and entering a mode is free; what is gated is the run, and the
     /// gate says why. (The start screen used to disable the three cards until a
     /// source existed — that gating is what D6 replaces.)
+    /// The retired `CanStartRoute` card gate is deliberately asserted nowhere: no
+    /// view binds it any more, so this fact pins what the screen does — the panels
+    /// stay enterable and the run carries the gate with its reason.
     /// </summary>
     [AvaloniaFact]
     public void Dashboard_entry_is_free_and_only_the_run_is_gated()
@@ -324,13 +332,11 @@ public class RouteSplitTests
             var lights = strip.GetVisualDescendants().OfType<Shapes.Ellipse>().ToList();
             Assert.Equal(2, lights.Count);
             Assert.Equal(Colors.Red, ((ISolidColorBrush)lights[1].Fill!).Color);
-            Assert.False(vm.CanStartRoute);
 
             var folder = Path.GetTempPath();
             vm.Wizard.Step1.LocalPath = folder;
 
             // …green once it does, and with a usable source the run opens up.
-            Assert.True(vm.CanStartRoute);
             Assert.Equal(Colors.ForestGreen, ((ISolidColorBrush)lights[1].Fill!).Color);
             Assert.True(vm.DedupOperation.IsRunEnabled);
             Assert.Null(vm.DedupOperation.RunDisabledReason);
@@ -408,7 +414,7 @@ public class RouteSplitTests
     }
 
     [AvaloniaFact]
-    public void Home_returns_to_the_dashboard_and_the_route_resumes_where_it_was()
+    public void Home_returns_to_the_dashboard_and_another_route_opens_at_the_source()
     {
         var vm = Shell(SourceSession("local", Path.GetTempPath()));
 
@@ -423,7 +429,9 @@ public class RouteSplitTests
         Assert.False(vm.IsWizardVisible);
         Assert.Null(vm.Shell.Current);          // D-03: the dashboard means nothing is open
 
-        // Picking the other route later starts it from the Datasource step.
+        // Picking another route later opens it at the Datasource step: Enter*Route
+        // resets the step, so nothing resumes mid-flow — what survives the trip is
+        // the configured source and settings, not the step position.
         vm.StartTaggingRouteCommand.Execute(null);
         Assert.Equal(MainWindowViewModel.TaggingRoute, vm.Route);
         Assert.Equal(0, vm.Wizard.CurrentStepIndex);

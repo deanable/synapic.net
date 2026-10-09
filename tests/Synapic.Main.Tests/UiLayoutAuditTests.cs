@@ -155,17 +155,20 @@ public class UiLayoutAuditTests
     [InlineData(900, 600)]
     public void Tagging_steps_have_no_overlapping_or_clipped_controls(double width, double height)
     {
-        foreach (var (name, goTo) in new (string, Action<WizardViewModel>)[]
+        foreach (var (name, index, goTo) in new (string Name, int Index, Action<WizardViewModel> Go)[]
                  {
-                     ("step 1 source & model", w => w.GoToStep1Command.Execute(null)),
-                     ("step 2 settings", w => w.GoToStep2Command.Execute(null)),
-                     ("step 3 process", w => w.GoToStep3Command.Execute(null)),
-                     ("step 4 results", w => w.GoToStep4Command.Execute(null)),
+                     ("step 1 source & model", 0, w => w.GoToStep1Command.Execute(null)),
+                     ("step 2 settings", 1, w => w.GoToStep2Command.Execute(null)),
+                     ("step 3 process", 2, w => w.GoToStep3Command.Execute(null)),
+                     ("step 4 results", 3, w => w.GoToStep4Command.Execute(null)),
                  })
         {
             var shell = Shell("local", Path.GetTempPath());
             shell.StartTaggingRouteCommand.Execute(null);
             goTo(shell.Wizard);
+            // The case audits the step it names: a gate that silently refused the
+            // move would otherwise audit the source step four times over.
+            Assert.Equal(index, shell.Wizard.CurrentStepIndex);
 
             AuditWindow(new MainWindow { DataContext = shell },
                 $"Tagging {name}", width, height);

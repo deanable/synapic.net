@@ -4,8 +4,8 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Completed 02-05-PLAN.md (Phase 2 complete)
-last_updated: "2026-10-09T16:05:00.000Z"
-last_activity: 2026-10-09 -- Phase 2 gate sweep (02-05) green: all five success criteria ✓; phase 2 complete
+last_updated: "2026-10-09T17:20:00.000Z"
+last_activity: 2026-10-09 -- Phase 2 pin audit (02-REVIEW.md addendum): 2 name/assertion contradictions + 4 gaps fixed; Main 442/442
 progress:
   total_phases: 3
   completed_phases: 2
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-08)
 Phase: 2 of 3 (Add operation template and dashboard)
 Plan: 5 of 5 in current phase
 Status: Phase 2 complete — gate sweep 02-05 green (criteria 1, 2, 3, 5, 9 + decision coverage 7/7); ready to plan Phase 3 (collapse navigation, retire settings dialogs)
-Last activity: 2026-10-09 -- Phase 2 gate sweep (02-05) green: all five success criteria ✓; phase 2 complete
+Last activity: 2026-10-09 -- Phase 2 pin audit (02-REVIEW.md addendum): the four rewritten test files audited name-first, 2 contradictions and 4 gaps fixed; build 0/0, Main 442/442
 
 Progress: [█████████░] 69%
 
@@ -82,11 +82,12 @@ Recent decisions affecting current work:
 - [Phase 02]: The gate sweep's `PrefillDedupSource` check is recorded source-only (`--include=*.cs --include=*.axaml`): the bare grep also matches stale gitignored DLLs under `bin/obj/`, which are build outputs, not code — Phase 3's chrome-deletion greps should refine the same way and say so
 - [Phase 02]: A `ContentControl` whose content matches no `DataTemplate` prints the content's `ToString()`, so every region host ends with a last, inheritance-matching empty `DataTemplate` (region hosts may render nothing, never a type name) — a new step view model that lands without a template now fails `No_step_renders_a_view_model_type_name_as_text` instead of shipping
 - [Phase 02]: `ShellViewModel.Open`/`Home`/`Operations` have no caller yet (the panels bind the route commands; help reads `ContextHelpTopic`) — they are Phase 3's rendered-navigation surface, and `Shell.Current` is written by the route machine, so Phase 3 should make Shell the entry point and let `Route` go
+- [Phase 02]: A pin's name must state what its assertions can actually fail on — auditing the four rewritten test files name-first caught a "resumes where it was" fact whose assertions show a fresh route entry, and a D6 fact still asserting the retired `CanStartRoute` route gate (no view binds the property; Phase 3 deletes it, and `GoHome`'s "returning resumes" doc was wrong for the same reason)
 
 ## Session Continuity
 
-Last session: 2026-10-09T16:40:00.000Z
-Stopped at: Completed 02-05-PLAN.md (Phase 2 complete) + 02-REVIEW.md code review (1 Critical, 1 Warning fixed; 6 Info noted)
+Last session: 2026-10-09T17:20:00.000Z
+Stopped at: Completed 02-05-PLAN.md (Phase 2 complete) + 02-REVIEW.md code review (1 Critical, 1 Warning fixed; 6 Info noted) + its pin-audit addendum (2 name/assertion contradictions, 4 gaps fixed — Main 442/442)
 Resume file: None
 
 Next: Phase 3 — collapse navigation and retire the three settings dialogs (delete the legacy wizard chrome the still-passing sidebar/step-tab/dialog facts describe; inline parameters; dedup Apply busy state). Carried deviations: the dashboard's wide 2×2 breakpoint form is not implemented.

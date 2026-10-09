@@ -4,12 +4,12 @@ review_date: 2026-10-09
 depth: standard
 status: fixed
 diff_base: 19c4dff7^   # first phase-2 commit's parent
-files_reviewed: 16
+files_reviewed: 20            # 16 source (main pass) + the 4 rewritten test files (addendum)
 findings:
   critical: 1
-  warning: 1
-  info: 6
-  total: 8
+  warning: 3                 # WR-1 + PA-1, PA-2 (addendum)
+  info: 10                   # IN-1..IN-6 + PA-3..PA-6 (addendum)
+  total: 14
 ---
 
 # Phase 2 Code Review — operation template, shared source, dashboard
@@ -19,6 +19,8 @@ findings:
 Reviewed the phase's 16 changed source files (15 production + StepDedup code-behind pair; test files excluded from findings) at standard depth: per-file reading of the diffs, then targeted runtime probes of the real compiled visual tree for anything a diff cannot show.
 
 **One Critical and one Warning were found and fixed in this pass; six Info-level notes are recorded and left as-is.** The Critical was invisible to the phase's own gates: the region assertions count region *markers*, and the layout audit flags clipped or overlapping controls — neither looks at the *text* a region renders, so Region B printing a raw view-model type name passed every gate.
+
+**The addendum at the end audits the four test files the phase rewrote, which this pass excluded by scope rule; it found and fixed two name/assertion contradictions and four smaller gaps.**
 
 ## Scope
 
@@ -35,7 +37,7 @@ src/Synapic.Main/Views/Operation/RunStateBar.axaml(.cs)             (new)
 src/Synapic.Main/Views/Wizard/StepDedup.axaml(.cs)
 ```
 
-Out of scope by scope rule: `src/Synapic.Main/Services/` (phase gate proved it untouched), the four rewritten test files, and the planning artifacts.
+Out of scope by scope rule: `src/Synapic.Main/Services/` (phase gate proved it untouched) and the planning artifacts. The four rewritten test files are covered by the addendum at the end of this document, so nothing in the phase is left unreviewed.
 
 ## Critical
 
@@ -104,7 +106,72 @@ TEXT: Synapic.Main.ViewModels.Steps.Step2EngineViewModel     ← and again
 
 ## Review method note
 
-The phase's file scope was computed from the git diff (`19c4dff7^..HEAD`, planning artifacts and tests excluded), the depth from config (standard). Because the two hosts' defect was invisible to both the diff and the existing gates, the review additionally drove the compiled UI headlessly and dumped the rendered text and region children, then used the same harness to prove the fix before deleting it.
+The phase's file scope was computed from the git diff (`19c4dff7^..HEAD`, planning artifacts and tests excluded), the depth from config (standard). Because the two hosts' defect was invisible to both the diff and the existing gates, the review additionally drove the compiled UI headlessly and dumped the rendered text and region children, then used the same harness to prove the fix before deleting it.---
+
+# Addendum (2026-10-09) — pin audit of the four rewritten test files
+
+The main pass above excluded the four test files the phase rewrote (02-04), so nothing had checked whether the rewritten *pins* still say what they verify. This addendum closes that gap: every fact the rewrite created, renamed or edited — 25 names across [RouteSplitTests.cs](tests/Synapic.Main.Tests/RouteSplitTests.cs), [WorkflowOrderTests.cs](tests/Synapic.Main.Tests/WorkflowOrderTests.cs), [MainLayoutShellTests.cs](tests/Synapic.Main.Tests/MainLayoutShellTests.cs) and [UiLayoutAuditTests.cs](tests/Synapic.Main.Tests/UiLayoutAuditTests.cs) — was read name-first, then compared against what its assertions can actually fail on, with the views and view models those assertions reach into.
+
+**Two Warning-level name/assertion contradictions and four smaller gaps were found; all six are fixed.** No fact was added or deleted, so the case counts are unchanged (Main **442/442**).
+
+## PA-1 — `Home_returns_to_the_dashboard_and_the_route_resumes_where_it_was` claimed a resume its own assertions disprove — FIXED
+
+**Where:** [RouteSplitTests.cs](tests/Synapic.Main.Tests/RouteSplitTests.cs); renamed from `Home_returns_to_the_chooser_and_the_route_resumes_where_it_was` by 02-04, which carried the false clause through the rename.
+
+**What:** the fact opens *dedup*, advances to the dedup step, returns Home, then enters a **different** route (tagging) and asserts `CurrentStepIndex == 0` — a fresh start. Nothing resumes: `WizardViewModel.EnterTaggingRoute`/`EnterDedupRoute`/`EnterUpscaleRoute` each set `CurrentStep = Step1`, and `MainWindowViewModel.GoHome` only sets `Route` and `Shell.Current`. The fact's own body comment contradicted its name ("Picking the other route later starts it from the Datasource step"), and re-entering the *same* route resumes no more than switching does — the step always returns to the source.
+
+**Impact:** a pin that promises resume semantics reads as proof that mid-flow position survives a trip to the dashboard — which Phase 3 would then have to preserve, or silently break.
+
+**Fix:** renamed to `Home_returns_to_the_dashboard_and_another_route_opens_at_the_source`, with the body comment stating what actually survives a trip to the dashboard (the configured source and settings, not the step position). The same false claim lived in production — `GoHome`'s doc said "route state is kept, so returning resumes" — and was corrected there too ([MainWindowViewModel.cs](src/Synapic.Main/ViewModels/MainWindowViewModel.cs)).
+
+## PA-2 — `Dashboard_entry_is_free_and_only_the_run_is_gated` asserted a route gate its name denies — FIXED
+
+**Where:** [RouteSplitTests.cs](tests/Synapic.Main.Tests/RouteSplitTests.cs) — the D6 replacement fact itself.
+
+**What:** the fact asserted `Assert.False(vm.CanStartRoute)` (no source) and `Assert.True(vm.CanStartRoute)` (source) — the **retired** card gate. `CanStartRoute`'s own doc called it "the start screen's gate: the three workflow cards stay disabled until the source panel has a usable source", and ui-design D6 is exactly what removed it ("entering a mode is free; only *actions* are gated … Replaces `CanStartRoute` card gating"). Grep confirms no view binds it any more (no `.axaml` reference; only the property, its doc, `docs/csharp-reference.md`, `docs/ui-design.md` and these two assertions). So a fact named "only the run is gated" was the last thing in the tree asserting a second, route-level gate — one that no longer exists on screen.
+
+**Why it survived the rewrite:** the D6 re-point checked the *cards* (now enabled) and the *run* gate, and carried the old predicate's assertion along with the strip-light checks it happened to sit between.
+
+**Fix:** both assertions dropped from the fact; every D6 guarantee it does pin (panels enterable, run gated with `RunDisabledReason`, then run open with no reason) is unchanged. The fact's doc now records why `CanStartRoute` is asserted nowhere, and the property's stale doc says it is retired, unbindable, and kept only for Phase 3 to delete deliberately.
+
+## PA-3 — `Operation_entry_returns_to_the_chooser_from_any_step` tested exactly one step — FIXED
+
+**Where:** [WorkflowOrderTests.cs](tests/Synapic.Main.Tests/WorkflowOrderTests.cs). The file was rewritten by 02-04 but this fact predates it, which is why the rewrite's rename pass skipped it.
+
+**What:** "from any step" — the body entered tagging, jumped to step 3, went Home, and asserted home visibility once. "Chooser" also names the screen the redesign replaced: the assertions are `IsHomeVisible`/`IsWizardVisible`/`IsNavHomeActive`, i.e. the dashboard.
+
+**Fix:** renamed `Operation_entry_returns_to_the_dashboard_from_any_step` and made the name true — it walks all four tagging steps, asserts it really reached the step it names, and asserts the way back from each, with failure messages that name the step.
+
+## PA-4 — the audit's four "Tagging step N" cases never verified which step they audited — FIXED
+
+**Where:** [UiLayoutAuditTests.cs](tests/Synapic.Main.Tests/UiLayoutAuditTests.cs) — `Tagging_steps_have_no_overlapping_or_clipped_controls`.
+
+**What:** the theory's four cases are named for the four steps and each calls that step's `GoToStepNCommand`, but the only thing asserted about *where* the audit ran is `_panelsAudited > 10`. A gate that silently refuses the move — `GoToStep2` does exactly that on an invalid source, setting `ValidationError` and returning — would leave all four cases auditing the source step and reporting green: four cases named for four screens, all measuring one.
+
+**Fix:** each case now asserts `CurrentStepIndex` equals the step it names, before the audit runs.
+
+## PA-5, PA-6 (Info)
+
+| ID | Finding | Note / disposition |
+|----|---------|--------------------|
+| PA-5 | `Dashboard_shows_exactly_four_panels_named_Settings_Tag_Dedup_Upscale`'s doc claimed "each one opens its view" | Only the three operation panels open a mode; the Settings panel renders its content in place and has no open command (§5's settings view is Phase 3). Doc corrected to say so. |
+| PA-6 | `Region_A_strip_shows_the_same_source_and_count_on_every_route` deconstructed its route name and never used it | A failure said nothing about which route broke. Added a per-route `EffectivelyVisible` assertion carrying the route in its message — which is also the "shows … on every route" half of the name. |
+
+## Checked, no action
+
+- **`Dashboard_lays_the_source_panel_out_above_the_operation_panels` / `Dashboard_panels_and_route_visibility_are_bound_in_the_real_window`** — plural names; the second was measured through two of the three cards and now checks the upscale card as well. The layout fact keeps measuring the row through one card, which is sound because `Dashboard_panels_read_in_order_and_audit_clean` pins all three panels' shared row and left-to-right order at two sizes.
+- **`All_three_modes_render_the_same_three_regions_in_order`, `RunStateBar_renders_the_run_state_it_binds`, `No_step_renders_a_view_model_type_name_as_text`** — names match their assertions. `RunStateBar` is bound to the same `Step3ProcessViewModel` the template hands it, so the fact exercises the real binding surface rather than a stand-in.
+- **The facts the rewrite deliberately left alone** (sidebar entry and active marks, tabs, settings dialogs) — unchanged so Phase 3 starts from a known list. Facts outside the four rewritten files that still say "chooser" (e.g. `UpscaleRouteTests.Home_returns_to_the_chooser_…`) keep the pre-rename vocabulary and belong to Phase 3's wording sweep.
+
+## Addendum verification
+
+| Check | Command | Result |
+|-------|---------|--------|
+| Build (warnings are errors) | `dotnet build Synapic.Net.sln --nologo -v minimal` | exit 0 — **0 Warning(s) 0 Error(s)** |
+| The four rewritten files | `dotnet test tests/Synapic.Main.Tests/… --filter "…RouteSplitTests\|…WorkflowOrderTests\|…UiLayoutAuditTests\|…MainLayoutShellTests"` | exit 0 — **44/44** |
+| Full suite | `dotnet test Synapic.Net.sln -c Release --nologo` | exit 0 — Shared **6/6**, Integration **5/5**, Main **442/442**, 0 failed, 0 skipped |
+| No fact added or deleted | case count before/after | Main **442 → 442**; the fixes are assertion- and name-level only |
 
 ---
+
 *Reviewed: 2026-10-09 — Phase 2 (02-add-operation-template-and-dashboard)*

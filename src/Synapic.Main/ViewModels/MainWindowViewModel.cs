@@ -157,10 +157,12 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool IsHomeVisible => Route == HomeRoute;
 
     /// <summary>
-    /// The start screen's gate: the three workflow cards stay disabled until the
-    /// source panel has a usable source — an existing local folder, or a live
-    /// Daminion session — so a route is never entered without knowing what it
-    /// would work on.
+    /// Retired gate — ui-design D6 replaced the "cards stay disabled until the
+    /// source panel has a usable source" rule with "entering a mode is free, only
+    /// a run is gated", so no view binds this any more (the dashboard panels are
+    /// always enabled, and the run carries its own
+    /// <see cref="IOperationViewModel.IsRunEnabled"/> plus its reason). Kept only
+    /// so Phase 3 can delete it deliberately.
     /// </summary>
     public bool CanStartRoute => Wizard.Step1.HasUsableSource;
 
@@ -287,7 +289,7 @@ public partial class MainWindowViewModel : ViewModelBase
         SynapicLog.Info(nameof(MainWindowViewModel), "Route selected: Upscaling");
     }
 
-    /// <summary>Back to the start screen (route state is kept, so returning resumes).</summary>
+    /// <summary>Back to the dashboard. The configured state (the source, the operation settings) survives the trip, but entering a route always opens at its source step — <see cref="WizardViewModel.EnterTaggingRoute"/> and its siblings reset the step, so nothing resumes mid-flow.</summary>
     [RelayCommand]
     private void GoHome()
     {

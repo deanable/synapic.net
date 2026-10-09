@@ -104,22 +104,34 @@ public class WorkflowOrderTests
     }
 
     /// <summary>
-    /// 2 · Operation type is the start screen, and one click enters an operation
-    /// at its first step; the three cards are the chooser the user asked for.
+    /// 2 · Operation type is the way back to the dashboard, from every step of
+    /// the operation on screen — the dashboard is one click away wherever the
+    /// user is, and the entry is marked as the one they are on.
     /// </summary>
     [AvaloniaFact]
-    public void Operation_entry_returns_to_the_chooser_from_any_step()
+    public void Operation_entry_returns_to_the_dashboard_from_any_step()
     {
         var shell = Shell("local", Path.GetTempPath());
-        shell.StartTaggingRouteCommand.Execute(null);
-        shell.Wizard.GoToStep3Command.Execute(null);
-        Assert.Equal(2, shell.Wizard.CurrentStepIndex);
+        var steps = new (string Name, int Index, Action<WizardViewModel> Go)[]
+        {
+            ("step 1 source & model", 0, _ => { }),
+            ("step 2 settings", 1, w => w.GoToStep2Command.Execute(null)),
+            ("step 3 process", 2, w => w.GoToStep3Command.Execute(null)),
+            ("step 4 results", 3, w => w.GoToStep4Command.Execute(null)),
+        };
 
-        shell.GoHomeCommand.Execute(null);
+        foreach (var (name, index, go) in steps)
+        {
+            shell.StartTaggingRouteCommand.Execute(null);
+            go(shell.Wizard);
+            Assert.Equal(index, shell.Wizard.CurrentStepIndex);   // the fact really left the source step
 
-        Assert.True(shell.IsHomeVisible);
-        Assert.False(shell.IsWizardVisible);
-        Assert.True(shell.IsNavHomeActive);
+            shell.GoHomeCommand.Execute(null);
+
+            Assert.True(shell.IsHomeVisible, $"{name}: the operation entry did not return to the dashboard");
+            Assert.False(shell.IsWizardVisible, $"{name}: the wizard is still on screen after the operation entry");
+            Assert.True(shell.IsNavHomeActive, $"{name}: the dashboard entry is not marked active");
+        }
     }
 
     /// <summary>
