@@ -83,6 +83,9 @@ public partial class Step3ProcessViewModel : RunStateViewModel
                 PauseSource!.Token,
                 _session.Engine.ToTagFieldSelection()));
 
+            if (_session.TotalItems == 0)
+                AppendLog("No images matched this source and its filters — choose a folder or scope with images, then run tagging again.");
+
             // Local usage counters (opt-in): one line per finished batch.
             TelemetryService.Shared.RecordBatch(
                 itemsProcessed: _session.ProcessedItems - _session.FailedItems,

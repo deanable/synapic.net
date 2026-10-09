@@ -535,15 +535,25 @@ public class ServerDetectionTests
 
     // ── The device the server is really using ────────────────────────────────
 
+    /// <summary>
+    /// A shell whose device probe offers CUDA whatever this machine has, built
+    /// before the caller names the device under test. Two things would otherwise
+    /// replace a CUDA selection on a runner with no NVIDIA driver: construction is
+    /// where the first-run Defaults seeding writes the configured default into a
+    /// session with no saved engine state, and where the engine form applies its
+    /// rule of offering only the devices the probe reports.
+    /// </summary>
+    private static MainWindowViewModel ShellOfferingCuda(Session session) =>
+        new(new FakeSidecar(), new FakeBuildService(), session, () => Exe, null, null, _ => Exe,
+            computeAvailabilityProbe: () => new ComputeAvailability(Cuda: true, Mps: false));
+
     [AvaloniaFact]
     public void Reported_device_matching_the_selection_is_shown_without_a_warning()
     {
         var session = new Session();
-        var vm = new MainWindowViewModel(new FakeSidecar(), new FakeBuildService(), session, () => Exe, null, null, _ => Exe);
-        // The device this run asked for, stated after the shell is built: the
-        // engine form refuses a device this machine cannot offer, so naming it
-        // before construction would leave the fixture on the CPU. The subject
-        // here is ApplyServerDevice's comparison, not that rule.
+        var vm = ShellOfferingCuda(session);
+        // Named after construction (see ShellOfferingCuda): what is under test is
+        // ApplyServerDevice's comparison, not the rules that seed a device.
         session.Engine.Device = "cuda";
 
         vm.ApplyServerDevice("cuda");
@@ -561,9 +571,8 @@ public class ServerDetectionTests
         // build, no usable CUDA) and everything tagged on the CPU with nothing
         // on screen saying so.
         var session = new Session();
-        var vm = new MainWindowViewModel(new FakeSidecar(), new FakeBuildService(), session, () => Exe, null, null, _ => Exe);
-        // CUDA asked for, stated after the shell is built (see the matching-device
-        // fact above for why the order matters on a CPU-only machine).
+        var vm = ShellOfferingCuda(session);
+        // CUDA asked for, stated after construction (see ShellOfferingCuda).
         session.Engine.Device = "cuda";
 
         vm.ApplyServerDevice("cpu");

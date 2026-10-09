@@ -29,7 +29,7 @@ public partial class Step4ResultsViewModel : ViewModelBase
     public ObservableCollection<ProcessItemResult> Results { get; } = new();
 
     [ObservableProperty]
-    private string _summary = "No results yet";
+    private string _summary = "No results yet — run tagging to create a report.";
 
     [ObservableProperty]
     private ProcessItemResult? _selectedResult;
@@ -42,7 +42,7 @@ public partial class Step4ResultsViewModel : ViewModelBase
     {
         Results.Clear();
         foreach (var r in _session.Results) Results.Add(r);
-        UpdateSummary("No results yet", reset: true);
+        UpdateSummary("No results yet — run tagging to create a report.", reset: true);
         RetryFailedCommand.NotifyCanExecuteChanged();
         VerifyDaminionCommand.NotifyCanExecuteChanged();
     }
@@ -198,8 +198,10 @@ public partial class Step4ResultsViewModel : ViewModelBase
         var verified = _session.Results.Count(r => r.Status == "Verified");
         var failed = _session.Results.Count - ok;
         var baseLine = $"{ok} succeeded ({verified} verified), {failed} failed, {_session.Results.Count} total";
-        Summary = reset || string.IsNullOrEmpty(suffix)
-            ? baseLine
+        Summary = reset && _session.Results.Count == 0
+            ? "No results yet — run tagging to create a report."
+            : string.IsNullOrEmpty(suffix)
+                ? baseLine
             : suffix.StartsWith("Verified") || suffix.Contains("Retry") || suffix.Contains("Retried")
                 ? suffix
                 : $"{baseLine} — {suffix}";

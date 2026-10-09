@@ -460,36 +460,43 @@ public class HelpServiceTests : IDisposable
     }
 
     [AvaloniaFact]
-    public async Task F1_opens_the_topic_for_the_mode_on_screen()
+    public async Task F1_key_dispatch_opens_the_context_topic_on_dashboard_and_every_route()
     {
         var help = new FakeHelpService();
         var vm = NewViewModel(help, Exe);
+        var window = new MainWindow { DataContext = vm };
+        window.Show();
         await vm.DetectServerAsync(); // finds the executable, so the sidecar panel is not gating
 
-        // The dashboard has no mode, so F1 falls back to the help home.
-        Assert.Equal(HelpTopics.Home, vm.ContextHelpTopic);
-
-        var modes = new (string Mode, Action Enter, string Topic)[]
+        var visits = new (Action Enter, string Topic)[]
         {
-            ("tag", () => vm.StartTaggingRouteCommand.Execute(null), "step3-process.html"),
-            ("dedup", () => vm.StartDedupRouteCommand.Execute(null), "dedup.html"),
-            ("upscale", () => vm.StartUpscaleRouteCommand.Execute(null), HelpTopics.Upscale),
+            (() => { }, HelpTopics.Home),
+            (() => vm.StartTaggingRouteCommand.Execute(null), "step3-process.html"),
+            (() => vm.StartDedupRouteCommand.Execute(null), "dedup.html"),
+            (() => vm.StartUpscaleRouteCommand.Execute(null), HelpTopics.Upscale),
         };
 
-        foreach (var (mode, enter, topic) in modes)
+        try
         {
-            enter();
-            Assert.Equal(topic, vm.ContextHelpTopic);
+            foreach (var (enter, topic) in visits)
+            {
+                enter();
+                Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                Assert.Equal(topic, vm.ContextHelpTopic);
+                var openedBefore = help.OpenedTopics.Count;
 
-            vm.OpenContextHelpCommand.Execute(null);
-            Assert.Equal(topic, help.OpenedTopics[^1]);
+                window.KeyPressQwerty(PhysicalKey.F1, RawInputModifiers.None);
+
+                Assert.Equal(openedBefore + 1, help.OpenedTopics.Count);
+                Assert.Equal(topic, help.OpenedTopics[^1]);
+            }
+
+            Assert.Equal(visits.Select(v => v.Topic), help.OpenedTopics);
         }
-
-        // Back on the dashboard the topic follows the navigation state again.
-        vm.GoHomeCommand.Execute(null);
-        Assert.Equal(HelpTopics.Home, vm.ContextHelpTopic);
-
-        Assert.Equal(modes.Length, help.OpenedTopics.Count);
+        finally
+        {
+            window.Close();
+        }
     }
 
     [AvaloniaFact]

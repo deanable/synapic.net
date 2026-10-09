@@ -13,7 +13,7 @@ provides:
   - StopApplyCommand (enabled exactly while IsApplying) and StopScanCommand (cancels either scan entry point)
   - ApplyBusyStateTests (5 facts) — D-04 / ui-design §10 criterion 6's dedup clause
   - UI-REVIEW.md carried-forward finding #1 marked RESOLVED
-affects: [03-04 final gate (criterion 6), any future dedup apply work]
+affects: [03-05 final gate (criterion 6), any future dedup apply work]
 
 # Tech tracking
 tech-stack:
@@ -89,13 +89,13 @@ completed: 2026-10-09
 
 ## Issues Encountered
 
-- Two pre-existing `ServerDetectionTests` failures remain (no CUDA driver on this machine makes `TrySelectDevice("cuda")` fall back to CPU, so the device-mismatch expectations flip). Documented with a clean-HEAD reproduction in 03-01-SUMMARY.md. This plan did not touch them; the phase gate in 03-04 needs a decision on whether to make those two facts machine-independent via the `availabilityProbe` seam the constructor already offers.
+- Two pre-existing `ServerDetectionTests` failures remain (no CUDA driver on this machine makes `TrySelectDevice("cuda")` fall back to CPU, so the device-mismatch expectations flip). Documented with a clean-HEAD reproduction in 03-01-SUMMARY.md. This plan did not touch them. **Resolved since:** both facts now state the device after construction and inject the engine form's availability probe, so they pass on a machine without CUDA — the suite is 460/460 with no known failures (see STATE.md and 03-04-SUMMARY.md's Issues Encountered).
 
 ## Next Phase Readiness
 
 - ui-design §10 criterion 6 now holds for dedup (`Apply` busy + Stop) and its scan; the tagging/upscale clauses were already carried by the shared bar and their own pages.
 - 03-02 (chrome collapse) is unaffected by this plan's changes: nothing here binds the sidebar, the action bar or the step chain.
-- 03-04's sweep can quote `ApplyBusyStateTests` by name for criterion 6 and cite the UI-REVIEW closure line for the audit item.
+- 03-05's sweep can quote `ApplyBusyStateTests` by name for criterion 6 and cite the UI-REVIEW closure line for the audit item.
 
 ---
 *Phase: 03-collapse-navigation-and-retire-settings-dialogs*

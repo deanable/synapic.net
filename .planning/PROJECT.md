@@ -24,9 +24,10 @@ reviewable results written back — without the user ever fighting the UI.
 - UI redesign per `docs/ui-design.md` (SSOT): dashboard-first, one shared operation layout
 - Presentation-layer refactor per `docs/ui-refactor-plan.md` (the Phase 1–3 work this roadmap tracks)
 - §5 app-wide settings view (the dashboard Settings panel: inference server, appearance, logging, defaults,
-  about) — **built, suite-green, and owned by no plan**: it landed as untracked files in 03-02's commit
-  (`d79917c`) after 03-01 freed the panel, and Phase 3's plan list never named it. Tracked in the ROADMAP's
-  "Unplanned work delivered during Phase 3" and scheduled for verification by 03-04
+  about) — **delivered and now owned by plan `03-04`**: it landed as untracked files in 03-02's commit
+  (`d79917c`) after 03-01 freed the panel, and the plan was written on 2026-10-09 to adopt it. Its
+  must-haves and evidence are in `03-04-SUMMARY.md`, which the `03-05` gate verifies (two rows recorded ✗
+  there: a health-details surface, and §5's wide section-nav layout)
 
 ## Constraints
 

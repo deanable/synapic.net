@@ -426,6 +426,27 @@ public class WorkflowOrderTests
     /// template fails here instead of shipping.
     /// </summary>
     [AvaloniaFact]
+    public void Tagging_report_shows_actionable_guidance_before_first_results()
+    {
+        var shell = Shell("local", Path.GetTempPath());
+        var window = new MainWindow { DataContext = shell };
+        window.Show();
+        try
+        {
+            shell.StartTaggingRouteCommand.Execute(null);
+            Dispatcher.UIThread.RunJobs();
+
+            var report = Assert.Single(window.GetVisualDescendants().OfType<TextBlock>(),
+                text => text.Text == "No results yet — run tagging to create a report.");
+            Assert.True(report.IsVisible);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
     public void No_mode_renders_a_view_model_type_name_as_text()
     {
         var shell = Shell("local", Path.GetTempPath());

@@ -26,6 +26,64 @@ public class StepDedupViewModelTests
     private static DuplicateGroupViewModel Group(params DedupItemViewModel[] items) =>
         new(items, "phash", 0.90);
 
+    // ── Empty scan guidance ────────────────────────────────────────────────
+
+    [AvaloniaFact]
+    public async Task Empty_local_folder_shows_actionable_guidance()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), $"synapic-empty-guidance-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(folder);
+        try
+        {
+            var vm = new StepDedupViewModel { FolderPath = folder };
+
+            await vm.ScanCommand.ExecuteAsync(null);
+
+            Assert.Equal("No images found in this source — choose a folder or scope with images, then scan again.",
+                vm.ScanSummary);
+            Assert.Empty(vm.Groups);
+
+            var view = new StepDedup { DataContext = vm };
+            var window = new Window { Content = view, Width = 1000, Height = 700 };
+            window.Show();
+            try
+            {
+                Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(),
+                    text => text.Text == vm.ScanSummary && text.IsVisible);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task Images_without_duplicates_suggest_relaxing_the_match_rules()
+    {
+        var folder = Directory.CreateTempSubdirectory("synapic-no-dups-").FullName;
+        try
+        {
+            var image = FindSampleImage() ?? throw new InvalidOperationException("TestData/sample.jpg not found");
+            File.Copy(image, Path.Combine(folder, "one.jpg"));
+            var vm = new StepDedupViewModel { FolderPath = folder };
+
+            await vm.ScanCommand.ExecuteAsync(null);
+
+            Assert.Equal("No duplicates found among 1 images — try a lower threshold or another algorithm.",
+                vm.ScanSummary);
+            Assert.Empty(vm.Groups);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
     // ── Scan settings ───────────────────────────────────────────────────────
 
     [Fact]

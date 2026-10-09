@@ -13,7 +13,7 @@ provides:
   - Tagging's full engine form is the Parameters region, so all three modes' parameters are inline in Region B
   - The dialog entry points (shell Settings command, the two page ⚙ buttons, the per-step OpenSettingsRequested hooks) removed
   - The five dialog-pinning facts rewritten to inline-parameter pins, plus an assembly-level "no dialog type" pin
-affects: [03-02 collapsing navigation, 03-04 final gate, any future test that expects a settings window]
+affects: [03-02 collapsing navigation, 03-05 final gate, any future test that expects a settings window]
 
 # Tech tracking
 tech-stack:
@@ -120,7 +120,7 @@ completed: 2026-10-09
 
 - 03-02 can delete the sidebar and action bar without touching settings: their Settings buttons already point at `SettingsCommand`, and the sidebar's "3 · Settings…" entry is the last per-operation-sounding label left.
 - Region B now renders one form per mode on its step; the step chain itself (which is what makes the region depend on `Wizard.CurrentStep`) is 03-02's to collapse.
-- Criterion 4 is pinned by name and ready for 03-04's item-by-item sweep; the two pre-existing `ServerDetectionTests` failures need a decision before the final gate can be reported green.
+- Criterion 4 is pinned by name and ready for 03-05's item-by-item sweep; the two pre-existing `ServerDetectionTests` failures need a decision before the final gate can be reported green.
 
 ---
 *Phase: 03-collapse-navigation-and-retire-settings-dialogs*

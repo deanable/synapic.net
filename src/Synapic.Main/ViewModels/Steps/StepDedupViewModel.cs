@@ -557,7 +557,11 @@ public partial class StepDedupViewModel : RunStateViewModel
             var thumbs = await LoadThumbsAsync(result, ct);
             AttachGroups(result, thumbs);
             var dupCount = Groups.Sum(g => g.Items.Count - 1);
-            ScanSummary = $"{result.TotalFiles} files scanned — {Groups.Count} groups, {dupCount} duplicates";
+            ScanSummary = Groups.Count == 0
+                ? result.TotalFiles == 0
+                    ? "No images found in this source — choose a folder or scope with images, then scan again."
+                    : $"No duplicates found among {result.TotalFiles} images — try a lower threshold or another algorithm."
+                : $"{result.TotalFiles} files scanned — {Groups.Count} groups, {dupCount} duplicates";
             SynapicLog.Info(nameof(StepDedupViewModel), ScanSummary);
             TelemetryService.Shared.RecordDedup(dupCount);
 
@@ -595,6 +599,9 @@ public partial class StepDedupViewModel : RunStateViewModel
 
         // An empty folder looks exactly like "no duplicates found" in the UI,
         // so say which one it was before the hashing starts.
+        if (files.Length == 0)
+            ScanSummary = "No images found in this folder — choose a folder with supported images, then scan again.";
+
         SynapicLog.Info(nameof(StepDedupViewModel),
             files.Length == 0
                 ? $"No .jpg/.jpeg/.png/.tif/.tiff files found under '{FolderPath}' (recursive) — nothing to compare"

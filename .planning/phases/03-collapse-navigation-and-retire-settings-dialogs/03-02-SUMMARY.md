@@ -16,7 +16,7 @@ provides:
   - MainLayout without the sidebar, the Back/Next/StartOver action bar or the step DataTemplates; the sidebar's styles removed from App.axaml
   - MainLayout.axaml.cs pushing the four template slots on Shell.Current (the element's own DataContext cannot reach the shell)
   - Every chrome-, route- and step-pinning fact rewritten to the dashboard/template pins (19 renamed, 3 gained, 1 removed with its host)
-affects: [03-04 final gate, any future test that expects a numbered step, a sidebar entry or a route string]
+affects: [03-05 final gate, any future test that expects a numbered step, a sidebar entry or a route string]
 
 # Tech tracking
 tech-stack:
@@ -180,13 +180,13 @@ completed: 2026-10-09
 
 ## Issues Encountered
 
-- **The settings view files were uncommitted prerequisites.** `src/Synapic.Main/ViewModels/SettingsViewModel.cs`, `src/Synapic.Main/Views/Dashboard/SettingsPanel.axaml(.cs)`, the `ConfigService`/`SynapicLog` changes and `tests/Synapic.Main.Tests/SettingsViewTests.cs` were untracked (03-01's commit predates them) while `MainWindowViewModel` now depends on them, so this commit carries them. They are 03-01's feature by content; nothing about them changed here except the panel's `IsDashboardVisible`/engine-form assertions in the migrated fact.
+- **The settings view files were uncommitted prerequisites.** `src/Synapic.Main/ViewModels/SettingsViewModel.cs`, `src/Synapic.Main/Views/Dashboard/SettingsPanel.axaml(.cs)`, the `ConfigService`/`SynapicLog` changes and `tests/Synapic.Main.Tests/SettingsViewTests.cs` were untracked (03-01's commit predates them) while `MainWindowViewModel` now depends on them, so this commit carries them. They are 03-01's feature by content; nothing about them changed here except the panel's `IsDashboardVisible`/engine-form assertions in the migrated fact. **Adopted later:** that work got an owning plan on 2026-10-09 — `03-04`, recorded in 03-04-SUMMARY.md — and the final gate moved to `03-05` with it, so this commit's untracked-file carry is no longer unowned.
 - **Two `OperationShellViewModel` facts were asserted against behaviour the ctor resets.** The first draft of `Opening_the_tagging_mode_is_never_blocked_by_the_tag_fields` cleared the tag fields on the *session* before construction, which the engine form then re-hydrates from its own defaults; the fact now clears them through the view model (what the user does), which is also what makes the run's gate observable.
 - **`Server_status_and_help_...` needed a weaker uniqueness claim than expected.** Two elements carry `StatusText` in the tree, so the fact requires that the status is visible somewhere rather than that it occurs once — noted in the fact so a future reader does not "tighten" it back into a flake.
 
 ## Next Phase Readiness
 
-- **03-04's final gate can now sweep criteria 1–9 item by item with a green suite** (460/460, build 0/0), including criterion 2 (no sidebar/route booleans — the compiler plus the greps prove it) and criterion 7 (pinned by name).
+- **03-05's final gate can now sweep criteria 1–9 item by item with a green suite** (460/460, build 0/0), including criterion 2 (no sidebar/route booleans — the compiler plus the greps prove it) and criterion 7 (pinned by name).
 - **Criterion 9's layout audit** walks the dashboard and all three modes at four sizes; the wide two-column form of the dashboard remains the one carried deviation from Phase 2.
 - **The help corpus still numbers the old steps** (`setup-guide.html`, `step*-*.html`) while the shell's topics are mode-named: a wording sweep, not a functional gap, and the natural first task of the docs pass.
 - **`ShellViewModel.Open`/`Home`/`Operations` now have their caller** (the route commands), so the Phase 2 note about them being unrendered navigation surface is closed.

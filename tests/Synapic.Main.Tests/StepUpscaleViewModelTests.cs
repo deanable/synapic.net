@@ -188,7 +188,8 @@ public class StepUpscaleViewModelTests
 
             Assert.False(vm.IsRunning);
             Assert.True(vm.IsIdle);
-            Assert.Equal("Done. Processed 0, succeeded 0, failed 0", vm.ProgressText);
+            Assert.Equal("No images were found in this source — choose a folder or catalog scope with images, then run upscale again.",
+                vm.ProgressText);
 
             // The original app's log lines: run start + the Parameters echo
             // (written on the UI thread, so they are on disk by now).
@@ -198,7 +199,7 @@ public class StepUpscaleViewModelTests
                 "Parameters: workflow=balanced, factor=4x, precision=auto, max_dimension=2048, " +
                 "output=keep, quality=88, denoise=0.50, sharpen=0.25, overwrite=true",
                 parameters[(parameters.IndexOf(']') + 2)..]);      // strip "[HH:mm:ss] "
-            Assert.Contains(vm.LogLines, l => l.Contains("Done. Processed 0", StringComparison.Ordinal));
+            Assert.Contains(vm.LogLines, l => l.Contains("No images were found in this source — choose a folder or catalog scope with images, then run upscale again.", StringComparison.Ordinal));
         }
         finally
         {

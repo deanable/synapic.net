@@ -52,6 +52,13 @@ public partial class MainWindowViewModel : ViewModelBase
     private string _lastDownloadStatus = "";
     private string _lastReportedDevice = "";
 
+    /// <param name="computeAvailabilityProbe">
+    /// Overridable so a test can state what the machine can run instead of
+    /// depending on the GPU under the test runner. It reaches the engine form,
+    /// which offers only the devices this answers with — so a fact about the
+    /// device the shell compares against can name one this machine would not
+    /// offer. Null = probe the machine.
+    /// </param>
     public MainWindowViewModel(
         IInferenceSidecar sidecar,
         ISidecarBuildService build,
@@ -63,7 +70,8 @@ public partial class MainWindowViewModel : ViewModelBase
         SystemPromptPresetStore? presetStore = null,
         ISidecarDownloadService? download = null,
         IHelpService? help = null,
-        ConfigService? configService = null)
+        ConfigService? configService = null,
+        Func<ComputeAvailability>? computeAvailabilityProbe = null)
     {
         _sidecar = sidecar;
         _build = build;
@@ -96,7 +104,8 @@ public partial class MainWindowViewModel : ViewModelBase
         };
         if (engineStore?.Load() is null) AppSettings.ApplyDefaultsToNewSession();
 
-        Operations = new OperationShellViewModel(_session, _sidecar, connectionStore, engineStore, presetStore);
+        Operations = new OperationShellViewModel(
+            _session, _sidecar, connectionStore, engineStore, presetStore, computeAvailabilityProbe);
         Operations.NavigationLockChanged += (_, _) => OnPropertyChanged(nameof(IsNavigationLocked));
 
         // The shared source is the dashboard panels' status line and the header

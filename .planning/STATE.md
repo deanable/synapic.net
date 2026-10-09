@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 03-02-PLAN.md
-last_updated: "2026-10-09T11:21:06.000Z"
+stopped_at: 03-05 final gate refresh; Phase 3 remains open on criteria 6 and 8
+last_updated: "2026-10-09T15:08:26.000Z"
 last_activity: 2026-10-09
 progress:
   total_phases: 3
   completed_phases: 2
-  total_plans: 13
-  completed_plans: 12
+  total_plans: 14
+  completed_plans: 14
   percent: 67
 ---
 
@@ -26,24 +26,24 @@ See: .planning/PROJECT.md (updated 2026-10-09)
 ## Current Position
 
 Phase: 03 (collapse-navigation-and-retire-settings-dialogs) — EXECUTING
-Plan: 3 of 4 (03-01, 03-02, 03-03 complete; 03-04 the final gate)
-Status: Ready to execute
+Plan: 5 of 5 executed (03-01 through 03-05); 03-05 gate verdict remains incomplete
+Status: Executed, remediation required
 Last activity: 2026-10-09
 
-Progress: 12 of 13 plans complete — Phase 1 4/4, Phase 2 5/5, Phase 3 3/4 (03-04 the final gate)
+Progress: 14 of 14 plans executed — Phase 1 4/4, Phase 2 5/5, Phase 3 5/5 plans executed but phase acceptance remains open (03-05 §10 criteria 6 and 8 ✗)
 
-**Suite is fully green (as of 03-02, commit `805a79f`):** `dotnet test Synapic.Net.sln -c Release` exits 0 → Shared 6/6, Integration 5/5, Main **460/460** (0 failed, 0 skipped). Build `0 Warning(s) 0 Error(s)`. Test-count history, so an older figure is never read as current: 442 (01-04) → 441 main-only at 02-05 plus the 5 integration and 6 shared → 446 (03-01) → 451 (03-03) → 460 (03-02). The two `ServerDetectionTests` device failures 03-01 recorded as pre-existing are fixed in 03-02 — their fixture stated the device before the shell was built, and the engine form's availability rule normalized it away on a CUDA-less machine — so the suite has no known failures left.
+**Suite is currently green (verified by 03-05):** `dotnet test Synapic.Net.sln -c Release --no-restore --nologo` exits 0 → Shared 6/6, Integration 5/5, Main **463/463** (0 failed, 0 skipped); `dotnet build Synapic.Net.sln --no-restore --nologo -v minimal` → 0 warnings / 0 errors. Test-count history: 442 (01-04) → 441 Main-only at 02-05 plus Integration 5 and Shared 6 → 446 (03-01) → 451 (03-03) → 460 (03-02) → 463 (this resumed 03-05 run). Empty-state and cross-route F1 tests now pass. A green suite does not mean the phase gate passed: §10 criteria 6 (not every empty-state branch has behavioral evidence) and 8 (preservation checklist has partial and unsupported claims) remain incomplete; see the per-claim 37-item map in 03-05-SUMMARY.md.
 
-**State of the redesign after 03-02:** one navigation model (`ShellViewModel.Current`, null = dashboard); the numbered sidebar, the Back/Next/StartOver action bar and the wizard step chain are deleted from `src/`, with the greps returning no matches; the three settings dialogs are deleted and every operation parameter is inline in Region B; layout audit green at 900×600 / 1024×700 / 1280×800 / 1600×900 for the dashboard and all three modes. Remaining: 03-04's item-by-item §10 sweep.
+**State of the redesign after 03-05:** one navigation model (`ShellViewModel.Current`, null = dashboard); the numbered sidebar and step chain are deleted, operation settings dialogs are gone, and parameters are inline in Region B; §5 settings view is recorded by 03-04; layout audit is green at four sizes for the dashboard and all modes. The F1 matrix now passes on Dashboard, Tag, Dedup and Upscale. Remaining gate work: criterion 6's untested zero-result/all-failed branches and criterion 8's partially evidenced or unsupported feature-preservation claims (see 03-05-SUMMARY.md); Phase 3 is not complete.
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 12
+- Total plans executed: 14
 - Average duration: 25 min
-- Total execution time: 5.1 hours
-- Last plans: 03-01 — 42 min, 2 tasks, 25 files · 03-02 — 58 min, 2 tasks, 46 files · 03-03 — 28 min, 2 tasks, 4 files
+- Total execution time: 5.4 hours
+- Last recorded plans: 03-01 — 42 min, 2 tasks, 25 files · 03-02 — 58 min, 2 tasks, 46 files · 03-03 — 28 min, 2 tasks, 4 files · 03-04 — 20 min, 3 tasks, 2 files · 03-05 — 35 min, 3 tasks, 1 planning file; gate ran but verdict incomplete
 
 **By Phase:**
 
@@ -51,25 +51,21 @@ Progress: 12 of 13 plans complete — Phase 1 4/4, Phase 2 5/5, Phase 3 3/4 (03-
 |-------|-------|-------|----------|
 | 01-extract-run-state-and-operation-contract | 4 | 4 | 8 min |
 | 02-add-operation-template-and-dashboard | 5 | 5 | 29 min |
-| 03-collapse-navigation-and-retire-settings-dialogs | 3 | 4 | 43 min |
+| 03-collapse-navigation-and-retire-settings-dialogs | 5 | 5 | 31 min |
 
 **Phase 1 gate sweep (01-04):** all five ROADMAP success criteria ✓ — build 0/0, full solution 442 passed / 0 failed / 0 skipped, 0 `.axaml` and 0 `Services/` diffs, one log-cap file, three inheritors
 
 **Phase 2 gate sweep (02-05):** all five ROADMAP success criteria ✓ — build 0/0 (incl. `--no-incremental`), suite Shared 6/5+0, Integration 5/0, Main 441/0, audit 19/19 at four sizes incl. stacked, decision coverage passed 7/7, `PrefillDedupSource` absent from source, mapping table accounts for all six removed test names
 
-**Phase 3 partial sweeps:** 03-01 (dialogs retired, params inline) and 03-02 (navigation collapse) each ended with build 0/0 and the full suite green at that commit's content; the phase gate itself is 03-04's, and the settings view (§5) is an extra item it must sweep — see the decision below.
+**Phase 3 sweeps:** 03-01 (dialogs retired, params inline), 03-02 (navigation collapse), 03-03 (dedup Apply busy + Stop) and 03-04 (§5 settings record: 8 §5 pins + 22 audit facts, no source changed) are recorded. Resumed 03-05 verification: build 0/0, full solution 6 + 5 + 463 passed, focused UI/F1/settings/server sweep 143/143, layout audit 22/22, F1 route matrix 1/1; decision coverage 5/5. Criterion 7 now passes. Criterion 6 remains ✗ because zero-result Daminion and all-failed Upscale branches are not pinned; criterion 8 remains ✗ with the full 37-row map now recorded (23 ✓, 12 △, 2 ✗). Phase 3 acceptance remains open.
 
 ## Accumulated Context
 
 ### Roadmap Evolution
 
 - 2026-10-08: .planning bootstrapped; Phases 1–3 added from docs/ui-refactor-plan.md gates
-- 2026-10-09: **Phase 3 gained unplanned work.** The §5 app-wide settings view (the dashboard Settings panel:
-  inference server, appearance, logging, defaults, about) was built during the phase after 03-01 freed the
-  panel of the source form and the model picker, but no plan in the roadmap owns it: 03-01's must-haves cover
-  the *dialog retirement* and the inlining, and the Phase 3 goal only implies §5 via its source list. It is
-  recorded in ROADMAP.md under "Unplanned work delivered during Phase 3" and must be swept by 03-04 (or a new
-  plan added to the phase) before the phase is called complete.
+- 2026-10-09: **Phase 3 gained unplanned work.** The §5 app-wide settings view (the dashboard Settings panel) landed with 03-02 before it had an owner. Plan `03-04` later adopted it and recorded section-by-section evidence in 03-04-SUMMARY.md; `03-05` verifies that record. The plan numbering now follows execution order.
+- 2026-10-09: **03-05 final gate re-run; still not passed.** Build 0/0, solution tests 6 + 5 + 463, focused sweep 143/143, audit 22/22, all-route F1 matrix 1/1, decision coverage 5/5 and Services scope empty. Criterion 7 now passes; criterion 6 lacks complete empty-branch coverage, criterion 8 has a per-item 37-row map but retains 12 partial and 2 unsupported entries, so Phase 3 success criterion 4 remains ✗. See 03-05-SUMMARY.md; no Phase 3 complete checkbox is set.
 
 ### Decisions
 
@@ -101,13 +97,15 @@ Recent decisions affecting current work:
 - [Phase 03]: Deleting chrome means deleting its styling too — the orphan sidebar styles (`Button.navItem`/`.active`, `Button.navMode`, `TextBlock.navGroup`) were removed from `App.axaml`, and a re-introduced sidebar entry now fails the absence pins in `WorkflowOrderTests`/`MainLayoutShellTests` as well
 - [Phase 03]: A fact that names a device on a session before the shell is built is testing the engine form's availability rule, not the behaviour it names — the two `ServerDetectionTests` device facts now state the device after construction (the first green run of those tests on this machine)
 - [Phase 03]: `HelpTopics.ForStepIndex` still maps 0–5 because the compiled help's topic files are named for the old steps; the adapters read the entry their mode maps to, and renaming the topics is a docs-pass task, not this phase's
-- [Phase 03, unplanned]: **The §5 settings view has no owning plan.** It was written as untracked files (`SettingsViewModel.cs`, `Views/Dashboard/SettingsPanel.axaml(.cs)`, `SettingsViewTests.cs`, the `ConfigService.UiSettings` defaults, `SynapicLog`'s level switch, the startup theme apply) that `MainWindowViewModel` then depended on, so 03-02's commit carried them. 03-01's SUMMARY and UI-REVIEW.md describe it as delivered, but no ROADMAP plan lists it as a must-have — it is recorded as unplanned delivered work and 03-04 must verify §5 item by item (five sections present and in order, nothing configured in two places, values persist) rather than assume it is covered
+- [Phase 03]: **The §5 settings view is owned by plan `03-04`** (was unplanned). It was written as untracked files (`SettingsViewModel.cs`, `Views/Dashboard/SettingsPanel.axaml(.cs)`, `SettingsViewTests.cs`, the `ConfigService.UiSettings` defaults, `SynapicLog`'s level switch, the startup theme apply) that `MainWindowViewModel` then depended on, so 03-02's commit carried them. 03-04, written 2026-10-09 after delivery, states the must-haves and records the evidence in 03-04-SUMMARY.md — five sections in order, nothing configured in two places, per-section reach, persistence — and the `03-05` gate verifies that record instead of sweeping §5 as an extra item
+- [Phase 03]: **A plan added mid-phase renumbers the gate rather than landing after it** — the §5 record took `03-04` and the final gate became `03-05`, keeping the phase's last plan its gate (as in `01-04`/`02-05`) and plan order equal to execution order; the "03-04 final gate" references in ROADMAP, PROJECT.md and the three earlier summaries were repointed in the same change
+- [Phase 03]: **A record may not map a nearby control onto a missing one** — 03-04-SUMMARY.md records two §5 rows ✗ (no health-details surface; §5's wide section-nav layout is not implemented, the single scrolling column being the form §5 allows at every size), because a technicality pass would leave the next reader unable to tell what §5 is missing
 - [Phase 03, unplanned]: The Defaults section seeds a session that has no saved engine state, and the shell applies it before the mode view models are built — which means a session handed to the shell with a device already chosen has that choice rewritten. Harmless today (a real first run passes a fresh session), but it is why the two `ServerDetectionTests` device facts read as failures until they stated the device after construction: worth a guard on `ApplyDefaultsToNewSession` if a second caller ever hands in a configured session
 
 ## Session Continuity
 
-Last session: 2026-10-09T11:21:06.000Z
-Stopped at: Completed 03-02-PLAN.md
+Last session: 2026-10-09T15:08:26.000Z
+Stopped at: 03-05 final gate refresh; phase acceptance incomplete
 Resume file: None
 
-Next: Phase 3 plan 04 — the final gate: sweep all nine docs/ui-design.md §10 criteria and the roadmap gates item by item against the now-green suite (build 0/0, Main 460/460, audit at four sizes), **plus the unplanned §5 settings view** (five sections present and in order, nothing configured in two places, values persist — see the ROADMAP's "Unplanned work delivered during Phase 3"), and confirm the decision coverage 7/7. Carried deviations: the dashboard's wide 2×2 breakpoint form is not implemented, and the help corpus still numbers the old steps (`setup-guide.html`, `step*-*.html`) — a wording sweep. Open question for the phase gate: whether §5 gets swept by 03-04 or becomes a plan of its own.
+Next: close the two remaining 03-05 gate gaps before considering Phase 3 complete: (1) add evidence-backed tests for untested empty-result branches (notably zero-result Daminion Tag/Dedup and all-failed Upscale) for criterion 6; (2) resolve the two unsupported historical claims and strengthen the partial rows in the 37-item criterion-8 map. Cross-route F1 key dispatch passes. The §5 record 03-04 has been verified by 03-05; its health-details and wide section-navigation gaps remain explicit. Gate record: `.planning/phases/03-collapse-navigation-and-retire-settings-dialogs/03-05-SUMMARY.md`. All 14 plans have been executed, but Phase 3 remains NOT PASSED. The dashboard's wide 2×2 layout and help corpus's old step names remain carried deviations.

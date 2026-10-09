@@ -18,7 +18,7 @@ the legacy navigation. Each phase keeps the app shippable and ends at a hard ver
 
 - [x] **Phase 1: Extract run state and operation contract** - Pull the copy-pasted run machinery into a shared base; no visible change
 - [x] **Phase 2: Add operation template and dashboard** - One shared three-region layout + 4-panel dashboard the app boots to (5/5 plans — gate sweep green: all five success criteria ✓)
-- [ ] **Phase 3: Collapse navigation and retire settings dialogs** - Delete the legacy wizard chrome; inline parameters; busy-state fix
+- [ ] **Phase 3: Collapse navigation and retire settings dialogs** - Delete the legacy wizard chrome; inline parameters; busy-state fix (03-05 gate incomplete: §10 criteria 6 and 8 remain open; criterion 7 now has cross-route F1 evidence)
 
 ## Phase Details
 
@@ -118,7 +118,7 @@ finding #1). Source: `docs/ui-design.md` §5, §6, §9, §10; `docs/ui-refactor-
   4. All nine `ui-design.md` §10 acceptance criteria pass item-by-item
   5. `dotnet build` 0 warnings/errors, full suite green, layout audit green at 4 window sizes × 4 routes
 
-**Plans:** 3/4 plans executed (03-01, 03-02, 03-03), plus the unplanned §5 settings view recorded below
+**Plans:** 5/5 plans executed — 03-05 gate recorded; criterion 7 passes, criteria 6 and 8 remain ✗; Phase 3 is not complete
 
 Plans:
 
@@ -126,13 +126,16 @@ Plans:
 - [x] `03-01` — Retire the three settings dialogs; params inline in Region B; rewrite dialog pins
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [x] `03-02` — Delete sidebar/Back-Next/step chain; ShellViewModel.Current is the only navigation — build 0/0, suite 460/460, criterion-7 fact added, 32 facts migrated
+- [x] `03-02` — Delete sidebar/Back-Next/step chain; ShellViewModel.Current is the only navigation — build 0/0, suite 460/460 at that gate (resumed 03-05 now confirms 463), criterion-7 fact added, 32 facts migrated
 - [x] `03-03` — Dedup Apply busy state (IsApplying + Stop) closes UI-REVIEW finding #1
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] `03-04` — Final gate: all nine ui-design §10 criteria + roadmap gates, item-by-item
+- [x] `03-04` — Adopt the app-wide settings view (§5): record its must-haves and its evidence — 8 §5 pins + 22 audit facts green, §5 swept item by item; two rows recorded ✗ (a health-details surface, the wide section-nav layout)
 
-**Unplanned work delivered during Phase 3** *(no plan in this roadmap owns these — 03-04 sweeps them as extra items)*
+**Wave 4** *(blocked on Wave 3 completion)*
+- [x] `03-05` — Final gate rerun: build 0/0, solution suite 6 + 5 + 463, focused sweep 143/143, audit 22/22, F1 matrix 1/1; criterion 7 passes, criteria 6 and 8 remain ✗, so Phase 3 remains open — see 03-05-SUMMARY.md
+
+**Settings view (§5)** *(delivered during Phase 3 by no plan of its own — adopted and recorded by `03-04`, verified by `03-05`)*
 
 - [x] **Settings view (§5)** — the dashboard's Settings panel is the real app-wide settings view (inference
   server: status, Start/Stop/Build, auto-launch, per-platform variants, fallback warning; appearance: theme;
@@ -143,8 +146,10 @@ Plans:
   (`d79917c`): `ViewModels/SettingsViewModel.cs`, `Views/Dashboard/SettingsPanel.axaml(.cs)`,
   `tests/Synapic.Main.Tests/SettingsViewTests.cs`, `ConfigService.UiSettings` defaults,
   `SynapicLog.SetMinimumLevel`/`CurrentMinimumLevel`, and the persisted theme applied at startup.
-  Pins: 8 facts in `SettingsViewTests` plus the layout audit walking the new sections at four sizes.
-  **Status: implemented and suite-green, but owned by no plan** — 03-01's plan retired the dialogs and inlined
-  the parameters, and the Phase 3 goal only implies §5 via its source list. 03-04 should verify §5 item by
-  item (five sections present and in order, nothing configured in two places, settings persist) before the
-  phase is called complete, or a plan should be added to the phase to own it.
+  Pins: 8 facts in `SettingsViewTests` plus the layout audit walking the dashboard (settings panel included)
+  at four sizes.
+  **Status: delivered and suite-green; adopted by `03-04` on 2026-10-09** — the plan states §5's must-haves
+  and 03-04-SUMMARY.md records the evidence (five sections present and in order, nothing configured in two
+  places, per-section reach, persistence). 03-05 verifies that record rather than sweeping unplanned work as
+  an extra item. Two §5 rows are recorded ✗ in the record: a health-details surface and §5's wide
+  section-nav layout do not exist.

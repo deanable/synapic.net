@@ -36,15 +36,23 @@ public partial class OperationShellViewModel : ViewModelBase
     public const string DedupKey = "dedup";
     public const string UpscaleKey = "upscale";
 
+    /// <param name="computeAvailabilityProbe">
+    /// Overridable so a test (or a future re-probe) can state what the machine can
+    /// run instead of depending on the GPU under the test runner: the engine form
+    /// offers only the devices this answers with, and refuses a selection it does
+    /// not offer. Null = probe the machine.
+    /// </param>
     public OperationShellViewModel(
         Session session,
         IInferenceSidecar sidecar,
         DaminionConnectionStore? connectionStore = null,
         EngineSettingsStore? engineStore = null,
-        SystemPromptPresetStore? presetStore = null)
+        SystemPromptPresetStore? presetStore = null,
+        Func<ComputeAvailability>? computeAvailabilityProbe = null)
     {
         Source = new Step1DatasourceViewModel(session, connectionStore);
-        TagParameters = new Step2EngineViewModel(session, sidecar, engineStore, presetStore);
+        TagParameters = new Step2EngineViewModel(
+            session, sidecar, engineStore, presetStore, computeAvailabilityProbe);
         TagRun = new Step3ProcessViewModel(session, sidecar, Source);
         TagReport = new Step4ResultsViewModel(session, Source, TagRun);
         Dedup = new StepDedupViewModel(step1: Source);

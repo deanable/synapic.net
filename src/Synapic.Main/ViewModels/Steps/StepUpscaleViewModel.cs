@@ -240,7 +240,11 @@ public partial class StepUpscaleViewModel : RunStateViewModel
                 line => { AppendLog(line); return Task.CompletedTask; },
                 pause: null, Cts!.Token);
 
-            var line = $"Done. Processed {summary.Processed}, succeeded {summary.Succeeded}, failed {summary.Failed}";
+            var line = summary.Total == 0
+                ? "No images were found in this source — choose a folder or catalog scope with images, then run upscale again."
+                : summary.Succeeded == 0 && summary.Failed > 0
+                    ? "No upscale outputs were created — check the run log for failures, then adjust the source or settings before retrying."
+                    : $"Done. Processed {summary.Processed}, succeeded {summary.Succeeded}, failed {summary.Failed}";
             ProgressText = line;
             AppendLog(line);
             SynapicLog.Info(nameof(StepUpscaleViewModel),
