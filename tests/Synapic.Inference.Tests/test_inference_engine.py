@@ -29,19 +29,33 @@ class _FakePipeline:
 
 
 class _CapturingPipeline:
-    """Stands in for a real image-text-to-text pipeline."""
+    """Stands in for a real image-text-to-text pipeline.
+
+    Takes one reply, or several to answer consecutive calls with (the last one
+    repeats). ``calls`` keeps every call's messages, so a test can see that the
+    model was asked again and what the second ask said; ``messages`` stays the
+    most recent call, which is what the single-call tests read.
+    """
 
     task = "image-text-to-text"
     model_id = "fake/model"
 
-    def __init__(self, reply):
+    def __init__(self, *replies):
         self.generation_config = _FakeGenerationConfig(max_length=20, max_new_tokens=None)
-        self.reply = reply
+        self.replies = list(replies) or [""]
+        self.calls = []
         self.messages = None
 
     def __call__(self, text=None, generate_kwargs=None):
+        self.calls.append(text)
         self.messages = text
-        return [{"generated_text": [{"role": "assistant", "content": self.reply}]}]
+        reply = self.replies[min(len(self.calls) - 1, len(self.replies) - 1)]
+        return [{"generated_text": [{"role": "assistant", "content": reply}]}]
+
+    def instruction_for(self, call_index):
+        """The user turn's instruction text of one call."""
+        content = self.calls[call_index][-1]["content"]
+        return next(part["text"] for part in content if part["type"] == "text")
 
 
 REPLY = '{"description": "A cat.", "category": "Animals", "keywords": ["Cat"]}'
@@ -189,6 +203,209 @@ def test_run_inference_sends_the_json_instruction(tmp_path):
         user_turn = pipe.messages[-1]
         text = user_turn["content"][1]["text"]
         assert text == inference_engine.DEFAULT_VLM_USER_PROMPT
+
+
+# The reply shape observed in a Daminion batch, 2026-10-10: the value ran to the
+# end of its line without its closing quote and without the comma before the next
+# member, so every parser gave up and the raw reply was written into Description.
+BROKEN_REPLY = (
+    '{\n  "description": "A cat. \n'
+    '  "category": "Animals", "keywords": ["Cat"]\n}'
+)
+
+
+def test_run_inference_reports_no_repairs_for_a_clean_reply(tmp_path):
+    # An empty list is what the host reads as "nothing to flag": a clean batch
+    # must not be dressed up as a repaired one.
+    result = inference_engine.run_inference(
+        _CapturingPipeline(REPLY), _image(tmp_path), "image-text-to-text"
+    )
+
+    assert result["reply_repairs"] == []
+
+
+def test_run_inference_reports_why_a_reply_was_rebuilt(tmp_path, caplog):
+    # The tags still come out (that is the point of the repair), but the item is
+    # marked so a batch the model was mangling is visible instead of silent.
+    with caplog.at_level("INFO"):
+        result = inference_engine.run_inference(
+            _CapturingPipeline(BROKEN_REPLY), _image(tmp_path), "image-text-to-text"
+        )
+
+    assert result["reply_repairs"] == ["missing member separator"]
+    assert result["category"] == "Animals"
+    assert result["keywords"] == ["Cat"]
+    assert result["description"] == "A cat."
+    assert any("repaired" in record.getMessage() for record in caplog.records)
+
+
+def test_run_inference_reports_a_reply_cut_off_by_max_new_tokens(tmp_path):
+    result = inference_engine.run_inference(
+        _CapturingPipeline('{"description": "A cat.", "keywords": ["Cat"'),
+        _image(tmp_path),
+        "image-text-to-text",
+    )
+
+    assert result["reply_repairs"] == ["truncated payload"]
+    assert result["description"] == "A cat."
+
+
+class _CaptioningPipeline:
+    """Stands in for a plain image-to-text pipeline (BLIP, GIT, ...).
+
+    Called positionally with an image and a fixed "Describe the image." prompt,
+    and asked for a caption rather than a payload.
+    """
+
+    task = "image-to-text"
+    model_id = "fake/blip"
+    generation_config = None
+
+    def __init__(self, caption):
+        self.caption = caption
+        self.calls = 0
+
+    def __call__(self, image=None, prompt=None, generate_kwargs=None):
+        self.calls += 1
+        return [{"generated_text": self.caption}]
+
+
+def test_a_captioner_is_never_asked_again(tmp_path):
+    # A captioning run asks for a sentence, not a payload: there is no format
+    # to get wrong, so the retry (which lives in the chat branch) never fires.
+    pipe = _CaptioningPipeline("A cat sitting on a mat.")
+
+    result = inference_engine.run_inference(pipe, _image(tmp_path), "image-to-text")
+
+    assert pipe.calls == 1
+    assert result["reply_retried"] is False
+    assert result["description"] == "A cat sitting on a mat."
+
+
+def test_a_malformed_reply_is_asked_again_and_the_second_one_is_used(tmp_path):
+    # The first reply is the shape that used to end up as raw text in the
+    # Description; the retry is a chance to get a reply that reads cleanly.
+    pipe = _CapturingPipeline(BROKEN_REPLY, REPLY)
+
+    result = inference_engine.run_inference(pipe, _image(tmp_path), "image-text-to-text")
+
+    assert len(pipe.calls) == 2
+    assert result["reply_retried"] is True
+    assert result["reply_repairs"] == []  # the reply that was used needed no repair
+    assert result["category"] == "Animals"
+    assert result["keywords"] == ["Cat"]
+    assert result["description"] == "A cat."
+
+
+def test_the_retry_shows_the_model_its_own_broken_reply(tmp_path):
+    # Re-formatting a known answer keeps what the model already said; a fresh
+    # guess at the image would lose it.
+    pipe = _CapturingPipeline(BROKEN_REPLY, REPLY)
+
+    inference_engine.run_inference(pipe, _image(tmp_path), "image-text-to-text")
+
+    retry_turn = pipe.instruction_for(1)
+    assert "one line of strict JSON" in retry_turn
+    assert "could not be read as JSON" in retry_turn
+    assert BROKEN_REPLY in retry_turn  # the previous reply, verbatim
+    assert pipe.instruction_for(0) == inference_engine.DEFAULT_VLM_USER_PROMPT
+
+
+def test_a_truncated_reply_is_asked_again(tmp_path):
+    pipe = _CapturingPipeline('{"description": "A cat.", "keywords": ["Cat"', REPLY)
+
+    result = inference_engine.run_inference(pipe, _image(tmp_path), "image-text-to-text")
+
+    assert len(pipe.calls) == 2
+    assert result["reply_retried"] is True
+    assert result["reply_repairs"] == []
+    assert result["category"] == "Animals"
+
+
+def test_a_reply_that_stays_broken_keeps_the_first_one(tmp_path):
+    # A retry that repeats the mistake must not replace the reply in hand (nor
+    # cost the run its tags: the repair still reads the first one).
+    pipe = _CapturingPipeline(BROKEN_REPLY, BROKEN_REPLY)
+
+    result = inference_engine.run_inference(pipe, _image(tmp_path), "image-text-to-text")
+
+    assert len(pipe.calls) == 2
+    assert result["reply_retried"] is True
+    assert result["reply_repairs"] == ["missing member separator"]
+    assert result["description"] == "A cat."
+
+
+def test_a_clean_reply_is_never_asked_again(tmp_path):
+    pipe = _CapturingPipeline(REPLY)
+
+    result = inference_engine.run_inference(pipe, _image(tmp_path), "image-text-to-text")
+
+    assert len(pipe.calls) == 1
+    assert result["reply_retried"] is False
+    assert result["reply_repairs"] == []
+
+
+def test_a_caption_is_not_retried_when_the_instruction_asks_for_prose(tmp_path):
+    # A user who replaced the built-in instruction with prose of their own gets a
+    # caption, which is not a malformed reply - retrying every image would double
+    # the cost of such a run to fix a problem it does not have.
+    pipe = _CapturingPipeline("A cat sitting on a mat.")
+
+    result = inference_engine.run_inference(
+        pipe, _image(tmp_path), "image-text-to-text", user_prompt="Describe this image."
+    )
+
+    assert len(pipe.calls) == 1
+    assert result["reply_retried"] is False
+    assert "cat" in result["description"].lower()
+
+
+def test_a_custom_instruction_that_asks_for_json_is_still_retried(tmp_path):
+    # The wording is the user's, but the intent is a payload - so a reply that
+    # cannot be read is still worth one more ask.
+    pipe = _CapturingPipeline(BROKEN_REPLY, REPLY)
+
+    result = inference_engine.run_inference(
+        pipe,
+        _image(tmp_path),
+        "image-text-to-text",
+        user_prompt="Reply with one JSON object holding description and keywords.",
+    )
+
+    assert len(pipe.calls) == 2
+    assert result["reply_retried"] is True
+    assert result["description"] == "A cat."
+
+
+def test_a_retry_that_fails_to_generate_does_not_fail_the_item(tmp_path):
+    class _FailsOnRetry(_CapturingPipeline):
+        def __call__(self, text=None, generate_kwargs=None):
+            if self.calls:  # the second call: recorded, then the pipeline dies
+                self.calls.append(text)
+                raise RuntimeError("out of memory")
+            return super().__call__(text, generate_kwargs)
+
+    pipe = _FailsOnRetry(BROKEN_REPLY)
+
+    result = inference_engine.run_inference(pipe, _image(tmp_path), "image-text-to-text")
+
+    assert len(pipe.calls) == 2  # asked, and the ask failed
+    assert result["reply_retried"] is True
+    assert result["reply_repairs"] == ["missing member separator"]
+    assert result["description"] == "A cat."
+
+
+def test_run_inference_reports_a_clean_reply_that_is_not_json(tmp_path):
+    # A plain caption is not a repair: the extractor deliberately keeps it as the
+    # description, so the item is not flagged as rebuilt.
+    result = inference_engine.run_inference(
+        _CapturingPipeline("A cat sitting on a mat."),
+        _image(tmp_path),
+        "image-text-to-text",
+    )
+
+    assert result["reply_repairs"] == []
+    assert "cat" in result["description"].lower()
 
 
 def test_generation_kwargs_clears_conflicting_max_length():

@@ -306,7 +306,7 @@
 		<param name="Local" value="troubleshooting.html#sidecar">
 		</OBJECT>
 	<LI> <OBJECT type="text/sitemap">
-		<param name="Name" value="Start Over">
+		<param name="Name" value="Alt+Home">
 		<param name="Local" value="window-overview.html">
 		</OBJECT>
 	<LI> <OBJECT type="text/sitemap">
@@ -340,6 +340,18 @@
 	<LI> <OBJECT type="text/sitemap">
 		<param name="Name" value="troubleshooting">
 		<param name="Local" value="troubleshooting.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="Settings view">
+		<param name="Local" value="window-overview.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="sidebar">
+		<param name="Local" value="window-overview.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="processing view">
+		<param name="Local" value="workflow-overview.html">
 		</OBJECT>
 	<LI> <OBJECT type="text/sitemap">
 		<param name="Name" value="uninstall">

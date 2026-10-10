@@ -179,6 +179,32 @@ public record TagResponse
 
     [JsonPropertyName("model_used")]
     public string? ModelUsed { get; init; }
+
+    /// <summary>
+    /// Why the sidecar had to put the model's reply back together before it
+    /// could be read (empty for a reply that parsed as it arrived) — e.g.
+    /// <c>missing member separator</c>, <c>truncated payload</c>. A batch whose
+    /// replies mostly needed rewriting is reported as repaired rather than
+    /// looking like a clean run, so a model that is mangling its own JSON is
+    /// visible while the tags are still written.
+    ///
+    /// Nullable on purpose: the sidecar is a separate binary that can be older
+    /// than the app, and one that predates this field sends no member at all —
+    /// which this deserializer reads as null, not as the empty array. The host
+    /// treats null and empty alike, so an absent field is simply "no repairs".
+    /// </summary>
+    [JsonPropertyName("reply_repairs")]
+    public string[]? ReplyRepairs { get; init; }
+
+    /// <summary>
+    /// True when the first reply could not be read as JSON and the sidecar asked
+    /// the model once more before giving up on the format (the tags come from
+    /// whichever of the two replies read better). The item still succeeded — the
+    /// host reports the retry so a batch that needed a second ask per image is
+    /// visible rather than looking like a clean run.
+    /// </summary>
+    [JsonPropertyName("reply_retried")]
+    public bool ReplyRetried { get; init; }
 }
 
 /// <summary>

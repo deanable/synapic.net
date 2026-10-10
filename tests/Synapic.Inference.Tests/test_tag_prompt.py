@@ -65,6 +65,16 @@ def test_prompt_asks_for_a_single_line_description():
     assert "single line" in LOWER
 
 
+def test_prompt_asks_for_the_whole_object_on_one_line():
+    # Asked for because of the shape that cost a batch: the description ended at
+    # a line break without its closing quote and the next member opened on the
+    # following line, which no parser can read. A single-line object has nowhere
+    # for that break to happen; if the model breaks the rule anyway,
+    # inference_engine asks once more before falling back to raw text.
+    assert "one single line" in LOWER
+    assert "no line breaks" in LOWER
+
+
 def test_prompt_stays_inside_a_small_token_budget():
     # It is prepended to every request and the model's context is finite.
     assert len(PROMPT) < 900, f"prompt grew to {len(PROMPT)} chars"

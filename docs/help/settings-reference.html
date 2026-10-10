@@ -19,20 +19,20 @@ opens this page at that row &mdash; or follow the links from the step topics.</p
 
 <table>
 <tr><th class="setting">Layer</th><th>What it holds</th><th>When it is written</th></tr>
-<tr><td>The step forms</td><td>The live values a run uses, held in memory for the session.</td><td>Continuously as you type; pushed to the session when you leave the step.</td></tr>
-<tr><td><code>HKCU\Software\Synapic</code> (Windows only)</td><td>What the forms restore from next launch: <code>\Engine</code> for Step 2, <code>\Daminion</code> for Step 1. Per user, no admin rights.</td><td>When you leave the step; the Daminion key only after a successful login. On macOS and Linux these stores do not exist &mdash; the forms start from defaults every run.</td></tr>
-<tr><td><span class="path">%APPDATA%\Synapic\config.json</span></td><td>App preferences (<code>ui.*</code>, read at startup) plus a snapshot of the last wizard working set (<code>datasource.*</code>, <code>engine.*</code>, <code>processing.*</code>). Unknown keys survive saves.</td><td>When the wizard moves between steps, and never mid-keystroke.</td></tr>
+<tr><td>The settings forms</td><td>The live values a run uses, held in memory for the session.</td><td>Continuously as you type; pushed to the session when you move away from the section.</td></tr>
+<tr><td><code>HKCU\Software\Synapic</code> (Windows only)</td><td>What the forms restore from next launch: <code>\Engine</code> for the inference engine, <code>\Daminion</code> for the data source. Per user, no admin rights.</td><td>When the configuration is saved; the Daminion key only after a successful login. On macOS and Linux these stores do not exist &mdash; the forms start from defaults every run.</td></tr>
+<tr><td><span class="path">%APPDATA%\Synapic\config.json</span></td><td>App preferences (<code>ui.*</code>, read at startup) plus a snapshot of the last working set (<code>datasource.*</code>, <code>engine.*</code>, <code>processing.*</code>). Unknown keys survive saves.</td><td>When the configuration is saved, and never mid-keystroke.</td></tr>
 </table>
 
 <div class="warning">
 <p class="first">Do not hand-edit while Synapic is running.</p>
-<p>The app reads settings at startup and writes them when you leave a step, so
+<p>The app reads settings at startup and writes them when it saves the configuration, so
 a hand edit made mid-session can be overwritten. Close the app first, and see
 <a href="admin-settings-files.html#registry">Files, folders and registry
 keys</a> for the full path list.</p>
 </div>
 
-<h2 id="datasource">Step 1 &mdash; Datasource</h2>
+<h2 id="datasource">Data source</h2>
 
 <p>The source choice and the local-folder fields are session state: they are
 snapshotted into <code>datasource.*</code> in config.json but restored from
@@ -41,12 +41,12 @@ empty path.</p>
 
 <table>
 <tr><th class="setting">Setting</th><th>What it does</th><th>Default</th></tr>
-<tr><td><a name="datasource-type"></a><span class="ui">Local Folder / Daminion Server</span><br><code>datasource.type</code></td><td>Which source the wizard reads: files in a folder on disk, or a Daminion catalog over its API. Only one can be active at a time.</td><td>Local Folder</td></tr>
+<tr><td><a name="datasource-type"></a><span class="ui">Local Folder / Daminion Server</span><br><code>datasource.type</code></td><td>Which source a run reads: files in a folder on disk, or a Daminion catalog over its API. Only one can be active at a time.</td><td>Local Folder</td></tr>
 <tr><td><a name="local-path"></a><span class="ui">Folder containing images</span><br><code>datasource.localPath</code></td><td>The folder to scan. With <span class="ui">Include subfolders</span> off, only the images directly in it are tagged. JPEG, PNG and TIFF are read; RAW files are skipped.</td><td>empty (choose each launch)</td></tr>
 <tr><td><a name="local-recursive"></a><span class="ui">Include subfolders</span><br><code>datasource.localRecursive</code></td><td>Descend into subfolders when scanning. Off keeps a first test honest: you know exactly which files were candidates.</td><td>off</td></tr>
 </table>
 
-<h2 id="daminion">Step 1 &mdash; Daminion connection</h2>
+<h2 id="daminion">Daminion connection</h2>
 
 <p>These live in <code>HKCU\Software\Synapic\Daminion</code> and mirror into
 <code>datasource.daminion.*</code> in config.json, except the password. The
@@ -60,7 +60,7 @@ password never replaces a working configuration.</p>
 <tr><td><a name="password"></a><span class="ui">Password</span><br><code>registry: PasswordEncrypted</code></td><td>Protected with Windows DPAPI for your user on this machine, then base64-encoded. It is <em>never</em> written to config.json, and copying the registry value to another machine or user does not work &mdash; by design.</td><td>empty</td></tr>
 </table>
 
-<h2 id="scope">Step 1 &mdash; Scope and filters</h2>
+<h2 id="scope">Scope and filters</h2>
 
 <p>What the batch considers: all of it lives in the Daminion registry key and
 <code>datasource.daminion.*</code>. The narrative version is
@@ -76,13 +76,12 @@ password never replaces a working configuration.</p>
 <tr><td><a name="untagged-filters"></a><span class="ui">Only items with untagged: Keywords / Categories / Description</span><br><code>untaggedKeywords</code> &middot; <code>untaggedCategories</code> &middot; <code>untaggedDescription</code></td><td>Three independent switches that keep already-tagged items out of the batch &mdash; the cheapest way to resume a big catalog where it left off. <span class="ui">Select all untagged</span> ticks them together.</td><td>all off</td></tr>
 </table>
 
-<h2 id="limits">Step 1 &mdash; Batch limits and image scale</h2>
+<h2 id="limits">Batch limits and image scale</h2>
 
 <p>Registry values <code>MaxItems</code>, <code>ProcessAll</code>,
 <code>ResizeScale</code> and <code>UseThumbnailOverride</code>, mirrored into
 <code>processing.*</code> (and <code>datasource.daminion.maxItems</code>) in
-config.json. Narrative: <a href="step1-limits.html">How many items to
-process</a>.</p>
+config.json. Narrative: <a href="step1-limits.html">How many items, and how much of each image</a>.</p>
 
 <table>
 <tr><th class="setting">Setting</th><th>What it does</th><th>Default</th></tr>
@@ -93,22 +92,21 @@ process</a>.</p>
 <tr><td><a name="auto-paginate"></a>Auto-paginate<br><code>processing.autoPaginate</code></td><td>Config-file only: keep fetching full pages (500 items) while the server keeps returning them. It is always on as written by the app; turn it off only to cap a runaway query at the first page.</td><td><code>true</code></td></tr>
 </table>
 
-<h2 id="engine">Step 2 &mdash; Engine</h2>
+<h2 id="engine">Inference engine</h2>
 
-<p>Step 2 restores from <code>HKCU\Software\Synapic\Engine</code> and mirrors
+<p>This section restores from <code>HKCU\Software\Synapic\Engine</code> and mirrors
 into <code>engine.*</code> in config.json. Values are sent to the sidecar with
-every tag request. Narrative: <a href="step2-engine.html">Step 2 &mdash;
-Tagging Engine</a>.</p>
+every tag request. Narrative: <a href="step2-engine.html">Inference engine</a>.</p>
 
 <table>
 <tr><th class="setting">Setting</th><th>What it does</th><th>Default</th></tr>
 <tr><td><a name="model-id"></a><span class="ui">Model id</span><br><code>engine.modelId</code> &middot; <code>ModelId</code></td><td>The Hugging Face repository of the vision-language model to run. The list shows what is already in the local cache; <span class="ui">Download model&hellip;</span> fetches another. The id is sent with every request, so a run can use a different model than the previous one.</td><td><code>LiquidAI/LFM2.5-VL-450M</code></td></tr>
-<tr><td><a name="device"></a><span class="ui">Device</span><br><code>engine.device</code> &middot; <code>Device</code></td><td>Where the model runs: <span class="ui">CPU</span> (<code>cpu</code>) works everywhere, <span class="ui">CUDA</span> (<code>cuda</code>) uses an NVIDIA GPU and is many times faster, <span class="ui">MPS</span> (<code>mps</code>) uses Apple silicon. Only the devices this machine can actually run are listed &mdash; CUDA appears once an NVIDIA driver is detected, MPS on macOS builds &mdash; and the choice also decides which server Synapic starts. The status bar names the device the running server reports.</td><td>CPU</td></tr>
+<tr><td><a name="device"></a><span class="ui">Device</span><br><code>engine.device</code> &middot; <code>Device</code></td><td>Where the model runs: <span class="ui">CPU</span> (<code>cpu</code>) works everywhere, <span class="ui">CUDA</span> (<code>cuda</code>) uses an NVIDIA GPU and is many times faster, <span class="ui">MPS</span> (<code>mps</code>) uses Apple silicon. Only the devices this machine can actually run are listed &mdash; CUDA appears once an NVIDIA driver is detected, MPS on macOS builds &mdash; and the choice also decides which server Synapic starts. The bottom of the sidebar names the device the running server reports.</td><td>CPU</td></tr>
 <tr><td><a name="task"></a><span class="ui">Task</span> (shown read-only)<br><code>engine.task</code> &middot; <code>Task</code></td><td>The model task format the sidecar loads with. Synapic's models are all <code>image-text-to-text</code>; it is displayed for diagnosis rather than edited.</td><td><code>image-text-to-text</code></td></tr>
 <tr><td><a name="tag-fields"></a><span class="ui">Tag fields: Keywords / Categories / Description</span><br><code>registry: TagKeywords</code> &middot; <code>TagCategories</code> &middot; <code>TagDescription</code></td><td>Which of the three model results get written. The model always returns all three; these three DWORDs decide what lands in the file or catalog. Registry only (not in config.json) &mdash; check them first when a field is missing. See <a href="step2-tag-fields.html">Tag fields</a>.</td><td>all three on</td></tr>
 </table>
 
-<h2 id="scoring">Step 2 &mdash; Scoring controls</h2>
+<h2 id="scoring">Scoring controls</h2>
 
 <div class="note">
 <p class="first">These do not change what the local model produces.</p>
@@ -127,7 +125,7 @@ exist</a> explains the mechanics.</p>
 <tr><td><a name="probability-candidates"></a><span class="ui">Candidate labels</span><br><code>engine.probabilityCandidates</code> &middot; <code>ProbabilityCandidates</code></td><td>Comma-separated label list for probability/zero-shot scoring &mdash; the closed set of keywords the scorer chooses among. Empty means the model's own vocabulary.</td><td>empty</td></tr>
 </table>
 
-<h2 id="prompts">Step 2 &mdash; Prompts</h2>
+<h2 id="prompts">Prompts</h2>
 
 <table>
 <tr><th class="setting">Setting</th><th>What it does</th><th>Default</th></tr>
@@ -147,17 +145,17 @@ survive.</p>
 
 <table>
 <tr><th class="setting">Setting</th><th>What it does</th><th>Default</th></tr>
-<tr><td><a name="auto-launch-sidecar"></a><span class="ui">Auto-launch the inference server</span><br><code>ui.autoLaunchSidecar</code></td><td>Start the sidecar when the app starts (and stop it on exit). Set <code>false</code> to make <span class="ui">Start Server</span> a manual step &mdash; useful on machines where Synapic is opened only to browse results.</td><td><code>true</code></td></tr>
-<tr><td><a name="log-level"></a>Log level<br><code>ui.logLevel</code></td><td>Which levels the in-app log panel shows: <code>verbose</code>, <code>debug</code>, <code>info</code>, <code>warning</code> or <code>error</code>. The log <em>file</em> always records debug detail regardless &mdash; this only filters what you see on screen. See <a href="admin-logs-support.html">Logs, crashes and support</a>.</td><td><code>info</code></td></tr>
+<tr><td><a name="auto-launch-sidecar"></a><span class="ui">Auto-launch the inference server</span><br><code>ui.autoLaunchSidecar</code></td><td>Start the sidecar when the app starts (and stop it on exit). It is also the <span class="ui">Start the server with the app</span> checkbox in the inference server section; set it to <code>false</code> to make <span class="ui">Start Server</span> a manual step &mdash; useful on machines where Synapic is opened only to browse results.</td><td><code>true</code></td></tr>
+<tr><td><a name="log-level"></a>Log level<br><code>ui.logLevel</code></td><td>Which levels the in-app log shows: <code>verbose</code>, <code>debug</code>, <code>info</code>, <code>warning</code> or <code>error</code>. The log <em>file</em> always records debug detail regardless &mdash; this only filters what you see on screen. See <a href="admin-logs-support.html">Logs, crashes and support</a>.</td><td><code>info</code></td></tr>
 <tr><td><a name="telemetry-enabled"></a>Usage counters<br><code>ui.telemetryEnabled</code></td><td>When <code>true</code>, app launches, batches, items, failures and dedup runs are counted into <span class="path">logs\synapic-usage.json</span> so a support engineer can read them from a user-shared file. Strictly local: no network access, ever. When <code>false</code>, the counter is a no-op.</td><td><code>false</code></td></tr>
-<tr><td><a name="theme"></a>Theme<br><code>ui.theme</code></td><td>Reserved. The value round-trips through config saves untouched, but the UI follows your operating system's light/dark setting today; changing this key has no visible effect yet.</td><td><code>system</code></td></tr>
+<tr><td><a name="theme"></a>Theme<br><code>ui.theme</code></td><td><span class="ui">System</span> follows your operating system's light/dark setting; the other entries pin the app to one appearance. Also selectable in <span class="ui">Settings &rsaquo; App preferences &rsaquo; Appearance</span>.</td><td><code>system</code></td></tr>
 <tr><td>Config version<br><code>version</code></td><td>Schema version of the file (currently <code>2</code>). Written by the app; do not hand-edit &mdash; an older app meeting a newer file still keeps unknown keys, but the version is how tooling tells them apart.</td><td><code>2</code></td></tr>
 </table>
 
 <div class="tip">
 <p class="first">The snapshot blocks are writable, too.</p>
 <p><code>datasource.*</code>, <code>engine.*</code> and <code>processing.*</code>
-in config.json are written from the wizard but not read back at startup (the
+in config.json are written from the settings forms but not read back at startup (the
 forms restore from the registry instead). That makes the file a convenient
 place to stage a known-good working set for a colleague &mdash; and the reason
 a hand edit there looks like it "does nothing" on the same machine.</p>
@@ -165,13 +163,13 @@ a hand edit there looks like it "does nothing" on the same machine.</p>
 
 <h2 id="dedup">Deduplication (not persisted)</h2>
 
-<p>The dedup tool's settings live in the session only: every launch starts
+<p>The deduplication settings live in the session only: every launch starts
 over. Narrative: <a href="dedup.html">Deduplication</a>.</p>
 
 <table>
 <tr><th class="setting">Setting</th><th>What it does</th><th>Default</th></tr>
-<tr><td><a name="dedup-source"></a><span class="ui">Local Folder / Daminion Catalog</span></td><td>Which source the scan reads: files in a folder on disk, or the Daminion catalog scope chosen in Step 1 (entire catalog, keyword search, shared collection or saved search). Mirrors the datasource radios of Step 1 &mdash; the catalog side groups the items the catalog has already hashed without downloading them and downloads the rest to hash, so a scope whose items carry no server hash is slower than a local scan.</td><td>Local Folder</td></tr>
-<tr><td><a name="dedup-folder"></a><span class="ui">Folder to scan</span></td><td>The folder whose images are compared, shown for the local source. Nothing outside it is read or touched.</td><td>empty</td></tr>
+<tr><td><a name="dedup-source"></a><span class="ui">Shared source (set in Settings &rsaquo; Data source)</span></td><td>There is no separate source for deduplication: the scan reads the shared source &mdash; the folder on disk, or the Daminion catalog scope (entire catalog, keyword search, shared collection or saved search). The catalog side groups the items the catalog has already hashed without downloading them and downloads the rest to hash, so a scope whose items carry no server hash is slower than a local scan.</td><td>the shared source</td></tr>
+<tr><td><a name="dedup-folder"></a><span class="ui">Folder to scan</span></td><td>The folder whose images are compared: the local folder set in <span class="ui">Settings &rsaquo; Data source</span>. Nothing outside it is read or touched.</td><td>empty</td></tr>
 <tr><td><a name="dedup-algorithm"></a><span class="ui">Algorithm</span></td><td>How similarity is computed: <code>PHash</code> (perceptual hash, the general choice), <code>DHash</code>, <code>AHash</code> (both gradient/average variants, cheaper) or <code>ColorMoment</code> (color statistics, slower, forgiving of crop-less edits).</td><td>PHash</td></tr>
 <tr><td><a name="dedup-threshold"></a><span class="ui">Threshold</span></td><td>How similar is duplicate: from 0.5 to 1.0. Higher is stricter &mdash; near-exact copies cluster at 0.97+, resized and lightly edited images need lower.</td><td>0.90</td></tr>
 <tr><td><a name="dedup-server-hash"></a><span class="ui">Server hash</span></td><td>How the Daminion catalog's own content hashes are compared, shown for the catalog source. <code>Exact</code> (the default) groups only items whose <code>hashCode</code> is identical &mdash; the safe choice while it is unconfirmed whether the server hash is byte-exact or perceptual. <code>Hamming</code> compares those values by distance at the threshold, like the algorithmic hashes. Either way server hashes are only compared with each other, never with the algorithmic hashes of downloaded items.</td><td>Exact</td></tr>
@@ -182,12 +180,12 @@ over. Narrative: <a href="dedup.html">Deduplication</a>.</p>
 <h2>Changing settings by hand</h2>
 
 <ul>
-<li>Close Synapic first: forms are saved when you leave a step, so an edit made while it runs can be overwritten.</li>
+<li>Close Synapic first: forms are saved when the configuration is saved, so an edit made while it runs can be overwritten.</li>
 <li>Registry values by name, with types and defaults:
 <a href="admin-settings-files.html#registry">Files, folders and registry
 keys</a>.</li>
 <li>Resetting a step to defaults: deleting its registry key does it &mdash;
-<a href="step2-settings.html">What Step 2 remembers</a> and
+<a href="step2-settings.html">What the engine settings remember</a> and
 <a href="step1-daminion.html">Connecting to Daminion</a> show the safe way.</li>
 <li>Backups (registry export + config.json):
 <a href="admin-settings-files.html">the same topic, top to bottom</a>.</li>
@@ -198,7 +196,7 @@ keys</a>.</li>
 <ul>
 <li><a href="setup-guide.html">Setup guide</a> &mdash; where each setting fits in the flow</li>
 <li><a href="tips.html">Tips and useful info</a></li>
-<li><a href="step2-settings.html">What Step 2 remembers</a></li>
+<li><a href="step2-settings.html">What the engine settings remember</a></li>
 <li><a href="glossary.html">Glossary</a></li>
 </ul>
 </div>

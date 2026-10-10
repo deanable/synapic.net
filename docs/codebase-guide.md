@@ -11,20 +11,22 @@ vision-language model (default `LiquidAI/LFM2.5-VL-450M`) and writes the
 results either into the image files' metadata or back into a **Daminion** DAM
 catalog.
 
-Entry point: the app opens on a **start screen** whose first section is the
-**source panel** (folder picker, Daminion connect, scope, filters, and a record
-count that refreshes itself on launch and on every change), then three routes
-&mdash; `Tagging` (the wizard below), `Deduplication` (Datasource &rarr; Dedup,
-nothing else) and `Upscaling` (Datasource &rarr; Upscaling, the Daminion
-"Feature enhancement" utility). The route cards stay disabled until the panel has
-a usable source (`Step1.HasUsableSource`: a folder that exists, or a live
-Daminion session), and the panel *is* `Wizard.Step1`, so one source feeds every
-route. `MainWindowViewModel.Route` holds `home` / `tagging` /
-`dedup` / `upscale` and owns `StartTaggingRouteCommand` /
-`StartDedupRouteCommand` / `StartUpscaleRouteCommand` / `GoHomeCommand`;
-`WizardViewModel.IsDedupRoute` / `IsUpscaleRoute` are what hide
-Engine/Process/Results and send Next from Datasource straight to that route's
-step. All three routes run on one shared batch kernel
+Entry point: the app opens on the **Settings view** — the first row of a
+left sidebar of four rows (**Settings**, **Tagging**, **Deduplication**,
+**Upscaling**), the open row lit (see
+[`mock-up/Mockup.svg`](mock-up/Mockup.svg)). Settings owns the app's
+configuration — the source and its Daminion connection (folder picker, server
+URL and login), the inference server (sidecar download / build / start-stop), the
+inference engine, the operation rules and the app preferences. The other three
+rows open **processing** views that carry the read-only source profile, the
+**scope, filters and record count the run works on** (D10 — a scope is a run's
+choice, so it is made where the run happens), their mode-specific parts and their
+output, of which the shared run bar is the one run surface. Navigation is
+`MainWindowViewModel.Shell` (`ShellViewModel`): `Shell.Current` — null means the
+Settings view, non-null names the open operation — is the only state behind it,
+and `StartTaggingRouteCommand` / `StartDedupRouteCommand` /
+`StartUpscaleRouteCommand` / `GoHomeCommand` are what the sidebar rows bind (the
+old `Route` strings, route booleans and dashboard panels are gone). All three routes run on one shared batch kernel
 (`Services/Processing/WorkflowRunner`): fetch &rarr; bounded per-item handler &rarr;
 progress/ETA &rarr; summary &mdash; only the parameters (`TagRequest`,
 `DedupOptions`, `UpscaleOptions`) and the per-item handler change.

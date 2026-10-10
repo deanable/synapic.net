@@ -1007,5 +1007,15 @@ public partial class StepDedupViewModel : RunStateViewModel
     /// <summary>This mode's primary run is the scan (CONTEXT D-05).</summary>
     protected override bool CanStart() => CanScan();
 
+    /// <summary>The bar's primary action is this mode's scan, under its own name.</summary>
+    public override string RunActionLabel => "Scan";
+
+    /// <summary>
+    /// The scan's Stop, on the shared bar. It cancels whichever entry point
+    /// started the scan (this one, or the page's Scan when it had one), so the
+    /// bar is the one place a long scan is called off.
+    /// </summary>
+    public override IRelayCommand? StopAction => StopScanCommand;
+
     protected override Task StartCoreAsync(CancellationToken ct) => ScanAsync(ct);
 }

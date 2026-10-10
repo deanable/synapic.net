@@ -3,7 +3,8 @@
 extract_tags_from_result and extract_dict_from_text mirror the original repo's
 behaviour on well-formed input. The JSON hunt is deliberately more forgiving than
 the original where a small VLM gets the payload shape wrong - envelopes,
-capitalised or synonymous keys, literal newlines, truncation, and JSON delivered
+capitalised or synonymous keys, literal newlines, truncation, a member the model
+ran into the next one without closing its quote or its comma, and JSON delivered
 inside a string. Each of those used to end in "Could not extract JSON from model
 response" and write the raw payload into the Description field, so they are
 pinned here, together with the payload that is still deliberately left alone.
@@ -22,14 +23,23 @@ from json_utils import (  # noqa: E402
     safe_parse_python_literal,
 )
 from tag_extractor import (  # noqa: E402
+    REPLY_CLEAN,
+    REPLY_REPAIRED,
+    REPLY_UNREADABLE,
+    classify_reply,
     extract_tags_from_result,
+    reads_better_than,
+    reply_is_malformed,
     to_title_case,
+    vlm_reply_text,
 )
 
 TASK_CLASSIFICATION = "image-classification"
 TASK_ZERO_SHOT = "zero-shot-image-classification"
 TASK_IMAGE_TO_TEXT = "image-to-text"
 TASK_VLM = "image-text-to-text"
+
+CLEAN_PAYLOAD = '{"description": "A cat.", "category": "Animals", "keywords": ["Cat"]}'
 
 
 class TestJsonUtils:
@@ -112,6 +122,189 @@ class TestJsonUtils:
         text = json.dumps('{"description": "D", "keywords": ["K"]}')
         data = extract_dict_from_text(text, expected_keys={"description"})
         assert data["description"] == "D"
+
+    def test_value_ended_at_a_line_break_is_repaired(self):
+        # Observed 2026-10-10: the value ended its line without the closing quote,
+        # and the next line opened the next key straight away, so the separator
+        # was missing too (the trailing space before the newline is verbatim).
+        # Nothing could read this - the open quote swallows the closing brace, so
+        # the brace scanner never even found a span.
+        text = (
+            '{\n'
+            '  "description": "A surreal staircase with a warm hue. \n'
+            '  "category": "visual_art", "keywords": ["staircase", "tunnel"]\n'
+            '}'
+        )
+        data = extract_dict_from_text(
+            text, expected_keys={"description", "category", "keywords"}
+        )
+        assert data is not None
+        # The line break and the next member's indentation are not caption text:
+        # the quote goes in front of them, not after them.
+        assert data["description"] == "A surreal staircase with a warm hue."
+        assert data["category"] == "visual_art"
+        assert data["keywords"] == ["staircase", "tunnel"]
+
+    def test_member_comma_missing_is_repaired(self):
+        # The neighbouring shape: the value is closed, the comma between it and
+        # the next member is not.
+        text = (
+            '{\n'
+            '  "description": "A surreal staircase."\n'
+            '  "category": "visual_art"\n'
+            '}'
+        )
+        data = extract_dict_from_text(
+            text, expected_keys={"description", "category"}
+        )
+        assert data is not None
+        assert data["description"] == "A surreal staircase."
+        assert data["category"] == "visual_art"
+
+    def test_valid_multiline_payload_is_left_alone(self):
+        # The repair may only fire where a boundary is really missing: a payload
+        # that parses must come back exactly as it arrived, newline and all.
+        text = (
+            '{\n  "description": "line one\nline two",\n'
+            '  "category": "C",\n  "keywords": ["K"]\n}'
+        )
+        data = extract_dict_from_text(
+            text, expected_keys={"description", "category", "keywords"}
+        )
+        assert data["description"] == "line one\nline two"
+        assert data["category"] == "C"
+
+    def test_a_clean_payload_reports_no_repairs(self):
+        # The reasons are what the host turns into a per-item "repaired" status,
+        # so a reply that parsed as it arrived must report nothing: a clean batch
+        # has to stay a clean batch.
+        repairs = []
+        data = extract_dict_from_text(
+            '{"description": "D", "category": "C"}',
+            expected_keys={"description", "category"},
+            repairs=repairs,
+        )
+        assert data["description"] == "D"
+        assert repairs == []
+
+    def test_a_reconstructed_reply_reports_why(self):
+        repairs = []
+        text = (
+            '{\n'
+            '  "description": "A surreal staircase with a warm hue. \n'
+            '  "category": "visual_art"\n'
+            '}'
+        )
+        data = extract_dict_from_text(
+            text, expected_keys={"description", "category"}, repairs=repairs
+        )
+        assert data["category"] == "visual_art"
+        assert repairs == ["missing member separator"]
+
+    def test_a_truncated_reply_reports_why(self):
+        repairs = []
+        data = extract_dict_from_text(
+            '{"description": "A dog", "keywords": ["dog"',
+            expected_keys={"description"},
+            repairs=repairs,
+        )
+        assert data["description"] == "A dog"
+        assert repairs == ["truncated payload"]
+
+    def test_a_failed_search_leaves_no_repair_reason_behind(self):
+        # The reason is only handed over when a payload was really produced, so a
+        # text that no repair can rescue does not mark a later item as repaired.
+        repairs = []
+        for hopeless in ("no braces here", '{"unrelated": 1}'):
+            assert extract_dict_from_text(
+                hopeless, expected_keys={"description"}, repairs=repairs
+            ) is None
+        assert repairs == []
+
+    def test_a_quoted_phrase_that_is_not_a_payload_key_is_not_a_member(self):
+        # Only a quote in front of a key the caller is looking for counts as a
+        # member boundary; anything else is left to the parsers, so a caption
+        # containing a quoted ordinary word cannot be cut in half by the repair.
+        text = '{"description": "He said "go": and left"}'
+        assert extract_dict_from_text(text, expected_keys={"description"}) is None
+
+
+BROKEN_PAYLOAD_REPLY = (
+    '{\n  "description": "A cat. \n'
+    '  "category": "Animals", "keywords": ["Cat"]\n}'
+)
+
+
+class TestReplyVerdicts:
+    """How well a reply reads, which is what decides whether to ask again.
+
+    ``inference_engine`` retries the model when the verdict is not CLEAN, and
+    only adopts the second reply when it reads strictly better, so these states
+    are what keeps the retry honest in both directions.
+    """
+
+    def test_a_clean_payload_reads_clean(self):
+        assert classify_reply([{"generated_text": CLEAN_PAYLOAD}], TASK_VLM) == REPLY_CLEAN
+        assert not reply_is_malformed([{"generated_text": CLEAN_PAYLOAD}], TASK_VLM)
+
+    def test_a_payload_that_needed_rebuilding_reads_repaired(self):
+        result = [{"generated_text": BROKEN_PAYLOAD_REPLY}]
+
+        assert classify_reply(result, TASK_VLM) == REPLY_REPAIRED
+        assert reply_is_malformed(result, TASK_VLM)
+
+    def test_a_reply_with_no_payload_at_all_reads_unreadable(self):
+        # This is the reply that becomes raw text in the Description field.
+        result = [{"generated_text": "A cat sitting on a mat."}]
+
+        assert classify_reply(result, TASK_VLM) == REPLY_UNREADABLE
+        assert reply_is_malformed(result, TASK_VLM)
+
+    def test_an_empty_reply_reads_unreadable(self):
+        assert classify_reply([{"generated_text": ""}], TASK_VLM) == REPLY_UNREADABLE
+
+    def test_a_payload_the_pipeline_already_parsed_needs_no_reading(self):
+        # A pipeline that hands over a dict has already done the parsing; there
+        # is nothing here to retry.
+        result = [{"generated_text": {"description": "A cat", "category": "Animals"}}]
+
+        assert classify_reply(result, TASK_VLM) == REPLY_CLEAN
+        assert vlm_reply_text(result) == ""
+
+    def test_a_caption_reads_as_unreadable_because_it_is_not_a_payload(self):
+        # Deliberate: this verdict is only about whether a payload can be read,
+        # so a caption is "unreadable" as JSON. Whether that is a problem is the
+        # caller's question - the plain image-to-text path asks for a caption
+        # and never consults this (the retry lives in the chat branch).
+        result = [{"generated_text": "A cat sitting on a mat."}]
+
+        assert classify_reply(result, TASK_IMAGE_TO_TEXT) == REPLY_UNREADABLE
+
+    def test_only_a_better_second_reply_is_adopted(self):
+        unreadable = [{"generated_text": "A cat sitting on a mat."}]
+        repaired = [{"generated_text": BROKEN_PAYLOAD_REPLY}]
+        clean = [{"generated_text": CLEAN_PAYLOAD}]
+
+        assert reads_better_than(clean, unreadable, TASK_VLM)
+        assert reads_better_than(repaired, unreadable, TASK_VLM)
+        assert reads_better_than(clean, repaired, TASK_VLM)
+        # A retry that repeats the mistake (or makes it worse) is discarded.
+        assert not reads_better_than(repaired, repaired, TASK_VLM)
+        assert not reads_better_than(unreadable, clean, TASK_VLM)
+
+    def test_the_reply_text_is_the_assistant_turn(self):
+        chat = [
+            {
+                "generated_text": [
+                    {"role": "assistant", "content": [{"type": "text", "text": "A cat"}]}
+                ]
+            }
+        ]
+
+        assert vlm_reply_text(chat) == "A cat"
+        assert vlm_reply_text([{"generated_text": "A cat"}]) == "A cat"
+        assert vlm_reply_text({"generated_text": "A cat"}) == "A cat"
+        assert vlm_reply_text("A cat") == ""  # not a pipeline result at all
 
 
 class TestTitleCase:
@@ -283,6 +476,57 @@ class TestExtractImageToText:
         _, _, description, _ = extract_tags_from_result(result, TASK_IMAGE_TO_TEXT)
         assert description == "A cat sitting on a wooden mat in a sunlit"
         assert description != raw
+
+    def test_the_reply_that_landed_in_the_description_is_now_read(self):
+        # Verbatim from a Daminion item's Description field, 2026-10-10: the raw
+        # reply, written as plain text because the extractor gave up on it (all
+        # seven items in that batch did). 450 characters of model prose in the
+        # Description, with the category and the keywords lost.
+        raw = (
+            '{\n  "description": "A surreal, elongated staircase with a warm, '
+            'reddish-orange hue, creating a tunnel-like effect. Three figures stand '
+            'at the top, their silhouettes blurred by the light. The environment '
+            'features intricate, curved lines and patterns that enhance the sense '
+            'of depth and movement. The scene evokes a futuristic or otherworldly '
+            'atmosphere. \n'
+            '  "category": "visual_art", "keywords": ["staircase", "lighting", '
+            '"surrealism", "color", "tunnel"]\n}'
+        )
+        result = [{"generated_text": raw}]
+
+        category, keywords, description, _ = extract_tags_from_result(result, TASK_VLM)
+
+        assert category == "Visual_Art"
+        assert keywords == ["Staircase", "Lighting", "Surrealism", "Color", "Tunnel"]
+        assert description.startswith("A surreal, elongated staircase")
+        assert description.endswith("or otherworldly atmosphere.")
+        assert description != raw
+
+    def test_the_repaired_reply_is_reported_to_the_caller(self):
+        # Same verbatim reply as the test above, this time asking what the host
+        # gets told: one reason for the rewrite, and the tags still extracted.
+        raw = (
+            '{\n  "description": "A surreal, elongated staircase. \n'
+            '  "category": "visual_art", "keywords": ["staircase"]\n}'
+        )
+        repairs = []
+
+        category, keywords, _, _ = extract_tags_from_result(
+            [{"generated_text": raw}], TASK_VLM, repairs=repairs
+        )
+
+        assert category == "Visual_Art"
+        assert keywords == ["Staircase"]
+        assert repairs == ["missing member separator"]
+
+    def test_a_clean_reply_leaves_the_repair_list_alone(self):
+        repairs = []
+
+        extract_tags_from_result(
+            [{"generated_text": '{"description": "D"}'}], TASK_VLM, repairs=repairs
+        )
+
+        assert repairs == []
 
     def test_an_unrecognised_payload_is_left_as_raw_text(self):
         # Deliberate: accepting an object with no recognised field would produce an

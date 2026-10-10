@@ -272,7 +272,8 @@ public sealed class InferenceSidecarService : IInferenceSidecar
     /// <summary>
     /// Set while the launched exe is older than the sidecar source (dev
     /// checkouts only - installed apps have no source tree to compare against).
-    /// Surfaced in the status bar so a stale binary is visible, not just logged.
+    /// A stale build is refused at launch, so this is set at the moment the
+    /// run is blocked - not merely a status-bar hint.
     /// </summary>
     public string? StaleBuildNotice { get; private set; }
 
@@ -309,6 +310,25 @@ public sealed class InferenceSidecarService : IInferenceSidecar
             return null;
         }
     }
+
+    /// <summary>
+    /// The user-facing reason a stale executable is refused, or null when the
+    /// executable is current. A run is hard-blocked rather than served from
+    /// bytes older than the source, so the message names the exact fix (the
+    /// Build/Download pair in the setup panel). Pure so it is directly testable.
+    /// </summary>
+    public static string? DescribeStaleLaunchBlock(string sidecarPath, string? repoRoot)
+    {
+        var staleness = DescribeStaleness(sidecarPath, repoRoot);
+        return staleness is null ? null : FormatStaleLaunchBlock(staleness);
+    }
+
+    /// <summary>Wraps a staleness description (from <see cref="DescribeStaleness"/>)
+    /// in the instructions that unblock the run.</summary>
+    public static string FormatStaleLaunchBlock(string staleness) =>
+        $"The inference server is out of date and will not be started: {staleness}. " +
+        "Rebuild it with Build sidecar, or use Download to fetch the prebuilt executable, " +
+        "in the Settings view's Inference server section - then start the server again.";
 
     private static bool IsSidecarSourceFile(string path)
     {
@@ -430,11 +450,19 @@ public sealed class InferenceSidecarService : IInferenceSidecar
 
         WarnIfDeviceCannotBeHonoured(device, sidecarPath);
 
+        // Hard block: never run an executable older than the sidecar source. The
+        // old behaviour merely warned and launched anyway, so a stale binary kept
+        // silently reproducing bugs that were already fixed - the running binary,
+        // not the source, was the bug. Refuse, say exactly how to fix it, and let
+        // the setup panel (already surfaced for a stale variant) do the rebuild.
         StaleBuildNotice = DescribeStaleness(sidecarPath, FindRepoRoot());
         if (StaleBuildNotice is not null)
-            SynapicLog.Warning(nameof(InferenceSidecarService),
-                $"Stale server build: {StaleBuildNotice}. Rebuild it from the setup panel - " +
-                "an exe older than the sidecar source keeps regenerating exceptions that are already fixed.");
+        {
+            var block = FormatStaleLaunchBlock(StaleBuildNotice);
+            SynapicLog.Error(nameof(InferenceSidecarService), block);
+            SetStatus(SidecarStatus.Error, block);
+            throw new InvalidOperationException(block);
+        }
 
         SweepStalePortFiles();
         SetStatus(SidecarStatus.Starting);

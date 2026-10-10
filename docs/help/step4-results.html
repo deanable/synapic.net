@@ -2,14 +2,14 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
-<title>Step 4 &mdash; Results</title>
+<title>Tagging results</title>
 <link rel="stylesheet" type="text/css" href="help.css">
 </head>
 <body>
 
-<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; The workflow &rsaquo; Step 4 &mdash; Results</p>
+<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; The operations &rsaquo; Tagging results</p>
 
-<h1>Step 4 &mdash; Results</h1>
+<h1>Tagging results</h1>
 
 <p class="lead">One row per image, with what the model produced and what happened
 to it. This is where you confirm a run did what you meant, before you widen it to
@@ -42,6 +42,7 @@ Status to put every failure together, or by Description to spot the vague ones.<
 <table>
 <tr><th class="setting">Status</th><th>Meaning</th></tr>
 <tr><td>Success</td><td>The image was tagged and the result was written.</td></tr>
+<tr><td>Success (repaired)</td><td>The image was tagged and written, but the model's reply had to be put back together before Synapic could read it &mdash; the model left out a quote or a comma, or the reply was cut off. The tags are still real, so the item counts as a success; the run log names what had to be repaired. Seeing many of these in one batch means the model is mangling its own JSON, which is worth a look before you trust the run. Verifying a Daminion write keeps the marker: such an item becomes <span class="ui">Verified (repaired)</span>.</td></tr>
 <tr><td>Write Failed</td><td>The image was tagged, but writing the result failed &mdash; a permissions problem on a folder, or a metadata update Daminion refused. The model's output is still in the row, so nothing was wasted.</td></tr>
 <tr><td>Verified</td><td>A Daminion item whose stored metadata was re-read and matched what Synapic wrote.</td></tr>
 </table>
@@ -59,7 +60,7 @@ quality is looking at the images &mdash; and at a few items in Daminion.</p>
 <tr><th class="setting">Button</th><th>What it does</th></tr>
 <tr><td><span class="ui">Export CSV</span></td><td>Writes the whole result set to <span class="path">Documents\synapic_results_&lt;timestamp&gt;.csv</span>, with columns for file name, status, tags, category, keywords, description, probabilities and scoring tier. Useful when a curator wants to review the run away from Synapic.</td></tr>
 <tr><td><span class="ui">Retry Failed</span></td><td>Re-does only the rows whose status is not a success. Synapic re-fetches those items from the source, drops the old failed entries, and runs them again with the current settings. Fix the cause first &mdash; a missing file will fail the same way twice.</td></tr>
-<tr><td><span class="ui">Verify Daminion Writes</span></td><td>Available when Step 1 has a live Daminion connection. Re-reads the metadata of each successful Daminion item and compares it with what was supposed to be written: matching items become <span class="ui">Verified</span>, mismatches are listed in the summary and the log.</td></tr>
+<tr><td><span class="ui">Verify Daminion Writes</span></td><td>Available when the data source has a live Daminion connection. Re-reads the metadata of each successful Daminion item and compares it with what was supposed to be written: matching items become <span class="ui">Verified</span>, mismatches are listed in the summary and the log.</td></tr>
 <tr><td><span class="ui">Refresh</span></td><td>Reloads the grid from the run's results. Use it after a retry or a verification.</td></tr>
 </table>
 
@@ -87,13 +88,13 @@ wrong.</li>
 
 <p>The results grid is a report, not a control panel: there is no way to edit a
 tag here and push it back. To change an outcome, adjust <a
-href="step2-engine.html">Step 2</a> and run the affected items again &mdash; a
+href="step2-engine.html">the engine settings</a> and run the affected items again &mdash; a
 re-run replaces the fields Synapic manages, so it is safe to repeat.</p>
 
 <div class="seealso">
 <h2>See also</h2>
 <ul>
-<li><a href="step3-process.html">Step 3 &mdash; Process</a></li>
+<li><a href="step3-process.html">Running a tagging batch</a></li>
 <li><a href="step3-log.html">Reading the log</a></li>
 <li><a href="metadata-written.html">What gets written to your images</a></li>
 <li><a href="troubleshooting.html#results">Troubleshooting: failed writes and retries</a></li>

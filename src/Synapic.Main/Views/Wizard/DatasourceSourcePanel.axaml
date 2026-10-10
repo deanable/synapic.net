@@ -6,13 +6,16 @@
              x:Class="Synapic.Main.Views.Wizard.DatasourceSourcePanel"
              x:DataType="vm:Step1DatasourceViewModel">
 
-  <!-- The whole "which images?" decision: the source profile, the source
-       itself (a folder, or a Daminion login), the catalog scope and filters,
-       and the record count that keeps itself current. It is the body of the
-       operation template's Data source region (ui-design §8) and renders the one
-       shell-owned source on every mode — there is no second copy of this form
-       anywhere, so the source cannot be configured twice; Step 1 reports the
-       same profile read-only and keeps the model and the processing limits.
+  <!-- Where the images come from: the source choice, the folder, and the Daminion
+       login — the source profile and the connection. It is the body of the
+       Settings view's Data source section (ui-design §5/§8, D10).
+
+       What the run works on — the catalog scope, its filters and the record
+       count — is no longer here: it is chosen on the processing view that runs
+       (ScopeSelectionPanel), because a scope belongs to a run rather than to the
+       app's configuration. One shared source state, so the scope picked there is
+       the scope this form reports; the panel and this form bind the same view
+       model instance.
 
        The Daminion form is stacked rather than one wide row: four controls in a
        row only fit at 1280 and the connect button was the first thing to be
@@ -82,73 +85,13 @@
                      IsVisible="{Binding ConnectionMessage}" Margin="0,0,12,8" />
         </WrapPanel>
 
-        <Separator Margin="0,4" />
-
-        <Grid ColumnDefinitions="*,16,*">
-          <!-- Scope column -->
-          <StackPanel Grid.Column="0" Spacing="8"
-                      help:HelpScope.Topic="step1-scope-filters.html">
-            <TextBlock Classes="sectionTitle" Text="Scope" />
-            <ComboBox SelectedIndex="{Binding ScopeIndex}" ItemsSource="{Binding ScopeOptions}"
-                      MinWidth="190" HorizontalAlignment="Stretch"
-                      help:HelpScope.Topic="settings-reference.html#daminion-scope" />
-            <TextBox Watermark="Search term"
-                     IsVisible="{Binding IsSearchScope}"
-                     Text="{Binding SearchTerm}" />
-            <WrapPanel IsVisible="{Binding IsCollectionScope}">
-              <ComboBox ItemsSource="{Binding Collections}"
-                        SelectedItem="{Binding SelectedCollection}"
-                        DisplayMemberBinding="{Binding Name}"
-                        MinWidth="200" Margin="0,0,8,8"
-                        IsEnabled="{Binding IsDaminionConnected}" />
-              <TextBox Watermark="Collection id (manual)" Text="{Binding CollectionId}"
-                       Width="150" Margin="0,0,8,8" />
-            </WrapPanel>
-            <WrapPanel IsVisible="{Binding IsSavedSearchScope}">
-              <ComboBox ItemsSource="{Binding SavedSearches}"
-                        SelectedItem="{Binding SelectedSavedSearch}"
-                        DisplayMemberBinding="{Binding Name}"
-                        MinWidth="200" Margin="0,0,8,8"
-                        IsEnabled="{Binding IsDaminionConnected}" />
-              <TextBox Watermark="Saved search id (manual)" Text="{Binding SavedSearchId}"
-                       Width="150" Margin="0,0,8,8" />
-            </WrapPanel>
-          </StackPanel>
-
-          <!-- Filters column -->
-          <StackPanel Grid.Column="2" Spacing="8"
-                      help:HelpScope.Topic="step1-scope-filters.html">
-            <TextBlock Classes="sectionTitle" Text="Filters" />
-            <WrapPanel>
-              <TextBlock Classes="fieldLabel" Text="Status:" Margin="0,0,8,8" />
-              <ComboBox SelectedIndex="{Binding StatusFilterIndex}"
-                        ItemsSource="{Binding StatusFilterOptions}" MinWidth="120"
-                        Margin="0,0,8,8"
-                        help:HelpScope.Topic="settings-reference.html#status-filter" />
-            </WrapPanel>
-            <TextBlock Text="Only items with untagged:" Opacity="0.8" />
-            <WrapPanel help:HelpScope.Topic="settings-reference.html#untagged-filters">
-              <CheckBox Content="Keywords" IsChecked="{Binding UntaggedKeywords}" Margin="0,0,16,8" />
-              <CheckBox Content="Categories" IsChecked="{Binding UntaggedCategories}" Margin="0,0,16,8" />
-              <CheckBox Content="Description" IsChecked="{Binding UntaggedDescription}" Margin="0,0,16,8" />
-            </WrapPanel>
-            <Button Content="Select all untagged" Command="{Binding SelectAllUntaggedCommand}"
-                    HorizontalAlignment="Left" />
-          </StackPanel>
-        </Grid>
-
-        <Separator Margin="0,4" />
-
-        <!-- Record count: automatic on launch, on connect and on every scope,
-             filter or folder change. The button is only a re-ask. -->
-        <WrapPanel help:HelpScope.Topic="step1-scope-filters.html">
-          <TextBlock Text="{Binding CountText}" VerticalAlignment="Center" FontWeight="SemiBold"
-                     IsVisible="{Binding CountText}" Margin="0,0,12,8" />
-          <ProgressBar IsIndeterminate="True" Width="80" Height="6" VerticalAlignment="Center"
-                       IsVisible="{Binding IsCounting}" Margin="0,0,12,8" />
-          <Button Content="Recount" Command="{Binding CountCommand}" Margin="0,0,12,8"
-                  ToolTip.Tip="The count keeps itself current; press this to ask again (the server, or the folder)." />
-        </WrapPanel>
+        <!-- The scope now travels with the run: each processing view carries the
+             scope and filter choice, so the selection is made where the work
+             happens rather than three views away. The hint names no mode on
+             purpose: the Settings search matches section copy, and naming them
+             here would drag this section into a search for any of them. -->
+        <TextBlock Classes="hint" TextWrapping="Wrap"
+                   Text="The catalog scope, its filters and the record count are chosen on the processing view that runs — one scope, shown where the work happens." />
       </StackPanel>
     </Border>
   </StackPanel>

@@ -12,6 +12,52 @@
 > decision, edit this file in the same PR that changes the code. A doc that
 > disagrees with this one is stale, not an alternative.
 
+> ## Update — sidebar navigation (current)
+>
+> The mockup [`mock-up/Mockup.svg`](mock-up/Mockup.svg) supersedes the two-screen
+> dashboard described below. The app now has a **left sidebar of four rows** —
+> **Settings**, **Tagging**, **Deduplication**, **Upscaling** — and one content
+> panel to its right, with the open row lit:
+>
+> ```
+> ┌───────────────┬─────────────────────────────────────────────┐
+> │ ⚙ Settings    │                                             │
+> │ 🏷 Tagging     │                                             │
+> │ 🧹 Dedup       │   the open view (Settings / a processing    │
+> │ ✨ Upscaling   │   operation)                                │
+> │   · server ·  │                                             │
+> └───────────────┴─────────────────────────────────────────────┘
+> ```
+>
+> - **Settings** (the first row, and the app's home) owns the app's
+>   configuration: the source and its Daminion connection (folder, server URL and
+>   login), the inference server (sidecar download / build / start-stop), the
+>   inference engine (model, device, tagging behaviour), the deduplication and
+>   upscaling rules, and the app preferences (appearance, logging, defaults,
+>   about).
+> - What a run works on is chosen where the run happens (**D10**): each
+>   **processing** view carries the shared source's read-only profile, the catalog
+>   scope, its filters and the record count, plus its mode-specific parts and its
+>   output. It is one shared selection, not one per mode — the processing views and
+>   the Settings form bind the same view model — so nothing is configured twice,
+>   and the scope is no longer three views away from the run that uses it.
+> - The **run bar is the one run surface** (**D10**): progress, the run's
+>   actions and the run log live there for every mode, and a mode's own page
+>   carries only what the run bar cannot (dedup's scan-and-review, upscaling's
+>   parameter read-back). The tagging page was a second copy of the run bar — the
+>   same progress, a second Start and a second log — and is deleted.
+> - Below ~1000 px of shell width the sidebar **collapses to an icon-only rail**
+>   (each row keeps its glyph and drops its label; the title and the wide status
+>   lines go with it, and the Help entry shortens to `?`), so a narrow window
+>   keeps its content width. The class is set from the layout in
+>   `MainLayout.ApplyCompact`, since Avalonia has no XAML breakpoint, and the
+>   layout audit covers both forms (down to 640×480).
+> - The **dashboard** (§2.1) and the operation layout's **mode rail** (§2.2) no
+>   longer exist as screens: the sidebar is the only navigation, and
+>   `Shell.Current` (null = the Settings view) is the only state behind it. The
+>   sections below are kept for history; where they disagree with this update,
+>   this update wins.
+
 ---
 
 ## 1. Design intent
@@ -123,6 +169,10 @@ neutral hint (`no source configured yet`).
 
 ### 4.1 Region A — Data source (top, full width)
 
+> **Superseded in part by D10 (2026-10-10):** the Scope and Count rows below are
+> now chosen on each processing view (one shared selection), and the source itself
+> — folder, server URL and login — is configured on the Settings view.
+
 Shared, single-instance state (D4): configured once, shown identically in
 every mode, editable in place. Contents:
 
@@ -148,6 +198,10 @@ persisted like today's `config.json` writes. Controls follow the standards in
 §7.
 
 ### 4.3 Region C — Output / Report (bottom-right)
+
+> **Read with D10 (2026-10-10):** the run lifecycle below lives in the shared run
+> bar, which is the only run surface; a mode's own page adds only what the bar
+> cannot express.
 
 Owns the run lifecycle end-to-end:
 
@@ -368,6 +422,7 @@ The redesign is done when all of these are verifiable:
 | D7 | No always-visible global log strip; run logs live in Output, diagnostics in Settings. | Decided (design) — confirm during review |
 | D8 | The dashboard is the 2×2 grid of four panels while each panel keeps 600 px of width, and stacks into one reading-order column below that. §7's "~1000 px" is a window figure: applied to the dashboard's own width it would leave a two-column panel ~490 px wide, under what the settings form and the operation cards need. Dropped from §7: the 2×1 step. | Decided (implementation, 2026-10-10) |
 | D9 | The operation layout's left column is the mode switch: Tag, Dedup and Upscale as buttons, the open one lit, its settings in the column beside it and Output full width below. The rail is a mode *switch*, not the retired sidebar — no numbering, no step chain, and its lit state is derived from the shell's current mode rather than stored. | Decided (user, 2026-10-10) |
+| D10 | **The scope is chosen on the run, and the run has one surface.** (a) The catalog scope, its filters and the record count live on each processing view, not in Settings: a scope belongs to a run, so it is made where the run happens. It stays *one* shared selection (D4 holds) — the processing views and the Settings form bind the same view model instance, so it is a second surface, never a second setting. The source itself (folder, server URL, login) stays on Settings as app configuration. (b) The shared run bar is the only run surface: progress, the run's actions and the run log are there for every mode, the bar asks each mode for its own words ("Start tagging"/"Scan"/"Run upscale"; tagging's Pause/Resume; "Abort"/"Stop"), and a mode's page carries only what the bar cannot. The tagging page — a second progress bar, a second Start and a second log — is deleted. | Decided (user, 2026-10-10) |
 
 ## 12. Open questions
 

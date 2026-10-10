@@ -26,9 +26,12 @@ you choose where they land:</p>
 <li>into your Daminion catalog, through the Daminion API.</li>
 </ul>
 
-<p>The app is a four-step wizard &mdash; pick the images, choose the engine
-settings, run the batch, review the results &mdash; plus a separate
-deduplication tool. The engine itself is a second program, the <span
+<p>The window has four views down the left side. <span class="ui">Settings</span>
+holds every configuration the app has &mdash; the source and its server, the
+inference server, the engine, the operation rules and the app preferences &mdash;
+and the other three, <span class="ui">Tagging</span>,
+<span class="ui">Deduplication</span> and <span class="ui">Upscaling</span>, run
+over the source it names. The engine itself is a second program, the <span
 class="term">inference server</span> (also called the sidecar); Synapic starts it
 for you once one is built.</p>
 
@@ -39,8 +42,8 @@ for you once one is built.</p>
 <tr><td>Set up Synapic from scratch, in order</td><td><a href="setup-guide.html">Setup guide</a></td></tr>
 <tr><td>Understand how it works, then tag your first images</td><td><a href="getting-started.html">Getting started with Synapic</a></td></tr>
 <tr><td>Understand why the app asks you to build a server</td><td><a href="first-run-sidecar.html">Build the inference server</a></td></tr>
-<tr><td>Learn the wizard, window by window</td><td><a href="workflow-overview.html">The workflow, step by step</a> and <a href="window-overview.html">The main window</a></td></tr>
-<tr><td>Connect to Daminion and choose what to process</td><td><a href="step1-datasource.html">Step 1 &mdash; Datasource</a></td></tr>
+<tr><td>Learn the window and where everything lives</td><td><a href="window-overview.html">The Synapic window</a> and <a href="workflow-overview.html">How a run works</a></td></tr>
+<tr><td>Point it at your images and connect to Daminion</td><td><a href="step1-datasource.html">The data source</a></td></tr>
 <tr><td>Decide which tags get written</td><td><a href="step2-tag-fields.html">Tag fields: what gets written</a></td></tr>
 <tr><td>Find out what a setting does before changing it</td><td><a href="settings-reference.html">Settings reference</a></td></tr>
 <tr><td>Look up a word the app used, or the DAM did</td><td><a href="glossary.html">Glossary</a></td></tr>
@@ -52,9 +55,10 @@ for you once one is built.</p>
 <h2>Two things worth knowing up front</h2>
 
 <div class="tip">
-<p class="first">Still only keywords? Check Step 2 before anything else.</p>
+<p class="first">Still only keywords? Check the tag fields before anything else.</p>
 <p>The model always returns all three fields. The app writes only the ones
-ticked under <span class="ui">Tag fields</span> in Step 2, and it does that
+ticked under <span class="ui">Tag fields</span> in
+<span class="ui">Settings &rsaquo; Inference engine</span>, and it does that
 quietly &mdash; the log still says the item was updated. If your catalog turns up
 with keywords but no category or description, that checkbox row is the cause; see
 <a href="step2-tag-fields.html">Tag fields: what gets written</a>.</p>
@@ -71,22 +75,28 @@ usually this, not a fault.</p>
 <h2>What is new in this version</h2>
 
 <ul class="checks">
-<li><span class="term">The source comes first.</span> The start screen now asks
-which images before it offers a workflow: a folder picker, the Daminion connect
-form, the scope and the filters all live in one source panel, with two
-<b>source lights</b> showing what is ready and the record count underneath. The
-three workflows stay disabled until a light is green. See
-<a href="getting-started.html">Getting started with Synapic</a>.</li>
-<li><span class="term">The record count is automatic.</span> It runs on launch,
-after a connect and on every scope, filter or folder change &mdash; there is no
-count button to press. See <a href="step1-scope-filters.html">Scope and
-filters</a>.</li>
-<li><span class="term">System-prompt history.</span> Every system prompt you use
-in Step 2 is remembered, so earlier wording is one click away instead of gone.
-See <a href="step2-prompts.html">Prompts</a>.</li>
-<li><span class="term">Step 2 says what a run will write.</span> A partial
-<span class="ui">Tag fields</span> selection now warns on screen and in the
-batch's first log line. See <a href="step2-tag-fields.html">Tag fields</a>.</li>
+<li><span class="term">Configuration has one home.</span> The source, the server,
+the engine, the operation rules and the app preferences now sit in one scrolling
+column on the <span class="ui">Settings</span> view, with a search box over it.
+The other three views hold no configuration at all, so nothing is set up twice.
+See <a href="window-overview.html">The Synapic window</a>.</li>
+<li><span class="term">The sidebar replaced the dashboard and the step
+chain.</span> There is no start screen and no numbered wizard: the four rows are
+the navigation, and picking one opens that view. See
+<a href="workflow-overview.html">How a run works</a>.</li>
+<li><span class="term">One layout for every operation.</span> Each processing
+view shows a read-only <span class="ui">Working on</span> summary of the shared
+source and then its <span class="ui">Output</span>: the run bar, the operation's
+own controls, its log and, for tagging, its report.</li>
+<li><span class="term">System-prompt history.</span> Every system prompt you
+commit in the engine settings is remembered, so earlier wording is one click away
+instead of gone. See <a href="step2-prompts.html">Prompts</a>.</li>
+<li><span class="term">The engine says what a run will write.</span> A partial
+<span class="ui">Tag fields</span> selection now warns on screen, so a run that
+was only ever going to write keywords says so before it starts. See
+<a href="step2-tag-fields.html">Tag fields</a>.</li>
+<li><span class="term">A narrow window keeps its content.</span> Below roughly
+1000 pixels of width the sidebar collapses to an icon-only rail.</li>
 </ul>
 
 <h2>Using this help</h2>
@@ -95,6 +105,10 @@ batch's first log line. See <a href="step2-tag-fields.html">Tag fields</a>.</li>
 topics by task, <span class="ui">Index</span> to look up a word such as a setting
 name, and <span class="ui">Search</span> to search the full text. Every topic
 ends with links to related topics.</p>
+
+<p>Press <kbd>F1</kbd> in the app to open the topic for whatever you are looking
+at &mdash; the section or the exact setting under the focus, the sidecar topic
+while no server exists, otherwise the view on screen.</p>
 
 <div class="seealso">
 <h2>See also</h2>

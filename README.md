@@ -223,15 +223,15 @@ Synapic.Net/
 
 │   │   │   │   ├── Step2Engine.axaml       # the tagging settings form (dialog)
 
-│   │   │   │   ├── Step3Process.axaml      # 4 · Process
+│   │   │   │   ├── Step3Process.axaml      # the tagging run page
 
-│   │   │   │   ├── Step4Results.axaml      # 5 · Results
+│   │   │   │   ├── Step4Results.axaml      # the tagging report
 
-│   │   │   │   ├── StepDedup.axaml         # 4 · Deduplication
+│   │   │   │   ├── StepDedup.axaml         # the deduplication run page
 
 │   │   │   │   ├── DedupSettingsPanel.axaml
 
-│   │   │   │   ├── StepUpscale.axaml       # 4 · Upscaling
+│   │   │   │   ├── StepUpscale.axaml       # the upscaling run page
 
 │   │   │   │   └── UpscaleSettingsPanel.axaml
 

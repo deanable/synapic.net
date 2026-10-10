@@ -2,76 +2,53 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
-<title>The workflow, step by step</title>
+<title>How a run works</title>
 <link rel="stylesheet" type="text/css" href="help.css">
 </head>
 <body>
 
-<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; How Synapic works &rsaquo; The workflow, step by step</p>
+<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; How Synapic works &rsaquo; How a run works</p>
 
-<h1>The workflow, step by step</h1>
+<h1>How a run works</h1>
 
-<p class="lead">One image at a time, Synapic fetches the image, asks the model
-for tags, and writes the tags. The numbered steps are the decisions you get to
-make before and after that loop.</p>
+<p class="lead">Synapic has one source and three operations that run over it.
+Everything is configured in the Settings view; a processing view carries only the
+run and what it produced. This topic is the map between the two.</p>
 
-<h2>The workflow, in order</h2>
+<h2>One source, three operations</h2>
 
-<p>Every launch opens on the start screen, which is the whole setup as a
-numbered sequence, and the sidebar lists the same numbers:</p>
-
-<ol class="steps">
-<li><span class="term">1 &middot; Source &amp; model.</span> <em>Which images, and
-which model?</em> The source panel holds a local folder picker and the Daminion
-connect form, and two lights above them answer the source half at a glance
-&mdash; green while a Daminion session is live, green while the chosen folder
-exists, red while either is missing. The record count for the chosen source runs
-on its own: on launch, after a connect, and whenever the folder, the scope or a
-filter changes. Below it, the model picker chooses the model and the device; step
-1 of the wizard shows the same two things.</li>
-<li><span class="term">2 &middot; Operation type.</span> <em>Tagging,
-deduplication or upscaling?</em> The three cards stay disabled until one of the
-source lights is green &mdash; a folder that exists, or a real connection to the
-Daminion server. Picking one enters that operation at its first step; the
-sidebar's mode headers switch operation at any time.</li>
-<li><span class="term">3 &middot; Settings.</span> <em>How should it run?</em>
-Every operation keeps its settings in its own dialog, opened from the header, the
-sidebar or the action bar. Tagging's dialog holds model, device, tag fields,
-thresholds and prompts; deduplication's holds the algorithm, the threshold, the
-server-hash rule and the keep-set rules; upscaling's holds workflow, factor,
-precision, output and post-processing. Each operation's pages report those
-settings back, so nothing runs blind.</li>
-</ol>
+<p>The source &mdash; a folder on disk, or a Daminion catalog with its scope and
+filters &mdash; is shared. It is chosen once, in the Settings view, and every
+operation reads it from there. An operation is not a separate tool with its own
+source: picking <span class="ui">Tagging</span>,
+<span class="ui">Deduplication</span> or <span class="ui">Upscaling</span> in the
+sidebar changes what runs, not what it runs on.</p>
 
 <table>
-<tr><th class="setting">Operation</th><th>What it is for</th><th>Steps it shows</th></tr>
-<tr><td><span class="ui">Tagging</span></td><td>Run the model over a datasource and write the tags</td><td>1 Source &amp; model &rarr; 3 Settings &rarr; 4 Process &rarr; 5 Results</td></tr>
-<tr><td><span class="ui">Deduplication</span></td><td>Find near-duplicate images and act on the extras</td><td>1 Source &amp; model &rarr; 3 Settings &rarr; 4 Deduplication</td></tr>
-<tr><td><span class="ui">Upscaling</span></td><td>Enhance image resolution (the Daminion Feature enhancement utility)</td><td>1 Source &amp; model &rarr; 3 Settings &rarr; 4 Upscaling</td></tr>
+<tr><th class="setting">Operation</th><th>What it is for</th><th>What it writes</th></tr>
+<tr><td><span class="ui">Tagging</span></td><td>Run the model over the source and write a category, keywords and a description for each image</td><td>XMP metadata in the image file, or a metadata update in the Daminion catalog</td></tr>
+<tr><td><span class="ui">Deduplication</span></td><td>Find near-duplicate images and act on the extras</td><td>Whatever the chosen action does: tag them as duplicates, move them, or delete them</td></tr>
+<tr><td><span class="ui">Upscaling</span></td><td>Enhance image resolution &mdash; the Daminion Feature enhancement utility &mdash; with AI (Swin2SR) or fast Lanczos</td><td>New image files in the folder you name in the upscaling settings</td></tr>
 </table>
 
-<p>All three operations start from the same source. Step 1 reports it read-only
-and owns the processing limits (how many items, and how much of each image); the
-source itself is changed on the start screen, next to the record count. The
-deduplication and upscaling operations skip the tagging steps entirely:
-<span class="ui">Next</span> goes straight to that operation's step. Their own
-run steps appear in the sidebar only while that operation is the one on screen.</p>
+<h2>Where each thing is configured</h2>
 
-<p><span class="ui">2 &middot; Operation type</span> in the sidebar returns to the
-start screen at any time (Alt+Home does the same); the operation you were in is
-kept, so coming back and picking a card resumes where you left off.</p>
-
-<h2>The steps</h2>
+<p>Every setting has exactly one home, and it is on the Settings view. The
+processing views report the settings back read-only, so nothing runs blind.</p>
 
 <table>
-<tr><th class="setting">Step</th><th>The decision</th><th>Where it is remembered</th></tr>
-<tr><td>1 &mdash; Source &amp; model</td><td>A folder on disk, or a Daminion server plus scope and filters; the model and the device; how many items to take and how much of each image the model sees</td><td>Folder: <span class="path">config.json</span>. Daminion: registry, on a successful connect. Model and device: registry / <span class="path">config.json</span></td></tr>
-<tr><td>3 &mdash; Settings (tagging)</td><td>Tag fields, thresholds, probability mode and prompts &mdash; the summary page reports them, the dialog changes them</td><td>Registry and <span class="path">config.json</span>, when you apply or leave the step</td></tr>
-<tr><td>4 &mdash; Process</td><td>Nothing &mdash; you watch, pause, resume or abort</td><td>&mdash;</td></tr>
-<tr><td>5 &mdash; Results</td><td>Review, export, retry failures, verify Daminion writes</td><td>&mdash;</td></tr>
-<tr><td>4 &mdash; Deduplication</td><td>A scan for near-duplicate images &mdash; local folder or Daminion scope &mdash; with keep checkboxes and a bulk action; its settings dialog holds the scan rules</td><td>&mdash;</td></tr>
-<tr><td>4 &mdash; Upscaling</td><td>Enhance resolution over the same source &mdash; AI (Swin2SR) or fast Lanczos &mdash; with the output settings you choose in its dialog</td><td>&mdash;</td></tr>
+<tr><th class="setting">What</th><th>Where it is set</th><th>Which topics</th></tr>
+<tr><td>Folder, folder recursion, Daminion login, scope, filters, record count</td><td>Settings &rsaquo; Data source</td><td><a href="step1-datasource.html">The data source</a>, <a href="step1-daminion.html">Connecting to Daminion</a>, <a href="step1-scope-filters.html">Scope and filters</a></td></tr>
+<tr><td>How many items, and how much of each image the model sees</td><td>Settings &rsaquo; Data source &rsaquo; How many items, and how much of each image</td><td><a href="step1-limits.html">How many items, and how much of each image</a></td></tr>
+<tr><td>Model, device, tag fields, scoring, prompts</td><td>Settings &rsaquo; Inference engine</td><td><a href="step2-engine.html">Inference engine</a>, <a href="step2-tag-fields.html">Tag fields</a>, <a href="step2-prompts.html">Prompts</a></td></tr>
+<tr><td>Deduplication algorithm, threshold, server-hash rule, keep-set rule</td><td>Settings &rsaquo; Deduplication</td><td><a href="dedup.html">Deduplication</a></td></tr>
+<tr><td>Upscaling workflow, factor, precision, output and post-processing</td><td>Settings &rsaquo; Upscaling</td><td><a href="upscale.html">Upscaling</a></td></tr>
+<tr><td>Appearance, logging, new-session defaults, about</td><td>Settings &rsaquo; App preferences</td><td><a href="settings-reference.html">Settings reference</a></td></tr>
 </table>
+
+<p><kbd>F1</kbd> in a processing view opens this topic, because both of its
+regions &mdash; the source summary and the output &mdash; are about the run as a
+whole.</p>
 
 <h2>What happens to each image</h2>
 
@@ -86,10 +63,11 @@ it.</li>
 <li><span class="term">Tag.</span> The image goes to the inference server, which
 returns three things in one call: a category, a list of keywords, and a
 description.</li>
-<li><span class="term">Write.</span> Synapic keeps the fields ticked in the
-tagging settings (3 &middot; Settings) and writes them &mdash; XMP metadata in the
-file for a folder, or a metadata update for a Daminion item. Fields you did not
-tick are discarded here, not at the model.</li>
+<li><span class="term">Write.</span> Synapic keeps the fields ticked in
+<span class="ui">Tag fields</span> (Settings &rsaquo; Inference engine) and
+writes them &mdash; XMP metadata in the file for a folder, or a metadata update
+for a Daminion item. Fields you did not tick are discarded here, not at the
+model.</li>
 <li><span class="term">Record.</span> The outcome is appended to the run's
 results: success, write failure, or an error explaining why that image could not
 be processed.</li>
@@ -99,8 +77,9 @@ be processed.</li>
 <p class="first">One call, three results.</p>
 <p>There is no per-field choice of model or task, and no second request for the
 description. A single multimodal call produces everything, which is why the
-tagging settings' field checkboxes only change what gets <em>written</em>. See <a
-href="step2-tag-fields.html">Tag fields: what gets written</a>.</p>
+<span class="ui">Tag fields</span> checkboxes only change what gets
+<em>written</em>. See <a href="step2-tag-fields.html">Tag fields: what gets
+written</a>.</p>
 </div>
 
 <h2>How much runs at once</h2>
@@ -113,8 +92,8 @@ written. Two consequences are worth knowing before you read a log or a stopwatch
 <li><span class="term">Throughput is not latency.</span> Four images finishing
 roughly every ten seconds means one image every two or three seconds on average,
 while each individual image still took ten. A folder of 200 images therefore takes
-minutes, not seconds &mdash; and the ETA in Step 3 is computed from completed
-images, so it settles after the first couple.</li>
+minutes, not seconds &mdash; and the ETA in a processing view is computed from
+completed images, so it settles after the first couple.</li>
 <li><span class="term">A GPU changes the arithmetic.</span> Four parallel calls
 share one model. On a CPU that is usually a win; on a small GPU the calls can
 contend, so a CUDA build does not always beat a CPU build by the factor the
@@ -140,12 +119,12 @@ large first run.</li>
 <div class="seealso">
 <h2>See also</h2>
 <ul>
-<li><a href="step1-datasource.html">1 &mdash; Source &amp; model</a></li>
-<li><a href="step2-engine.html">3 &mdash; Tagging settings</a></li>
+<li><a href="window-overview.html">The Synapic window</a></li>
+<li><a href="step1-datasource.html">The data source</a></li>
+<li><a href="step2-engine.html">Inference engine</a></li>
 <li><a href="dedup.html">Deduplication</a></li>
 <li><a href="upscale.html">Upscaling</a></li>
 <li><a href="metadata-written.html">What gets written to your images</a></li>
-<li><a href="window-overview.html">The main window</a></li>
 </ul>
 </div>
 

@@ -451,7 +451,10 @@ def models_download(body: DownloadRequestModel):
             "description": (
                 "Inference result (TagResponse): category, keywords, "
                 "description, probabilities, optional scoring, inference_ms, "
-                "model_used."
+                "model_used, reply_repairs (the rewrites the JSON hunt needed "
+                "before the reply could be read; empty for a clean reply), "
+                "reply_retried (the first reply could not be read as JSON, so "
+                "the model was asked once more)."
             )
         },
         404: {"description": "Image not found."},

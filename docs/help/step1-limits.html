@@ -2,19 +2,19 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
-<title>How many items to process</title>
+<title>How many items, and how much of each image</title>
 <link rel="stylesheet" type="text/css" href="help.css">
 </head>
 <body>
 
-<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; The workflow &rsaquo; Step 1 &rsaquo; How many items to process</p>
+<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; Settings &rsaquo; How many items, and how much of each image</p>
 
-<h1>How many items to process</h1>
+<h1>How many items, and how much of each image</h1>
 
-<p class="lead">Step 1 decides how big the batch is and how much of each image
+<p class="lead">The lower half of the Data source section decides how big a batch is and how much of each image
 the model looks at. Both are about time, not quality. The source itself &mdash;
-which folder, or which catalog scope &mdash; is chosen on the start screen; see
-<a href="step1-datasource.html">The source, and Step 1</a>.</p>
+which folder, or which catalog scope &mdash; is chosen in the section above; see
+<a href="step1-datasource.html">The data source</a>.</p>
 
 <h2>How many items</h2>
 
@@ -22,7 +22,7 @@ which folder, or which catalog scope &mdash; is chosen on the start screen; see
 <tr><th class="setting">Control</th><th>What it does</th></tr>
 <tr><td><span class="ui">Max items</span></td><td>The ceiling for this run: 100 by default, raised in steps of 50. The batch stops when it has taken that many items. Setting it to 0 removes the ceiling, exactly as <span class="ui">Process all</span> does.</td></tr>
 <tr><td><span class="ui">Process all (page until empty)</span></td><td>Ignores the ceiling and keeps requesting pages of results until the server returns none. This is the switch for a catalog larger than a single API response &mdash; without it, a big catalog can look like it was fully processed when only the first page was.</td></tr>
-<tr><td><span class="ui">Recount</span></td><td>Lives on the start screen beside the source, not in Step 1: it reports how many items the scope and filters select. The count refreshes by itself, so this button is only a re-ask. See <a href="step1-scope-filters.html">Scope and filters</a>.</td></tr>
+<tr><td><span class="ui">Recount</span></td><td>Lives beside the source controls above, not in the limits row: it reports how many items the scope and filters select. The count refreshes by itself, so this button is only a re-ask. See <a href="step1-scope-filters.html">Scope and filters</a>.</td></tr>
 </table>
 
 <div class="note">
@@ -71,7 +71,7 @@ overwrites the first, rather than adding to it.</p>
 <h2>See also</h2>
 <ul>
 <li><a href="step1-scope-filters.html">Scope and filters</a></li>
-<li><a href="step3-process.html">Step 3 &mdash; Process</a> &mdash; progress, ETA, pause and abort</li>
+<li><a href="step3-process.html">Running a tagging batch</a> &mdash; progress, ETA, pause and abort</li>
 <li><a href="metadata-written.html">What gets written to your images</a></li>
 </ul>
 </div>

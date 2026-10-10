@@ -6,11 +6,11 @@
              x:Class="Synapic.Main.Views.Wizard.Step4Results"
              x:DataType="vm:Step4ResultsViewModel">
 
-  <!-- 5 · Results: what the batch wrote, and the ways out of it (export, retry,
+  <!-- The report: what the batch wrote, and the ways out of it (export, retry,
        verify). The action row wraps — four buttons plus the summary line is more
        than a 1024px window fits on one line. -->
   <StackPanel Spacing="12">
-    <TextBlock Classes="stepTitle" Text="5 · Results" />
+    <TextBlock Classes="sectionTitle" Text="Report" />
 
     <Border Classes="card settingsCard" Padding="16" help:HelpScope.Topic="step4-results.html">
       <StackPanel Spacing="8">
@@ -30,7 +30,9 @@
                  GridLinesVisibility="Horizontal" IsReadOnly="True">
       <dg:DataGrid.Columns>
         <dg:DataGridTextColumn Header="File" Binding="{Binding FileName}" Width="260" />
-        <dg:DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="110" />
+        <!-- Wide enough for "Success (repaired)", the status an item gets when
+             the sidecar had to put the model's reply back together to read it. -->
+        <dg:DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="170" />
         <dg:DataGridTextColumn Header="Category" Binding="{Binding Category}" Width="150" />
         <dg:DataGridTextColumn Header="Keywords" Binding="{Binding KeywordsCsv}" Width="280" />
         <dg:DataGridTextColumn Header="Description" Binding="{Binding Description}" Width="*" />

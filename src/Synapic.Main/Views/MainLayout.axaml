@@ -3,66 +3,128 @@
              xmlns:vm="using:Synapic.Main.ViewModels"
              xmlns:steps="using:Synapic.Main.Views.Wizard"
              xmlns:op="using:Synapic.Main.Views.Operation"
-             xmlns:dash="using:Synapic.Main.Views.Dashboard"
+             xmlns:settings="using:Synapic.Main.Views.Settings"
              xmlns:help="using:Synapic.Main.Services"
              x:Class="Synapic.Main.Views.MainLayout"
              x:DataType="vm:MainWindowViewModel">
 
-  <!-- The shell (ui-design §6.1/§6.2, D5): a slim top bar (app title ·
-       breadcrumb · the shared source profile · Settings), then the content —
-       either the dashboard or the open operation's template — then the server
-       status footer and the diagnostics drawer.
+  <!-- The shell (docs/mock-up/Mockup.svg): a left sidebar of four navigation
+       rows and one content panel to its right. The rows are Settings, Tagging,
+       Deduplication and Upscaling — Settings is where every configuration lives
+       (source/connection, inference server and engine, app preferences) and the
+       other three are the processing views that run over the shared source.
 
-       There is no numbered sidebar and no Back/Next/StartOver bar any more:
-       navigation is Dashboard ⇄ operation, and `Shell.Current` is the only state
-       behind it. The chrome that carried the step chain went with the chain. A
-       mode's own tunables live inline in its Parameters region; every row in this
-       file wraps rather than clips, because the window has no minimum width and a
-       row that only fits at 1280 loses its last control on a smaller screen. -->
-  <Grid RowDefinitions="Auto,*,Auto,Auto">
+       There is no dashboard and no numbered step chain: the sidebar is the only
+       navigation, Shell.Current is the only state behind it (null = the Settings
+       view), and the lit row is derived from that state rather than remembered by
+       the sidebar. The server status and the help entry are pinned to the bottom
+       of the sidebar, so they stay reachable from every view (the shell keeps the
+       status indicator, §6.1/D7).
 
-    <!-- ═══════════════ Header: title, breadcrumb, source profile ══════════ -->
-    <Border Grid.Row="0" Classes="card" Padding="12,8" Margin="8,8,8,0"
-            help:HelpScope.Topic="workflow-overview.html">
-      <!-- The breadcrumb names the open operation; the Dashboard entry is the way
-           back from every route (§6.2, always available) and is locked while a
-           batch runs (§6.3). The source strip keeps the flexible column, so a
-           long folder path or server URL ellipsizes inside it instead of pushing
-           the count and the settings button off the right edge. -->
-      <Grid ColumnDefinitions="Auto,*,Auto,Auto">
-        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8"
-                    VerticalAlignment="Center" Margin="0,0,12,0">
-          <TextBlock Text="Synapic" FontWeight="SemiBold" VerticalAlignment="Center" />
-          <TextBlock Text="{Binding Breadcrumb}" Opacity="0.65" VerticalAlignment="Center"
-                     MaxWidth="240" TextTrimming="CharacterEllipsis" />
-          <Button Content="← Dashboard" Command="{Binding GoHomeCommand}"
-                  IsVisible="{Binding IsOperationVisible}"
-                  IsEnabled="{Binding !IsNavigationLocked}"
-                  VerticalAlignment="Center"
-                  ToolTip.Tip="Back to the dashboard. Locked while a batch runs — stop the run first (ui-design §6.3)." />
+       Below the width threshold the sidebar collapses to an icon-only rail
+       (MainLayout.ApplyCompact): a narrow window keeps its content width instead of
+       losing it to the navigation. Each row is an emoji + a `navLabel` TextBlock,
+       so compact mode has a label to drop without losing the icon. -->
+  <Grid ColumnDefinitions="Auto,*" RowDefinitions="*,Auto">
+
+    <!-- ═══════════════ Sidebar: title, the four rows, the server ══════════ -->
+    <Border Grid.Row="0" Grid.RowSpan="2" Grid.Column="0" x:Name="Sidebar"
+            Classes="card sidebar" Margin="8,8,4,8">
+      <Grid RowDefinitions="Auto,*,Auto">
+
+        <StackPanel Grid.Row="0" Spacing="2" Margin="4,4,4,12">
+          <TextBlock Text="Synapic" FontSize="18" FontWeight="SemiBold"
+                     Classes="sidebarWide" />
+          <TextBlock Classes="hint sidebarWide" Text="AI image workflows" />
         </StackPanel>
 
-        <!-- Read-only profile of the chosen source: both lights and the
-             folder/server line, the same widget Region A reports with. It has no
-             inputs, so the source form lives in one place only (Region A). -->
-        <steps:SourceStatusStrip Grid.Column="1" DataContext="{Binding Operations.Source}"
-                                 MaxWidth="640" HorizontalAlignment="Left" />
+        <!-- The four views, in the mock-up's order. Each row carries the same
+             route command the rest of the app carries (there is no second entry
+             point per view) and its active flag is computed from Shell.Current.
+             They are locked while a batch runs (§6.3), so a run is not navigated
+             away from mid-flight. -->
+        <StackPanel Grid.Row="1" Spacing="6">
+          <Button Classes="navItem" Classes.active="{Binding IsSettingsVisible}"
+                  Command="{Binding GoHomeCommand}"
+                  IsEnabled="{Binding !IsNavigationLocked}"
+                  ToolTip.Tip="Everything the app configures: the source and server connection, the inference server and engine, and the app preferences.">
+            <StackPanel Orientation="Horizontal" Spacing="10">
+              <TextBlock Text="⚙" VerticalAlignment="Center" />
+              <TextBlock Text="Settings" Classes="navLabel" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Button Classes="navItem" Classes.active="{Binding IsTagModeActive}"
+                  Command="{Binding StartTaggingRouteCommand}"
+                  IsEnabled="{Binding !IsNavigationLocked}"
+                  ToolTip.Tip="Run the AI model over the shared source.">
+            <StackPanel Orientation="Horizontal" Spacing="10">
+              <TextBlock Text="🏷" VerticalAlignment="Center" />
+              <TextBlock Text="Tagging" Classes="navLabel" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Button Classes="navItem" Classes.active="{Binding IsDedupModeActive}"
+                  Command="{Binding StartDedupRouteCommand}"
+                  IsEnabled="{Binding !IsNavigationLocked}"
+                  ToolTip.Tip="Find and resolve duplicate groups in the shared source.">
+            <StackPanel Orientation="Horizontal" Spacing="10">
+              <TextBlock Text="🧹" VerticalAlignment="Center" />
+              <TextBlock Text="Deduplication" Classes="navLabel" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Button Classes="navItem" Classes.active="{Binding IsUpscaleModeActive}"
+                  Command="{Binding StartUpscaleRouteCommand}"
+                  IsEnabled="{Binding !IsNavigationLocked}"
+                  ToolTip.Tip="Enhance image resolution over the shared source.">
+            <StackPanel Orientation="Horizontal" Spacing="10">
+              <TextBlock Text="✨" VerticalAlignment="Center" />
+              <TextBlock Text="Upscaling" Classes="navLabel" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+        </StackPanel>
 
-        <TextBlock Grid.Column="2" Text="{Binding Operations.Source.CountText}"
-                   IsVisible="{Binding Operations.Source.CountText}"
-                   VerticalAlignment="Center" HorizontalAlignment="Right"
-                   FontWeight="SemiBold" FontSize="12" Opacity="0.85"
-                   Margin="12,0" TextTrimming="CharacterEllipsis"
-                   ToolTip.Tip="Records the current source would be worked on." />
-
-        <Button Grid.Column="3" Content="⚙ Settings" Command="{Binding SettingsCommand}"
-                VerticalAlignment="Center"
-                ToolTip.Tip="App settings, on the dashboard's Settings panel. The open operation's own parameters are inline in its Parameters region." />
+        <!-- The server indicator and the help entry: pinned to the bottom of the
+             sidebar so both are on screen in every view. The Start/Stop/Build
+             controls are in the Settings view's Inference server section, one
+             home each (§5/§8). In compact mode the status text and the download
+             read-out are dropped (the dot keeps the state); the Help entry
+             shortens to its glyph. -->
+        <StackPanel Grid.Row="2" Spacing="6" Margin="4,12,4,0"
+                    help:HelpScope.Topic="first-run-sidecar.html">
+          <WrapPanel>
+            <Ellipse Width="12" Height="12" VerticalAlignment="Center"
+                     Margin="0,0,8,8" Fill="{Binding ServerBrush}" />
+            <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
+                       FontWeight="SemiBold" FontSize="12" TextWrapping="Wrap"
+                       Margin="0,0,0,8" MaxWidth="160" Classes="sidebarWide" />
+          </WrapPanel>
+          <!-- The device /health reports for the loaded model: a silent CPU
+               fallback is exactly what this makes visible. -->
+          <TextBlock Text="{Binding ServerDeviceText}"
+                     IsVisible="{Binding IsServerDeviceVisible}"
+                     FontSize="11" FontWeight="SemiBold" Opacity="0.75"
+                     Classes="sidebarWide"
+                     ToolTip.Tip="Compute device the inference server reports for the loaded model." />
+          <ProgressBar Value="{Binding DownloadPercent}" Maximum="100"
+                       IsVisible="{Binding IsDownloadVisible}"
+                       Width="150" Height="6" HorizontalAlignment="Left"
+                       Classes="sidebarWide" />
+          <TextBlock Text="{Binding DownloadText}" IsVisible="{Binding IsDownloadVisible}"
+                     FontSize="11" Opacity="0.85" TextWrapping="Wrap" Classes="sidebarWide" />
+          <!-- What the server reports about the device it is really using, when
+               it is not the one selected. Silent otherwise. -->
+          <TextBlock Text="{Binding DeviceNotice}"
+                     IsVisible="{Binding IsDeviceNoticeVisible}"
+                     FontSize="11" Foreground="{DynamicResource SynapicWarningBrush}"
+                     TextWrapping="Wrap" Classes="sidebarWide" />
+          <Button Content="Help" x:Name="HelpButton" Command="{Binding OpenHelpCommand}"
+                  HorizontalAlignment="Left"
+                  ToolTip.Tip="Open the Synapic help. F1 opens the topic for what you are looking at." />
+        </StackPanel>
       </Grid>
     </Border>
 
-    <!-- ═══════════════ Body: dashboard or the open operation ══════════════ -->
-    <Grid Grid.Row="1" RowDefinitions="Auto,*" Margin="8,4,8,4">
+    <!-- ═══════════════ Content: the open view ═════════════════════════════ -->
+    <Grid Grid.Column="1" Grid.Row="0" RowDefinitions="Auto,*" Margin="4,8,8,4">
 
       <!-- Sidecar banner: the sidecar is pivotal (nothing can be tagged without
            it), so the workspace stays disabled until at least one variant
@@ -76,81 +138,41 @@
           <TextBlock Text="Synapic cannot tag images until a sidecar is ready. Download the prebuilt CPU version (runs anywhere) or the CUDA version (fastest on an NVIDIA GPU), or build it from source if this checkout has the toolchain. The rest of the application stays disabled until one is ready."
                      Opacity="0.75" TextWrapping="Wrap" Margin="0,0,0,4"
                      IsVisible="{Binding IsSidecarRequired}" />
-          <!-- The variants themselves are operated in one place: the settings
-               view's Inference server section (ui-design §5/§8). This panel is
-               the blocking banner, and it points there rather than growing a
-               second set of Build/Download buttons. -->
-          <TextBlock Text="Build or download a variant in the Settings panel's Inference server section."
+          <!-- A stale build is refused at launch, so the workspace stays blocked
+               with the reason stated rather than a run starting on old bytes. -->
+          <TextBlock Text="Inference server out of date" FontWeight="SemiBold" FontSize="14"
+                     TextWrapping="Wrap" IsVisible="{Binding IsSidecarStale}" />
+          <TextBlock Text="{Binding SidecarStaleText}"
+                     Foreground="{DynamicResource SynapicWarningBrush}"
+                     TextWrapping="Wrap" Margin="0,0,0,4"
+                     IsVisible="{Binding IsSidecarStale}" />
+          <TextBlock Text="Build or download a variant in the Settings view's Inference server section."
                      Opacity="0.75" TextWrapping="Wrap" />
         </StackPanel>
       </Border>
 
-      <!-- The two things the shell can show: the dashboard (nothing open, D1/D2)
-           and the open operation's template (D5). They are the same content
-           region, so exactly one is ever on screen, and which one is derived from
-           Shell.Current rather than kept in a second variable. -->
-      <ScrollViewer Grid.Row="1" IsVisible="{Binding IsDashboardVisible}">
-        <dash:DashboardView />
+      <!-- Exactly one view is ever on screen: the Settings view when nothing is
+           open, otherwise the open operation's processing view. Which one is
+           derived from Shell.Current rather than kept in a second variable. -->
+      <ScrollViewer Grid.Row="1" IsVisible="{Binding IsSettingsVisible}">
+        <settings:SettingsTab />
       </ScrollViewer>
 
       <ScrollViewer Grid.Row="1"
                     IsEnabled="{Binding IsWorkspaceEnabled}"
                     IsVisible="{Binding IsOperationVisible}">
-        <!-- The four content slots are handed to the template in code-behind
+        <!-- The content slots are handed to the template in code-behind
              (MainLayout.axaml.cs): a binding written on this element resolves
              against the element's *own* DataContext, which is not the shell. -->
         <op:OperationLayout x:Name="OperationHost" />
       </ScrollViewer>
     </Grid>
 
-    <!-- ═══════════════ Footer: server status (§3.4) ═══════════════════════ -->
-    <!-- Annotated with the sidecar topic on purpose: this is where the server's
-         state and its Start/Stop/Build controls are talked about, so F1 from
-         here opens the sidecar topic. -->
-    <Border Grid.Row="2" Classes="card" Padding="10,8" Margin="8,4,8,0"
-            help:HelpScope.Topic="first-run-sidecar.html">
-      <StackPanel Orientation="Vertical" Spacing="4">
-        <!-- Wraps: the status row carries two lights and a progress read-out; on
-             a narrow window they move to a second line instead of pushing Help
-             out of the card. The Start/Stop/Build controls are in the settings
-             view's Inference server section, one home each (§5/§8). -->
-        <WrapPanel>
-          <Ellipse Width="12" Height="12" VerticalAlignment="Center"
-                   Margin="0,0,8,6" Fill="{Binding ServerBrush}" />
-          <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
-                     FontWeight="SemiBold" Margin="0,0,8,6" />
-          <!-- The device /health reports for the loaded model: a silent CPU
-               fallback is exactly what this makes visible. -->
-          <TextBlock Text="{Binding ServerDeviceText}"
-                     IsVisible="{Binding IsServerDeviceVisible}"
-                     VerticalAlignment="Center" FontSize="11" FontWeight="SemiBold"
-                     Opacity="0.75" Margin="0,0,8,6"
-                     ToolTip.Tip="Compute device the inference server reports for the loaded model." />
-          <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"
-                      IsVisible="{Binding IsDownloadVisible}" Margin="0,0,8,6">
-            <ProgressBar Value="{Binding DownloadPercent}" Maximum="100"
-                         Width="150" Height="6" VerticalAlignment="Center" />
-            <TextBlock Text="{Binding DownloadText}" VerticalAlignment="Center" FontSize="11"
-                       Opacity="0.85" />
-          </StackPanel>
-          <Button Content="Help" Command="{Binding OpenHelpCommand}" Margin="0,0,8,6"
-                  VerticalAlignment="Center"
-                  ToolTip.Tip="Open the Synapic help. F1 opens the topic for what you are looking at." />
-        </WrapPanel>
-        <!-- What the server reports about the device it is really using, when it
-             is not the one selected. Silent otherwise. -->
-        <TextBlock Text="{Binding DeviceNotice}"
-                   IsVisible="{Binding IsDeviceNoticeVisible}"
-                   FontSize="11" Foreground="{DynamicResource SynapicWarningBrush}"
-                   TextWrapping="Wrap" />
-      </StackPanel>
-    </Border>
-
     <!-- ═══════════════ Diagnostics (Settings → Logging) ═══════════════ -->
     <!-- No always-visible log strip (D7): this view is the diagnostics drawer,
          and it is in the tree only while the Setting says so. An operation's own
-         run log lives in its Output region. -->
-    <Border Grid.Row="3" Classes="card" Height="160" Margin="8"
+         run log lives in its processing view. -->
+    <Border Grid.Column="1" Grid.Row="1" Classes="card" Height="160" Margin="4,4,8,8"
             IsVisible="{Binding IsDiagnosticsVisible}"
             help:HelpScope.Topic="step3-log.html">
       <Grid RowDefinitions="Auto,*" Margin="8">

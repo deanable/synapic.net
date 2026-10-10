@@ -7,9 +7,9 @@
 </head>
 <body>
 
-<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; The workflow &rsaquo; Upscaling</p>
+<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; The operations &rsaquo; Upscaling</p>
 
-<h1>Upscaling (Feature enhancement)</h1>
+<h1>Upscaling</h1>
 
 <p class="lead">A resolution-boosting tool in the spirit of Daminion's Feature
 enhancement utility: pick a source, choose how aggressive the enhancement
@@ -19,22 +19,22 @@ algorithm runs in the inference server, exactly like tagging does.</p>
 
 <div class="note">
 <p class="first">It has its own route.</p>
-<p>The start screen offers <span class="ui">Upscaling</span> beside
-<span class="ui">Tagging</span> and <span class="ui">Deduplication</span>, and
-that route is Datasource &rarr; Upscaling only: the Engine, Process and
-Results steps never appear. From the tagging route the same tool stays
-reachable through the <span class="ui">Upscaling</span> tab once you reach
-Results. See <a href="workflow-overview.html">Source first, then the
-route</a>.</p>
+<p>The sidebar offers <span class="ui">Upscaling</span> beside
+<span class="ui">Tagging</span> and <span class="ui">Deduplication</span>. Each is a view
+of its own rather than a step in a shared chain, and the source it runs over
+&mdash; the same one tagging uses &mdash; is configured in the Settings view. See <a
+href="workflow-overview.html">How a run works</a>.</p>
+
+
 </div>
 
-<h2>Choosing the source</h2>
+<h2>The source it runs over</h2>
 
-<p>The source is the one configured on the start screen &mdash; a local folder or
-the Daminion catalog scope (entire catalog, keyword search, shared collection or
-saved search). Step 1 shows the same two source lights read-only, and the source
-is changed on the start screen (<span class="ui">&#8962; Home</span>), where the
-record count sits next to it.</p>
+<p>The source is the shared one configured in <span class="ui">Settings &rsaquo; Data source</span>: a
+folder on disk, or the Daminion catalog scope (entire catalog, keyword search, shared
+collection or saved search). The upscaling view shows the same two source lights
+read-only, so a run is never started blind about what it will touch, and the
+record count sits beside them there.</p>
 
 <ul>
 <li><span class="term">Catalog source.</span> Each item is checked out, its
@@ -46,7 +46,7 @@ beside the original as <span class="path">name_upscaled.ext</span>; the
 original file itself is never modified.</li>
 </ul>
 
-<h2>Settings</h2>
+<h2>The settings it runs with</h2>
 
 <table>
 <tr><th class="setting">Setting</th><th>What it does</th></tr>
@@ -117,7 +117,7 @@ succeeded and failed counts.</li>
 <li>It does not retouch, denoise by hand or change composition &mdash; it
 makes the same image bigger.</li>
 <li>It does not touch the original in a local source, and it does not run
-unattended: the batch stops when you close the step or press Stop.</li>
+unattended: the batch stops when you press Stop or close the app.</li>
 <li>It needs the inference server. Fast works as soon as the server is
 running; quality and balanced additionally fetch their model on first use.</li>
 </ul>
@@ -125,8 +125,8 @@ running; quality and balanced additionally fetch their model on first use.</li>
 <div class="seealso">
 <h2>See also</h2>
 <ul>
-<li><a href="step1-datasource.html">Step 1 &mdash; Datasource</a> &mdash; the source every route reads</li>
-<li><a href="step1-limits.html">How many items to process</a></li>
+<li><a href="step1-datasource.html">The data source</a> &mdash; the source every operation reads</li>
+<li><a href="step1-limits.html">How many items, and how much of each image</a></li>
 <li><a href="dedup.html">Deduplication</a> &mdash; the other catalog utility</li>
 <li><a href="admin-logs-support.html#logs">Logs, crashes and support</a> &mdash; where runs are recorded</li>
 </ul>

@@ -33,7 +33,7 @@
 			<param name="Local" value="first-run-sidecar.html">
 			</OBJECT>
 		<LI> <OBJECT type="text/sitemap">
-			<param name="Name" value="The main window">
+			<param name="Name" value="The Synapic window">
 			<param name="Local" value="window-overview.html">
 			</OBJECT>
 	</UL>
@@ -42,7 +42,7 @@
 		</OBJECT>
 	<UL>
 		<LI> <OBJECT type="text/sitemap">
-			<param name="Name" value="The workflow, step by step">
+			<param name="Name" value="How a run works">
 			<param name="Local" value="workflow-overview.html">
 			</OBJECT>
 		<LI> <OBJECT type="text/sitemap">
@@ -51,11 +51,11 @@
 			</OBJECT>
 	</UL>
 	<LI> <OBJECT type="text/sitemap">
-		<param name="Name" value="Step 1 - Datasource">
+		<param name="Name" value="Settings">
 		</OBJECT>
 	<UL>
 		<LI> <OBJECT type="text/sitemap">
-			<param name="Name" value="Choosing a datasource">
+			<param name="Name" value="The data source">
 			<param name="Local" value="step1-datasource.html">
 			</OBJECT>
 		<LI> <OBJECT type="text/sitemap">
@@ -67,16 +67,11 @@
 			<param name="Local" value="step1-scope-filters.html">
 			</OBJECT>
 		<LI> <OBJECT type="text/sitemap">
-			<param name="Name" value="How many items to process">
+			<param name="Name" value="How many items, and how much of each image">
 			<param name="Local" value="step1-limits.html">
 			</OBJECT>
-	</UL>
-	<LI> <OBJECT type="text/sitemap">
-		<param name="Name" value="Step 2 - Tagging Engine">
-		</OBJECT>
-	<UL>
 		<LI> <OBJECT type="text/sitemap">
-			<param name="Name" value="Model, device and scoring">
+			<param name="Name" value="Inference engine">
 			<param name="Local" value="step2-engine.html">
 			</OBJECT>
 		<LI> <OBJECT type="text/sitemap">
@@ -98,54 +93,68 @@
 			<param name="Local" value="step2-prompts.html">
 			</OBJECT>
 		<LI> <OBJECT type="text/sitemap">
-			<param name="Name" value="What Step 2 remembers">
+			<param name="Name" value="What the engine settings remember">
 			<param name="Local" value="step2-settings.html">
 			</OBJECT>
-	</UL>
-	<LI> <OBJECT type="text/sitemap">
-		<param name="Name" value="Step 3 - Process">
-		</OBJECT>
-	<UL>
-		<LI> <OBJECT type="text/sitemap">
-			<param name="Name" value="Running a batch">
-			<param name="Local" value="step3-process.html">
-			</OBJECT>
-		<LI> <OBJECT type="text/sitemap">
-			<param name="Name" value="Reading the log">
-			<param name="Local" value="step3-log.html">
-			</OBJECT>
-	</UL>
-	<LI> <OBJECT type="text/sitemap">
-		<param name="Name" value="Step 4 - Results">
-		<param name="Local" value="step4-results.html">
-		</OBJECT>
-	<LI> <OBJECT type="text/sitemap">
-		<param name="Name" value="Deduplication">
-		<param name="Local" value="dedup.html">
-		</OBJECT>
-	<LI> <OBJECT type="text/sitemap">
-		<param name="Name" value="Upscaling">
-		<param name="Local" value="upscale.html">
-		</OBJECT>
-	<LI> <OBJECT type="text/sitemap">
-		<param name="Name" value="Settings and tips">
-		</OBJECT>
-	<UL>
 		<LI> <OBJECT type="text/sitemap">
 			<param name="Name" value="Settings reference">
 			<param name="Local" value="settings-reference.html">
 			</OBJECT>
+	</UL>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="The operations">
+		</OBJECT>
+	<UL>
+		<LI> <OBJECT type="text/sitemap">
+			<param name="Name" value="Running a tagging batch">
+			<param name="Local" value="step3-process.html">
+			</OBJECT>
+		<LI> <OBJECT type="text/sitemap">
+			<param name="Name" value="Tagging results">
+			<param name="Local" value="step4-results.html">
+			</OBJECT>
+		<LI> <OBJECT type="text/sitemap">
+			<param name="Name" value="Deduplication">
+			<param name="Local" value="dedup.html">
+			</OBJECT>
+		<LI> <OBJECT type="text/sitemap">
+			<param name="Name" value="Upscaling">
+			<param name="Local" value="upscale.html">
+			</OBJECT>
+	</UL>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="Logs and diagnostics">
+		</OBJECT>
+	<UL>
+		<LI> <OBJECT type="text/sitemap">
+			<param name="Name" value="Reading the log">
+			<param name="Local" value="step3-log.html">
+			</OBJECT>
+		<LI> <OBJECT type="text/sitemap">
+			<param name="Name" value="Logs, crashes and support">
+			<param name="Local" value="admin-logs-support.html">
+			</OBJECT>
+		<UL>
+			<LI> <OBJECT type="text/sitemap">
+				<param name="Name" value="Where the logs are">
+				<param name="Local" value="admin-logs-support.html#logs">
+				</OBJECT>
+			<LI> <OBJECT type="text/sitemap">
+				<param name="Name" value="What to send with a support request">
+				<param name="Local" value="admin-logs-support.html#support">
+				</OBJECT>
+		</UL>
+	</UL>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="Tips and troubleshooting">
+		</OBJECT>
+	<UL>
 		<LI> <OBJECT type="text/sitemap">
 			<param name="Name" value="Tips and useful info">
 			<param name="Local" value="tips.html">
 			</OBJECT>
-	</UL>
-	<LI> <OBJECT type="text/sitemap">
-		<param name="Name" value="Troubleshooting">
-		</OBJECT>
-	<UL>
 		<LI> <OBJECT type="text/sitemap">
-			<param name="Name" value="All symptoms">
+			<param name="Name" value="Troubleshooting">
 			<param name="Local" value="troubleshooting.html">
 			</OBJECT>
 		<UL>
@@ -173,6 +182,10 @@
 		<LI> <OBJECT type="text/sitemap">
 			<param name="Name" value="Frequently asked questions">
 			<param name="Local" value="faq.html">
+			</OBJECT>
+		<LI> <OBJECT type="text/sitemap">
+			<param name="Name" value="Glossary">
+			<param name="Local" value="glossary.html">
 			</OBJECT>
 	</UL>
 	<LI> <OBJECT type="text/sitemap">
@@ -211,24 +224,6 @@
 				<param name="Local" value="admin-settings-files.html#registry">
 				</OBJECT>
 		</UL>
-		<LI> <OBJECT type="text/sitemap">
-			<param name="Name" value="Logs, crashes and support">
-			<param name="Local" value="admin-logs-support.html">
-			</OBJECT>
-		<UL>
-			<LI> <OBJECT type="text/sitemap">
-				<param name="Name" value="Where the logs are">
-				<param name="Local" value="admin-logs-support.html#logs">
-				</OBJECT>
-			<LI> <OBJECT type="text/sitemap">
-				<param name="Name" value="What to send with a support request">
-				<param name="Local" value="admin-logs-support.html#support">
-				</OBJECT>
-		</UL>
 	</UL>
-	<LI> <OBJECT type="text/sitemap">
-		<param name="Name" value="Glossary">
-		<param name="Local" value="glossary.html">
-		</OBJECT>
 </UL>
 </BODY></HTML>

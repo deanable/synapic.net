@@ -1,0 +1,108 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Synapic.Main.ViewModels"
+             xmlns:steps="using:Synapic.Main.Views.Wizard"
+             xmlns:op="using:Synapic.Main.Views.Operation"
+             xmlns:settings="using:Synapic.Main.Views.Settings"
+             xmlns:dash="using:Synapic.Main.Views.Dashboard"
+             xmlns:help="using:Synapic.Main.Services"
+             x:Class="Synapic.Main.Views.Settings.SettingsTab"
+             x:DataType="vm:MainWindowViewModel">
+
+  <!-- The Settings view (docs/mock-up/Mockup.svg, first sidebar row): every
+       configuration the app needs, in one scrolling column and in the order the
+       user meets it —
+
+         1. Data source      — what to work on: local folder or Daminion login,
+                               scope, filters and the record count (plus limits).
+         2. Inference server — the local sidecar: build/download, start/stop.
+         3. Inference engine — the model, device and tagging behaviour.
+         4. Deduplication    — the scan and keep-set rules.
+         5. Upscaling        — workflow, factor and output.
+         6. App preferences  — appearance, logging, defaults and about.
+
+       The three processing views hold no configuration of their own any more:
+       they show only what they are about to run and the result, so nothing is
+       configured in two places. Every section is in the tree at once (a single
+       scrolling column, ui-design §5), so the layout audit can measure each one.
+       Rows wrap rather than clip — the window has no minimum width. -->
+  <StackPanel Spacing="12" Margin="0,0,0,12" help:HelpScope.Topic="settings-reference.html">
+
+    <StackPanel Spacing="2">
+      <TextBlock Text="Settings" Classes="stepTitle" />
+      <TextBlock Classes="hint" TextWrapping="Wrap"
+                 Text="Everything the app needs configured: the source and its server, the inference engine, the operation rules and the app preferences. The processing views run with what is set here." />
+    </StackPanel>
+
+    <!-- Search: filter the column to the sections that mention what you type —
+         the settings have one home now, so they are a long column and this keeps
+         it navigable. The first match is scrolled into view; an empty query shows
+         every section. -->
+    <Border Classes="card settingsCard" Padding="12">
+      <StackPanel Spacing="6">
+        <TextBox x:Name="SettingsSearchBox"
+                 Watermark="Search settings — e.g. Daminion, model, dedup, theme"
+                 help:HelpScope.Topic="settings-reference.html" />
+        <TextBlock x:Name="SearchStatusText" Classes="hint" IsVisible="False" />
+      </StackPanel>
+    </Border>
+
+    <!-- ── 1 · Data source (connection) ──────────────────────────────────── -->
+    <Border Classes="card settingsCard" x:Name="SectionDataSource"
+            Padding="16" help:HelpScope.Topic="step1-datasource.html">
+      <StackPanel Spacing="8">
+        <TextBlock Text="Data source" Classes="sectionTitle" />
+        <TextBlock Classes="hint" TextWrapping="Wrap"
+                   Text="One source for every operation: a local folder, or a Daminion catalog with its scope and filters. Connect to the server here." />
+        <steps:DatasourceSourcePanel DataContext="{Binding Operations.Source}" />
+
+        <Separator Margin="0,2" />
+
+        <op:SourceLimitsPanel DataContext="{Binding Operations.Source}" />
+      </StackPanel>
+    </Border>
+
+    <!-- ── 2 · Inference server (sidecar) ────────────────────────────────── -->
+    <Border Classes="card settingsCard" x:Name="SectionInferenceServer" Padding="16">
+      <settings:InferenceServerSection />
+    </Border>
+
+    <!-- ── 3 · Inference engine (tagging configuration) ──────────────────── -->
+    <Border Classes="card settingsCard" x:Name="SectionEngine"
+            Padding="16" help:HelpScope.Topic="step2-engine.html">
+      <StackPanel Spacing="8">
+        <TextBlock Text="Inference engine" Classes="sectionTitle" />
+        <TextBlock Classes="hint" TextWrapping="Wrap"
+                   Text="The model, the compute device and the tagging behaviour every tagging run uses." />
+        <steps:Step2Engine DataContext="{Binding Operations.TagParameters}" />
+      </StackPanel>
+    </Border>
+
+    <!-- ── 4 · Deduplication rules ──────────────────────────────────────── -->
+    <Border Classes="card settingsCard" x:Name="SectionDedup"
+            Padding="16" help:HelpScope.Topic="dedup.html">
+      <StackPanel Spacing="8">
+        <TextBlock Text="Deduplication" Classes="sectionTitle" />
+        <TextBlock Classes="hint" TextWrapping="Wrap"
+                   Text="How the deduplication view decides what counts as a duplicate: the algorithm, the threshold and the keep-set rule." />
+        <steps:DedupSettingsPanel DataContext="{Binding Operations.Dedup}" />
+      </StackPanel>
+    </Border>
+
+    <!-- ── 5 · Upscaling settings ───────────────────────────────────────── -->
+    <Border Classes="card settingsCard" x:Name="SectionUpscale"
+            Padding="16" help:HelpScope.Topic="upscale.html">
+      <StackPanel Spacing="8">
+        <TextBlock Text="Upscaling" Classes="sectionTitle" />
+        <TextBlock Classes="hint" TextWrapping="Wrap"
+                   Text="The workflow, scale factor, precision and output the upscaling view runs with." />
+        <steps:UpscaleSettingsPanel DataContext="{Binding Operations.Upscale}" />
+      </StackPanel>
+    </Border>
+
+    <!-- ── 6 · App preferences ──────────────────────────────────────────── -->
+    <!-- Appearance, Logging, Defaults and About: the app-wide halves that are
+         not tied to one operation (§5, decision D3). -->
+    <dash:SettingsPanel DataContext="{Binding AppSettings}" />
+  </StackPanel>
+</UserControl>

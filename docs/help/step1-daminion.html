@@ -7,19 +7,19 @@
 </head>
 <body>
 
-<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; The workflow &rsaquo; Step 1 &rsaquo; Connecting to Daminion</p>
+<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; Settings &rsaquo; Connecting to Daminion</p>
 
 <h1>Connecting to Daminion</h1>
 
 <p class="lead">One login does the whole run: it lists the catalog, counts
 matching items, downloads the images, and writes the tags back. The connect form
-lives on the start screen &mdash; the record count and the two source lights sit
-beside it &mdash; so the connection is established before a workflow is picked.</p>
+lives in the Settings view's Data source section, beside the record count and
+the two source lights &mdash; so the connection is established before a run.</p>
 
 <h2>Connecting</h2>
 
 <ol class="steps">
-<li>On the start screen, under the two source lights, choose <span class="ui">Daminion Server</span>.</li>
+<li>In <span class="ui">Settings &rsaquo; Data source</span>, under the two source lights, choose <span class="ui">Daminion Server</span>.</li>
 <li>Fill in three fields:
 <ul>
 <li><span class="ui">Server URL</span> &mdash; the Daminion server address, for
@@ -37,7 +37,7 @@ itself in.</li>
 <div class="warning">
 <p class="first">Daminion permissions matter.</p>
 <p>An account that can read but not write will let a batch run and fail at the
-write. Check the account's rights in Daminion if Step 4 reports failures that all
+write. Check the account's rights in Daminion if the results report failures that all
 look alike.</p>
 </div>
 
@@ -67,7 +67,7 @@ press.</td></tr>
 again on every scope or filter change. <span class="ui">Recount</span> asks the
 server once more.</td></tr>
 <tr><td>The next launch</td><td>Synapic signs in to the same server on its own and
-counts immediately, so the start screen is ready before you press anything. A
+counts immediately, so the Data source section is ready before you press anything. A
 login that fails just leaves the connect form filled in.</td></tr>
 </table>
 
@@ -83,7 +83,7 @@ Windows account on that machine.</p>
 
 <p><span class="ui">Disconnect</span> appears once you are connected. It ends the
 session, clears the collection and saved-search lists, and puts the Daminion light
-back to red (which disables the workflow cards until another source is ready). The
+back to red, which is the cue that the next run has nothing to work on. The
 saved connection stays in the registry, so reconnecting is one press of
 <span class="ui">Connect</span>.</p>
 

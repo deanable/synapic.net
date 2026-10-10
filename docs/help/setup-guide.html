@@ -51,25 +51,28 @@ administrator prompt (the app installs under
 <h2>Stage 2 &mdash; Get an inference server</h2>
 
 <p>The model runs in a separate program (the <span class="term">sidecar</span>).
-Nothing can be tagged until one exists, so the wizard is greyed out and a panel
-says <span class="ui">Inference sidecar required</span> until you fix that:</p>
+Nothing can be tagged until one exists, so the workspace stays disabled and a
+banner says <span class="ui">Inference sidecar required</span> until you fix
+that:</p>
 
 <ol class="steps">
-<li>In the panel, press <span class="ui">Download</span> on the CPU row to
-fetch the prebuilt executable &mdash; works on any machine, no toolchain
-needed. CUDA users: the CUDA row, if this machine has an NVIDIA GPU.</li>
+<li>In <span class="ui">Settings &rsaquo; Inference server</span>, press
+<span class="ui">Download</span> on the CPU row of
+<span class="ui">Platform variants</span> to fetch the prebuilt executable
+&mdash; works on any machine, no toolchain needed. CUDA users: the CUDA row, if
+this machine has an NVIDIA GPU.</li>
 <li>No prebuilt fits? <span class="ui">Build sidecar</span> compiles from
 source; that first build downloads a private Python and the packages the model
 needs, so expect minutes.</li>
-<li>Wait for the status dot to turn green:
+<li>Wait for the status dot at the bottom of the sidebar to turn green:
 <span class="ui">Server running (port &hellip;)</span>. The very first launch
 is slow &mdash; up to a couple of minutes &mdash; because the executable is
 unpacked and the model is loaded.</li>
 </ol>
 
 <div class="tip">
-<p class="first">Checkpoint: the wizard is no longer greyed out.</p>
-<p>Step 1's controls respond and the log shows the server's port. If the dot
+<p class="first">Checkpoint: the workspace is no longer disabled.</p>
+<p>The Settings sections respond and the log shows the server's port. If the dot
 stays red, read <a href="first-run-sidecar.html">Build the inference
 server</a> and <a href="troubleshooting.html#sidecar">Troubleshooting: the
 inference server</a> before going further.</p>
@@ -78,19 +81,18 @@ inference server</a> before going further.</p>
 <h2>Stage 3 &mdash; Choose your images</h2>
 
 <ol class="steps">
-<li>On the start screen, in the source panel, select
+<li>In <span class="ui">Settings &rsaquo; Data source</span>, choose
 <span class="ui">Local Folder</span>.</li>
 <li>Browse to your test folder. Leave <span class="ui">Include
 subfolders</span> off for the rehearsal.</li>
 <li>Watch the folder light turn green (it names the folder it will use) and the
-record count appear under the panel. The three workflow cards unlock at the same
-moment.</li>
-<li>Daminion users: select <span class="ui">Daminion Server</span> instead and
+record count appear beside it.</li>
+<li>Daminion users: choose <span class="ui">Daminion Server</span> instead and
 carry on with Stage 4.</li>
 </ol>
 
 <p>Synapic tags JPEG, PNG and TIFF files; RAW files are skipped. Details and
-edge cases: <a href="step1-datasource.html">The source, and Step 1</a>.</p>
+edge cases: <a href="step1-datasource.html">The data source</a>.</p>
 
 <h2>Stage 4 &mdash; Connect and scope Daminion</h2>
 
@@ -105,14 +107,16 @@ the server URL, so a wrong URL lands in a different catalog.</li>
 search, shared collection or saved search &mdash; then the filters (status,
 "only items with untagged&hellip;"). Details:
 <a href="step1-scope-filters.html">Scope and filters</a>.</li>
-<li>Read the record count under the source panel: it runs by itself on launch
+<li>Read the record count beside the lights: it runs by itself on launch
 and after every scope or filter change, so you can see what the scope selects
 before anything runs. Set the <span class="ui">Max items</span> ceiling for the
-first run in Step 1 (100 is the default).</li>
+first run in the same section, under
+<span class="ui">How many items, and how much of each image</span> (100 is the
+default).</li>
 </ol>
 
 <p>Batch size and image scaling:
-<a href="step1-limits.html">How many items to process</a>.</p>
+<a href="step1-limits.html">How many items, and how much of each image</a>.</p>
 
 <h2>Stage 5 &mdash; Configure the engine</h2>
 
@@ -123,8 +127,7 @@ first run in Step 1 (100 is the default).</li>
 downloaded yet.</li>
 <li><span class="term">Device.</span> <span class="ui">CPU</span> everywhere;
 <span class="ui">CUDA</span> on an NVIDIA GPU; <span class="ui">MPS</span> on
-Apple silicon. See <a href="step2-engine.html">Step 2 &mdash; Tagging
-Engine</a>.</li>
+Apple silicon. See <a href="step2-engine.html">Inference engine</a>.</li>
 <li><span class="term">Tag fields.</span> Tick which of the three results get
 written. All three on is the default &mdash; and the single most common cause
 of "only keywords came out" is one of these boxes unticked. See
@@ -138,27 +141,28 @@ and description. Wording later: <a href="step2-prompts.html">Prompts</a>.</li>
 </ol>
 
 <div class="warning">
-<p class="first">Leaving Step 2 saves it.</p>
-<p>The form is written to the registry when you move on, and restored next
+<p class="first">The engine settings are remembered.</p>
+<p>They are saved with the rest of the configuration and restored next
 launch &mdash; a setting changed once keeps applying. What is remembered and
-how to reset it: <a href="step2-settings.html">What Step 2 remembers</a>.</p>
+how to reset it: <a href="step2-settings.html">What the engine settings
+remember</a>.</p>
 </div>
 
 <h2>Stage 6 &mdash; Run the batch</h2>
 
 <ol class="steps">
-<li>Go to <a href="step3-process.html">Step 3 &mdash; Process</a> and press
-<span class="ui">Start Processing</span>.</li>
-<li>Watch the log: one line per image reports the category, keyword count and
-the start of the description. Progress, ETA, pause and abort are explained in
-<a href="step3-process.html">Step 3</a>.</li>
+<li>Pick <span class="ui">Tagging</span> in the sidebar and press
+<span class="ui">Start Processing</span>. Progress, ETA, pause and abort are
+explained in <a href="step3-process.html">Running a tagging batch</a>.</li>
+<li>Watch the log in the same view: one line per image reports the category,
+keyword count and the start of the description.</li>
 <li>The first image also triggers the model download (about 860 MB) if this
 machine has never used it. Timings that look alarming on the first batch are
 usually that, not a fault.</li>
 </ol>
 
 <div class="tip">
-<p class="first">Checkpoint: rows appear in Step 4 with status
+<p class="first">Checkpoint: rows appear in the report with status
 <span class="term">Ok</span>.</p>
 <p>If rows say failed, or the log shows errors, stop and read
 <a href="troubleshooting.html">Troubleshooting</a> &mdash; running a large
@@ -168,8 +172,8 @@ batch against a broken setup only multiplies the cleanup.</p>
 <h2>Stage 7 &mdash; Review and verify</h2>
 
 <ol class="steps">
-<li>Read <a href="step4-results.html">Step 4 &mdash; Results</a>: the summary
-line and the per-file rows.</li>
+<li>Read the report below the run: the summary line and the per-file rows. See
+<a href="step4-results.html">Tagging results</a>.</li>
 <li>Open one of the files in your own image viewer or in Daminion and confirm
 the keywords, category and description are actually there. What lands where:
 <a href="metadata-written.html">What gets written to your images</a>.</li>
@@ -181,30 +185,33 @@ to argue with it later.</li>
 
 <h2>Stage 8 &mdash; Optional: deduplication</h2>
 
-<p>The <a href="dedup.html">Deduplication</a> tab finds near-identical images
-by perceptual hash &mdash; from a local folder or from the Daminion scope you
-chose in Step 1 &mdash; groups them, and lets you tick which copies to keep
-(or let the oldest/newest/smallest/largest auto-select do it) before you tag,
-move or delete the rest, or remove them from the catalog. It is a separate
-tool with its own source and threshold; it never touches the wizard's batch.</p>
+<p>The <a href="dedup.html">Deduplication</a> view finds near-identical images
+by perceptual hash &mdash; over the shared source, a local folder or the
+Daminion scope you chose &mdash; groups them, and lets you tick which copies to
+keep (or let the oldest/newest/smallest/largest keep-set rule do it) before you
+tag, move or delete the rest, or remove them from the catalog. It is a separate
+operation with the same source and its own rules; it never touches the tagging
+batch.</p>
 
 <h2>Stage 9 &mdash; Make the app yours</h2>
 
 <p>Two layers of settings, both optional:</p>
 
 <ul>
-<li><span class="term">In the app.</span> What you set in Steps 1 and 2 comes
-back next launch &mdash; connection, scope, filters, limits and all of Step 2
-&mdash; from the Windows registry (defaults each run on macOS and Linux). The
-local-folder box is the exception: reselect it each launch. Every field,
-default and storage location is listed in
+<li><span class="term">In the app.</span> What you set in the data source and
+the engine comes back next launch &mdash; connection, scope, filters, limits
+and all of the engine settings &mdash; from the Windows registry (defaults each
+run on macOS and Linux). The local-folder box is the exception: reselect it each
+launch. Every field, default and storage location is listed in
 <a href="settings-reference.html">Settings reference</a>.</li>
+<li><span class="term">In the app preferences.</span> Appearance, the logging
+level, whether the diagnostics drawer is shown, and what a new session starts
+from. All of them are the last section of the Settings view.</li>
 <li><span class="term">In the config file.</span>
-<span class="path">%APPDATA%\Synapic\config.json</span> holds the app-level
-preferences: <code>ui.autoLaunchSidecar</code> (start the server with the
-app), <code>ui.logLevel</code> (what the in-app log shows),
-<code>ui.telemetryEnabled</code> (local counters, off by default). Explained
-in <a href="settings-reference.html#application">Application settings</a>.</li>
+<span class="path">%APPDATA%\Synapic\config.json</span> holds the keys that have
+no control in the app: <code>ui.telemetryEnabled</code> (local counters, off by
+default) and <code>ui.theme</code>. Explained in
+<a href="settings-reference.html#application">Application settings</a>.</li>
 </ul>
 
 <p>Backups, registry paths and the rest:
@@ -215,11 +222,11 @@ in <a href="settings-reference.html#application">Application settings</a>.</li>
 <table>
 <tr><th class="setting">Done when&hellip;</th><th>Stage</th><th>Detail</th></tr>
 <tr><td>The installer finished and the app opens</td><td>1. Install</td><td><a href="getting-started.html">Getting started with Synapic</a></td></tr>
-<tr><td>The status dot is green and the wizard is enabled</td><td>2. Server</td><td><a href="first-run-sidecar.html">Build the inference server</a></td></tr>
-<tr><td>A folder or a Daminion connection is selected</td><td>3&ndash;4. Images</td><td><a href="step1-datasource.html">Step 1</a></td></tr>
+<tr><td>The status dot is green and the workspace is enabled</td><td>2. Server</td><td><a href="first-run-sidecar.html">Build the inference server</a></td></tr>
+<tr><td>A folder or a Daminion connection is selected</td><td>3&ndash;4. Images</td><td><a href="step1-datasource.html">The data source</a></td></tr>
 <tr><td>The record count reports a sensible number</td><td>4. Scope</td><td><a href="step1-scope-filters.html">Scope and filters</a></td></tr>
-<tr><td>Model, device and tag fields are as you want them</td><td>5. Engine</td><td><a href="step2-engine.html">Step 2</a></td></tr>
-<tr><td>The first batch finished with Ok rows</td><td>6. Run</td><td><a href="step3-process.html">Step 3</a></td></tr>
+<tr><td>Model, device and tag fields are as you want them</td><td>5. Engine</td><td><a href="step2-engine.html">Inference engine</a></td></tr>
+<tr><td>The first batch finished with Ok rows</td><td>6. Run</td><td><a href="step3-process.html">Running a tagging batch</a></td></tr>
 <tr><td>You opened a file and saw the tags in it</td><td>7. Verify</td><td><a href="metadata-written.html">What gets written</a></td></tr>
 </table>
 
@@ -238,8 +245,8 @@ in <a href="settings-reference.html#application">Application settings</a>.</li>
 <h2>See also</h2>
 <ul>
 <li><a href="getting-started.html">Getting started with Synapic</a> &mdash; the explanation behind this checklist</li>
-<li><a href="workflow-overview.html">The workflow, step by step</a></li>
-<li><a href="window-overview.html">The main window</a></li>
+<li><a href="workflow-overview.html">How a run works</a></li>
+<li><a href="window-overview.html">The Synapic window</a></li>
 <li><a href="faq.html">Frequently asked questions</a></li>
 </ul>
 </div>

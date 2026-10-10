@@ -118,6 +118,62 @@ public class SidecarStalenessTests : IDisposable
         }
     }
 
+    [Fact]
+    public void Stale_launch_is_blocked_with_the_rebuild_instructions()
+    {
+        try
+        {
+            MakeSource("inference_engine.py");
+            Directory.CreateDirectory(Path.GetDirectoryName(ExePath)!);
+            File.WriteAllText(ExePath, "stub exe");
+
+            File.SetLastWriteTimeUtc(Path.Combine(SourceDir, "inference_engine.py"), DateTime.UtcNow);
+            File.SetLastWriteTimeUtc(ExePath, DateTime.UtcNow.AddDays(-5));
+
+            var block = InferenceSidecarService.DescribeStaleLaunchBlock(ExePath, _root);
+
+            Assert.NotNull(block);
+            Assert.Contains("will not be started", block);
+            Assert.Contains("Build sidecar", block);
+            Assert.Contains("Download", block);
+        }
+        finally
+        {
+            try { Directory.Delete(_root, recursive: true); } catch { /* best effort */ }
+        }
+    }
+
+    [Fact]
+    public void Current_launch_is_not_blocked()
+    {
+        try
+        {
+            MakeSource("inference_engine.py");
+            Directory.CreateDirectory(Path.GetDirectoryName(ExePath)!);
+            File.WriteAllText(ExePath, "stub exe");
+
+            File.SetLastWriteTimeUtc(Path.Combine(SourceDir, "inference_engine.py"), DateTime.UtcNow.AddDays(-1));
+            File.SetLastWriteTimeUtc(ExePath, DateTime.UtcNow);
+
+            Assert.Null(InferenceSidecarService.DescribeStaleLaunchBlock(ExePath, _root));
+        }
+        finally
+        {
+            try { Directory.Delete(_root, recursive: true); } catch { /* best effort */ }
+        }
+    }
+
+    [Fact]
+    public void Block_message_includes_the_staleness_description()
+    {
+        const string staleness =
+            "exe built 2026-10-10 17:04Z but the sidecar source changed 2026-10-10 17:59Z";
+
+        var message = InferenceSidecarService.FormatStaleLaunchBlock(staleness);
+
+        Assert.Contains(staleness, message);
+    }
+
     public void Dispose()
     {
         try { Directory.Delete(_root, recursive: true); } catch { /* best effort */ }

@@ -241,6 +241,57 @@ public class ServerDetectionTests
         }
     }
 
+    [AvaloniaFact]
+    public async Task A_stale_build_blocks_the_workspace_and_explains_why()
+    {
+        var dir = Directory.CreateTempSubdirectory("synapic-stale-block-");
+        try
+        {
+            var exe = Path.Combine(dir.FullName, InferenceSidecarService.ExeName);
+            File.WriteAllText(exe, "stub");
+
+            var vm = new MainWindowViewModel(new FakeSidecar(), new FakeBuildService(), new Session(),
+                () => exe, null, null, _ => exe);
+            await vm.DetectServerAsync();
+
+            Assert.True(vm.IsWorkspaceEnabled);
+            Assert.False(vm.IsSidecarStale);
+
+            // Older than the sidecar source: the service refuses to launch it, so
+            // the workspace must stay blocked and state why - an old binary must
+            // never be able to run.
+            File.SetLastWriteTimeUtc(exe, DateTime.UtcNow.AddYears(-1));
+            await vm.DetectServerAsync();
+
+            Assert.True(vm.IsSidecarStale);
+            Assert.False(vm.IsWorkspaceEnabled);
+            Assert.Contains("cannot run", vm.SidecarStaleText);
+            Assert.Contains("Build sidecar", vm.SidecarStaleText);
+        }
+        finally
+        {
+            try { dir.Delete(recursive: true); } catch { /* best effort */ }
+        }
+    }
+
+    [AvaloniaFact]
+    public void A_refused_launch_is_shown_as_an_error_not_silently_ignored()
+    {
+        var sidecar = new FakeSidecar();
+        var vm = new MainWindowViewModel(sidecar, new FakeBuildService(), new Session(), () => Exe);
+
+        sidecar.RaiseStatus(SidecarStatus.Error,
+            "The inference server is out of date and will not be started: stale");
+
+        Assert.Equal(ServerUiState.Error, vm.ServerState);
+        Assert.True(vm.IsServerErrorVisible);
+        Assert.Contains("will not be started", vm.ServerErrorText);
+
+        // The banner belongs to the error state; leaving it clears the banner.
+        sidecar.RaiseStatus(SidecarStatus.Stopped);
+        Assert.False(vm.IsServerErrorVisible);
+    }
+
     // ── States of an already-built variant ───────────────────────────────────
 
     [AvaloniaFact]

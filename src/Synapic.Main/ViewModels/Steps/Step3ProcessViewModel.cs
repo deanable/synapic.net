@@ -32,6 +32,25 @@ public partial class Step3ProcessViewModel : RunStateViewModel
     /// <summary>The sidecar instance the orchestrator uses (Step 4 retries need it).</summary>
     public IInferenceSidecar Sidecar => _sidecar;
 
+    /// <summary>The bar's primary action in the tagging workflow's own words.</summary>
+    public override string RunActionLabel => "Start tagging";
+
+    /// <summary>Tagging is the one mode that pauses; the bar shows these while it can.</summary>
+    public override IRelayCommand? PauseAction => PauseCommand;
+
+    /// <summary>See <see cref="PauseAction"/>.</summary>
+    public override IRelayCommand? ResumeAction => ResumeCommand;
+
+    /// <summary>
+    /// Abort is this mode's Stop. It lives on the bar now, not on the run page:
+    /// the page carried the same progress, the same Start and a second log, and
+    /// a run with two of each is a run whose buttons disagree with each other.
+    /// </summary>
+    public override IRelayCommand? StopAction => AbortCommand;
+
+    /// <summary>Tagging aborts rather than stops — same cancellation, its own word.</summary>
+    public override string StopActionLabel => "Abort";
+
     protected override void NotifyRunCommandsCanExecuteChanged()
     {
         StartCommand.NotifyCanExecuteChanged();

@@ -78,7 +78,7 @@ tagging naturally fails. It is not a supported way to lock down a normal install
 
 <table>
 <tr><th class="setting">Setting</th><th>Can you pre-seed it?</th></tr>
-<tr><td>Step 1 and Step 2 settings (registry, <code>HKCU\Software\Synapic</code>)</td><td>Yes, per user, with a login script writing the values listed in <a href="admin-settings-files.html#registry">Files, folders and registry keys</a>.</td></tr>
+<tr><td>Data source and engine settings (registry, <code>HKCU\Software\Synapic</code>)</td><td>Yes, per user, with a login script writing the values listed in <a href="admin-settings-files.html#registry">Files, folders and registry keys</a>.</td></tr>
 <tr><td>The Daminion password</td><td>No. It is encrypted with the user's own Windows credentials (DPAPI), so a value copied from another machine or account cannot be decrypted. Each user enters it once.</td></tr>
 <tr><td>Auto-launch of the inference server</td><td>Yes &mdash; <code>ui.autoLaunchSidecar</code> in <span class="path">%APPDATA%\Synapic\config.json</span>. It ships <code>true</code>.</td></tr>
 <tr><td>Usage counters</td><td>Yes &mdash; <code>ui.telemetryEnabled</code>, <code>false</code> unless a user opts in. They are local counters in the log folder, not telemetry to a service.</td></tr>

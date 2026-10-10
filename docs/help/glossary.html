@@ -20,12 +20,12 @@ the way Synapic means them.</p>
 <tr><th class="setting">Term</th><th>Meaning</th></tr>
 <tr><td><span class="term">Inference server</span> / <span class="term">sidecar</span></td><td>The separate program that loads the model and answers one tagging request per image. Synapic starts it, talks to it over a local port, and stops it. See <a href="first-run-sidecar.html">Build the inference server</a>.</td></tr>
 <tr><td><span class="term">Variant</span></td><td>A build of the inference server for a particular runtime: the CPU build, or the CUDA build for NVIDIA GPUs.</td></tr>
-<tr><td><span class="term">Device</span></td><td>Where the model is computed: the CPU, an NVIDIA GPU (CUDA) or Apple silicon (MPS). Step 2 offers only the devices this machine can run, and the choice both selects the device for the next run and decides which server variant is launched. The status bar names the device the running server reports.</td></tr>
+<tr><td><span class="term">Device</span></td><td>Where the model is computed: the CPU, an NVIDIA GPU (CUDA) or Apple silicon (MPS). The engine section offers only the devices this machine can run, and the choice both selects the device for the next run and decides which server variant is launched. The status bar names the device the running server reports.</td></tr>
 <tr><td><span class="term">CUDA</span></td><td>NVIDIA's GPU compute platform. Needs an NVIDIA driver on the machine <em>and</em> the CUDA build of the inference server; with both, tagging is many times faster than on the CPU. Missing either one means the run falls back to the CPU.</td></tr>
 <tr><td><span class="term">Model</span></td><td>The vision-language network that turns an image into a category, keywords and a description. Default: <code>LiquidAI/LFM2.5-VL-450M</code>.</td></tr>
 <tr><td><span class="term">Model cache</span></td><td>The folder holding downloaded model weights, shared by every install on the machine: <span class="path">%LOCALAPPDATA%\Synapic\models</span>.</td></tr>
-<tr><td><span class="term">Batch</span></td><td>One run of Step 3: fetch, tag, write, for the items your Step 1 settings selected.</td></tr>
-<tr><td><span class="term">Tag fields</span></td><td>The three checkboxes in Step 2 that decide which of the model's results are written: keywords, categories, description.</td></tr>
+<tr><td><span class="term">Batch</span></td><td>One run of an operation: fetch, tag, write, for the items the data source selected.</td></tr>
+<tr><td><span class="term">Tag fields</span></td><td>The three checkboxes in the engine section that decide which of the model's results are written: keywords, categories, description.</td></tr>
 <tr><td><span class="term">System prompt</span></td><td>Optional context prepended to every request &mdash; tone, language, vocabulary. It must not change the output format.</td></tr>
 <tr><td><span class="term">Tag instruction</span></td><td>The instruction that asks the model for its result. Blank means the built-in instruction, which is the tested one.</td></tr>
 <tr><td><span class="term">ETA</span></td><td>Estimated time remaining for a batch, calculated from completed images and their average duration. Not available until the first image finishes.</td></tr>
@@ -34,17 +34,17 @@ the way Synapic means them.</p>
 <tr><td><span class="term">Warm-up</span></td><td>The server loading the model at startup so the first image of a batch does not pay for it.</td></tr>
 </table>
 
-<h2>The start screen and the source</h2>
+<h2>The window and the source</h2>
 
 <table>
 <tr><th class="setting">Term</th><th>Meaning</th></tr>
 <tr><td><span class="term">Source</span></td><td>What a run reads: a folder on disk, or a Daminion catalog scope. Not to be confused with the sidecar, which is the engine rather than the material.</td></tr>
-<tr><td><span class="term">Source panel</span></td><td>The first thing on the start screen: the folder picker, the Daminion connect form, the scope, the filters, and the record count. It belongs to Step 1's view model, so its choice is the source every route runs on.</td></tr>
+<tr><td><span class="term">Data source section</span></td><td>The part of the Settings view that holds the folder picker, the Daminion connect form, the scope, the filters and the record count, plus the processing limits. There is one source, so what it selects is what every operation runs on.</td></tr>
 <tr><td><span class="term">Source lights</span> / <span class="term">source profile</span></td><td>The two always-visible indicators above the radio buttons &mdash; one for the Daminion session, one for the local folder. Green means that source is ready to be worked with; the line beside each names the server URL, or the folder and whether subfolders are included.</td></tr>
 <tr><td><span class="term">Record count</span></td><td>How many images the current source and scope select: the files a folder scan would pick up, or the items Daminion reports for the scope and filters. It refreshes itself at launch, after a connect, and on every scope, filter or folder change.</td></tr>
 <tr><td><span class="term">Recount</span></td><td>The button next to the record count. The count is automatic, so this is only a re-ask &mdash; useful when the catalog changed underneath the session.</td></tr>
 <tr><td><span class="term">Stored source</span></td><td>The source kept for the next launch: the folder and the source type in <span class="path">config.json</span>, the Daminion connection in the registry. A stored Daminion source is reconnected to automatically, which is why the count can be there before you touch anything.</td></tr>
-<tr><td><span class="term">Route</span></td><td>One of the three workflows on the start screen: Tagging, Deduplication or Upscaling. A route is disabled until a source light is green.</td></tr>
+<tr><td><span class="term">Operation</span></td><td>One of the three things Synapic runs over the source: Tagging, Deduplication or Upscaling, each with its own sidebar row and its own view.</td></tr>
 </table>
 
 <h2>Daminion and DAM vocabulary</h2>
@@ -56,11 +56,11 @@ the way Synapic means them.</p>
 <tr><td><span class="term">Scope</span></td><td>Which part of the catalog a run looks at: everything, a keyword search, a shared collection, or a saved search.</td></tr>
 <tr><td><span class="term">Collection</span> (shared collection)</td><td>A named group of items in Daminion that people assemble by hand or by rule.</td></tr>
 <tr><td><span class="term">Saved search</span></td><td>A query saved in Daminion. The richest way to define a batch without re-creating the selection in Synapic.</td></tr>
-<tr><td><span class="term">Status flag</span></td><td>Daminion's triage state for an item: approved, rejected, or unassigned. Step 1 can filter on it.</td></tr>
-<tr><td><span class="term">Untagged filter</span></td><td>The Step 1 option to select only items where keywords, categories or the description are still empty.</td></tr>
+<tr><td><span class="term">Status flag</span></td><td>Daminion's triage state for an item: approved, rejected, or unassigned. The data source can filter on it.</td></tr>
+<tr><td><span class="term">Untagged filter</span></td><td>The data source option to select only items where keywords, categories or the description are still empty.</td></tr>
 <tr><td><span class="term">Item</span> / <span class="term">asset</span></td><td>One image in the catalog. Synapic tags items; for a folder it tags files, which are the same thing.</td></tr>
 <tr><td><span class="term">Paging</span></td><td>Fetching items in pages. <span class="ui">Process all</span> keeps paging until Daminion returns nothing.</td></tr>
-<tr><td><span class="term">Version control</span> (checkout / check-in)</td><td>Daminion's lock on an item. The upscaling route checks an item out, downloads the original, uploads the enhanced file as a new version with a comment, and checks it back in; a failed upload is undone so the item is never left checked out.</td></tr>
+<tr><td><span class="term">Version control</span> (checkout / check-in)</td><td>Daminion's lock on an item. The upscaling operation checks an item out, downloads the original, uploads the enhanced file as a new version with a comment, and checks it back in; a failed upload is undone so the item is never left checked out.</td></tr>
 <tr><td><span class="term">Feature enhancement</span></td><td>Daminion's name for the resolution-raising utility. Synapic's <span class="ui">Upscaling</span> route is that utility against the same catalog scope.</td></tr>
 </table>
 
@@ -116,7 +116,7 @@ the way Synapic means them.</p>
 <h2>See also</h2>
 <ul>
 <li><a href="getting-started.html">Getting started with Synapic</a></li>
-<li><a href="workflow-overview.html">The workflow, step by step</a></li>
+<li><a href="workflow-overview.html">How a run works</a></li>
 <li><a href="metadata-written.html">What gets written to your images</a></li>
 <li><a href="faq.html">Frequently asked questions</a></li>
 </ul>

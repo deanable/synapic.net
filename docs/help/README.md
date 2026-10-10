@@ -3,7 +3,7 @@
 The end-user and administrator help, authored as plain HTML and compiled into a
 single **`Synapic.chm`** by Microsoft HTML Help Workshop (`hhc.exe`).
 
-The topics are help *source*, and the app opens them itself (toolbar **Help**,
+The topics are help *source*, and the app opens them itself (the sidebar's **Help**,
 or <kbd>F1</kbd> for the topic that matches what you are looking at). The
 compiled `.chm` is what Windows gets, **embedded inside `Synapic.dll`** and
 verified against a SHA-256 before it is opened; macOS and Linux, which have no
@@ -59,12 +59,12 @@ the topic. The order is deliberate, and every entry is tried in turn:
 | macOS / Linux | The same topic as HTML, in the default browser | `help/` next to the app, falling back to a checkout's `docs/help` |
 | Windows, no compiled help in the build | The same topic as HTML | As above - this is a checkout that has not run `build-chm.ps1` |
 
-Two entry points use it: the toolbar **Help** button opens `index.html`, and
+Two entry points use it: the sidebar **Help** button opens `index.html`, and
 <kbd>F1</kbd> opens the topic for what the user is looking at - the nearest
 control annotated with `HelpScope.Topic` in the views (a section's topic, or
 one setting's `settings-reference.html#anchor` row), falling back to the
-sidecar topics while the setup panel is what is gating them, otherwise the
-wizard step on screen (`HelpTopics.ForStepIndex`).
+sidecar topics while the setup banner is what is gating them, otherwise the
+view on screen (`HelpTopics.ForStepIndex`).
 
 **On Windows there is no second entry.** The compiled help is the whole of the
 payload, and a compiled help that fails its hash, or an `hh.exe` that will not
@@ -140,11 +140,11 @@ missing from `[FILES]` produces a `.chm` that opens, looks fine, and is wrong.
 ## Maintaining it when the UI changes
 
 The help claims to describe what the app actually does, so a change to a label,
-a checkbox or a persisted setting is a help change too. When you touch Step 1-4
-or the sidecar panel:
+a checkbox or a persisted setting is a help change too. When you touch a settings section,
+a processing view or the sidecar section:
 
 - Labels live in `src/Synapic.Main/Views/*.axaml`; match them exactly,
-  including the `&mdash;` in headings like "Step 2 &mdash; Engine".
+  including punctuation in a heading like "Tag fields: what gets written".
 - Persisted values live in `EngineSettingsStore` /
   `DaminionConnectionStore`; `admin-settings-files.html` lists those names and
   registry paths, so update it with them.

@@ -5,6 +5,7 @@ using Synapic.Main.Services;
 using Synapic.Main.ViewModels;
 using Synapic.Main.ViewModels.Operations;
 using Synapic.Main.Views;
+using Synapic.Main.Views.Operation;
 using Synapic.Main.Views.Wizard;
 using Xunit;
 
@@ -55,13 +56,15 @@ public class MainWindowPopulationTests
         // each renders off the host's own view model — there is no step chain to
         // walk any more, so the content is whatever the host hands the template.
         var source = new DatasourceSourcePanel { DataContext = host.Source };
+        var scope = new ScopeSelectionPanel { DataContext = host.Source };
         var parameters = new Step2Engine { DataContext = host.TagParameters };
-        var run = new Step3Process { DataContext = host.TagRun };
+        var run = new RunStateBar { DataContext = host.TagRun };
         var report = new Step4Results { DataContext = host.TagReport };
         var dedup = new StepDedup { DataContext = host.Dedup };
         var upscale = new StepUpscale { DataContext = host.Upscale };
 
         Assert.Same(host.Source, source.DataContext);
+        Assert.Same(host.Source, scope.DataContext);
         Assert.Same(host.TagParameters, parameters.DataContext);
         Assert.Same(host.TagRun, run.DataContext);
         Assert.Same(host.TagReport, report.DataContext);

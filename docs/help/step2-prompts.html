@@ -7,11 +7,11 @@
 </head>
 <body>
 
-<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; The workflow &rsaquo; Step 2 &rsaquo; Prompts</p>
+<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; Settings &rsaquo; Prompts</p>
 
 <h1>Prompts: system prompt and tag instruction</h1>
 
-<p class="lead">Step 2 has two text boxes, and it is easy to confuse them. One
+<p class="lead">The engine section has two text boxes, and it is easy to confuse them. One
 sets the context the model works in; the other says what the model must produce.
 Only the second one can break the result, and you do not need to touch either.</p>
 
@@ -47,6 +47,11 @@ If the system prompt asks for prose, a different set of keys, or a markdown
 report, it fights the instruction below it &mdash; and that is the one reliable
 way to make the parser's job hard. Anything the app cannot recognise ends up in
 the description as raw text. Steer the wording, not the format.</p>
+<p>One safety net sits in front of that: when the model's reply cannot be read as
+JSON at all, Synapic asks it once more for the same information in strict JSON
+before falling back to raw text. The run log says so (<span class="ui">The first
+reply could not be read as JSON &mdash; asked the model again</span>), and the item
+itself is still reported as a success.</p>
 </div>
 
 <h2>The saved system prompts</h2>
@@ -57,7 +62,7 @@ prompt you have used, most recent first.</p>
 
 <table>
 <tr><th class="setting">Action</th><th>What happens</th></tr>
-<tr><td>Type a prompt and leave the box (or move off Step 2)</td><td>It is committed to the history and selected in the list. A blank box is never saved.</td></tr>
+<tr><td>Type a prompt and leave the box (or move focus away)</td><td>It is committed to the history and selected in the list. A blank box is never saved.</td></tr>
 <tr><td>Pick an entry from the list</td><td>It fills the box.</td></tr>
 <tr><td>Highlight an entry and press <kbd>Delete</kbd></td><td>The entry is removed from the history. If it was the prompt in the box, the box is cleared too &mdash; otherwise the next commit would simply save it again.</td></tr>
 <tr><td>Read the line under the box</td><td>Confirms what happened: saved, removed, or that nothing was selected to remove.</td></tr>
@@ -66,7 +71,7 @@ prompt you have used, most recent first.</p>
 <p>The history lives in a small JSON file, <span
 class="path">%APPDATA%\Synapic\system-prompts.json</span>, newest first and capped
 in length. It is a convenience list, not the setting: the prompt actually used by
-a run is stored with the rest of your Step 2 settings, so pruning this list can
+a run is stored with the rest of your engine settings, so pruning this list can
 never change how a batch behaves.</p>
 
 <h2>The tag instruction</h2>
@@ -99,7 +104,7 @@ happens, so check the log if a run suddenly produces empty fields.</p>
 <ol class="steps">
 <li>Copy ten representative images into a scratch folder.</li>
 <li>Run them with your current settings and note what you think of the output in
-Step 4.</li>
+the results.</li>
 <li>Change one thing &mdash; the system prompt, and only the system prompt.</li>
 <li>Run the same ten again and compare. Tags are replaced, not merged, so the
 second run is the one you judge.</li>
@@ -114,7 +119,7 @@ configuration the app is tested with.</p>
 <h2>See also</h2>
 <ul>
 <li><a href="step2-tag-fields.html">Tag fields: what gets written</a></li>
-<li><a href="step2-settings.html">What Step 2 remembers</a></li>
+<li><a href="step2-settings.html">What the engine settings remember</a></li>
 <li><a href="step3-log.html">Reading the log</a></li>
 <li><a href="admin-settings-files.html#paths">Files, folders and registry keys</a></li>
 </ul>

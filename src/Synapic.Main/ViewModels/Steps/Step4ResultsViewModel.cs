@@ -84,13 +84,13 @@ public partial class Step4ResultsViewModel : ViewModelBase
 
     // ── Retry failed items ───────────────────────────────────────────────────
 
-    private bool CanRetryFailed() => !IsBusy && _session.Results.Any(r => r.Status != "Success");
+    private bool CanRetryFailed() => !IsBusy && _session.Results.Any(r => ProcessStatus.NeedsRetry(r.Status));
 
     [RelayCommand(CanExecute = nameof(CanRetryFailed))]
     private async Task RetryFailedAsync(CancellationToken ct)
     {
         var failedFiles = _session.Results
-            .Where(r => r.Status != "Success")
+            .Where(r => ProcessStatus.NeedsRetry(r.Status))
             .Select(r => r.FileName)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (failedFiles.Count == 0) return;
@@ -142,7 +142,7 @@ public partial class Step4ResultsViewModel : ViewModelBase
         if (client is null) return;
 
         var targets = _session.Results
-            .Where(r => r.Status is "Success" or "Verified" && r.DaminionId is not null)
+            .Where(r => ProcessStatus.IsSuccess(r.Status) && r.DaminionId is not null)
             .ToList();
         if (targets.Count == 0)
         {
@@ -164,7 +164,9 @@ public partial class Step4ResultsViewModel : ViewModelBase
                 if (verdict.Ok)
                 {
                     verified++;
-                    ReplaceResult(result with { Status = "Verified" });
+                    // Verification replaces the status, so carry the repaired
+                    // marker over rather than hiding that the reply needed work.
+                    ReplaceResult(result with { Status = ProcessStatus.VerifiedFor(result.Status) });
                 }
                 else
                 {
@@ -194,10 +196,15 @@ public partial class Step4ResultsViewModel : ViewModelBase
 
     private void UpdateSummary(string suffix, bool reset)
     {
-        var ok = _session.Results.Count(r => r.Status is "Success" or "Verified");
-        var verified = _session.Results.Count(r => r.Status == "Verified");
+        var ok = _session.Results.Count(r => ProcessStatus.IsSuccess(r.Status));
+        var verified = _session.Results.Count(r => ProcessStatus.IsVerified(r.Status));
+        var repaired = _session.Results.Count(r => ProcessStatus.WasRepaired(r.Status));
         var failed = _session.Results.Count - ok;
-        var baseLine = $"{ok} succeeded ({verified} verified), {failed} failed, {_session.Results.Count} total";
+        // The repaired count only appears when there is one: a clean run reads
+        // exactly as it always did, and a shaky one cannot be mistaken for it.
+        var baseLine = $"{ok} succeeded ({verified} verified"
+            + (repaired > 0 ? $", {repaired} repaired" : "")
+            + $"), {failed} failed, {_session.Results.Count} total";
         Summary = reset && _session.Results.Count == 0
             ? "No results yet — run tagging to create a report."
             : string.IsNullOrEmpty(suffix)

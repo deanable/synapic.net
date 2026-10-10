@@ -226,19 +226,35 @@ Order of operations:
 3. **Model inference** by task:
    - `image-text-to-text` (VLM): chat-style `messages`, with the optional
      `system_prompt` as a `system` message, then the image and the fixed
-     `DEFAULT_VLM_USER_PROMPT` (asks for JSON with `description`, `category`,
-     `keywords`).
+     `DEFAULT_VLM_USER_PROMPT` (asks for one *single-line* JSON object with
+     `description`, `category`, `keywords`). One line is asked for deliberately:
+     the reply that cost a batch (a description ending at a line break with no
+     closing quote, the next member starting on the line below) is a shape a
+     single-line instruction has no room for.
    - `image-to-text`: prompted caption ("Describe the image.") with a plain
      fallback.
    - `zero-shot-image-classification`: candidates (or
      `DEFAULT_CANDIDATE_LABELS`).
    - otherwise: plain image classification.
-4. **Extraction** via `tag_extractor.extract_tags_from_result`, then scored
+4. **One retry for an unreadable reply** (chat path only): if the instruction
+   asked for a JSON payload and `tag_extractor.reply_is_malformed` says the
+   reply does not read cleanly, the model is asked **once** more — same system
+   prompt, same image, with `RETRY_INSTRUCTION` (the one-line rules again) plus
+   its own reply echoed back verbatim, so the second attempt re-formats a known
+   answer instead of guessing at the image again. The second reply is adopted
+   only when `reads_better_than` grades it strictly higher (unreadable <
+   repaired < clean); otherwise the first stands and the tags are unchanged. A
+   retry that fails to generate is logged and ignored — the first reply is
+   already in hand. The retry never runs for a plain captioner, and never for a
+   custom instruction that does not ask for JSON (see `_expects_a_json_payload`),
+   so a prose instruction cannot double the cost of a run that has no payload to
+   fix. Cost: one extra generation per malformed reply, at most.
+5. **Extraction** via `tag_extractor.extract_tags_from_result`, then scored
    probabilities are merged over the extracted ones, a `[AI: No Result]`
    placeholder is used when nothing was extracted, and `_finalize` caps
    keywords at `MAX_KEYWORDS_PER_IMAGE` and returns
    `{category, keywords, description, probabilities, inference_ms,
-   model_used, scoring?}`.
+   model_used, scoring?, reply_repairs, reply_retried}`.
 
 ### `_generation_kwargs(model, max_new_tokens)`
 
@@ -257,7 +273,7 @@ not recognise.
 ## `tag_extractor.py` — raw output → tags
 
 `extract_tags_from_result(result, model_task, threshold, stop_words,
-probabilities) → (category, keywords, description, probabilities)`:
+probabilities, repairs) → (category, keywords, description, probabilities)`:
 
 - **image-classification**: top-5 labels above threshold become keywords.
 - **zero-shot**: best label above threshold becomes the category.
@@ -266,6 +282,19 @@ probabilities) → (category, keywords, description, probabilities)`:
   directly, otherwise `json_utils.extract_dict_from_text` is tried with the
   expected keys; when that fails the whole text becomes the description after
   stripping known prefixes, and the category falls back to `[AI: No Result]`.
+- `repairs` is an optional list the caller passes in: it receives one short
+  reason per rewrite the JSON hunt needed (`missing member separator`,
+  `truncated payload`), and stays empty for a reply that parsed as it arrived.
+  `inference_engine` forwards it as the response's `reply_repairs`, which the
+  host turns into a per-item `Success (repaired)` status — so a batch whose
+  replies were being mangled is visible instead of looking clean.
+- `vlm_reply_text` returns a pipeline result's reply as text (chat turn or plain
+  string, `""` when there is none or the pipeline already parsed it), and
+  `classify_reply`/`reply_is_malformed`/`reads_better_than` grade it as
+  `REPLY_CLEAN` (parsed as it arrived), `REPLY_REPAIRED` (had to be rebuilt) or
+  `REPLY_UNREADABLE` (no payload — the raw-text fallback). The grade is the same
+  hunt the extractor runs, so the retry decision below rests on what the tags
+  will actually be built from, and costs no model time.
 - `_sanitize_category` normalises string/list/malformed categories;
   `_normalize_keywords` flattens strings/lists; `to_title_case` applies the
   original Title-Case rules (compound words, underscores, slashes, all-caps,
@@ -278,6 +307,15 @@ probabilities) → (category, keywords, description, probabilities)`:
 `safe_parse_python_literal` (length/depth guarded JSON → `ast.literal_eval`),
 `extract_dict_from_text` (fenced code blocks → balanced-brace scan → truncated
 payload repair), with bracketed-string awareness to avoid false delimiters.
+
+A fifth pass, `_repair_missing_member_separators`, puts back the member boundary
+the model dropped: where a value ends its line without its closing quote and the
+next line opens `"key":` (observed 2026-10-10, every item of a batch), it closes
+the value and adds the comma, in front of the line break rather than after it. It
+only fires beside a quote that opens a key the caller asked for, so a payload that
+parses is returned untouched; without it nothing could read such a reply at all
+(the unclosed quote swallows the object's closing brace, so no span is found) and
+the whole reply was written into the Description field.
 
 ---
 

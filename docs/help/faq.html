@@ -22,7 +22,7 @@ and no API key to configure, by design.</p>
 <p>A small vision-language model, <code>LiquidAI/LFM2.5-VL-450M</code> by
 default, chosen because it is quick enough on an ordinary CPU. You can point Step
 2 at another compatible model id, and the list shows what is already in the local
-cache. See <a href="step2-engine.html">Step 2 &mdash; Tagging Engine</a>.</p>
+cache. See <a href="step2-engine.html">Inference engine</a>.</p>
 
 <h2>Why does the app insist on building an "inference server"?</h2>
 
@@ -34,7 +34,7 @@ href="first-run-sidecar.html">Build the inference server</a>.</p>
 <h2>Why did only keywords get tagged?</h2>
 
 <p>Because only keywords were selected. The three boxes under
-<span class="ui">Tag fields</span> in Step 2 decide which of the model's three
+<span class="ui">Tag fields</span> in the engine section decide which of the model's three
 results are written, and the choice is remembered. It is the first thing to check
 when a field is missing &mdash; ahead of the model, the prompt and the server. See
 <a href="step2-tag-fields.html#diagnose">the diagnosis recipe</a>.</p>
@@ -88,7 +88,7 @@ runs can fight over the same files &mdash; give each run a different scope.</p>
 
 <h2>Where are my settings kept?</h2>
 
-<p>Step 1's connection and Step 2's engine settings live in the Windows registry
+<p>The data source connection and the engine settings live in the Windows registry
 under <code>HKCU\Software\Synapic</code>, per user. The saved system prompts are a
 JSON file in <span class="path">%APPDATA%\Synapic</span>, and the model cache
 lives in <span class="path">%LOCALAPPDATA%\Synapic\models</span>. Full list:
@@ -102,15 +102,15 @@ scoring being unavailable is expected. Leave them at their defaults.</p>
 
 <h2>Can I see the tags before they are written?</h2>
 
-<p>Not in the wizard &mdash; the batch writes as it goes. The practical
+<p>Not as a step of its own &mdash; the batch writes as it goes. The practical
 alternative is to run against a copy of the images (or a scratch collection),
-review the results in Step 4, and then run the real target with the settings you
+review the results, and then run the real target with the settings you
 settled on.</p>
 
 <h2>What does F1 open?</h2>
 
 <p>This help, at the topic for what you are looking at: the setup panel while no
-inference server exists, otherwise the step on screen. The toolbar's
+inference server exists, otherwise the view on screen. The sidebar's
 <span class="ui">Help</span> button opens the contents instead. On Windows
 Synapic uses the compiled <span class="path">Synapic.chm</span> beside
 <span class="path">Synapic.exe</span> when that file is there, and the same

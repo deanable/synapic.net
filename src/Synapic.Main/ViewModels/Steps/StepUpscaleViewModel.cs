@@ -180,6 +180,15 @@ public partial class StepUpscaleViewModel : RunStateViewModel
 
     // ── Run state (shared with every operation) ─────────────────────────────
 
+    /// <summary>The bar's primary action in the upscaling workflow's own words.</summary>
+    public override string RunActionLabel => "Run upscale";
+
+    /// <summary>
+    /// Stop is this mode's Stop. It is on the shared bar now, next to the same
+    /// progress and the same log the page used to show a second time.
+    /// </summary>
+    public override IRelayCommand? StopAction => StopCommand;
+
     protected override void NotifyRunCommandsCanExecuteChanged()
     {
         StartCommand.NotifyCanExecuteChanged();

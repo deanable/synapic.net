@@ -20,35 +20,60 @@
       <Setter Property="BoxShadow" Value="0 1 4 0 #22000000" />
     </Style>
 
-    <!-- Start-screen route cards: three equal, tall, self-describing choices. -->
-    <Style Selector="Button.routeCard">
-      <Setter Property="Padding" Value="18" />
-      <Setter Property="MinHeight" Value="150" />
-      <Setter Property="CornerRadius" Value="10" />
-      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-    </Style>
-
-    <!-- The operation view's mode rail (ui-design §2.2/§6.2): one button per
-         mode on the left of the template, the open one lit. "active" is derived
-         from Shell.Current (MainWindowViewModel.Is*ModeActive), so the rail has
-         no selection state of its own and pressing the open mode's button keeps
-         it open rather than toggling the view empty. -->
-    <Style Selector="Button.modeTab">
+    <!-- The left sidebar's navigation row (docs/mock-up/Mockup.svg): one row per
+         view — Settings first, then the three processing operations — the open
+         one lit. "active" is derived from Shell.Current
+         (MainWindowViewModel.IsSettingsVisible / Is*ModeActive), so the sidebar
+         keeps no selection of its own: pressing the open view's own row leaves it
+         open instead of toggling the view empty, and there is one answer to
+         "which view is open". -->
+    <Style Selector="Button.navItem">
       <Setter Property="HorizontalAlignment" Value="Stretch" />
       <Setter Property="HorizontalContentAlignment" Value="Left" />
-      <Setter Property="Padding" Value="12,8" />
+      <Setter Property="Padding" Value="12,10" />
       <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="FontSize" Value="14" />
     </Style>
-    <Style Selector="Button.modeTab.active">
+    <Style Selector="Button.navItem.active">
       <Setter Property="Background" Value="{DynamicResource SynapicAccentBrush}" />
       <Setter Property="Foreground" Value="White" />
       <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
-    <Style Selector="Button.modeTab.active /template/ ContentPresenter">
+    <Style Selector="Button.navItem.active /template/ ContentPresenter">
       <Setter Property="TextElement.Foreground" Value="White" />
     </Style>
-    <Style Selector="Button.modeTab.active:pointerover /template/ ContentPresenter">
+    <Style Selector="Button.navItem.active:pointerover /template/ ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource SynapicAccentHoverBrush}" />
+    </Style>
+
+    <!-- The sidebar itself: a fixed-width column of navigation rows, the app
+         title above and the server status pinned below. -->
+    <Style Selector="Border.sidebar">
+      <Setter Property="MinWidth" Value="210" />
+      <Setter Property="Padding" Value="12" />
+    </Style>
+
+    <!-- Compact form (MainLayout.ApplyCompact): below the width threshold the
+         sidebar collapses to a narrow icon-only rail. The navigation rows keep
+         their icon and drop their label; the title and the wide status lines go
+         with them, and the Help entry shortens. The class is set from the shell's
+         own width, because Avalonia has no XAML breakpoint. -->
+    <Style Selector="Border.sidebar.compact">
+      <Setter Property="MinWidth" Value="64" />
+      <Setter Property="MaxWidth" Value="64" />
+      <!-- A tighter padding, or the row's own padding would leave the 20px icon
+           only 14px to sit in (the layout audit caught exactly that clip). -->
+      <Setter Property="Padding" Value="6" />
+    </Style>
+    <Style Selector="Border.sidebar.compact TextBlock.navLabel">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="Border.sidebar.compact TextBlock.sidebarWide">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="Border.sidebar.compact Button.navItem">
+      <Setter Property="Padding" Value="0,10" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
     </Style>
 
     <!-- Primary action (proposal §5.2: one obvious primary action per view). -->
@@ -105,11 +130,6 @@
       <Setter Property="Margin" Value="0,0,0,12" />
     </Style>
 
-    <!-- The numbered sidebar's styles — its item, active-item, mode-header and
-         group classes — went with the sidebar itself: navigation is Dashboard ⇄
-         operation now, and the mode's own entry is the dashboard panel. A
-         re-introduced sidebar entry would need its styling back, which is the
-         point — this phase deletes the chrome rather than hiding it. -->
   </Application.Styles>
 
   <Application.Resources>

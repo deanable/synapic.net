@@ -3,6 +3,7 @@ suggestion, fuzzy matching — no network or torch downloads required.
 """
 
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -206,11 +207,33 @@ class TestDownloadProgress:
 
     def test_finished_hidden_after_ttl(self, monkeypatch):
         model_loader.reset_download_state()
+
+        # A hand-wound clock, because the completion TTL is a wall-clock
+        # comparison and the test has to age the download out *for real*.
+        # Windows' time.time() only ticks every ~15.6 ms, so a test that marks a
+        # download complete and then shortens the TTL to 0 races the clock: in
+        # the same tick ``now - finished_at`` is exactly 0.0, which is still
+        # inside the TTL, and the finished download stays visible. Freezing the
+        # clock and winding it forward past the production TTL removes the race
+        # and keeps the shipped TTL and the real comparison under test.
+        now = [1_000_000.0]
+        monkeypatch.setattr(time, "time", lambda: now[0])
+
         model_loader.mark_download_started("org/model")
         assert model_loader.get_active_download() is not None
 
-        monkeypatch.setattr(model_loader, "_DOWNLOAD_COMPLETE_TTL_SECONDS", 0)
         model_loader.mark_download_complete("org/model", done=10, total=10)
+        # Inside the TTL a finished download is still reported (the /health bar
+        # the user sees right after a download).
+        assert model_loader.get_active_download() is not None
+
+        now[0] += model_loader._DOWNLOAD_COMPLETE_TTL_SECONDS + 1
+        assert model_loader.get_active_download() is None
+
+        # ...and a failed download ages out the same way (same TTL, same clock).
+        model_loader.mark_download_failed("org/model", "hub down")
+        assert model_loader.get_active_download() is not None
+        now[0] += model_loader._DOWNLOAD_COMPLETE_TTL_SECONDS + 1
         assert model_loader.get_active_download() is None
 
     def test_active_download_preferred_over_finished(self):

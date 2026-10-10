@@ -37,7 +37,7 @@ numbers.</p>
 <p>Concurrency: the app tags images in parallel slots, so the last stretch of
 a batch can look uneven while slots drain. The progress bar counts finished
 items, not started ones. See
-<a href="step3-process.html">Step 3 &mdash; Process</a>.</p>
+<a href="step3-process.html">Running a tagging batch</a>.</p>
 
 <h2>Better tags</h2>
 
@@ -52,7 +52,7 @@ belong in the system prompt; the output shape belongs to the built-in
 instruction. See <a href="step2-prompts.html">Prompts</a>.</li>
 <li><span class="term">Check the tag fields before blaming the model.</span>
 If a field is missing, the first suspect is the matching unticked box in
-Step 2, not the prompt:
+the engine section, not the prompt:
 <a href="step2-tag-fields.html#diagnose">the diagnosis recipe</a>.</li>
 <li><span class="term">Candidate labels pin the vocabulary.</span> If the
 keywords drift into synonyms you did not want, give the scorer the exact list
@@ -83,7 +83,7 @@ written to your images</a>.</p>
 <ul>
 <li><span class="term">Count before you run.</span> The record count under the
 source panel answers "how much work is this?" and keeps itself current as you
-change the scope. So does the summary line in Step 4 afterwards.</li>
+change the scope. So does the summary line in the report afterwards.</li>
 <li><span class="term">Rough pass now, proper pass later.</span> A 200px
 thumbnail triage over the whole catalog, then a full-scale run over the saved
 search that matters, is a legitimate plan &mdash; the second run overwrites
@@ -92,7 +92,7 @@ the first rather than adding to it.</li>
 <span class="ui">Verify Daminion Writes</span> button re-reads what the server
 actually has, which settles "did it really save?" without opening the catalog
 by hand.</li>
-<li><span class="term">Failed rows are retryable.</span> Step 4's
+<li><span class="term">Failed rows are retryable.</span> The report's
 <span class="ui">Retry Failed</span> re-runs exactly the rows that broke
 (transient errors, a dropped connection) without touching the successes.</li>
 </ul>
@@ -125,7 +125,7 @@ before a first pass and you tag each photo once, not three times:
 
 <table>
 <tr><th class="setting">Thing</th><th>Good to know</th></tr>
-<tr><td>Saved prompt history</td><td>Highlight an entry in the Step 2 presets dropdown and press <kbd>Delete</kbd> to prune it &mdash; the list is its own file (<span class="path">%APPDATA%\Synapic\system-prompts.json</span>), never your current settings. See <a href="step2-prompts.html">Prompts</a>.</td></tr>
+<tr><td>Saved prompt history</td><td>Highlight an entry in the engine section's presets dropdown and press <kbd>Delete</kbd> to prune it &mdash; the list is its own file (<span class="path">%APPDATA%\Synapic\system-prompts.json</span>), never your current settings. See <a href="step2-prompts.html">Prompts</a>.</td></tr>
 <tr><td>Logs</td><td><span class="path">logs\synapic.log</span> next to the app; the previous ten runs are rotated into <span class="path">logs\archives\</span> and crash snapshots land in <span class="path">logs\crashes\</span>. Nothing is ever uploaded. See <a href="admin-logs-support.html">Logs, crashes and support</a>.</td></tr>
 <tr><td>Model cache</td><td><span class="path">%LOCALAPPDATA%\Synapic\models</span> (off Windows: <span class="path">~/.cache/synapic/models</span>) is shared by every Synapic install for your user. Deleting it re-downloads &mdash; it is disk, not configuration.</td></tr>
 <tr><td>Updating</td><td>Re-running the installer upgrades in place; settings survive because they live outside the install folder (registry + config.json). The sidecar updates from its own row: <span class="ui">Build sidecar</span> and <span class="ui">Download</span> while a row is missing or outdated, a disabled <span class="ui">Up to date</span> marker when it is current. See <a href="admin-install.html">Installing and upgrading</a>.</td></tr>
@@ -137,11 +137,11 @@ before a first pass and you tag each photo once, not three times:
 <table>
 <tr><th class="setting">Shortcut / control</th><th>What it does</th></tr>
 <tr><td><kbd>F1</kbd></td><td>Opens this help at what you are looking at: a section's topic, or the exact row of the setting under the pointer. Press it once anywhere in the app.</td></tr>
-<tr><td>Toolbar <span class="ui">Help</span></td><td>Opens the help home page (contents, index and search are in the help window itself).</td></tr>
-<tr><td><kbd>Delete</kbd> in Step 2</td><td>Removes the highlighted entry from the saved system-prompt list.</td></tr>
+<tr><td>Sidebar <span class="ui">Help</span></td><td>Opens the help home page (contents, index and search are in the help window itself).</td></tr>
+<tr><td><kbd>Delete</kbd> in the engine section</td><td>Removes the highlighted entry from the saved system-prompt list.</td></tr>
 <tr><td>The record count / <span class="ui">Recount</span></td><td>Size of the run, before the run &mdash; automatic, with a manual re-ask beside it.</td></tr>
-<tr><td><span class="ui">Pause / Abort</span> in Step 3</td><td>Pause finishes the items already handed out; Abort stops after the current ones and keeps what completed.</td></tr>
-<tr><td><span class="ui">Retry Failed</span> in Step 4</td><td>Re-runs only the rows that failed.</td></tr>
+<tr><td><span class="ui">Pause / Abort</span> in the Tagging view</td><td>Pause finishes the items already handed out; Abort stops after the current ones and keeps what completed.</td></tr>
+<tr><td><span class="ui">Retry Failed</span> in the report</td><td>Re-runs only the rows that failed.</td></tr>
 </table>
 
 <div class="seealso">

@@ -1,0 +1,117 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Synapic.Main.ViewModels"
+             xmlns:help="using:Synapic.Main.Services"
+             x:Class="Synapic.Main.Views.Settings.InferenceServerSection"
+             x:DataType="vm:MainWindowViewModel">
+
+  <!-- §5 Inference server: the local sidecar that runs the models — status, the
+       Start/Stop/Build controls, the auto-launch toggle, the background download
+       progress and one row per buildable variant (build from source, or fetch the
+       prebuilt executable). It is the Settings view's own section now, bound to
+       the shell it operates (its DataContext is the MainWindowViewModel), so the
+       server is configured and driven from exactly one place. -->
+  <StackPanel Spacing="8" help:HelpScope.Topic="first-run-sidecar.html">
+    <TextBlock Text="Inference server" Classes="sectionTitle" />
+    <TextBlock Classes="hint" TextWrapping="Wrap"
+               Text="The local sidecar that runs the models. Nothing can be tagged until one is ready; the rest of the application stays disabled until then." />
+
+    <WrapPanel>
+      <Ellipse Width="12" Height="12" VerticalAlignment="Center" Margin="0,0,8,8"
+               Fill="{Binding ServerBrush}" />
+      <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
+                 FontWeight="SemiBold" FontSize="12" Margin="0,0,12,8"
+                 TextWrapping="Wrap" />
+      <TextBlock Text="{Binding ServerDeviceText}"
+                 IsVisible="{Binding IsServerDeviceVisible}"
+                 VerticalAlignment="Center" FontSize="11" FontWeight="SemiBold"
+                 Opacity="0.75" Margin="0,0,12,8"
+                 ToolTip.Tip="Compute device the inference server reports for the loaded model." />
+    </WrapPanel>
+
+    <WrapPanel>
+      <Button Content="Start Server" Command="{Binding StartServerCommand}"
+              Margin="0,0,8,8" />
+      <Button Content="Stop Server" Command="{Binding StopServerCommand}"
+              Margin="0,0,8,8" />
+      <Button Content="Build Server" Command="{Binding BuildServerCommand}"
+              IsVisible="{Binding IsBuildButtonVisible}" Margin="0,0,8,8" />
+      <CheckBox Content="Start the server with the app"
+                IsChecked="{Binding AppSettings.AutoLaunchSidecar}" VerticalAlignment="Center"
+                Margin="0,0,8,8"
+                ToolTip.Tip="On: the sidecar starts with the app and stops with it. Off: Start/Stop only, by hand." />
+    </WrapPanel>
+
+    <!-- What the server reports about the device it is really using, when it is
+         not the one selected. Silent otherwise. -->
+    <TextBlock Text="{Binding DeviceNotice}"
+               IsVisible="{Binding IsDeviceNoticeVisible}"
+               FontSize="11" Foreground="{DynamicResource SynapicWarningBrush}"
+               TextWrapping="Wrap" />
+
+    <!-- Why the server refused to start (a stale build, or another launch
+         failure). Shown here, next to the Build/Download controls that fix it. -->
+    <TextBlock Text="{Binding ServerErrorText}"
+               IsVisible="{Binding IsServerErrorVisible}"
+               FontSize="11" Foreground="{DynamicResource SynapicWarningBrush}"
+               TextWrapping="Wrap" />
+
+    <StackPanel Orientation="Horizontal" Spacing="6"
+                IsVisible="{Binding IsDownloadVisible}">
+      <ProgressBar Value="{Binding DownloadPercent}" Maximum="100"
+                   Width="150" Height="6" VerticalAlignment="Center" />
+      <TextBlock Text="{Binding DownloadText}" VerticalAlignment="Center"
+                 FontSize="11" Opacity="0.85" TextWrapping="Wrap" />
+    </StackPanel>
+
+    <Separator Margin="0,2" />
+
+    <!-- One row per buildable variant (CPU / CUDA): build it from source, or
+         fetch the prebuilt one from the release. -->
+    <TextBlock Text="Platform variants" FontWeight="SemiBold" FontSize="12" />
+    <ItemsControl ItemsSource="{Binding SidecarVariants}">
+      <ItemsControl.ItemTemplate>
+        <DataTemplate x:DataType="vm:SidecarVariantViewModel">
+          <StackPanel Orientation="Vertical" Margin="0,3">
+            <WrapPanel>
+              <Ellipse Width="10" Height="10" VerticalAlignment="Center"
+                       Margin="0,0,8,6" Fill="{Binding StatusBrush}" />
+              <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"
+                         VerticalAlignment="Center" Margin="0,0,8,6" />
+              <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
+                         Opacity="0.8" Margin="0,0,8,6" />
+              <TextBlock Text="{Binding Rid}" VerticalAlignment="Center"
+                         Opacity="0.45" FontSize="11" Margin="0,0,8,6" />
+              <ProgressBar IsVisible="{Binding IsBusy}"
+                           IsIndeterminate="{Binding IsBuildIndeterminate}"
+                           Value="{Binding BuildPercent}" Maximum="100"
+                           Width="170" Height="6" VerticalAlignment="Center"
+                           Margin="0,0,8,6" />
+              <Button Content="Build sidecar" Command="{Binding BuildCommand}"
+                      IsVisible="{Binding IsBuildButtonVisible}" Margin="0,0,8,6"
+                      ToolTip.Tip="Compile this variant from source; replaces an outdated executable with fresh bytes" />
+              <Button Content="Download" Command="{Binding DownloadCommand}"
+                      IsVisible="{Binding IsDownloadButtonVisible}" Margin="0,0,8,6"
+                      ToolTip.Tip="Fetch the prebuilt executable from the latest GitHub release instead of compiling it; replaces an outdated executable" />
+              <Button Content="Up to date" IsEnabled="False"
+                      IsVisible="{Binding IsUpToDateVisible}" Margin="0,0,8,6"
+                      ToolTip.Tip="Nothing to do: this executable matches the source it was built from, and the GitHub release carries nothing newer for it." />
+              <TextBlock Text="{Binding BuildStage}" IsVisible="{Binding IsBusy}"
+                         VerticalAlignment="Center" Opacity="0.8" FontSize="11"
+                         TextTrimming="CharacterEllipsis" MaxWidth="280"
+                         Margin="0,0,8,6" />
+            </WrapPanel>
+            <TextBlock Text="{Binding Detail}" Opacity="0.6" FontSize="11"
+                       TextWrapping="Wrap" Margin="18,2,0,0" />
+            <TextBlock Text="{Binding StaleText}" IsVisible="{Binding IsStale}"
+                       Foreground="{DynamicResource SynapicWarningBrush}"
+                       FontSize="11" TextWrapping="Wrap" Margin="18,2,0,0" />
+            <TextBlock Text="{Binding GitHubUpdateText}" IsVisible="{Binding IsGitHubUpdate}"
+                       Foreground="{DynamicResource SynapicWarningBrush}"
+                       FontSize="11" TextWrapping="Wrap" Margin="18,2,0,0" />
+          </StackPanel>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+  </StackPanel>
+</UserControl>

@@ -10,11 +10,9 @@ using Synapic.Main.ViewModels.Operations;
 using Synapic.Main.ViewModels.Steps;
 using Synapic.Shared.Contracts;
 
-namespace Synapic.Main.ViewModels;
-
-/// <summary>
-/// User-facing state of the inference server, shown by the always-visible
-/// toolbar indicator: black = not detected (no sidecar executable), red =
+namespace Synapic.Main.ViewModels;    /// <summary>
+    /// User-facing state of the inference server, shown by the always-visible
+    /// sidebar indicator: black = not detected (no sidecar executable), red =
 /// stopped, orange = starting, green = running, orange-red = error,
 /// blue = building.
 /// </summary>
@@ -48,6 +46,8 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly Func<string?> _findSidecarExecutable;
     private readonly Func<string, string?> _findSidecarVariant;
     private string? _detectedExe;
+    private string? _detectedStale;
+    private string? _lastServerErrorMessage;
     private CancellationTokenSource? _healthPollCts;
     private string _lastDownloadStatus = "";
     private string _lastReportedDevice = "";
@@ -212,12 +212,16 @@ public partial class MainWindowViewModel : ViewModelBase
     /// </summary>
     public ShellViewModel Shell { get; }
 
-    // ── Dashboard ⇄ operation, derived from Shell.Current ─────────────────
+    // ── Settings ⇄ operation, derived from Shell.Current ─────────────────
 
-    /// <summary>The dashboard is what is on screen (nothing is open).</summary>
-    public bool IsDashboardVisible => Shell.Current is null;
+    /// <summary>
+    /// The Settings view is what is on screen when no operation is open (docs/
+    /// mock-up/Mockup.svg, first sidebar row): the app opens here, and the
+    /// sidebar's Settings row is lit whenever this is true.
+    /// </summary>
+    public bool IsSettingsVisible => Shell.Current is null;
 
-    /// <summary>An operation is open, so the template is what is on screen.</summary>
+    /// <summary>An operation is open, so a processing view is what is on screen.</summary>
     public bool IsOperationVisible => Shell.Current is not null;
 
     // ── The mode rail (ui-design §2.2/§6.2) ───────────────────────────────
@@ -241,17 +245,13 @@ public partial class MainWindowViewModel : ViewModelBase
     private bool IsModeOpen(string key) => Shell.Current?.Key == key;
 
     /// <summary>
-    /// The open operation's name, or an empty string on the dashboard
-    /// (ui-design §6.1 breadcrumb: app title · Dashboard / Tag).
+    /// The open operation's name, or an empty string on the Settings view.
     /// </summary>
     public string OperationTitle => Shell.Current?.Title ?? "";
 
-    /// <summary>The shell chrome's breadcrumb text (§6.1).</summary>
-    public string Breadcrumb => Shell.Current is null ? "Dashboard" : $"Dashboard / {Shell.Current.Title}";
-
     /// <summary>
-    /// Run lock (ui-design §6.3): while a batch runs, leaving the mode is
-    /// locked — the dashboard entry is disabled and says why. Entering the mode
+    /// Run lock (ui-design §6.3): while a batch runs, the sidebar's rows are
+    /// disabled — a run is not navigated away from mid-flight. Entering the view
     /// is free (D6); only the exit is held until the run finishes or is stopped.
     /// </summary>
     public bool IsNavigationLocked => Operations.IsRunning;
@@ -273,10 +273,9 @@ public partial class MainWindowViewModel : ViewModelBase
     /// </summary>
     private void NotifyNavigationChanged()
     {
-        OnPropertyChanged(nameof(IsDashboardVisible));
+        OnPropertyChanged(nameof(IsSettingsVisible));
         OnPropertyChanged(nameof(IsOperationVisible));
         OnPropertyChanged(nameof(OperationTitle));
-        OnPropertyChanged(nameof(Breadcrumb));
         OnPropertyChanged(nameof(ContextHelpTopic));
         // The mode rail's lit button follows the same one write as the rest of
         // the chrome: a rail that kept its own selection would be a second
@@ -289,11 +288,10 @@ public partial class MainWindowViewModel : ViewModelBase
     // ── Settings (ui-design §5/§6.1, D3) ─────────────────────────────────
 
     /// <summary>
-    /// The shell's Settings shortcut (ui-design §6.1): app-wide settings live on
-    /// the dashboard's Settings panel, so the shortcut goes there. Every
-    /// per-operation parameter is inline in the operation template's Parameters
-    /// region instead — the three modal settings dialogs are retired (D3/D-02),
-    /// so nothing here builds a window any more.
+    /// The Settings shortcut: every configuration lives on the Settings view
+    /// (docs/mock-up/Mockup.svg, first sidebar row), so the shortcut goes there.
+    /// It is the same move as <see cref="GoHomeCommand"/>; the sidebar's Settings
+    /// row binds that one. Nothing here builds a window (D3/D-02).
     /// </summary>
     [RelayCommand]
     private void Settings() => Shell.Home();
@@ -323,15 +321,16 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Back to the dashboard (ui-design §6.2: always available, and it resumes
-    /// where you left off — the configured source, the mode's own parameters and
-    /// its last output all survive the trip).
+    /// Back to the Settings view (docs/mock-up/Mockup.svg: the sidebar's first
+    /// row, and the app's home — always available, and it resumes where you left
+    /// off: the configured source, the operation's own settings and its last
+    /// output all survive the trip).
     /// </summary>
     [RelayCommand]
     private void GoHome()
     {
         Shell.Home();
-        SynapicLog.Info(nameof(MainWindowViewModel), "Returned to the dashboard");
+        SynapicLog.Info(nameof(MainWindowViewModel), "Returned to the Settings view");
     }
 
     // ── Help (docs/help; see HelpService) ──────────────────────────────────
@@ -348,7 +347,7 @@ public partial class MainWindowViewModel : ViewModelBase
     /// F1 fallback: the topic for the state of the app - the sidecar topic while
     /// that panel is what is gating them, otherwise the open operation's own
     /// topic from the operation contract (<see cref="IOperationViewModel.HelpTopic"/>),
-    /// and the help home on the dashboard. The window's key handler asks
+    /// and the help home on the Settings view. The window's key handler asks
     /// <see cref="Synapic.Main.Services.HelpScope"/> first, so focus inside an
     /// annotated scope (a section, or one setting) opens that scope's topic
     /// instead; this is what applies when focus sits in nothing annotated.
@@ -475,6 +474,21 @@ public partial class MainWindowViewModel : ViewModelBase
     /// <summary>True once a sidecar executable exists, so the server can be started.</summary>
     public bool IsSidecarReady => _detectedExe is not null;
 
+    /// <summary>
+    /// True when the detected executable predates the sidecar source (dev
+    /// checkouts only): the service refuses to launch it, so a run cannot start
+    /// from bytes older than the code. The setup panel that offers the fix is
+    /// already held open by <see cref="IsSidecarPanelVisible"/>.
+    /// </summary>
+    public bool IsSidecarStale => _detectedStale is not null;
+
+    /// <summary>Why the workspace stays blocked while the executable is stale.</summary>
+    public string SidecarStaleText => _detectedStale is null
+        ? string.Empty
+        : $"The inference server is out of date and cannot run: {_detectedStale}. " +
+          "Rebuild it (Build sidecar) or download the prebuilt executable in the Inference server section below, " +
+          "then start the server again.";
+
     /// <summary>True when nothing has been built yet - the blocking setup state.</summary>
     public bool IsSidecarRequired => !IsSidecarReady;
 
@@ -494,7 +508,7 @@ public partial class MainWindowViewModel : ViewModelBase
     /// sidecar: nothing can be tagged, so the rest of the UI stays disabled
     /// until at least one variant is built.
     /// </summary>
-    public bool IsWorkspaceEnabled => IsSidecarReady;
+    public bool IsWorkspaceEnabled => IsSidecarReady && !IsSidecarStale;
 
     /// <summary>Status dot color for the always-visible server indicator.</summary>
     public IBrush ServerBrush => ServerState switch
@@ -513,6 +527,18 @@ public partial class MainWindowViewModel : ViewModelBase
     private string StaleServerSuffix => _sidecar.StaleBuildNotice is null
         ? ""
         : " \u2014 stale build, rebuild recommended";
+
+    /// <summary>
+    /// The reason the server last refused to run (a stale build, or another
+    /// launch failure) - shown as a warning so a blocked run is explained, never
+    /// silent. Cleared whenever the server leaves the error state.
+    /// </summary>
+    [ObservableProperty]
+    private string? _serverErrorText;
+
+    public bool IsServerErrorVisible => ServerErrorText is not null;
+
+    partial void OnServerErrorTextChanged(string? value) => OnPropertyChanged(nameof(IsServerErrorVisible));
 
     // ── Which device the server is really using ────────────────────────────
 
@@ -599,6 +625,9 @@ public partial class MainWindowViewModel : ViewModelBase
             DeviceNotice = null;
             _lastReportedDevice = "";
         }
+        // The last refusal (a stale build, or another launch failure) belongs to
+        // the error state; keep it only while that state is current.
+        ServerErrorText = value is ServerUiState.Error ? _lastServerErrorMessage : null;
         EnsureHealthPolling(value is ServerUiState.Starting or ServerUiState.Running);
         NotifyCommands();
 
@@ -626,6 +655,8 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(IsSidecarReady));
         OnPropertyChanged(nameof(IsSidecarRequired));
+        OnPropertyChanged(nameof(IsSidecarStale));
+        OnPropertyChanged(nameof(SidecarStaleText));
         OnPropertyChanged(nameof(IsSidecarPanelVisible));
         OnPropertyChanged(nameof(IsWorkspaceEnabled));
     }
@@ -857,6 +888,9 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private void OnSidecarStatusChanged(object? sender, SidecarStatusChangedEventArgs e)
     {
+        // Captured before SetState: the state transition reads it to render the
+        // error banner, and a stale refusal arrives as SidecarStatus.Error.
+        _lastServerErrorMessage = e.Status == SidecarStatus.Error ? e.Message : null;
         SetState(e.Status switch
         {
             SidecarStatus.Stopped => ServerUiState.Stopped,
@@ -902,6 +936,12 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         _detectedExe = exe;
+        // Staleness of the executable this shell would launch: The service
+        // refuses a stale build, so the workspace must stay blocked until it is
+        // rebuilt or replaced - no run can start from old bytes.
+        _detectedStale = exe is null
+            ? null
+            : InferenceSidecarService.DescribeStaleness(exe, InferenceSidecarService.FindRepoRoot());
         RefreshSidecarVariants();
 
         if (exe is null)

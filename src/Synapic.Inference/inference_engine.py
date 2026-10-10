@@ -19,7 +19,13 @@ from typing import Any, Dict, List, Optional
 
 import config  # noqa: E402 (flat imports: PyInstaller entry compatibility)
 import model_loader  # noqa: E402
-from tag_extractor import extract_tags_from_result  # noqa: E402
+from tag_extractor import (  # noqa: E402
+    extract_tags_from_result,
+    reads_better_than,
+    reply_excerpt,
+    reply_is_malformed,
+    vlm_reply_text,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -39,8 +45,9 @@ logger = logging.getLogger(__name__)
 # Keep the key names in sync with ``tag_extractor.VLM_FIELD_ALIASES``, and keep
 # the example's values generic: a plausible example gets copied verbatim.
 DEFAULT_VLM_USER_PROMPT = (
-    "Describe this image and reply with exactly one JSON object - nothing "
-    "else, no markdown, no code fences, no text before or after it.\n"
+    "Describe this image and reply with exactly one JSON object, on one "
+    "single line - nothing else, no markdown, no code fences, no line breaks "
+    "anywhere in the reply, no text before or after it.\n"
     "Use exactly these three keys, spelled exactly like this, and use double "
     "quotes for every key and string value:\n"
     '  "description": one or two sentences describing the image, written on a '
@@ -51,6 +58,46 @@ DEFAULT_VLM_USER_PROMPT = (
     'Shape: {"description": "words here", "category": "word", '
     '"keywords": ["tag", "tag"]}'
 )
+
+
+# Sent as the user turn of the one retry a malformed reply gets. It repeats the
+# format rules that matter and shows the model what it actually wrote, which is
+# what makes the second attempt a rewrite of a known-bad reply rather than a
+# fresh guess at the image (a fresh guess loses the first answer's content).
+RETRY_INSTRUCTION = (
+    "\n\nYour previous reply could not be read as JSON. Reply again with the same "
+    "information, as exactly one line of strict JSON: one object, every key and "
+    "string in double quotes, no line breaks anywhere, no code fences, no text "
+    "before or after it. The reply to fix:\n"
+)
+
+# How much of the broken reply is echoed back to the model. It is a few hundred
+# bytes in practice; the cap only protects the context from a runaway reply.
+RETRY_ECHO_LIMIT = 1500
+
+
+def _expects_a_json_payload(instruction: str) -> bool:
+    """Whether this instruction is asking for a JSON object at all.
+
+    The retry is only for a reply that was *meant* to be JSON. A user who
+    replaced the built-in instruction with prose of their own gets a caption,
+    which is not a failure to repair — retrying every image of such a run would
+    double its cost to fix a problem it does not have.
+    """
+    if instruction == DEFAULT_VLM_USER_PROMPT:
+        return True
+    lowered = instruction.lower()
+    return "json" in lowered or "{" in instruction
+
+
+def _ask_vlm(
+    model: Any, system_prompt: str, image: Any, instruction: str, max_new_tokens: int
+) -> Any:
+    """One chat-style VLM call with the given tag instruction."""
+    return model(
+        text=build_vlm_messages(system_prompt, image, instruction),
+        generate_kwargs=_generation_kwargs(model, max_new_tokens),
+    )
 
 
 def build_vlm_messages(
@@ -229,6 +276,7 @@ def run_inference(
     # Model inference (mirrors processing.py STAGE 2)
     # ------------------------------------------------------------------
     result: Any = None
+    reply_retried = False
 
     if task in [config.MODEL_TASK_IMAGE_TO_TEXT, config.MODEL_TASK_IMAGE_TEXT_TO_TEXT]:
         from PIL import Image
@@ -244,15 +292,57 @@ def run_inference(
                     logger.info(
                         f"Using the custom tag instruction from settings ({len(instruction)} chars)"
                     )
-                messages = build_vlm_messages(system_prompt, img, instruction)
                 try:
-                    result = model(
-                        text=messages,
-                        generate_kwargs=_generation_kwargs(model, max_new_tokens),
-                    )
+                    result = _ask_vlm(model, system_prompt, img, instruction, max_new_tokens)
                 except Exception as e:
                     logger.error(f"VLM inference failed: {e}")
                     raise
+
+                # One more ask before giving up on the format. A small VLM
+                # sometimes wrecks its own JSON (a missing quote, a break inside
+                # the object, a reply cut off mid-string); asking again with the
+                # broken reply in front of it recovers those items instead of
+                # writing the raw reply into Description. Only when a payload
+                # was asked for, only once, and only when the second reply
+                # really reads better than the first - a retry that repeats the
+                # same mistake leaves the tags exactly as they would have been.
+                if _expects_a_json_payload(instruction) and reply_is_malformed(
+                    result, task
+                ):
+                    broken = vlm_reply_text(result)
+                    logger.warning(
+                        "Model reply could not be read as JSON - asking once more: %s",
+                        reply_excerpt(broken),
+                    )
+                    # Marked on the decision, not on the outcome: the item really
+                    # did need a second ask, whether or not that ask produced
+                    # anything.
+                    reply_retried = True
+                    try:
+                        # The model is shown its own reply, verbatim and with its
+                        # line breaks intact: it is being asked to re-format a
+                        # known answer, not to look at the image again.
+                        retry = _ask_vlm(
+                            model,
+                            system_prompt,
+                            img,
+                            RETRY_INSTRUCTION + broken[:RETRY_ECHO_LIMIT],
+                            max_new_tokens,
+                        )
+                    except Exception as e:
+                        # The retry is a second chance, not a requirement: the
+                        # first reply is already in hand, so a retry that fails
+                        # to generate must not fail the item.
+                        logger.warning(f"The retry of the VLM call failed: {e}")
+                    else:
+                        if reads_better_than(retry, result, task):
+                            logger.info("The second reply reads better - using it")
+                            result = retry
+                        else:
+                            logger.warning(
+                                "The second reply did not read any better - keeping the "
+                                "first one"
+                            )
             else:
                 # Standard image-to-text (BLIP, GIT, ...)
                 try:
@@ -288,8 +378,12 @@ def run_inference(
     # ------------------------------------------------------------------
     # Tag extraction (threshold on 0.0-1.0 scale)
     # ------------------------------------------------------------------
+    # Reasons the JSON hunt had to rewrite the model's reply before it could be
+    # read; non-empty marks the item as repaired over the wire, so a batch whose
+    # replies were being mangled does not look like a clean one.
+    reply_repairs: List[str] = []
     category, keywords, description, probabilities = extract_tags_from_result(
-        result, task, threshold=confidence_threshold
+        result, task, threshold=confidence_threshold, repairs=reply_repairs
     )
 
     # A custom instruction is the user's own wording, and a vague one makes the
@@ -327,7 +421,17 @@ def run_inference(
         description = "[AI: No Result]"
         logger.info(f"No tags extracted for item, using placeholder: {description}")
 
-    return _finalize(category, keywords, description, probabilities, score_result, model, started)
+    return _finalize(
+        category,
+        keywords,
+        description,
+        probabilities,
+        score_result,
+        model,
+        started,
+        reply_repairs=reply_repairs,
+        reply_retried=reply_retried,
+    )
 
 
 def _finalize(
@@ -338,6 +442,8 @@ def _finalize(
     score_result: Any,
     model: Any,
     started: float,
+    reply_repairs: Optional[List[str]] = None,
+    reply_retried: bool = False,
 ) -> Dict[str, Any]:
     # Cap keywords (tag-spam guard from the original config).
     keywords = keywords[: config.MAX_KEYWORDS_PER_IMAGE]
@@ -349,6 +455,12 @@ def _finalize(
         "probabilities": probabilities or {},
         "inference_ms": int((time.monotonic() - started) * 1000),
         "model_used": getattr(model, "model_id", None) or model_loader.get_state_snapshot().get("model"),
+        # Empty for a reply that parsed as it arrived; one short reason per
+        # rewrite otherwise (the host shows those items as repaired).
+        "reply_repairs": list(reply_repairs or []),
+        # True when the first reply could not be read as JSON and the model was
+        # asked once more (the tags come from whichever reply read better).
+        "reply_retried": bool(reply_retried),
     }
     if score_result is not None:
         response["scoring"] = score_result.to_plain_dict()

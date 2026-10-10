@@ -47,10 +47,62 @@ public abstract partial class RunStateViewModel : ViewModelBase
     partial void OnIsRunningChanged(bool value)
     {
         OnPropertyChanged(nameof(IsIdle));
+        NotifyRunVisibilityChanged();
         NotifyRunCommandsCanExecuteChanged();
     }
 
-    partial void OnIsPausedChanged(bool value) => NotifyRunCommandsCanExecuteChanged();
+    partial void OnIsPausedChanged(bool value)
+    {
+        NotifyRunVisibilityChanged();
+        NotifyRunCommandsCanExecuteChanged();
+    }
+
+    // ── The mode's own run actions, for the shared run bar ────────────────
+
+    /// <summary>
+    /// The mode's own words for the run's primary action — the bar's one accent
+    /// button (“Start tagging”, “Scan”, “Run upscale”). The bar itself
+    /// stays mode-agnostic: it asks the operation it binds what to say.
+    /// </summary>
+    public virtual string RunActionLabel => "Start";
+
+    /// <summary>
+    /// The mode's Stop-family action while a run is in flight — tagging's Abort,
+    /// dedup's scan Stop, upscaling's Stop — or null for a mode with none. The
+    /// bar renders it from here rather than from the mode's own page, so a run
+    /// has exactly one Stop.
+    /// </summary>
+    public virtual IRelayCommand? StopAction => null;
+
+    /// <summary>What this mode calls its Stop action (tagging aborts).</summary>
+    public virtual string StopActionLabel => "Stop";
+
+    /// <summary>Pause semantics, for the modes that have them (tagging); null otherwise.</summary>
+    public virtual IRelayCommand? PauseAction => null;
+
+    /// <summary>See <see cref="PauseAction"/>.</summary>
+    public virtual IRelayCommand? ResumeAction => null;
+
+    /// <summary>Show Pause only while it can actually pause: running and not paused.</summary>
+    public bool ShowsPause => PauseAction is not null && IsRunning && !IsPaused;
+
+    /// <summary>Show Resume only while the run is paused.</summary>
+    public bool ShowsResume => ResumeAction is not null && IsPaused;
+
+    /// <summary>Show Stop only while a run is in flight.</summary>
+    public bool ShowsStop => StopAction is not null && IsRunning;
+
+    /// <summary>
+    /// The mode's action row follows the run state, so the bar re-reads it on
+    /// every transition — a hidden Pause that stayed enabled would be a button
+    /// that does nothing, and a Stop left behind after a run ends is worse.
+    /// </summary>
+    protected void NotifyRunVisibilityChanged()
+    {
+        OnPropertyChanged(nameof(ShowsPause));
+        OnPropertyChanged(nameof(ShowsResume));
+        OnPropertyChanged(nameof(ShowsStop));
+    }
 
     /// <summary>
     /// Per-operation hook: notify the run commands this operation exposes

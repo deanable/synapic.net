@@ -5,58 +5,42 @@ using Synapic.Main.ViewModels.Steps;
 namespace Synapic.Main.Views.Operation;
 
 /// <summary>
-/// The shared operation template: the three regions every mode renders through
-/// (Data source → Parameters → Output). It hosts the existing panels and pages
-/// and holds no mode logic — only per-mode DataTemplates and the four slots the
-/// host fills:
+/// The shared processing template (docs/mock-up/Mockup.svg): what a run works on
+/// and what it produced. Configuration lives on the Settings view, so this
+/// element hosts only the read-only source summary and the output — it holds no
+/// mode logic, only per-operation DataTemplates and the three slots the host
+/// fills:
 ///
 /// <list type="bullet">
-/// <item><see cref="SharedSource"/> — the one shared source for Region A (D4).</item>
-/// <item><see cref="Parameters"/> — the open mode's own settings (Region B).</item>
-/// <item><see cref="Run"/> — the open mode's run surface and its controls (Region C).</item>
-/// <item><see cref="Report"/> — the open mode's report, when it has one (Region C).</item>
+/// <item><see cref="SharedSource"/> — the read-only source summary.</item>
+/// <item><see cref="Run"/> — the open operation's run surface and controls.</item>
+/// <item><see cref="Report"/> — the open operation's report, when it has one.</item>
 /// </list>
 ///
-/// The slots are Avalonia properties so a mode change really re-renders the
-/// regions: the shell writes <c>Shell.Current</c>, the host reads the new mode's
-/// content off <c>OperationShellViewModel</c> and sets these, and the bindings
-/// follow. (A plain CLR property would be read once and never update, which is
-/// how a mode switch could keep showing the previous mode's form.)
+/// The slots are Avalonia properties so a view change really re-renders the
+/// regions: the shell writes <c>Shell.Current</c>, the host reads the new
+/// operation's content off <c>OperationShellViewModel</c> and sets these, and the
+/// bindings follow. (A plain CLR property would be read once and never update,
+/// which is how a view switch could keep showing the previous operation's run.)
 /// </summary>
 public partial class OperationLayout : UserControl
 {
     /// <summary>
-    /// The one shell-owned data source (docs/ui-design.md D4), handed to Region A
-    /// by the host. The template still knows no mode: it renders whatever source
-    /// state the shell passes in, and Region A binds that single instance — which
-    /// is what makes the source read identically on every route.
+    /// The one shell-owned data source (docs/ui-design.md D4), handed to the
+    /// read-only summary by the host. The template still knows no operation: it
+    /// renders whatever source state the shell passes in, and the summary has no
+    /// inputs — the source is configured on the Settings view.
     /// </summary>
     public static readonly StyledProperty<Step1DatasourceViewModel?> SharedSourceProperty =
         AvaloniaProperty.Register<OperationLayout, Step1DatasourceViewModel?>(nameof(SharedSource));
 
-    /// <summary>Region B's content: the open mode's parameters view model.</summary>
-    public static readonly StyledProperty<object?> ParametersProperty =
-        AvaloniaProperty.Register<OperationLayout, object?>(nameof(Parameters));
-
-    /// <summary>Region C's run content: progress bar plus the mode's run surface.</summary>
+    /// <summary>The output's run content: progress bar plus the operation's run surface.</summary>
     public static readonly StyledProperty<object?> RunProperty =
         AvaloniaProperty.Register<OperationLayout, object?>(nameof(Run));
 
-    /// <summary>Region C's report content, or null for a mode with none.</summary>
+    /// <summary>The output's report content, or null for an operation with none.</summary>
     public static readonly StyledProperty<object?> ReportProperty =
         AvaloniaProperty.Register<OperationLayout, object?>(nameof(Report));
-
-    /// <summary>
-    /// The shell's own view model, for the mode rail's three buttons: their
-    /// commands (the route commands the dashboard panels carry, so entering a
-    /// mode has one implementation) and their derived active flags
-    /// (<c>IsTagModeActive</c> …). Handed in for the same reason the four content
-    /// slots are: a binding written on this element resolves against the
-    /// element's own DataContext, which is the mode's step view model, not the
-    /// shell.
-    /// </summary>
-    public static readonly StyledProperty<object?> ModeRailProperty =
-        AvaloniaProperty.Register<OperationLayout, object?>(nameof(ModeRail));
 
     public OperationLayout()
     {
@@ -69,12 +53,6 @@ public partial class OperationLayout : UserControl
         set => SetValue(SharedSourceProperty, value);
     }
 
-    public object? Parameters
-    {
-        get => GetValue(ParametersProperty);
-        set => SetValue(ParametersProperty, value);
-    }
-
     public object? Run
     {
         get => GetValue(RunProperty);
@@ -85,12 +63,5 @@ public partial class OperationLayout : UserControl
     {
         get => GetValue(ReportProperty);
         set => SetValue(ReportProperty, value);
-    }
-
-    /// <summary>The shell view model behind the mode rail (see <see cref="ModeRailProperty"/>).</summary>
-    public object? ModeRail
-    {
-        get => GetValue(ModeRailProperty);
-        set => SetValue(ModeRailProperty, value);
     }
 }

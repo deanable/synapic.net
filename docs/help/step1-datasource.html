@@ -2,19 +2,19 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
-<title>The source, and Step 1</title>
+<title>The data source</title>
 <link rel="stylesheet" type="text/css" href="help.css">
 </head>
 <body>
 
-<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; The workflow &rsaquo; The source, and Step 1</p>
+<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; Settings &rsaquo; The data source</p>
 
-<h1>The source, and Step 1</h1>
+<h1>The data source</h1>
 
 <p class="lead">A run answers one question first: which images? That is decided on
-the start screen, next to the three workflows, because nothing else about the run
-means anything until it is answered. Step 1 restates the answer and sets how much
-of it to process.</p>
+the Settings view, above everything else, because nothing else about a run
+means anything until it is answered. The same section also sets how much of it
+to process.</p>
 
 <h2>Two kinds of source</h2>
 
@@ -24,7 +24,7 @@ of it to process.</p>
 <tr><td><span class="ui">Daminion Server</span></td><td>Images managed by Daminion, where the catalog is the source of truth.</td><td>Into the Daminion catalog, through its API</td></tr>
 </table>
 
-<p>Choose one on the start screen with the radio buttons under the two lights.
+<p>Choose one in <span class="ui">Settings &rsaquo; Data source</span>, with the radio buttons under the two lights.
 The panels below them are mutually exclusive, and the rest of the panel only
 shows what applies.</p>
 
@@ -39,9 +39,9 @@ answer to "what am I working with?" before you commit to anything:</p>
 <tr><td>Folder</td><td>The chosen folder exists; the line beside it names the folder, and says so when subfolders are included.</td><td>No folder is selected, or the typed path does not exist (a typo, or a drive that is not mounted).</td></tr>
 </table>
 
-<p>The three workflow cards stay disabled until one of the lights is green. That
-is deliberate: entering a route with no source would only lead to a run that
-cannot fetch anything.</p>
+<p>Check the lights before a run: they are the cheapest answer to "is there
+anything here to work on?". A red light means the next batch would fetch
+nothing, so fix the source before starting it.</p>
 
 <h2>Local folder</h2>
 
@@ -75,28 +75,28 @@ to have their own topics:</p>
 
 <ul>
 <li><a href="step1-daminion.html">Connecting to Daminion</a> &mdash; URL,
-credentials, and what happens on connect. That happens on the start screen: the
-form is not hidden in a step.</li>
+credentials, and what happens on connect. The form is not hidden away: it sits in
+this same section, above the scope and the filters.</li>
 <li><a href="step1-scope-filters.html">Scope and filters</a> &mdash; which items
 from the catalog, and which of them still need tagging.</li>
-<li><a href="step1-limits.html">How many items to process</a> &mdash; the ceiling
-and the image size, which stay in Step 1.</li>
+<li><a href="step1-limits.html">How many items, and how much of each image</a> &mdash; the ceiling
+and the image size, which live here with it.</li>
 </ul>
 
-<h2>What Step 1 shows</h2>
+<h2>The processing limits</h2>
 
-<p>Step 1 does not ask for the source a second time. It reports it &mdash; the
-same two lights, the record count, and a line saying the source is changed on the
-start screen (<span class="ui">&#8962; Home</span>) &mdash; and it owns the two
-limits that decide the size of the batch: how many items to take, and how much of
-each image the model sees. See <a href="step1-limits.html">How many items to
-process</a>.</p>
+<p>This section also owns the two limits that decide the size of a batch: how
+many items to take, and how much of each image the model sees. The processing views
+do not ask for the source a second time: they report it read-only &mdash; the same
+two lights and the record count &mdash; so a run is never started blind about what
+it will touch. See <a href="step1-limits.html">How many items, and how much of
+each image</a>.</p>
 
-<h2>What Step 1 is not</h2>
+<h2>What this section is not</h2>
 
 <ul>
 <li>It does not start anything. Choosing a source only fills in the session;
-processing begins in Step 3.</li>
+processing begins in the operation's own view.</li>
 <li>It does not validate that your folder contains images before you leave.
 Synapic tells you when the batch starts, in the log &mdash; "Found 0 image files"
 is the line to look for when a run finishes suspiciously fast.</li>
@@ -118,8 +118,8 @@ folder you used last is still selected when you come back.</p>
 <ul>
 <li><a href="step1-daminion.html">Connecting to Daminion</a></li>
 <li><a href="step1-scope-filters.html">Scope and filters</a></li>
-<li><a href="step1-limits.html">How many items to process</a></li>
-<li><a href="step2-engine.html">Step 2 &mdash; Engine</a></li>
+<li><a href="step1-limits.html">How many items, and how much of each image</a></li>
+<li><a href="step2-engine.html">Inference engine</a></li>
 <li><a href="metadata-written.html">What gets written to your images</a></li>
 </ul>
 </div>

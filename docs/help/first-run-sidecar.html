@@ -13,7 +13,7 @@
 
 <p class="lead">The model does not run inside Synapic. It runs in a second
 program, the inference server, which Synapic starts and talks to over a local
-port. Until one exists, the wizard is disabled on purpose.</p>
+port. Until one exists, the rest of the app is disabled on purpose.</p>
 
 <h2>Why there is a separate server</h2>
 
@@ -23,13 +23,13 @@ own process means the app starts instantly, and a crashed model cannot take your
 batch down with it. Synapic spawns the server, waits for it to report healthy,
 sends it one request per image, and shuts it down when the app closes.</p>
 
-<p>You only see it in two places: the status dot in the toolbar, and the build
-panel below it.</p>
+<p>You only see it in two places: the status dot at the bottom of the sidebar,
+and the <span class="ui">Inference server</span> section in the Settings view.</p>
 
 <h2>Building one</h2>
 
 <ol class="steps">
-<li>Look at the setup panel. Each row is a variant you can get on this
+<li>Look at the <span class="ui">Inference server</span> section in the Settings view. Each row under <span class="ui">Platform variants</span> is something you can get on this
 machine: <span class="ui">CPU</span> (runs anywhere) and, on Windows,
 <span class="ui">CUDA (NVIDIA GPU)</span> (much faster on a supported card). The
 small grey text next to the name is the variant's runtime identifier, for example
@@ -86,7 +86,7 @@ is not offered back to you.</p>
 keep the CPU one as a fallback. They are independent executables and the build of
 one cannot break the other.</p>
 <p>Which one runs is decided by the <a href="step2-engine.html#device">Device</a>
-control in Step 2: with <span class="ui">CUDA</span> selected, Synapic starts the
+control in <span class="ui">Settings &rsaquo; Inference engine</span>: with <span class="ui">CUDA</span> selected, Synapic starts the
 CUDA executable; any other setting starts the CPU one. The status bar names the
 device the running server reports, so a fallback is visible rather than silent.</p>
 </div>
@@ -117,7 +117,7 @@ after buying a GPU.</p>
 
 <div class="warning">
 <p class="first">Do not delete the server while Synapic is running.</p>
-<p>A running batch will fail image by image. Stop the server from the toolbar
+<p>A running batch will fail image by image. Press <span class="ui">Stop Server</span> in the Settings view
 first, close Synapic, then replace the file.</p>
 </div>
 
@@ -138,8 +138,8 @@ href="admin-deploy.html">Deploying to many machines</a>.</p>
 <table>
 <tr><th class="setting">What you see</th><th>What to do</th></tr>
 <tr><td><span class="ui">Server not detected</span> and no rows at all</td><td>There is no source checkout and the latest release has nothing for this machine's platform either. Install a release build that includes one.</td></tr>
-<tr><td>Build fails part-way</td><td>The log pane has the build's own output. A failed first build is usually the network (fetching Python or packages), and rebuilding after the network is back is the fix.</td></tr>
-<tr><td>Download fails</td><td>The log pane names the release, the asset and the HTTP status. The usual cause is a release without this platform's server, or no network; <span class="ui">Build sidecar</span> is the way round it when this checkout has the toolchain.</td></tr>
+<tr><td>Build fails part-way</td><td>The log drawer has the build's own output. A failed first build is usually the network (fetching Python or packages), and rebuilding after the network is back is the fix.</td></tr>
+<tr><td>Download fails</td><td>The log drawer names the release, the asset and the HTTP status. The usual cause is a release without this platform's server, or no network; <span class="ui">Build sidecar</span> is the way round it when this checkout has the toolchain.</td></tr>
 <tr><td>Status stuck on <span class="ui">Server starting&hellip;</span></td><td>A cold start really can take up to two minutes. If it exceeds that, the log says why; see <a href="troubleshooting.html#sidecar">Troubleshooting: the inference server</a>.</td></tr>
 <tr><td><span class="ui">stale build, rebuild recommended</span>, or <span class="ui">Update available</span> on a row</td><td>Developer checkouts only: the server executable is older than the inference source it was built from. Use <span class="ui">Build sidecar</span> or <span class="ui">Download</span> on that row; a running server is stopped and started again on the new build.</td></tr>
 </table>
@@ -148,7 +148,7 @@ href="admin-deploy.html">Deploying to many machines</a>.</p>
 <h2>See also</h2>
 <ul>
 <li><a href="getting-started.html">Getting started with Synapic</a></li>
-<li><a href="window-overview.html">The main window</a></li>
+<li><a href="window-overview.html">The Synapic window</a></li>
 <li><a href="admin-deploy.html">Deploying to many machines</a></li>
 <li><a href="troubleshooting.html#sidecar">Troubleshooting: the inference server</a></li>
 </ul>

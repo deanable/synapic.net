@@ -14,6 +14,7 @@ using Synapic.Main.Services;
 using Synapic.Main.ViewModels;
 using Synapic.Main.Views;
 using Synapic.Main.Views.Dashboard;
+using Synapic.Main.Views.Settings;
 using Synapic.Main.Views.Wizard;
 using Xunit;
 
@@ -68,19 +69,19 @@ public class SettingsViewTests
         Assert.Single(window.GetVisualDescendants().OfType<SettingsPanel>());
 
     /// <summary>
-    /// §5 lists exactly five sections, and the panel is one scrolling column of
-    /// them in reading order. It carries no source form and no model picker: the
-    /// shared source is Region A of every operation and the model is a Tag
-    /// parameter, so nothing here is configured twice.
+    /// §5's app-preference half is four sections — Appearance, Logging, Defaults
+    /// and About — in one scrolling column, composed into the Settings view. It
+    /// carries no source form and no engine form: those have their own sections
+    /// beside it on the Settings view, so nothing here is configured twice.
     /// </summary>
     [AvaloniaFact]
-    public void Settings_panel_is_the_five_section_app_wide_settings_view()
+    public void Settings_panel_is_the_four_section_app_preferences_view()
     {
         var shell = NewShell();
         var window = NewWindow(shell);
         try
         {
-            Assert.True(shell.IsDashboardVisible, "the dashboard is where the settings view lives");
+            Assert.True(shell.IsSettingsVisible, "the Settings view is where the app opens");
 
             var panel = Panel(window);
             var sections = panel.GetVisualDescendants().OfType<Border>()
@@ -89,15 +90,15 @@ public class SettingsViewTests
                 .ToList();
 
             Assert.Equal(
-                new[] { "SectionInferenceServer", "SectionAppearance", "SectionLogging", "SectionDefaults", "SectionAbout" },
+                new[] { "SectionAppearance", "SectionLogging", "SectionDefaults", "SectionAbout" },
                 sections);
 
             Assert.All(sections, name => Assert.True(
                 EffectivelyVisible(panel.GetVisualDescendants().OfType<Border>().First(b => b.Name == name)),
-                $"{name} is not on screen on the dashboard"));
+                $"{name} is not on screen on the Settings view"));
 
-            // No source form, no engine form: each has exactly one home — Region A
-            // for the source and Tag's Parameters region for the engine — and it
+            // No source form, no engine form: each has exactly one home — the
+            // Settings view's Data source and Inference engine sections — and it
             // is not this panel.
             Assert.Empty(panel.GetVisualDescendants().OfType<DatasourceSourcePanel>());
             Assert.Empty(panel.GetVisualDescendants().OfType<Step2Engine>());
@@ -270,8 +271,7 @@ public class SettingsViewTests
         var window = NewWindow(shell);
         try
         {
-            var panel = Panel(window);
-            var section = panel.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "SectionInferenceServer");
+            var section = Assert.Single(window.GetVisualDescendants().OfType<InferenceServerSection>());
             var buttons = section.GetVisualDescendants().OfType<Button>().ToList();
 
             Assert.Single(buttons, b => b.Command == shell.StartServerCommand);
@@ -295,6 +295,67 @@ public class SettingsViewTests
             Assert.True(autoLaunch.IsChecked);
             shell.AppSettings.AutoLaunchSidecar = false;
             Assert.False(temp.Service.Load().Ui.AutoLaunchSidecar);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    /// <summary>
+    /// The Settings view has a search box: a query filters the column to the
+    /// sections that mention it and jumps to the first match; an empty query shows
+    /// every section again, and a query that matches nothing says so.
+    /// </summary>
+    [AvaloniaFact]
+    public void Settings_search_filters_to_matching_sections_and_jumps_to_the_first()
+    {
+        var shell = NewShell();
+        var window = NewWindow(shell);
+        try
+        {
+            var settings = Assert.Single(window.GetVisualDescendants().OfType<SettingsTab>());
+            var box = Assert.Single(settings.GetVisualDescendants().OfType<TextBox>(),
+                t => t.Name == "SettingsSearchBox");
+
+            List<Border> Sections() => settings.GetVisualDescendants().OfType<Border>()
+                .Where(b => b.Name?.StartsWith("Section", StringComparison.Ordinal) == true).ToList();
+
+            // Empty: every section is on screen and nothing is reported.
+            var all = Sections();
+            Assert.NotEmpty(all);
+            Assert.All(all, s => Assert.True(s.IsVisible));
+            var status = Assert.Single(settings.GetVisualDescendants().OfType<TextBlock>(),
+                t => t.Name == "SearchStatusText");
+            Assert.False(status.IsVisible);
+
+            // A query that names one section keeps that one and hides the rest.
+            box.Text = "dedup";
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Equal(new[] { "SectionDedup" },
+                Sections().Where(s => s.IsVisible).Select(s => s.Name).ToList());
+            Assert.True(status.IsVisible);
+
+            // The App preferences heading goes with its sections when none match.
+            var header = Assert.Single(settings.GetVisualDescendants().OfType<Control>(),
+                c => c.Name == "AppPreferencesHeader");
+            Assert.False(header.IsVisible);
+
+            // A query that matches nothing hides every section and says so.
+            box.Text = "zzzznotathing";
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.All(Sections(), s => Assert.False(s.IsVisible));
+            Assert.Contains("No settings match", status.Text);
+
+            // Clearing the box brings every section back.
+            box.Text = "";
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.All(Sections(), s => Assert.True(s.IsVisible));
+            Assert.False(status.IsVisible);
+            Assert.True(header.IsVisible);
         }
         finally
         {

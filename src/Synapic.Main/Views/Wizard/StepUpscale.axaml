@@ -5,11 +5,12 @@
              x:Class="Synapic.Main.Views.Wizard.StepUpscale"
              x:DataType="vm:StepUpscaleViewModel">
 
-  <!-- 4 · Upscaling: the run page. The parameters live in the Parameters region
-       and are reported back here before a batch starts, so the run is never
-       blind. -->
+  <!-- The upscaling page. The parameters live in the Settings view's Upscaling
+       section and are reported back here before a batch starts, so the run is
+       never blind; the run itself — progress, Start, Stop and the log — is the
+       shared run bar above this page (D10). A second progress bar and a second
+       log here is exactly what the tagging view shipped and what was removed. -->
   <StackPanel Spacing="12">
-    <TextBlock Classes="stepTitle" Text="4 · Upscaling" />
     <TextBlock Text="{Binding SourceSummary}" Opacity="0.75" TextWrapping="Wrap"
                help:HelpScope.Topic="upscale.html" />
 
@@ -21,34 +22,5 @@
       </StackPanel>
     </Border>
 
-    <Border Classes="card settingsCard" Padding="16" help:HelpScope.Topic="step3-process.html">
-      <StackPanel Spacing="8">
-        <TextBlock Classes="sectionTitle" Text="Run" />
-        <ProgressBar Value="{Binding ProgressPercent}" Maximum="100" Height="18" />
-        <WrapPanel>
-          <TextBlock Text="{Binding ProgressText}" FontWeight="SemiBold" Margin="0,0,16,8" />
-          <TextBlock Text="{Binding EtaText}" Opacity="0.7" Margin="0,0,16,8" />
-          <TextBlock Text="{Binding CurrentFile}" Opacity="0.7" Margin="0,0,16,8"
-                     TextWrapping="Wrap" MaxWidth="520" TextTrimming="CharacterEllipsis" />
-        </WrapPanel>
-        <WrapPanel>
-          <Button Content="Run Upscale Batch" Command="{Binding StartCommand}"
-                  Classes="accent" Margin="0,0,8,8" />
-          <Button Content="Stop" Command="{Binding StopCommand}" Margin="0,0,8,8" />
-        </WrapPanel>
-      </StackPanel>
-    </Border>
-
-    <Border Classes="card" Height="300" Padding="8"
-            help:HelpScope.Topic="step3-log.html">
-      <ListBox ItemsSource="{Binding LogLines}" x:Name="LogList">
-        <ListBox.ItemTemplate>
-          <DataTemplate>
-            <TextBlock Text="{Binding}" FontFamily="Consolas,monospace" FontSize="12"
-                       TextWrapping="Wrap" />
-          </DataTemplate>
-        </ListBox.ItemTemplate>
-      </ListBox>
-    </Border>
   </StackPanel>
 </UserControl>

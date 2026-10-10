@@ -34,7 +34,7 @@ keeps its words.</p>
 <tr><td>The engine is a separate program</td><td>The <span class="term">inference server</span> (also called the sidecar) holds the model and answers one request per image. Synapic starts it, talks to it over a local port, and stops it when the app closes. It is the one part you have to build or download before anything can be tagged.</td></tr>
 </table>
 
-<p>Where the words go is your choice, and it is the first thing the app asks:</p>
+<p>Where the words go is your choice, and it is the first thing you configure:</p>
 
 <ul>
 <li><span class="term">A folder on disk</span> &mdash; the tags are written into
@@ -47,8 +47,8 @@ metadata lives where your colleagues already look for it.</li>
 
 <div class="note">
 <p class="first">One call produces all three fields.</p>
-<p>There is no second request for the description and no per-field model. Step 2's
-<span class="ui">Tag fields</span> checkboxes decide what gets
+<p>There is no second request for the description and no per-field model. The
+engine section's <span class="ui">Tag fields</span> checkboxes decide what gets
 <em>written</em>, not what the model is asked &mdash; which is the answer to the
 most common "why are my keywords there but my description missing?" question. See
 <a href="step2-tag-fields.html">Tag fields: what gets written</a>.</p>
@@ -56,12 +56,27 @@ most common "why are my keywords there but my description missing?" question. Se
 
 <h2>What you see when it opens</h2>
 
-<p>Synapic is one window: a toolbar for the server at the top, the
-<span class="term">source panel</span> and the three routes in the middle, and a
-live log along the bottom.</p>
+<p>Synapic is one window with a sidebar of four rows down the left and one view
+beside it. There is no dashboard and no numbered step chain: the row you pick is
+the view you get, and
+<a href="window-overview.html">The Synapic window</a> describes each part.</p>
 
-<p>The order of that middle section is deliberate. A run means nothing until you
-know which images it covers, so the source panel comes first, and it answers that
+<table>
+<tr><th class="setting">Row</th><th>What it is</th></tr>
+<tr><td><span class="ui">Settings</span></td><td>Every configuration the app has, in one scrolling column: the data source and its server, the inference server, the inference engine, the deduplication and upscaling rules, and the app preferences. It is what you see on launch, and where you start.</td></tr>
+<tr><td><span class="ui">Tagging</span></td><td>Run the model over the shared source and write the tags.</td></tr>
+<tr><td><span class="ui">Deduplication</span></td><td>Find near-duplicate images and resolve the groups.</td></tr>
+<tr><td><span class="ui">Upscaling</span></td><td>Raise image resolution, with AI (Swin2SR) or fast Lanczos resampling, over the same source.</td></tr>
+</table>
+
+<p>Three of the Settings view's six sections matter before your first run:
+<span class="ui">Data source</span> (what to work on),
+<span class="ui">Inference server</span> (the local engine) and
+<span class="ui">Inference engine</span> (how it tags). The rest
+&mdash; the deduplication and upscaling rules, and the app preferences &mdash;
+can wait.</p>
+
+<p>Inside <span class="ui">Data source</span>, the shared source answers its
 question twice over: once in words you choose (a folder, or a Daminion login plus
 scope), and once at a glance, in two <span class="term">source lights</span>.</p>
 
@@ -77,16 +92,10 @@ current: at launch, after a connect, and every time the folder, the scope or a
 filter changes. Nothing needs pressing; the <span class="ui">Recount</span>
 button is only there for the case where the catalog changed underneath you.</p>
 
-<p>Only then do the three routes matter, and they stay disabled until one of the
-lights is green &mdash; so a workflow is never entered without knowing what it
-would work on:</p>
-
-<table>
-<tr><th class="setting">Route</th><th>What it is for</th></tr>
-<tr><td><span class="ui">Tagging</span></td><td>Run the model over the source and write the tags. Four steps: Datasource, Engine, Process, Results.</td></tr>
-<tr><td><span class="ui">Deduplication</span></td><td>Find near-duplicate images &mdash; local folder or catalog scope &mdash; and tag, move or delete the extras.</td></tr>
-<tr><td><span class="ui">Upscaling</span></td><td>Raise image resolution, with AI (Swin2SR) or fast Lanczos resampling, over the same source.</td></tr>
-</table>
+<p>A processing view does not ask for any of that again. It shows the same lights
+and count read-only under <span class="ui">Working on</span>, and then its own
+<span class="ui">Output</span>: the run bar, the operation's controls, its log
+and, for tagging, its report. Nothing is configured in two places.</p>
 
 <h2>Install</h2>
 
@@ -106,35 +115,39 @@ href="admin-install.html">Installing and upgrading</a>.</p>
 
 <h2>Your first run, end to end</h2>
 
-<p>If this is a fresh install, the first thing you will notice is that the wizard
-is greyed out and a panel says <span class="ui">Inference sidecar required</span>.
-That is expected, and it is the only part that takes real time:</p>
+<p>If this is a fresh install, the first thing you will notice is that the
+workspace is disabled and a banner across the top says
+<span class="ui">Inference sidecar required</span>. That is expected, and it is
+the only part that takes real time:</p>
 
 <ol class="steps">
-<li><span class="term">Get an inference server.</span> In the panel, press
+<li><span class="term">Get an inference server.</span> In
+<span class="ui">Settings &rsaquo; Inference server</span>, press
 <span class="ui">Download</span> on the CPU row to fetch the prebuilt
 executable, or <span class="ui">Build sidecar</span> to compile it from source
 &mdash; that first build downloads a private Python and the packages the model
 needs, so expect minutes, not seconds. Full detail:
 <a href="first-run-sidecar.html">Build the inference server</a>.</li>
 <li><span class="term">Let the server start.</span> Synapic launches the server
-as soon as one exists, and the status dot turns green with
-<span class="ui">Server running (port &hellip;)</span>. The very first launch is
-slow &mdash; up to a couple of minutes &mdash; because the model is unpacked and
-loaded.</li>
-<li><span class="term">Choose the images.</span> In the source panel, either
-point at a folder on disk or connect to Daminion. Watch the matching light turn
-green and the record count appear; that pair is your confirmation that the run
-will see what you think it will. For a first test, a small folder is the kindest
-choice.</li>
-<li><span class="term">Run the batch.</span> Pick <span class="ui">Tagging</span>,
-then go to <a href="step3-process.html">Step 3 &mdash; Process</a> and press
-<span class="ui">Start Processing</span>. The first image also triggers the model
+as soon as one exists, and the status dot at the bottom of the sidebar turns
+green with <span class="ui">Server running (port &hellip;)</span>. The very first
+launch is slow &mdash; up to a couple of minutes &mdash; because the model is
+unpacked and loaded.</li>
+<li><span class="term">Choose the images.</span> In
+<span class="ui">Settings &rsaquo; Data source</span>, either point at a folder
+on disk or connect to Daminion. Watch the matching light turn green and the
+record count appear; that pair is your confirmation that a run will see what you
+think it will. For a first test, a small folder is the kindest choice.</li>
+<li><span class="term">Run the batch.</span> Pick
+<span class="ui">Tagging</span> in the sidebar, then press
+<span class="ui">Start Processing</span> in the
+<span class="ui">Output</span> region. The first image also triggers the model
 download (about 860 MB) if the model has never been used on this machine.</li>
-<li><span class="term">Review.</span> <a href="step4-results.html">Step 4
-&mdash; Results</a> lists what happened to every image, and
+<li><span class="term">Review.</span> The report below the run, in the same view,
+lists what happened to every image, and
 <span class="ui">Verify Daminion Writes</span> re-reads a Daminion catalog to
-confirm the tags really landed.</li>
+confirm the tags really landed. See
+<a href="step4-results.html">Tagging results</a>.</li>
 </ol>
 
 <h2>What a batch is doing, image by image</h2>
@@ -148,18 +161,18 @@ Daminion, the items your scope and filters select are paged from the catalog and
 each image (or a thumbnail) is downloaded as it is reached.</li>
 <li><span class="term">Tag.</span> The image goes to the inference server, which
 returns the category, keywords and description in one call.</li>
-<li><span class="term">Write.</span> The fields you ticked in Step 2 are written
-&mdash; XMP into the file, or a metadata update for a Daminion item. Because the
-write replaces what Synapic manages, there is no undo; run a first batch on
-copies if that matters.</li>
+<li><span class="term">Write.</span> The fields you ticked in the engine section
+are written &mdash; XMP into the file, or a metadata update for a Daminion item.
+Because the write replaces what Synapic manages, there is no undo; run a first
+batch on copies if that matters.</li>
 <li><span class="term">Record.</span> The outcome is appended to the run's
 results: success, write failure, or an error explaining why that image could not
 be processed.</li>
 </ol>
 
 <p>Four images move through that loop at once, so a batch is never as slow as one
-image times the count &mdash; see <a href="workflow-overview.html">the
-workflow</a> for how throughput and latency differ.</p>
+image times the count &mdash; see <a href="workflow-overview.html">How a run
+works</a> for how throughput and latency differ.</p>
 
 <h2>What the first run costs you in time</h2>
 
@@ -182,16 +195,18 @@ and the server process is already running.</p>
 dozen images in a folder:</p>
 
 <ol class="steps">
-<li>The source panel: choose <span class="ui">Local Folder</span>, point at the
-copy, and leave <span class="ui">Include subfolders</span> off. The folder light
-turns green and the count reports roughly a dozen files.</li>
-<li>Step 2: leave the defaults. The three <span class="ui">Tag fields</span>
-boxes are ticked, so all three results are written into the files' XMP
-metadata.</li>
-<li>Step 3: <span class="ui">Start Processing</span>, then read the log as it
-scrolls. A line per image reports the category, the number of keywords, and the
-start of the description.</li>
-<li>Step 4: check the rows, then look at one of the files in your own image
+<li><span class="ui">Settings &rsaquo; Data source</span>: choose
+<span class="ui">Local Folder</span>, point at the copy, and leave
+<span class="ui">Include subfolders</span> off. The folder light turns green and
+the count reports roughly a dozen files.</li>
+<li><span class="ui">Settings &rsaquo; Inference engine</span>: leave the
+defaults. The three <span class="ui">Tag fields</span> boxes are ticked, so all
+three results are written into the files' XMP metadata.</li>
+<li>Pick <span class="ui">Tagging</span> and press
+<span class="ui">Start Processing</span>, then read the log as it scrolls. A line
+per image reports the category, the number of keywords, and the start of the
+description.</li>
+<li>Check the report rows, then look at one of the files in your own image
 viewer or in Daminion to see the metadata.</li>
 </ol>
 
@@ -225,8 +240,8 @@ That judgement is still yours; the tool is there to make it cheap.</li>
 <li><a href="requirements.html">What you need</a></li>
 <li><a href="setup-guide.html">Setup guide</a> &mdash; the same ground, as a checklist</li>
 <li><a href="glossary.html">Glossary</a> &mdash; every term used here, defined</li>
-<li><a href="window-overview.html">The main window</a></li>
-<li><a href="workflow-overview.html">The workflow, step by step</a></li>
+<li><a href="window-overview.html">The Synapic window</a></li>
+<li><a href="workflow-overview.html">How a run works</a></li>
 <li><a href="troubleshooting.html#sidecar">Troubleshooting: the inference server</a></li>
 </ul>
 </div>

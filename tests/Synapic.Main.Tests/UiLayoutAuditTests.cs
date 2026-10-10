@@ -8,7 +8,7 @@ using Avalonia.VisualTree;
 using Synapic.Main.Models;
 using Synapic.Main.ViewModels;
 using Synapic.Main.Views;
-using Synapic.Main.Views.Dashboard;
+using Synapic.Main.Views.Settings;
 using Xunit;
 
 namespace Synapic.Main.Tests;
@@ -135,21 +135,27 @@ public class UiLayoutAuditTests
         }
     }
 
-    /// <summary>The home route is the dashboard now (docs/ui-design.md D1/D2).</summary>
+    /// <summary>
+    /// The Settings view is where the app opens (the first sidebar row), and it is
+    /// the densest screen in the app — the source form, the inference server and
+    /// engine and the operation rules all live there. It has to lay out cleanly at
+    /// every audited size.
+    /// </summary>
     [AvaloniaTheory]
     [InlineData(1600, 900)]
     [InlineData(1280, 800)]
     [InlineData(1024, 700)]
     [InlineData(900, 600)]
-    public void Home_screen_has_no_overlapping_or_clipped_controls(double width, double height)
+    [InlineData(640, 480)]
+    public void Settings_view_has_no_overlapping_or_clipped_controls(double width, double height)
     {
         AuditWindow(new MainWindow { DataContext = Shell("daminion") },
-            "Home (dashboard, Daminion form)", width, height);
+            "Settings (Daminion form)", width, height);
     }
 
     /// <summary>
-    /// The tagging mode — the whole form and its run on one page now that the
-    /// step chain is gone (D5): every region the mode renders has to lay out
+    /// The three processing views — the run surface and its output on one page now
+    /// that the step chain is gone: every region the view renders has to lay out
     /// cleanly at every audited size.
     /// </summary>
     [AvaloniaTheory]
@@ -157,36 +163,25 @@ public class UiLayoutAuditTests
     [InlineData(1280, 800)]
     [InlineData(1024, 700)]
     [InlineData(900, 600)]
-    public void Tagging_mode_has_no_overlapping_or_clipped_controls(double width, double height)
+    [InlineData(640, 480)]
+    public void Processing_views_have_no_overlapping_or_clipped_controls(double width, double height)
     {
-        var shell = Shell("local", Path.GetTempPath());
-        shell.StartTaggingRouteCommand.Execute(null);
+        var tagging = Shell("local", Path.GetTempPath());
+        tagging.StartTaggingRouteCommand.Execute(null);
+        AuditWindow(new MainWindow { DataContext = tagging }, "Tagging view", width, height);
 
-        AuditWindow(new MainWindow { DataContext = shell }, "Tagging mode", width, height);
-    }
-
-    [AvaloniaTheory]
-    [InlineData(1600, 900)]
-    [InlineData(1280, 800)]
-    [InlineData(1024, 700)]
-    [InlineData(900, 600)]
-    public void Dedup_and_upscale_modes_have_no_overlapping_or_clipped_controls(
-        double width, double height)
-    {
         var dedup = Shell("local", Path.GetTempPath());
         dedup.StartDedupRouteCommand.Execute(null);
-        AuditWindow(new MainWindow { DataContext = dedup }, "Deduplication mode", width, height);
+        AuditWindow(new MainWindow { DataContext = dedup }, "Deduplication view", width, height);
 
         var upscale = Shell("local", Path.GetTempPath());
         upscale.StartUpscaleRouteCommand.Execute(null);
-        AuditWindow(new MainWindow { DataContext = upscale }, "Upscaling mode", width, height);
+        AuditWindow(new MainWindow { DataContext = upscale }, "Upscaling view", width, height);
     }
 
     /// <summary>
-    /// The operation template through each of the three routes at every audited
-    /// size: the same three regions in reading order (top to bottom — the stacked
-    /// form Avalonia renders without a breakpoint), nothing clipped or
-    /// overlapping. ui-design §10 criteria 2 and 5, on the template itself.
+    /// The processing view through each route at every audited size: the read-only
+    /// source summary above the output, nothing clipped or overlapping.
     /// </summary>
     private static void AuditRegions(Window window, string screen, double width, double height)
     {
@@ -201,20 +196,15 @@ public class UiLayoutAuditTests
             Assert.Equal(height, window.ClientSize.Height);
 
             var tree = window.GetVisualDescendants().ToList();
-            var dataSource = Assert.Single(tree.OfType<Border>(),
-                b => b.Classes.Contains("dataSourceRegion"));
-            var parameters = Assert.Single(tree.OfType<Border>(),
-                b => b.Classes.Contains("parametersRegion"));
+            var summary = Assert.Single(tree.OfType<Border>(),
+                b => b.Classes.Contains("sourceSummaryRegion"));
             var output = Assert.Single(tree.OfType<Border>(),
                 b => b.Classes.Contains("outputRegion"));
 
-            var sourceTop = dataSource.TranslatePoint(new Point(0, 0), window)!.Value.Y;
-            var parametersTop = parameters.TranslatePoint(new Point(0, 0), window)!.Value.Y;
+            var summaryTop = summary.TranslatePoint(new Point(0, 0), window)!.Value.Y;
             var outputTop = output.TranslatePoint(new Point(0, 0), window)!.Value.Y;
-            Assert.True(sourceTop < parametersTop,
-                $"{screen}: the data source region is not above the parameters region");
-            Assert.True(parametersTop < outputTop,
-                $"{screen}: the parameters region is not above the output region");
+            Assert.True(summaryTop < outputTop,
+                $"{screen}: the source summary is not above the output region");
 
             var report = Audit(window);
             Assert.True(_panelsAudited > 10,
@@ -233,109 +223,36 @@ public class UiLayoutAuditTests
     [InlineData(1280, 800)]
     [InlineData(1024, 700)]
     [InlineData(900, 600)]
-    public void Operation_modes_audit_clean_with_the_three_regions_in_order(
+    [InlineData(640, 480)]
+    public void Processing_views_audit_clean_with_the_source_summary_above_the_output(
         double width, double height)
     {
         var tagging = Shell("local", Path.GetTempPath());
         tagging.StartTaggingRouteCommand.Execute(null);
-        AuditRegions(new MainWindow { DataContext = tagging }, "Tagging mode", width, height);
+        AuditRegions(new MainWindow { DataContext = tagging }, "Tagging view", width, height);
 
         var dedup = Shell("local", Path.GetTempPath());
         dedup.StartDedupRouteCommand.Execute(null);
-        AuditRegions(new MainWindow { DataContext = dedup }, "Dedup mode", width, height);
+        AuditRegions(new MainWindow { DataContext = dedup }, "Dedup view", width, height);
 
         var upscale = Shell("local", Path.GetTempPath());
         upscale.StartUpscaleRouteCommand.Execute(null);
-        AuditRegions(new MainWindow { DataContext = upscale }, "Upscale mode", width, height);
+        AuditRegions(new MainWindow { DataContext = upscale }, "Upscale view", width, height);
     }
 
-    /// <summary>The dashboard's four panels, by the class every one of them carries.</summary>
-    private static List<Control> DashboardPanels(Window window) =>
-        window.GetVisualDescendants().OfType<Control>()
-            .Where(c => c.Classes.Contains("dashboardPanel")).ToList();
-
     /// <summary>
-    /// The dashboard's wide form (ui-design §2.1: a 2x2 grid of four panels, read
-    /// row-major — Settings, Tag, Dedup, Upscale). Settings and Tag share the
-    /// first row, Dedup and Upscale the second; the second row sits under the
-    /// first and in the same two columns. The case asserts the two-column rule
-    /// itself (DashboardView.MinPanelWidth) before measuring, so a dashboard that
-    /// stacked early fails here rather than passing this fact on the narrow
-    /// form's geometry — a layout fact that does not check which layout it is
-    /// looking at cannot tell the two apart.
+    /// The Settings view is one reading-order column of configuration sections:
+    /// the connection first, then the inference server, the engine and the
+    /// operation rules, with the app preferences last. The sections stack in that
+    /// order at every audited size.
     /// </summary>
     [AvaloniaTheory]
-    [InlineData(1280, 800)]
     [InlineData(1600, 900)]
-    public void Dashboard_is_a_two_by_two_grid_of_its_four_panels(double width, double height)
-    {
-        var window = new MainWindow { DataContext = Shell("daminion") };
-        window.Width = width;
-        window.Height = height;
-        window.Show();
-        for (var i = 0; i < 3; i++)
-            Dispatcher.UIThread.RunJobs();
-        try
-        {
-            Assert.Equal(width, window.ClientSize.Width);
-            Assert.Equal(height, window.ClientSize.Height);
-
-            var panels = DashboardPanels(window);
-            Assert.Equal(4, panels.Count);
-
-            var dashboard = Assert.Single(window.GetVisualDescendants().OfType<DashboardView>());
-            Assert.True(dashboard.Bounds.Width >= DashboardView.MinPanelWidth * 2,
-                $"the dashboard is {dashboard.Bounds.Width} px wide at {width}x{height}: " +
-                "too narrow for the two-column form this case measures");
-
-            double Top(Control c) => c.TranslatePoint(new Point(0, 0), window)!.Value.Y;
-            double Left(Control c) => c.TranslatePoint(new Point(0, 0), window)!.Value.X;
-
-            var settings = panels.Single(p => p.Name == "SettingsPanel");
-            var tag = panels.Single(p => p.Name == "TagPanel");
-            var dedup = panels.Single(p => p.Name == "DedupPanel");
-            var upscale = panels.Single(p => p.Name == "UpscalePanel");
-
-            // First row: Settings | Tag.
-            Assert.True(System.Math.Abs(Top(settings) - Top(tag)) < Tolerance,
-                $"Settings and Tag are not on the first row at {width}x{height}");
-            Assert.True(Left(settings) < Left(tag),
-                $"Settings is not left of Tag at {width}x{height}");
-
-            // Second row: Dedup | Upscale, under the first row, same columns.
-            Assert.True(System.Math.Abs(Top(dedup) - Top(upscale)) < Tolerance,
-                $"Dedup and Upscale are not on the second row at {width}x{height}");
-            Assert.True(Top(dedup) > Top(settings),
-                $"the second row is not below the first at {width}x{height}");
-            Assert.True(Left(dedup) < Left(upscale),
-                $"Dedup is not left of Upscale at {width}x{height}");
-            Assert.True(System.Math.Abs(Left(dedup) - Left(settings)) < Tolerance &&
-                        System.Math.Abs(Left(upscale) - Left(tag)) < Tolerance,
-                $"the second row is not aligned with the first at {width}x{height}");
-
-            var report = Audit(window);
-            Assert.True(report.Length == 0,
-                $"Dashboard at {width}x{height} ({_panelsAudited} panels):\n{report}");
-        }
-        finally
-        {
-            window.Close();
-        }
-    }
-
-    /// <summary>
-    /// The dashboard's narrow form (ui-design §7/D8: below the switch point the
-    /// grid stacks): one full-width column in reading order — Settings, Tag,
-    /// Dedup, Upscale — every panel below the previous one and sharing one left
-    /// edge, with nothing clipped at the smallest audited size. The case asserts
-    /// the one-column rule before measuring, for the same reason its wide twin
-    /// does.
-    /// </summary>
-    [AvaloniaTheory]
+    [InlineData(1280, 800)]
     [InlineData(1024, 700)]
     [InlineData(900, 600)]
-    public void Dashboard_stacks_its_four_panels_in_reading_order_below_the_switch_point(
-        double width, double height)
+    [InlineData(640, 480)]
+    public void Settings_view_stacks_its_sections_in_reading_order(double width, double height)
     {
         var window = new MainWindow { DataContext = Shell("daminion") };
         window.Width = width;
@@ -348,67 +265,34 @@ public class UiLayoutAuditTests
             Assert.Equal(width, window.ClientSize.Width);
             Assert.Equal(height, window.ClientSize.Height);
 
-            var panels = DashboardPanels(window);
-            Assert.Equal(4, panels.Count);
+            var settings = Assert.Single(window.GetVisualDescendants().OfType<SettingsTab>());
+            double Top(string name) => settings.GetVisualDescendants().OfType<Border>()
+                .Single(b => b.Name == name)
+                .TranslatePoint(new Point(0, 0), window)!.Value.Y;
 
-            var dashboard = Assert.Single(window.GetVisualDescendants().OfType<DashboardView>());
-            Assert.True(dashboard.Bounds.Width < DashboardView.MinPanelWidth * 2,
-                $"the dashboard is {dashboard.Bounds.Width} px wide at {width}x{height}: " +
-                "wide enough for the two-column form, so this case is not measuring the stacked one");
+            var ordered = new[]
+            {
+                "SectionDataSource", "SectionInferenceServer", "SectionEngine",
+                "SectionDedup", "SectionUpscale",
+            };
 
-            double Top(Control c) => c.TranslatePoint(new Point(0, 0), window)!.Value.Y;
-            double Left(Control c) => c.TranslatePoint(new Point(0, 0), window)!.Value.X;
-
-            var ordered = new[] { "SettingsPanel", "TagPanel", "DedupPanel", "UpscalePanel" }
-                .Select(name => panels.Single(p => p.Name == name)).ToList();
-
-            for (var i = 1; i < ordered.Count; i++)
+            for (var i = 1; i < ordered.Length; i++)
                 Assert.True(Top(ordered[i]) > Top(ordered[i - 1]),
-                    $"{ordered[i].Name} is not below {ordered[i - 1].Name} at {width}x{height}");
+                    $"{ordered[i]} is not below {ordered[i - 1]} at {width}x{height}");
 
-            Assert.All(ordered, p => Assert.True(
-                System.Math.Abs(Left(p) - Left(ordered[0])) < Tolerance,
-                $"{p.Name} is not in the single column at {width}x{height}"));
+            // The app preferences follow the operation rules.
+            var preferences = settings.GetVisualDescendants().OfType<Border>()
+                .Single(b => b.Name == "SectionAppearance");
+            Assert.True(preferences.TranslatePoint(new Point(0, 0), window)!.Value.Y > Top("SectionUpscale"),
+                "the app preferences are not below the operation settings");
 
             var report = Audit(window);
             Assert.True(report.Length == 0,
-                $"Dashboard at {width}x{height} ({_panelsAudited} panels):\n{report}");
+                $"Settings at {width}x{height} ({_panelsAudited} panels):\n{report}");
         }
         finally
         {
             window.Close();
         }
-    }
-
-    /// <summary>
-    /// The three operations' parameter forms, audited where they live now
-    /// (ui-design D3 / §10 criterion 4): inline in the Parameters region of each
-    /// mode, inside the real shell at every audited size — no step to walk to, so
-    /// every case audits the mode as it opens. The dialogs were audited at the one
-    /// size each was authored for; inline they have to survive all four, beside
-    /// the two regions under and above them.
-    /// </summary>
-    [AvaloniaTheory]
-    [InlineData(1600, 900)]
-    [InlineData(1280, 800)]
-    [InlineData(1024, 700)]
-    [InlineData(900, 600)]
-    public void Inline_parameters_have_no_overlapping_or_clipped_controls(
-        double width, double height)
-    {
-        // Tagging: the full engine form is the Parameters region.
-        var tagging = Shell("local", Path.GetTempPath());
-        tagging.StartTaggingRouteCommand.Execute(null);
-        AuditWindow(new MainWindow { DataContext = tagging }, "Tagging parameters", width, height);
-
-        // Deduplication: the scan and keep-set rules.
-        var dedup = Shell("local", Path.GetTempPath());
-        dedup.StartDedupRouteCommand.Execute(null);
-        AuditWindow(new MainWindow { DataContext = dedup }, "Dedup parameters", width, height);
-
-        // Upscaling: workflow, factor, precision, output.
-        var upscale = Shell("local", Path.GetTempPath());
-        upscale.StartUpscaleRouteCommand.Execute(null);
-        AuditWindow(new MainWindow { DataContext = upscale }, "Upscale parameters", width, height);
     }
 }

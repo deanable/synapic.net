@@ -5,12 +5,18 @@
              x:Class="Synapic.Main.Views.Operation.RunStateBar"
              x:DataType="ops:RunStateViewModel">
 
-  <!-- The shared run bar (docs/ui-design.md §4.3, D-05): the run lifecycle of
-       every mode in one place — progress, ETA, the file being worked on, the
-       mode's primary action and the run log. It binds RunStateViewModel only, so
-       it renders the same for tagging, dedup and upscaling. Mode-specific
-       commands the base does not carry (tagging's Pause/Resume/Abort,
-       upscaling's Stop) stay on the mode's own page until Phase 3 moves them. -->
+  <!-- The shared run bar (docs/ui-design.md §4.3, D-05/D10): the whole run
+       lifecycle of every mode in one place — progress, ETA, the file being worked
+       on, the run's actions and the run log. It binds RunStateViewModel only, so
+       it renders the same for tagging, dedup and upscaling, and it asks the
+       operation it binds for the mode's own words: the primary action's label
+       ("Start tagging" / "Scan" / "Run upscale"), whether the mode can pause
+       (tagging can) and what its Stop is called ("Abort" / "Stop").
+
+       It is the *only* run surface: a mode's own page carries its report and its
+       mode-specific parts, never a second progress bar, a second Start or a
+       second log. Two of each is how the tagging view shipped two run sections
+       that could disagree about whether a run was in flight. -->
   <Border Classes="card settingsCard" Padding="16"
           help:HelpScope.Topic="step3-log.html">
     <StackPanel Spacing="10">
@@ -24,15 +30,20 @@
                    TextWrapping="Wrap" MaxWidth="520" TextTrimming="CharacterEllipsis" />
       </WrapPanel>
 
+      <!-- One accent action for the region, hidden while a run is in flight; the
+           mode's own Stop/Pause/Resume appear for as long as they can be used and
+           disappear when they cannot (a hidden button that stayed disabled is a
+           button that looks broken). -->
       <WrapPanel>
-        <!-- The one accent action of the Output region: hidden while a run is in
-             flight (the mode's own page below carries its Stop until Phase 3),
-             enabled whenever the run gate allows it. One label for all three
-             modes: the mode's own CTA copy arrives with the IOperationViewModel
-             wiring (Phase 2 plan 03), when the legacy run pages retire. -->
-        <Button Content="Start" Command="{Binding StartCommand}"
+        <Button Content="{Binding RunActionLabel}" Command="{Binding StartCommand}"
                 Classes="accent" IsVisible="{Binding !IsRunning}"
                 IsEnabled="{Binding IsIdle}" Margin="0,0,8,8" />
+        <Button Content="Pause" Command="{Binding PauseAction}"
+                IsVisible="{Binding ShowsPause}" Margin="0,0,8,8" />
+        <Button Content="Resume" Command="{Binding ResumeAction}"
+                IsVisible="{Binding ShowsResume}" Margin="0,0,8,8" />
+        <Button Content="{Binding StopActionLabel}" Command="{Binding StopAction}"
+                IsVisible="{Binding ShowsStop}" Margin="0,0,8,8" />
       </WrapPanel>
 
       <Border Height="180" Padding="8">

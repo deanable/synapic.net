@@ -18,7 +18,7 @@ log &mdash; <span class="path">logs\synapic.log</span> next to the executable
 <h2>First, two rules</h2>
 
 <ul>
-<li><span class="term">If a field is missing, check Step 2 before anything
+<li><span class="term">If a field is missing, check the engine section before anything
 else.</span> The write step keeps only the tag fields you ticked, and does it
 silently. See <a href="step2-tag-fields.html">Tag fields</a>.</li>
 <li><span class="term">If it is slow, check what else is running.</span> Four
@@ -31,14 +31,14 @@ href="#performance">speed and timings</a>.</li>
 
 <table>
 <tr><th class="setting">Symptom</th><th>Cause and fix</th></tr>
-<tr><td>Wizard is greyed out; <span class="ui">Inference sidecar required</span></td><td>No inference server exists. Build one from the setup panel: <a href="first-run-sidecar.html">Build the inference server</a>.</td></tr>
+<tr><td>The workspace is disabled; <span class="ui">Inference sidecar required</span></td><td>No inference server exists. Build or download one in <span class="ui">Settings &rsaquo; Inference server</span>: <a href="first-run-sidecar.html">Build the inference server</a>.</td></tr>
 <tr><td><span class="ui">Server not detected</span> and nothing to build</td><td>No server executable for this platform. Install a release that includes one, or drop a standalone server next to <span class="path">Synapic.exe</span>.</td></tr>
 <tr><td>Build stops part-way, rows stay on <span class="ui">Not built</span></td><td>The build log is in the log pane. A first build needs the network to fetch Python and the inference packages; a later failure is often disk space. Rebuild once the cause is gone.</td></tr>
 <tr><td><span class="ui">Server starting&hellip;</span> for more than two minutes</td><td>A cold start unpacks and loads the model, which is genuinely slow the first time. If it never resolves, the log contains the server's own output &mdash; usually a missing model or a driver problem.</td></tr>
 <tr><td><code>Timed out waiting for the sidecar port file</code></td><td>The server process never got far enough to publish its port. Look a few lines up in the log for its error: a corrupted build, an antivirus quarantine, or no write access to the temporary folder.</td></tr>
-<tr><td><code>Sidecar process exited unexpectedly</code></td><td>The server crashed mid-run. Restart it from the toolbar; if it repeats on the same image, that image is the suspect &mdash; a truncated or unusual file.</td></tr>
+<tr><td><code>Sidecar process exited unexpectedly</code></td><td>The server crashed mid-run. Restart it from the inference server section; if it repeats on the same image, that image is the suspect &mdash; a truncated or unusual file.</td></tr>
 <tr><td><code>Model loading &mdash; retry shortly</code></td><td>The server is still loading the model. Wait for it to report healthy; Synapic retries the request once by itself.</td></tr>
-<tr><td>Tagging is slow and the status bar says <span class="ui">CPU</span> although Step 2 says <span class="ui">CUDA</span></td><td>The server in use has no usable CUDA, so it fell back to the CPU. The note beside the indicator says which build to get: build or download the <span class="ui">CUDA (NVIDIA GPU)</span> variant (see <a href="first-run-sidecar.html">Build the inference server</a>), then restart the server &mdash; the launch picks the CUDA executable from then on. A GPU-less machine reports the same thing, and CUDA needs a current NVIDIA driver.</td></tr>
+<tr><td>Tagging is slow and the status bar says <span class="ui">CPU</span> although the engine section says <span class="ui">CUDA</span></td><td>The server in use has no usable CUDA, so it fell back to the CPU. The note beside the indicator says which build to get: build or download the <span class="ui">CUDA (NVIDIA GPU)</span> variant (see <a href="first-run-sidecar.html">Build the inference server</a>), then restart the server &mdash; the launch picks the CUDA executable from then on. A GPU-less machine reports the same thing, and CUDA needs a current NVIDIA driver.</td></tr>
 <tr><td><span class="ui">stale build, rebuild recommended</span></td><td>Developer checkouts only: the server executable predates the inference source. Rebuild that variant.</td></tr>
 </table>
 
@@ -46,12 +46,12 @@ href="#performance">speed and timings</a>.</li>
 
 <table>
 <tr><th class="setting">Symptom</th><th>Cause and fix</th></tr>
-<tr><td>Only keywords were written</td><td>The Step 2 tag-field selection. Check the boxes, the orange warning, and the batch's first log line: <a href="step2-tag-fields.html#diagnose">the diagnosis recipe</a>.</td></tr>
-<tr><td>Category or description is empty for every image</td><td>A custom tag instruction that stopped asking for those keys. Press <span class="ui">Reset to built-in</span> in Step 2 and run one image to confirm.</td></tr>
+<tr><td>Only keywords were written</td><td>The engine section's tag-field selection. Check the boxes, the orange warning, and the batch's first log line: <a href="step2-tag-fields.html#diagnose">the diagnosis recipe</a>.</td></tr>
+<tr><td>Category or description is empty for every image</td><td>A custom tag instruction that stopped asking for those keys. Press <span class="ui">Reset to built-in</span> in the engine section and run one image to confirm.</td></tr>
 <tr><td>Keywords came back empty although the description looks fine</td><td>Same cause: with a custom instruction, the reply can be valid JSON without a keyword list. The server logs a warning when this happens; reset to the built-in instruction.</td></tr>
 <tr><td>Raw JSON or code fences appear in the description</td><td>The model's reply could not be read as the expected shape &mdash; almost always a custom instruction or system prompt that asked for a different format. Clear both.</td></tr>
 <tr><td>Descriptions are vague and generic</td><td>The image was downscaled too far. Raise <span class="ui">AI image scale</span> to 100% and turn off the 200-pixel thumbnail: <a href="step1-limits.html">How many items to process</a>.</td></tr>
-<tr><td>Categories are plausible but not your vocabulary</td><td>The model is not constrained to a list. Steer it with a system prompt, or curate categories by hand &mdash; see <a href="step4-results.html">Step 4</a>.</td></tr>
+<tr><td>Categories are plausible but not your vocabulary</td><td>The model is not constrained to a list. Steer it with a system prompt, or curate categories by hand &mdash; see <a href="step4-results.html">Tagging results</a>.</td></tr>
 <tr><td>A run finishes suspiciously fast, with no results</td><td>The batch found nothing. The log says <code>Found 0 image files</code> or reports no matching items; check the folder path, the scope and the filters.</td></tr>
 </table>
 
@@ -64,7 +64,7 @@ href="#performance">speed and timings</a>.</li>
 <tr><td>Count looks wrong, or counting fails</td><td>The count is a server-side preview. If it fails, the batch still applies your filters; check the newest log line for the reason.</td></tr>
 <tr><td><code>Daminion returned the same ids as the previous page</code></td><td>The server ignored the paging offset. Synapic stops rather than looping; the batch covers the items fetched so far, so narrow the scope and run again.</td></tr>
 <tr><td><code>Could not download image for item 12345</code></td><td>The item exists but its image could not be fetched: a permissions problem, or a file the server cannot find.</td></tr>
-<tr><td>Items are updated but keywords are missing in Daminion</td><td>Look at the write path rather than the model: check the tag-field selection, then whether the account may write keywords. <span class="ui">Verify Daminion Writes</span> in Step 4 reports what the catalog actually holds.</td></tr>
+<tr><td>Items are updated but keywords are missing in Daminion</td><td>Look at the write path rather than the model: check the tag-field selection, then whether the account may write keywords. <span class="ui">Verify Daminion Writes</span> in the report tells you what the catalog actually holds.</td></tr>
 </table>
 
 <h2 id="performance">Speed and timings</h2>

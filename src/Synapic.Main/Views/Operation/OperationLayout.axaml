@@ -9,159 +9,62 @@
              x:Name="OperationLayoutRoot"
              x:DataType="vm:ViewModelBase">
 
-  <!-- One layout for every mode (docs/ui-design.md §2.2/§3, D-01/D5): three regions
-       in reading order — what to work on → how to work on it → what happened.
+  <!-- One view for every processing operation (docs/mock-up/Mockup.svg, the three
+       rows after Settings): the app's configuration lives on the Settings view, so
+       a processing view carries only what a run needs and what it produced —
 
-       There is no step chain any more: the shell fills these slots per mode, so
-       each mode's tunables live in exactly one region instead of behind numbered
-       pages. The slots are handed in by the host (MainLayout.axaml.cs) because a
-       binding written on this element resolves against the element's own
-       DataContext, which is not the shell:
-         SharedSource → Region A (the one shared source, D4, + its limits row)
-         Parameters   → Region B (the open mode's own settings)
-         Run, Report  → Region C (progress/controls, then the report)
-       The regions stack in one column, which is the narrow-window form of the
-       design: it keeps the reading order at every width and never clips a dense
-       parameter row. -->
+         · Working on   — the shared source's read-only profile, and the scope,
+                          filters and record count the run works on (D10: a scope
+                          is a run's choice, so it is made here).
+         · Output       — the shared run bar, which is the one run surface, and the
+                          operation's report where it has one.
+
+       The slots are handed in by the host (MainLayout.axaml.cs) because a binding
+       written on this element resolves against the element's own DataContext,
+       which is not the shell:
+         SharedSource → the read-only source summary
+         Run, Report  → the output region
+       The regions stack in one column, which is the narrow-window form: it keeps
+       the reading order at every width and never clips a dense parameter row. -->
   <StackPanel Spacing="12" Classes="operationLayout">
 
-    <!-- ── Region A · Data source (full-width, top of the form) ────────────── -->
-    <!-- One shared source, passed in by the host (SharedSource) and rendered by
-         the same panel on every route: the source configured once is the source
-         every mode shows and runs on (D-02/D4). This is where it is configured
-         (ui-design §8: local folder, Daminion login, scope, filters, limits row)
-         — the app-wide settings view has no Source section, because the source
-         is one object for every mode, not an app preference. -->
-    <Border Classes="card settingsCard dataSourceRegion" Padding="16"
-            help:HelpScope.Topic="step1-datasource.html">
-      <StackPanel Spacing="8">
-        <TextBlock Classes="sectionTitle" Text="Data source" />
+    <!-- ── Working on: the shared source, read-only ───────────────────────── -->
+    <!-- The one shared source (D4), passed in by the host and rendered by the
+         same read-only strip on every route. It has no inputs: the source and
+         everything else about it are configured on the Settings view, so there is
+         exactly one place to change them. -->
+    <Border Classes="card settingsCard sourceSummaryRegion" Padding="16"
+            help:HelpScope.Topic="workflow-overview.html">
+      <StackPanel Spacing="6">
+        <TextBlock Classes="sectionTitle" Text="Working on" />
+        <ContentControl x:Name="SourceSummaryHost"
+                        Content="{Binding #OperationLayoutRoot.SharedSource}">
+          <ContentControl.DataTemplates>
+            <DataTemplate DataType="vms:Step1DatasourceViewModel">
+              <steps:SourceStatusStrip />
+            </DataTemplate>
+          </ContentControl.DataTemplates>
+        </ContentControl>
+
+        <!-- The scope the run works on: one shared selection, chosen where the run
+             happens (D10). The same view model instance the Settings view's Data
+             source form binds, so it is a second surface, not a second setting. -->
+        <op:ScopeSelectionPanel DataContext="{Binding #OperationLayoutRoot.SharedSource}" />
+
         <TextBlock Classes="hint" TextWrapping="Wrap"
-                   Text="Local folder or Daminion catalog, its scope and the record count — one source for every operation." />
-        <ContentControl x:Name="DataSourceHost"
-                        Content="{Binding #OperationLayoutRoot.SharedSource}">
-          <ContentControl.DataTemplates>
-            <DataTemplate DataType="vms:Step1DatasourceViewModel">
-              <steps:DatasourceSourcePanel />
-            </DataTemplate>
-          </ContentControl.DataTemplates>
-        </ContentControl>
-
-        <Separator Margin="0,2" />
-
-        <ContentControl x:Name="DataSourceLimitsHost"
-                        Content="{Binding #OperationLayoutRoot.SharedSource}">
-          <ContentControl.DataTemplates>
-            <DataTemplate DataType="vms:Step1DatasourceViewModel">
-              <op:SourceLimitsPanel />
-            </DataTemplate>
-          </ContentControl.DataTemplates>
-        </ContentControl>
+                   Text="The folder or server the images come from, and the model and every rule, are set on the Settings view — this view runs with what is set there, on the scope chosen above." />
       </StackPanel>
     </Border>
 
-    <!-- ── The mode rail, then Region B · Parameters ───────────────────────── -->
-    <!-- The two columns the layout asks for: the three operations on the left,
-         the open one's settings on the right. Pressing a mode button switches
-         the mode through the same route command the dashboard panels carry, so
-         the settings, the run surface and the report all arrive together, and
-         the lit button is computed from Shell.Current (MainWindowViewModel's
-         IsTagModeActive/IsDedupModeActive/IsUpscaleModeActive) rather than
-         remembered by the rail — pressing the open mode's own button therefore
-         keeps it open instead of toggling the view empty.
-
-         The shared Data source keeps the full width above this row because it is
-         one source for every mode (D4, not a per-mode setting), and Output keeps
-         the full width below it because a run log and a results grid need the
-         room; only the mode's own settings belong in the per-mode column. -->
-    <!-- The rail is a fixed 200 px rather than Auto: an Auto column is measured
-         with infinite width, so the rail's wrapping hint line would take the room
-         it wanted and leave the settings column whatever was left over (measured
-         at 144 px at a 900 px window, which clipped the tagging form's sliders).
-         A fixed rail keeps the settings column the rest of the row at every
-         size, and the hint wraps inside it. -->
-    <Grid ColumnDefinitions="200,*">
-
-      <Border Grid.Column="0" Classes="card settingsCard modeRail" Padding="12"
-              Margin="0,0,12,0" help:HelpScope.Topic="workflow-overview.html">
-        <StackPanel Spacing="6">
-          <TextBlock Classes="sectionTitle" Text="Operation" />
-          <!-- The shell's own view model, handed in by the host (ModeRail): the
-               buttons need the route commands and the derived active flags, and
-               they live on the shell, not on this element's DataContext (the
-               mode's step view model). -->
-          <ContentControl x:Name="ModeRailHost"
-                          Content="{Binding #OperationLayoutRoot.ModeRail}">
-            <ContentControl.DataTemplates>
-              <DataTemplate DataType="vm:MainWindowViewModel">
-                <StackPanel Spacing="6">
-                  <Button Classes="modeTab" Classes.active="{Binding IsTagModeActive}"
-                          Command="{Binding StartTaggingRouteCommand}" Content="🏷  Tagging"
-                          ToolTip.Tip="Tagging: run the AI model over the shared source." />
-                  <Button Classes="modeTab" Classes.active="{Binding IsDedupModeActive}"
-                          Command="{Binding StartDedupRouteCommand}" Content="🧹  Deduplication"
-                          ToolTip.Tip="Deduplication: find and resolve duplicate groups." />
-                  <Button Classes="modeTab" Classes.active="{Binding IsUpscaleModeActive}"
-                          Command="{Binding StartUpscaleRouteCommand}" Content="✨  Upscaling"
-                          ToolTip.Tip="Upscaling: enhance resolution over the shared source." />
-                  <TextBlock Classes="hint" TextWrapping="Wrap" Margin="0,4,0,0"
-                             Text="Switching keeps the other modes' settings and the shared source." />
-                </StackPanel>
-              </DataTemplate>
-            </ContentControl.DataTemplates>
-          </ContentControl>
-        </StackPanel>
-      </Border>
-
-      <Border Grid.Column="1" Classes="card settingsCard parametersRegion" Padding="16"
-            help:HelpScope.Topic="settings-reference.html">
-        <StackPanel Spacing="8">
-          <TextBlock Classes="sectionTitle" Text="Parameters" />
-          <TextBlock Classes="hint" TextWrapping="Wrap"
-                     Text="The settings this operation runs with." />
-          <ContentControl x:Name="ParametersHost"
-                          Content="{Binding #OperationLayoutRoot.Parameters}">
-            <ContentControl.DataTemplates>
-              <!-- Every mode's parameters, inline: one view model, one view. These
-                   were the contents of the three modal settings dialogs (retired by
-                   ui-design D3) and of the wizard's numbered steps (retired by D5) —
-                   nothing here builds a window and nothing here is a second copy.
-                   Tagging's whole engine form (model, device, tag fields, scoring,
-                   prompts) is its Parameters region; the compact picker that used
-                   to duplicate it on step 1 is gone. -->
-              <DataTemplate DataType="vms:Step2EngineViewModel">
-                <steps:Step2Engine />
-              </DataTemplate>
-              <DataTemplate DataType="vms:StepDedupViewModel">
-                <steps:DedupSettingsPanel />
-              </DataTemplate>
-              <DataTemplate DataType="vms:StepUpscaleViewModel">
-                <steps:UpscaleSettingsPanel />
-              </DataTemplate>
-              <!-- A step that has no parameters of its own (or a mode with none
-                   selected) must render nothing at all. A ContentControl whose
-                   content matches no template draws the content's ToString() —
-                   i.e. the view model's type name as visible text — so this empty
-                   template has to be the last one, so every mode above wins. -->
-              <DataTemplate DataType="vm:ViewModelBase">
-                <Panel />
-              </DataTemplate>
-            </ContentControl.DataTemplates>
-          </ContentControl>
-        </StackPanel>
-      </Border>
-
-    </Grid>
-
-    <!-- ── Region C · Output / report ──────────────────────────────────────── -->
+    <!-- ── Output: run bar, the operation's run surface, its report ───────── -->
     <Border Classes="card settingsCard outputRegion" Padding="16"
             help:HelpScope.Topic="workflow-overview.html">
       <StackPanel Spacing="12">
         <TextBlock Classes="sectionTitle" Text="Output" />
 
-        <!-- The shared run bar for the modes that own a run (Phase 1's
+        <!-- The shared run bar for the operations that own a run (Phase 1's
              RunStateViewModel): progress, ETA and Stop in one place on every
-             mode. A mode with no run renders nothing. -->
+             operation. An operation with no run renders nothing. -->
         <ContentControl x:Name="RunHost"
                         Content="{Binding #OperationLayoutRoot.Run}">
           <ContentControl.DataTemplates>
@@ -180,15 +83,14 @@
           </ContentControl.DataTemplates>
         </ContentControl>
 
-        <!-- The mode's own run surface: the controls and log a run needs
-             (tagging's Start/Pause/Resume/Abort, dedup's Scan/Apply, upscaling's
-             batch). -->
+        <!-- The operation's own page, when it has one beyond the run: dedup's
+             scan-and-review and upscaling's parameter read-back. Tagging has
+             none — its page was a second copy of the run bar (the same progress,
+             the same Start, a second log) and is gone, so the bar is the one run
+             surface in every mode (D10). -->
         <ContentControl x:Name="RunPageHost"
                         Content="{Binding #OperationLayoutRoot.Run}">
           <ContentControl.DataTemplates>
-            <DataTemplate DataType="vms:Step3ProcessViewModel">
-              <steps:Step3Process />
-            </DataTemplate>
             <DataTemplate DataType="vms:StepDedupViewModel">
               <steps:StepDedup />
             </DataTemplate>
@@ -201,8 +103,8 @@
           </ContentControl.DataTemplates>
         </ContentControl>
 
-        <!-- The mode's report, when it has one (tagging: the results grid with
-             its export, retry and Daminion verification). -->
+        <!-- The operation's report, when it has one (tagging: the results grid
+             with its export, retry and Daminion verification). -->
         <ContentControl x:Name="ReportHost"
                         Content="{Binding #OperationLayoutRoot.Report}">
           <ContentControl.DataTemplates>

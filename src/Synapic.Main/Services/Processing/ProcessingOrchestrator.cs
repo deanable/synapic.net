@@ -279,7 +279,35 @@ public sealed class ProcessingOrchestrator
             var tags = new TagResult(category, keywords, description);
             var written = await WriteMetadataAsync(item, tags, ct).ConfigureAwait(false);
 
-            var status = written ? "Success" : "Write Failed";
+            // The sidecar had to put the reply back together before it could be
+            // read (JSON hunts are normally clean — the prompt was tuned until
+            // 13/13 replies parsed), so say so per item instead of letting a
+            // mangled batch look like a clean one. The tags are still good, so
+            // this is a status on a success, not a failure. Null and empty mean
+            // the same thing: a sidecar older than this field sends no member at
+            // all, which deserializes to null.
+            var repairs = response.ReplyRepairs ?? Array.Empty<string>();
+            var repaired = repairs.Length > 0;
+
+            // The sidecar asked the model again when its first reply was not
+            // readable JSON. Nothing about it is wrong on this side; it is
+            // reported because a batch that needed a second ask for every image
+            // otherwise looks exactly like a clean one.
+            if (response.ReplyRetried)
+            {
+                await _log("The first reply could not be read as JSON — asked the model again")
+                    .ConfigureAwait(false);
+            }
+
+            if (repaired)
+            {
+                await _log($"Reply repaired before reading: {string.Join("; ", repairs)}")
+                    .ConfigureAwait(false);
+            }
+
+            var status = written
+                ? (repaired ? ProcessStatus.SuccessRepaired : ProcessStatus.Success)
+                : ProcessStatus.WriteFailed;
             var tagsSummary = $"Cat: {category}, Kws: {keywords.Length}, Desc: {Truncate(description, 20)}";
             await _log($"Result: {tagsSummary}").ConfigureAwait(false);
 

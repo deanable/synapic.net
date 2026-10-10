@@ -2,16 +2,16 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
-<title>Step 2 &mdash; Tagging Engine</title>
+<title>Inference engine</title>
 <link rel="stylesheet" type="text/css" href="help.css">
 </head>
 <body>
 
-<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; The workflow &rsaquo; Step 2 &mdash; Tagging Engine</p>
+<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; Settings &rsaquo; Inference engine</p>
 
-<h1>Step 2 &mdash; Tagging Engine</h1>
+<h1>Inference engine</h1>
 
-<p class="lead">Step 2 is where the interesting decisions live: which model runs,
+<p class="lead">The inference engine section is where the interesting decisions live: which model runs,
 what you ask it for, and which of its answers are allowed to reach your images.
 The defaults are deliberately sensible; you can tag a whole library without
 changing anything here.</p>
@@ -19,7 +19,7 @@ changing anything here.</p>
 <h2>The model</h2>
 
 <p>Synapic ships with one family of models &mdash; a vision-language model that
-answers in the three fields this app needs. The list at the top of the step shows
+answers in the three fields this app needs. The list at the top of the section shows
 what is already in the local model cache, with each model's task, size, and a
 <span class="ui">&check; downloaded</span> marker.</p>
 
@@ -63,7 +63,7 @@ tells the running server, before the model is loaded, which device to build its
 pipeline on. A server already running is told the same thing the moment you
 change this control.</p>
 
-<p>The status bar shows the device the server reports for the model it actually
+<p>The bottom of the sidebar shows the device the server reports for the model it actually
 loaded, so a server that had to fall back says <span class="ui">CPU</span> there
 even while this control says <span class="ui">CUDA</span>, with a note beside it
 explaining that the CUDA build is what is missing. That is also what the log
@@ -114,7 +114,7 @@ gets written</a> takes two minutes and can save a batch.</p>
 <ul>
 <li><a href="step2-tag-fields.html">Tag fields: what gets written</a></li>
 <li><a href="step2-prompts.html">Prompts: system prompt and tag instruction</a></li>
-<li><a href="step2-settings.html">What Step 2 remembers</a></li>
+<li><a href="step2-settings.html">What the engine settings remember</a></li>
 <li><a href="first-run-sidecar.html">Build the inference server</a></li>
 </ul>
 </div>

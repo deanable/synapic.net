@@ -182,7 +182,7 @@ Run inference on one image and return its tags.
 
 **Responses**
 
-- `200` — Inference result (TagResponse): category, keywords, description, probabilities, optional scoring, inference_ms, model_used.
+- `200` — Inference result (TagResponse): category, keywords, description, probabilities, optional scoring, inference_ms, model_used, reply_repairs (the rewrites the JSON hunt needed before the reply could be read; empty for a clean reply), reply_retried (the first reply could not be read as JSON, so the model was asked once more).
 - `404` — Image not found.
 - `422` — Validation error (blank image_path, bad task).
 - `503` — Timed out waiting for an in-flight model load; the host retries once.
@@ -198,6 +198,8 @@ Run inference on one image and return its tags.
 | `scoring` | ScoringResult | yes |
 | `inference_ms` | integer | no |
 | `model_used` | string | yes |
+| `reply_repairs` | array of string | yes |
+| `reply_retried` | boolean | no |
 
 ### `POST /upscale`
 
@@ -295,6 +297,8 @@ Wire shapes of every DTO used above (nested DTOs included).
 | `scoring` | ScoringResult | yes |
 | `inference_ms` | integer | no |
 | `model_used` | string | yes |
+| `reply_repairs` | array of string | yes |
+| `reply_retried` | boolean | no |
 
 ### `ScoringResult`
 

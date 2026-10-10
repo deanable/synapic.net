@@ -1,0 +1,99 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Synapic.Main.ViewModels.Steps"
+             xmlns:help="using:Synapic.Main.Services"
+             x:Class="Synapic.Main.Views.Operation.ScopeSelectionPanel"
+             x:DataType="vm:Step1DatasourceViewModel">
+
+  <!-- What the run works on (docs/ui-design.md §4.1, D10): the catalog scope, its
+       filters and the record count that follows them. It is on every processing
+       view because that is where a scope is chosen — Tagging tags a scope,
+       Deduplication scans a scope, Upscaling enhances a scope — while the source
+       itself (the folder, or the server and its login) stays on the Settings view,
+       where it is app configuration rather than a run's choice.
+
+       One shared selection, two surfaces: this panel binds the same
+       Step1DatasourceViewModel instance the Settings view does, so a scope chosen
+       here is the scope the other two operations and the Settings view report.
+       The scope and filters apply to a Daminion catalog; a local folder is worked
+       on whole, so the panel says that instead of offering controls that would do
+       nothing. -->
+  <Border Classes="card settingsCard scopePanel" Padding="16"
+          help:HelpScope.Topic="step1-scope-filters.html">
+    <StackPanel Spacing="8">
+      <TextBlock Classes="sectionTitle" Text="Scope" />
+
+      <!-- Local folder: no scope to choose — the run takes what the folder holds
+           (recursive or not is set with the folder, on the Settings view). -->
+      <TextBlock Classes="hint" TextWrapping="Wrap" IsVisible="{Binding IsLocal}"
+                 Text="A local folder is worked on whole: every image in it is in scope. The folder and its subfolder setting are on the Settings view." />
+
+      <!-- Daminion: the catalog scope, then the filters that narrow it. Stacked
+           rather than one wide row — four controls in a row only fit at 1280 and
+           the last one was the first thing pushed off the edge. -->
+      <StackPanel Spacing="8" IsVisible="{Binding IsDaminion}">
+        <Grid ColumnDefinitions="*,16,*">
+          <!-- Scope column -->
+          <StackPanel Grid.Column="0" Spacing="8"
+                      help:HelpScope.Topic="step1-scope-filters.html">
+            <ComboBox SelectedIndex="{Binding ScopeIndex}" ItemsSource="{Binding ScopeOptions}"
+                      MinWidth="190" HorizontalAlignment="Stretch"
+                      help:HelpScope.Topic="settings-reference.html#daminion-scope" />
+            <TextBox Watermark="Search term"
+                     IsVisible="{Binding IsSearchScope}"
+                     Text="{Binding SearchTerm}" />
+            <WrapPanel IsVisible="{Binding IsCollectionScope}">
+              <ComboBox ItemsSource="{Binding Collections}"
+                        SelectedItem="{Binding SelectedCollection}"
+                        DisplayMemberBinding="{Binding Name}"
+                        MinWidth="200" Margin="0,0,8,8"
+                        IsEnabled="{Binding IsDaminionConnected}" />
+              <TextBox Watermark="Collection id (manual)" Text="{Binding CollectionId}"
+                       Width="150" Margin="0,0,8,8" />
+            </WrapPanel>
+            <WrapPanel IsVisible="{Binding IsSavedSearchScope}">
+              <ComboBox ItemsSource="{Binding SavedSearches}"
+                        SelectedItem="{Binding SelectedSavedSearch}"
+                        DisplayMemberBinding="{Binding Name}"
+                        MinWidth="200" Margin="0,0,8,8"
+                        IsEnabled="{Binding IsDaminionConnected}" />
+              <TextBox Watermark="Saved search id (manual)" Text="{Binding SavedSearchId}"
+                       Width="150" Margin="0,0,8,8" />
+            </WrapPanel>
+          </StackPanel>
+
+          <!-- Filters column -->
+          <StackPanel Grid.Column="2" Spacing="8"
+                      help:HelpScope.Topic="step1-scope-filters.html">
+            <WrapPanel>
+              <TextBlock Classes="fieldLabel" Text="Status:" Margin="0,0,8,8" />
+              <ComboBox SelectedIndex="{Binding StatusFilterIndex}"
+                        ItemsSource="{Binding StatusFilterOptions}" MinWidth="120"
+                        Margin="0,0,8,8"
+                        help:HelpScope.Topic="settings-reference.html#status-filter" />
+            </WrapPanel>
+            <TextBlock Text="Only items with untagged:" Opacity="0.8" />
+            <WrapPanel help:HelpScope.Topic="settings-reference.html#untagged-filters">
+              <CheckBox Content="Keywords" IsChecked="{Binding UntaggedKeywords}" Margin="0,0,16,8" />
+              <CheckBox Content="Categories" IsChecked="{Binding UntaggedCategories}" Margin="0,0,16,8" />
+              <CheckBox Content="Description" IsChecked="{Binding UntaggedDescription}" Margin="0,0,16,8" />
+            </WrapPanel>
+            <Button Content="Select all untagged" Command="{Binding SelectAllUntaggedCommand}"
+                    HorizontalAlignment="Left" />
+          </StackPanel>
+        </Grid>
+      </StackPanel>
+
+      <!-- Record count: automatic on launch, on connect and on every scope,
+           filter or folder change. The button is only a re-ask. -->
+      <WrapPanel help:HelpScope.Topic="step1-scope-filters.html">
+        <TextBlock Text="{Binding CountText}" VerticalAlignment="Center" FontWeight="SemiBold"
+                   IsVisible="{Binding CountText}" Margin="0,0,12,8" />
+        <ProgressBar IsIndeterminate="True" Width="80" Height="6" VerticalAlignment="Center"
+                     IsVisible="{Binding IsCounting}" Margin="0,0,12,8" />
+        <Button Content="Recount" Command="{Binding CountCommand}" Margin="0,0,12,8"
+                ToolTip.Tip="The count keeps itself current; press this to ask again (the server, or the folder)." />
+      </WrapPanel>
+    </StackPanel>
+  </Border>
+</UserControl>

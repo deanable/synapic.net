@@ -7,37 +7,37 @@
 </head>
 <body>
 
-<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; The workflow &rsaquo; Deduplication</p>
+<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; The operations &rsaquo; Deduplication</p>
 
 <h1>Deduplication</h1>
 
-<p class="lead">A separate tool, not part of the tagging wizard: it scans a
+<p class="lead">A separate operation, not part of tagging: it scans a
 source for images that look the same, groups the candidates into a vertical
 list, and lets you decide which copies to keep before acting on the rest. The
 source is either a local folder or the Daminion catalog &mdash; the same choice
-Step 1 makes for tagging.</p>
+the data source makes for tagging.</p>
 
 <div class="note">
 <p class="first">It has its own route.</p>
-<p>The start screen offers <span class="ui">Deduplication</span> beside
-<span class="ui">Tagging</span> and <span class="ui">Upscaling</span>, and
-that route is Datasource &rarr;
-Deduplication only: the Engine, Process and Results steps never appear. From the
-tagging route the same tool stays reachable through the
-<span class="ui">Deduplication</span> tab once you reach Results. See <a
-href="workflow-overview.html">Source first, then the route</a>.</p>
+<p>The sidebar offers <span class="ui">Deduplication</span> beside
+<span class="ui">Tagging</span> and <span class="ui">Upscaling</span>. Each is a view of
+its own rather than a step in a shared chain, and the
+source it runs over &mdash; the same one tagging uses &mdash; is configured in the
+Settings view. See <a
+href="workflow-overview.html">How a run works</a>.</p>
+
 </div>
 
-<h2>Choosing the source</h2>
+<h2>The source it scans</h2>
 
 <ol class="steps">
-<li>Pick <span class="ui">Local Folder</span> or <span class="ui">Daminion
-Catalog</span> at the top. The catalog side reuses the scope configured on the
-start screen (entire catalog, keyword search, shared collection or saved search)
-&mdash; its summary is shown above the scan button.</li>
-<li>For a local source, give it a <span class="ui">Folder to scan</span> (with
-<span class="ui">Browse&hellip;</span> if you prefer). Subfolders are included
-automatically and the scan covers <span class="path">.jpg</span>,
+<li>Deduplication reads the shared source, so there is no second source to choose. The
+catalog side reuses the scope configured in <span class="ui">Settings &rsaquo; Data source</span>
+(entire catalog, keyword search, shared collection or saved search) &mdash; its
+summary is shown above the scan button.</li>
+<li>For a local source, the folder is the one set in <span class="ui">Settings &rsaquo; Data source</span>. Subfolders are included
+automatically, and the scan covers <span class="path">.jpg</span>,
+
 <span class="path">.jpeg</span>, <span class="path">.png</span>,
 <span class="path">.tif</span> and <span class="path">.tiff</span>. For the
 catalog source, items the catalog has already hashed are compared without
@@ -61,9 +61,9 @@ reports what it still holds &mdash; which should read zero files.</p>
 <h2>Scanning</h2>
 
 <ol class="steps">
-<li>Choose an <span class="ui">algorithm</span> and a
-<span class="ui">Threshold</span>. The defaults are a good starting point. For the catalog source the
-<span class="ui">Server hash</span> picker decides how the catalog's own
+<li>The <span class="ui">algorithm</span> and the
+<span class="ui">Threshold</span> come from <span class="ui">Settings &rsaquo; Deduplication</span>; the defaults are a good starting point. For the catalog source the
+<span class="ui">Server hash</span> rule decides how the catalog's own
 content hashes are compared: <span class="ui">Exact</span> (the default) trusts
 only identical values, <span class="ui">Hamming</span> compares them by
 similarity at the threshold.</li>
@@ -111,8 +111,8 @@ from the server's thumbnail endpoint); nothing is saved to disk. A row whose
 image cannot be decoded simply shows no thumbnail. <strong>A checked item is
 kept</strong>; the action applies to the unchecked ones.</p>
 
-<p>Instead of ticking rows by hand, use the <span class="ui">Auto-select
-keep-set</span> switches above the list: <span class="ui">Oldest</span>,
+<p>Instead of ticking rows by hand, use the <span class="ui">Keep-set
+rules</span> in <span class="ui">Settings &rsaquo; Deduplication</span>: <span class="ui">Oldest</span>,
 <span class="ui">Newest</span>, <span class="ui">Smallest</span> and
 <span class="ui">Largest</span>. Each active switch ticks the item it names in
 every group; several switches tick the union of their picks. Ties go to the
@@ -173,7 +173,7 @@ Each scan is a fresh pass.</li>
 <div class="seealso">
 <h2>See also</h2>
 <ul>
-<li><a href="step1-limits.html">How many items to process</a></li>
+<li><a href="step1-limits.html">How many items, and how much of each image</a></li>
 <li><a href="metadata-written.html">What gets written to your images</a></li>
 <li><a href="admin-logs-support.html#logs">Logs, crashes and support</a> &mdash; where completed actions are recorded</li>
 </ul>

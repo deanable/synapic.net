@@ -5,38 +5,27 @@
              x:Class="Synapic.Main.Views.Wizard.StepDedup"
              x:DataType="vm:StepDedupViewModel">
 
-  <!-- 4 · Deduplication: what the scan works on, the scan itself, the review of
+  <!-- The deduplication run page: what the scan works on, the scan itself, the review of
        the groups and the apply. The rule settings (algorithm, threshold, server
-       hashing, keep-set rules) live in the Parameters region above, and the page
-       reports them back on the rule line so the scan is never started blind. -->
+       hashing, keep-set rules) live in the Settings view's Deduplication section, and
+       the page reports them back on the rule line so the scan is never started blind. -->
   <StackPanel Spacing="12">
-    <TextBlock Classes="stepTitle" Text="4 · Deduplication" />
     <TextBlock Classes="hint"
-               Text="Scan rules and the keep-set rule live in the Parameters region above; the scan, the review and the apply happen here." />
+               Text="The scan rules and the keep-set rule live in the Settings view's Deduplication section; the scan, the review and the apply happen here." />
 
     <!-- The source the scan runs on comes from the shared data-source strip
          (Region A): one source, configured once, shown identically in every
          mode — this page no longer offers a second, dedup-only source. -->
 
-    <!-- The scan, with its rules read back from the Parameters region. -->
+    <!-- The scan, with its rules read back from the Settings view. The scan
+         itself is started and stopped on the shared run bar above (D10, whose
+         primary action is this mode's "Scan" and whose Stop is its scan Stop) —
+         this card reports the rules and the result, so the scan has one entry
+         point and one Stop instead of two of each. -->
     <Border Classes="card settingsCard" Padding="16">
       <StackPanel Spacing="8">
-        <DockPanel>
-          <!-- The buttons keep their size at the right edge; the heading line
-               ellipsizes instead of pushing them out of the card. -->
-          <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8"
-                      Margin="12,0,0,0">
-            <Button Content="Scan" Command="{Binding ScanCommand}" Classes="accent"
-                    ToolTip.Tip="Scan the source for duplicate groups." />
-            <!-- UI-REVIEW #1, scan half: a long scan is cancellable, whichever
-                 entry point started it (this button or the shared run bar). -->
-            <Button Content="Stop" Command="{Binding StopScanCommand}"
-                    IsVisible="{Binding IsScanning}"
-                    ToolTip.Tip="Cancel the scan in progress." />
-          </StackPanel>
-          <TextBlock Classes="sectionTitle" Text="Scan for duplicates"
-                     VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-        </DockPanel>
+        <TextBlock Classes="sectionTitle" Text="Scan for duplicates"
+                   TextTrimming="CharacterEllipsis" />
 
         <TextBlock Classes="hint" Text="{Binding ScanSettingsSummary}" />
 

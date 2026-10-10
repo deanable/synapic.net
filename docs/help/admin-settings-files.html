@@ -19,8 +19,8 @@ interesting leaves the machine.</p>
 
 <table>
 <tr><th class="setting">What</th><th>Path</th><th>Notes</th></tr>
-<tr><td>Application settings</td><td><span class="path">%APPDATA%\Synapic\config.json</span></td><td>Wizard defaults and UI preferences. Off Windows: <span class="path">$XDG_CONFIG_HOME/Synapic/config.json</span> or <span class="path">~/.config/Synapic/config.json</span>.</td></tr>
-<tr><td>Saved system prompts</td><td><span class="path">%APPDATA%\Synapic\system-prompts.json</span></td><td>The Step 2 prompt history, newest first. Pruning it never changes a run's current settings. See <a href="step2-prompts.html">Prompts</a>.</td></tr>
+<tr><td>Application settings</td><td><span class="path">%APPDATA%\Synapic\config.json</span></td><td>Settings-file defaults and UI preferences. Off Windows: <span class="path">$XDG_CONFIG_HOME/Synapic/config.json</span> or <span class="path">~/.config/Synapic/config.json</span>.</td></tr>
+<tr><td>Saved system prompts</td><td><span class="path">%APPDATA%\Synapic\system-prompts.json</span></td><td>The engine section's prompt history, newest first. Pruning it never changes a run's current settings. See <a href="step2-prompts.html">Prompts</a>.</td></tr>
 <tr><td>Current log</td><td><span class="path">logs\synapic.log</span> next to the executable</td><td>Falls back to <span class="path">%LOCALAPPDATA%\Synapic\logs</span> when the install folder is not writable. Starts empty each run.</td></tr>
 <tr><td>Previous logs</td><td><span class="path">logs\archives\</span></td><td>Each start moves the previous log in here; the ten most recent are kept.</td></tr>
 <tr><td>Crash reports</td><td><span class="path">logs\crashes\</span></td><td>One text file per crash: the exception plus a snapshot of the run's log.</td></tr>
@@ -37,7 +37,7 @@ preserved when the app rewrites it, so a hand-added key survives.</p>
 <table>
 <tr><th class="setting">Key</th><th>Meaning</th></tr>
 <tr><td><code>version</code></td><td>Config schema version.</td></tr>
-<tr><td><code>datasource.type</code>, <code>.localPath</code>, <code>.localRecursive</code></td><td>The local-folder side of Step 1.</td></tr>
+<tr><td><code>datasource.type</code>, <code>.localPath</code>, <code>.localRecursive</code></td><td>The local-folder side of the data source.</td></tr>
 <tr><td><code>datasource.daminion.*</code></td><td>Server URL, username, scope, search term, ids, untagged filters, status filter and max items. The password is <em>not</em> here; it lives encrypted in the registry.</td></tr>
 <tr><td><code>engine.modelId</code>, <code>.task</code>, <code>.device</code></td><td>The default engine selection, for example <code>LiquidAI/LFM2.5-VL-450M</code>, <code>image-text-to-text</code>, <code>cpu</code>.</td></tr>
 <tr><td><code>engine.confidenceThreshold</code>, <code>.probabilityMode</code>, <code>.probabilityThreshold</code>, <code>.probabilityCandidates</code></td><td>The scoring controls. They do not affect the local vision-language model.</td></tr>
@@ -54,7 +54,7 @@ preserved when the app rewrites it, so a hand-added key survives.</p>
 need no administrator rights. They exist on Windows only: on Linux and macOS the
 app runs with defaults and forgets these settings between runs.</p>
 
-<h3>Step 2 &mdash; <code>HKCU\Software\Synapic\Engine</code></h3>
+<h3>Inference engine &mdash; <code>HKCU\Software\Synapic\Engine</code></h3>
 
 <table>
 <tr><th class="setting">Value</th><th>Type</th><th>Default</th></tr>
@@ -81,7 +81,7 @@ item. Reading them takes seconds and settles the most common "Synapic only wrote
 keywords" report.</p>
 </div>
 
-<h3>Step 1 &mdash; <code>HKCU\Software\Synapic\Daminion</code></h3>
+<h3>Data source &mdash; <code>HKCU\Software\Synapic\Daminion</code></h3>
 
 <table>
 <tr><th class="setting">Value</th><th>Meaning</th></tr>
@@ -97,7 +97,7 @@ keywords" report.</p>
 
 <p>This key is written only after a <em>successful</em> login, so a mistyped
 password can never overwrite a working configuration. Deleting the key resets
-Step 1 to defaults.</p>
+the data source to defaults.</p>
 
 <h2>Backing up a user's configuration</h2>
 
@@ -115,7 +115,7 @@ on an offline machine.</li>
 <p class="first">Do not edit these while Synapic is running.</p>
 <p>The app reads settings at startup and writes them when you leave a step, so a
 change made in the middle of a session can be overwritten. Close the app first.
-See <a href="step2-settings.html">What Step 2 remembers</a>.</p>
+See <a href="step2-settings.html">What the engine settings remember</a>.</p>
 </div>
 
 <div class="seealso">
@@ -123,7 +123,7 @@ See <a href="step2-settings.html">What Step 2 remembers</a>.</p>
 <ul>
 <li><a href="admin-logs-support.html">Logs, crashes and support</a></li>
 <li><a href="admin-deploy.html">Deploying to many machines</a></li>
-<li><a href="step2-settings.html">What Step 2 remembers</a></li>
+<li><a href="step2-settings.html">What the engine settings remember</a></li>
 <li><a href="step2-tag-fields.html">Tag fields: what gets written</a></li>
 </ul>
 </div>
