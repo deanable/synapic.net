@@ -30,8 +30,9 @@
 > ```
 >
 > - **Settings** (the first row, and the app's home) owns the app's
->   configuration: the source and its Daminion connection (folder, server URL and
->   login), the inference server (sidecar download / build / start-stop), the
+>   configuration, organised as **six tabs** (2026-10-11 revision, see §5): the
+>   source and its Daminion connection (folder, server URL and login), the
+>   inference server (sidecar download / build / start-stop), the
 >   inference engine (model, device, tagging behaviour), the deduplication and
 >   upscaling rules, and the app preferences (appearance, logging, defaults,
 >   about).
@@ -249,19 +250,28 @@ open findings):
 
 ## 5. Settings view
 
-Own layout: a sectioned list (section nav on the left, section content on the
-right — or a single scrolling column on narrow windows). Sections:
+Own layout: **six tabs, one concern per tab** (revised 2026-10-11 — the long
+single scrolling column made it hard to see where one concern ended and the
+next began, and the search box now shows the tab a setting lives on rather than
+filtering a column):
 
-| Section | Contents |
+| Tab | Contents |
 |---|---|
+| **Connection** | the data source (local folder or Daminion server, login, connect) and the shared processing limits (max items, AI image scale). The catalog scope itself stays on the processing view (D10). |
 | **Inference server** | status (stopped / starting / ready / error), Start/Stop Server, auto-launch toggle, Build/Download sidecar variants (CPU/CUDA), device fallback warning, health details |
-| **Appearance** | theme (system / light / dark), density notes |
-| **Logging** | log level, open log folder, diagnostics drawer toggle |
-| **Defaults** | defaults applied to a new session (default device, default thresholds) |
-| **About** | version, links (help home, repository) |
+| **Tagging engine** | the model picker, device, tag fields, scoring and prompts — every tagging run's settings |
+| **Dedup** | hash algorithm, similarity threshold, server-hash matching, keep-set auto-select rules |
+| **Upscale** | workflow, scale factor, precision, output format and quality, denoise, sharpen, overwrite |
+| **App preferences** | appearance (theme), logging (level, open folder, diagnostics toggle), defaults applied to a new session, about (version, links) |
+
+A search box above the tab strip switches to the tab a query names (with
+autocomplete over the settings' names); an empty query resets it. Each tab realizes
+only its own sections, so a tab of any height lays out cleanly at every audited
+size — the layout audit visits every tab.
 
 App-wide settings live **only** here; per-operation tunables live **only** in
-a mode's Parameters region. Nothing is configured in two places.
+their own tab (and are reported read-back on the processing view that runs with
+them). Nothing is configured in two places.
 
 ---
 

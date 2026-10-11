@@ -1,120 +1,119 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
-using Avalonia;
 using Avalonia.Controls;
 using Avalonia.VisualTree;
 
 namespace Synapic.Main.Views.Settings;
 
 /// <summary>
-/// The Settings view (docs/mock-up/Mockup.svg, first sidebar row): the one home
-/// for every configuration — the data source and its server connection, the
-/// inference server and engine, the per-operation rules, and the app
-/// preferences. Bound to the shell, because it composes the shared source, the
-/// operation view models and the app-settings view model in one column.
-///
-/// It also owns the search box: a query filters the column to the configuration
-/// sections that mention it and scrolls the first match into view, so the long
-/// column stays navigable. An empty query shows every section (the default).
+/// The Settings view as six tabs — Connection, Inference server, Tagging engine,
+/// Deduplication, Upscaling, App preferences — one concern per tab instead of one
+/// long column for all of them (ui-design §5, 2026-10-11 revision: a new user
+/// could not see where one concern ended and the next began). The search box
+/// above the strip is the fast path: it switches to the tab the query names, and
+/// <see cref="ShowSection"/>/<see cref="ShowTab"/> are the entry points tests use
+/// to land on a tab by section or tab name.
 /// </summary>
 public partial class SettingsTab : UserControl
 {
+    /// <summary>Each tab and the suggestions that name it in the search box.</summary>
+    private static readonly (string TabName, string[] Suggestions)[] TabSuggestions =
+    {
+        ("TabConnection", new[] { "Data source", "Local folder", "Daminion", "Max items", "AI image scale" }),
+        ("TabServer", new[] { "Inference server", "Sidecar", "Build", "Download", "Auto-launch" }),
+        ("TabEngine", new[] { "Inference engine", "Model", "Device", "Tag fields", "Scoring", "Prompts" }),
+        ("TabDedup", new[] { "Deduplication", "Algorithm", "Threshold", "Keep-set" }),
+        ("TabUpscale", new[] { "Upscaling", "Workflow", "Factor", "Precision", "Output" }),
+        ("TabApp", new[] { "Appearance", "Theme", "Logging", "Defaults", "About" }),
+    };
+
+    /// <summary>
+    /// The named section cards and the tab that hosts them. The App preferences
+    /// tab carries four sections behind one tab entry.
+    /// </summary>
+    public static readonly (string Section, string Tab)[] SectionToTab =
+    {
+        ("SectionDataSource", "TabConnection"),
+        ("SectionInferenceServer", "TabServer"),
+        ("SectionEngine", "TabEngine"),
+        ("SectionDedup", "TabDedup"),
+        ("SectionUpscale", "TabUpscale"),
+        ("SectionAppearance", "TabApp"),
+        ("SectionLogging", "TabApp"),
+        ("SectionDefaults", "TabApp"),
+        ("SectionAbout", "TabApp"),
+    };
+
+    /// <summary>The search box's dropdown: every suggestion names a real control.</summary>
+    public static readonly string[] SearchSuggestions =
+        TabSuggestions.SelectMany(t => t.Suggestions).ToArray();
+
     public SettingsTab()
     {
         InitializeComponent();
-        SettingsSearchBox.TextChanged += (_, _) => ApplyFilter(SettingsSearchBox.Text);
+        SettingsSearchBox.ItemsSource = SearchSuggestions;
+        // Watch the Text property rather than TextChanged: a picked suggestion
+        // updates Text, and the property is the one value the search reads.
+        SettingsSearchBox.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == AutoCompleteBox.TextProperty) ApplyFilter(SettingsSearchBox.Text);
+        };
     }
 
     /// <summary>
-    /// Filter the configuration column to the sections that mention
-    /// <paramref name="query"/> and scroll the first match into view. An empty
-    /// query shows every section again. Returns the number of matching sections.
+    /// Switch to the tab the query names and report what happened. An empty query
+    /// resets the status without switching. Returns the number of matching
+    /// suggestions — zero means the query names nothing and no switch happened.
     /// </summary>
     public int ApplyFilter(string? query)
     {
         var text = (query ?? "").Trim();
-        var sections = Sections();
-
         if (text.Length == 0)
         {
-            foreach (var section in sections) section.IsVisible = true;
             SearchStatusText.IsVisible = false;
-            UpdateGroupHeaders(show: true);
-            return sections.Count;
+            return TabSuggestions.Sum(t => t.Suggestions.Length);
         }
 
-        var matches = new List<Border>();
-        foreach (var section in sections)
-        {
-            var hit = Matches(section, text);
-            section.IsVisible = hit;
-            if (hit) matches.Add(section);
-        }
-
-        SearchStatusText.Text = matches.Count switch
-        {
-            0 => $"No settings match \u201c{text}\u201d.",
-            1 => $"1 section matches \u201c{text}\u201d.",
-            _ => $"{matches.Count} sections match \u201c{text}\u201d.",
-        };
-        SearchStatusText.IsVisible = true;
-
-        UpdateGroupHeaders(show: false);
-        if (matches.Count > 0) ScrollTo(matches[0]);
-        return matches.Count;
-    }
-
-    /// <summary>The four sections the App preferences heading introduces.</summary>
-    private static readonly string[] PreferenceSections =
-        { "SectionAppearance", "SectionLogging", "SectionDefaults", "SectionAbout" };
-
-    /// <summary>
-    /// Show or hide the App preferences heading with its sections: a query that
-    /// names none of them must not leave the heading stranded over empty space.
-    /// </summary>
-    private void UpdateGroupHeaders(bool show)
-    {
-        var header = this.GetVisualDescendants().OfType<Control>()
-            .FirstOrDefault(c => c.Name == "AppPreferencesHeader");
-        if (header is null) return;
-
-        header.IsVisible = show || PreferenceSections.Any(name =>
-            this.GetVisualDescendants().OfType<Border>()
-                .FirstOrDefault(b => b.Name == name) is { IsVisible: true });
-    }
-
-    /// <summary>The configuration sections, in reading order: the named Borders.</summary>
-    private IReadOnlyList<Border> Sections() =>
-        this.GetVisualDescendants().OfType<Border>()
-            .Where(b => b.Name is not null && b.Name.StartsWith("Section", StringComparison.Ordinal))
+        var matches = TabSuggestions
+            .Where(t => t.Suggestions.Any(s => s.Contains(text, StringComparison.OrdinalIgnoreCase)))
             .ToList();
+        var total = matches.Sum(t =>
+            t.Suggestions.Count(s => s.Contains(text, StringComparison.OrdinalIgnoreCase)));
 
-    /// <summary>
-    /// Does this section mention the query? Its own name counts (so "datasource"
-    /// finds SectionDataSource), and so does any text it renders — headings,
-    /// hints, field labels, control content.
-    /// </summary>
-    private static bool Matches(Control section, string query) =>
-        NameMatches(section.Name, query) ||
-        section.GetVisualDescendants().OfType<TextBlock>().Any(t => Contains(t.Text, query)) ||
-        section.GetVisualDescendants().OfType<ContentControl>()
-            .Any(c => Contains(c.Content as string, query));
-
-    private static bool Contains(string? haystack, string needle) =>
-        !string.IsNullOrEmpty(haystack) && haystack.Contains(needle, StringComparison.OrdinalIgnoreCase);
-
-    /// <summary>Name match ignores casing and spaces, so "data source" finds SectionDataSource.</summary>
-    private static bool NameMatches(string? name, string query) =>
-        !string.IsNullOrEmpty(name) &&
-        name.Replace(" ", "").Contains(query.Replace(" ", ""), StringComparison.OrdinalIgnoreCase);
-
-    /// <summary>Scroll the enclosing ScrollViewer so the target sits at the top of the viewport.</summary>
-    private static void ScrollTo(Control target)
-    {
-        var scroll = target.GetVisualAncestors().OfType<ScrollViewer>().FirstOrDefault();
-        if (scroll is null) return;
-        if (target.TranslatePoint(new Point(0, 0), scroll) is not { } topLeft) return;
-        scroll.Offset = new Vector(scroll.Offset.X, Math.Max(0, scroll.Offset.Y + topLeft.Y));
+        if (total == 0)
+        {
+            SearchStatusText.Text = $"No settings match \u201c{text}\u201d.";
+        }
+        else
+        {
+            ShowTab(matches[0].TabName);
+            var label = TabLabel(matches[0].TabName);
+            SearchStatusText.Text = total == 1
+                ? $"1 setting matches \u201c{text}\u201d \u2014 showing {label}."
+                : $"{total} settings match \u201c{text}\u201d \u2014 showing {label}.";
+        }
+        SearchStatusText.IsVisible = true;
+        return total;
     }
+
+    /// <summary>Select the tab that hosts <paramref name="sectionName"/>.</summary>
+    public void ShowSection(string sectionName)
+    {
+        var tab = SectionToTab.FirstOrDefault(kv => kv.Section == sectionName).Tab
+            ?? throw new ArgumentException($"Unknown section: {sectionName}", nameof(sectionName));
+        ShowTab(tab);
+    }
+
+    /// <summary>Select the tab with this name (TabConnection, TabServer, …).</summary>
+    public void ShowTab(string tabName)
+    {
+        var item = this.GetVisualDescendants().OfType<TabItem>()
+            .FirstOrDefault(t => t.Name == tabName)
+            ?? throw new InvalidOperationException($"No tab named {tabName} in the Settings view");
+        item.IsSelected = true;
+    }
+
+    private string TabLabel(string tabName) =>
+        this.GetVisualDescendants().OfType<TabItem>()
+            .First(t => t.Name == tabName).Header as string ?? tabName;
 }

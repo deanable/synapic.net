@@ -65,8 +65,22 @@ public class SettingsViewTests
         control.GetVisualAncestors().OfType<Control>().All(ancestor => ancestor.IsVisible);
 
     /// <summary>The settings view itself, found by its type inside the window.</summary>
-    private static SettingsPanel Panel(Window window) =>
-        Assert.Single(window.GetVisualDescendants().OfType<SettingsPanel>());
+    /// <summary>Switch tab and wait for the layout pass that materializes the
+    /// selected tab's content — a TabItem's children are not yet in the visual
+    /// tree right after selection; the dispatcher has to run.</summary>
+    private static void ShowTabAndWait(SettingsTab settings, string tabName)
+    {
+        settings.ShowTab(tabName);
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    private static SettingsPanel Panel(Window window)
+    {
+        // The app preferences are behind the App tab now; land on it first.
+        var settings = Assert.Single(window.GetVisualDescendants().OfType<SettingsTab>());
+        ShowTabAndWait(settings, "TabApp");
+        return Assert.Single(window.GetVisualDescendants().OfType<SettingsPanel>());
+    }
 
     /// <summary>
     /// §5's app-preference half is four sections — Appearance, Logging, Defaults
@@ -271,6 +285,8 @@ public class SettingsViewTests
         var window = NewWindow(shell);
         try
         {
+            // The inference server is behind its own tab now.
+            ShowTabAndWait(Assert.Single(window.GetVisualDescendants().OfType<SettingsTab>()), "TabServer");
             var section = Assert.Single(window.GetVisualDescendants().OfType<InferenceServerSection>());
             var buttons = section.GetVisualDescendants().OfType<Button>().ToList();
 
@@ -315,47 +331,86 @@ public class SettingsViewTests
         try
         {
             var settings = Assert.Single(window.GetVisualDescendants().OfType<SettingsTab>());
-            var box = Assert.Single(settings.GetVisualDescendants().OfType<TextBox>(),
+            var box = Assert.Single(settings.GetVisualDescendants().OfType<AutoCompleteBox>(),
                 t => t.Name == "SettingsSearchBox");
+            Assert.Same(SettingsTab.SearchSuggestions, box.ItemsSource);
 
-            List<Border> Sections() => settings.GetVisualDescendants().OfType<Border>()
-                .Where(b => b.Name?.StartsWith("Section", StringComparison.Ordinal) == true).ToList();
+            var tabs = settings.GetVisualDescendants().OfType<TabItem>().ToList();
+            Assert.Equal(6, tabs.Count);
+            var selected = () => tabs.Single(t => t.IsSelected).Name!;
+            // The Connection tab is where the app opens.
+            Assert.Equal("TabConnection", selected());
 
-            // Empty: every section is on screen and nothing is reported.
-            var all = Sections();
-            Assert.NotEmpty(all);
-            Assert.All(all, s => Assert.True(s.IsVisible));
             var status = Assert.Single(settings.GetVisualDescendants().OfType<TextBlock>(),
                 t => t.Name == "SearchStatusText");
             Assert.False(status.IsVisible);
 
-            // A query that names one section keeps that one and hides the rest.
-            box.Text = "dedup";
+            // Typing goes through the box's own text field, as a user's keys do:
+            // AutoCompleteBox.Text is driven by that field, so setting Text
+            // directly does not stick.
+            var typed = Assert.Single(box.GetVisualDescendants().OfType<TextBox>());
+            typed.Text = "dedup";
             Dispatcher.UIThread.RunJobs();
 
-            Assert.Equal(new[] { "SectionDedup" },
-                Sections().Where(s => s.IsVisible).Select(s => s.Name).ToList());
+            // The query switched to the tab the settings live on, and the status
+            // says where it went.
+            Assert.Equal("TabDedup", selected());
             Assert.True(status.IsVisible);
+            Assert.Contains("TabDedup" == selected() ? "Dedup" : "", status.Text!);
 
-            // The App preferences heading goes with its sections when none match.
-            var header = Assert.Single(settings.GetVisualDescendants().OfType<Control>(),
-                c => c.Name == "AppPreferencesHeader");
-            Assert.False(header.IsVisible);
-
-            // A query that matches nothing hides every section and says so.
-            box.Text = "zzzznotathing";
+            // Picking a suggestion from the dropdown switches the same way.
+            box.SelectedItem = "Theme";
             Dispatcher.UIThread.RunJobs();
+            Assert.Equal("TabApp", selected());
 
-            Assert.All(Sections(), s => Assert.False(s.IsVisible));
+            // A query that names nothing switches nowhere and says so.
+            ShowTabThenQuery(settings, "TabEngine", typed, "zzzznotathing");
+            Assert.Equal("TabEngine", selected());
             Assert.Contains("No settings match", status.Text);
 
-            // Clearing the box brings every section back.
-            box.Text = "";
+            // Clearing the box resets the status but keeps the tab the user is on.
+            typed.Text = "";
             Dispatcher.UIThread.RunJobs();
-
-            Assert.All(Sections(), s => Assert.True(s.IsVisible));
             Assert.False(status.IsVisible);
-            Assert.True(header.IsVisible);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    /// <summary>Land on a tab, then set a query the box will not match.</summary>
+    private static void ShowTabThenQuery(SettingsTab settings, string tab, TextBox typed, string query)
+    {
+        ShowTabAndWait(settings, tab);
+        Dispatcher.UIThread.RunJobs();
+        typed.Text = query;
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    /// <summary>
+    /// The search dropdown offers only names that really find something: every
+    /// suggestion, once picked, must match at least one section of the column.
+    /// A suggestion that matches nothing would open the dropdown and then say
+    /// "No settings match".
+    /// </summary>
+    [AvaloniaFact]
+    public void Every_search_suggestion_finds_at_least_one_section()
+    {
+        var shell = NewShell();
+        var window = NewWindow(shell);
+        try
+        {
+            var settings = Assert.Single(window.GetVisualDescendants().OfType<SettingsTab>());
+            Assert.NotEmpty(SettingsTab.SearchSuggestions);
+
+            foreach (var suggestion in SettingsTab.SearchSuggestions)
+            {
+                Assert.True(settings.ApplyFilter(suggestion) > 0,
+                    $"suggestion \u201c{suggestion}\u201d matches no settings section");
+            }
+
+            settings.ApplyFilter("");
         }
         finally
         {

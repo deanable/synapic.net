@@ -253,7 +253,11 @@ public sealed class ProcessingOrchestrator
                     {
                         var dims = await client.GetItemDimensionsAsync(daminionId, ct).ConfigureAwait(false);
                         var targetW = dims is { } d ? Math.Max(75, (int)(d.W * _ds.ResizeScale / 100.0)) : Math.Max(75, 2000 * _ds.ResizeScale / 100);
-                        downloaded = await client.DownloadPreviewAsync(daminionId, targetW, null, ct).ConfigureAwait(false);
+                        // Height is worked out here, once. Passing null would make
+                        // DownloadPreviewAsync look the dimensions up again: a second
+                        // round trip for every item, returning the same numbers.
+                        var targetH = dims is { } d2 && d2.W > 0 && d2.H > 0 ? (int)(d2.H * (double)targetW / d2.W) : targetW;
+                        downloaded = await client.DownloadPreviewAsync(daminionId, targetW, targetH, ct).ConfigureAwait(false);
                     }
 
                     if (string.IsNullOrEmpty(downloaded) || !File.Exists(downloaded))
@@ -267,17 +271,19 @@ public sealed class ProcessingOrchestrator
                     await _log($"Processing: {item.FileName}...").ConfigureAwait(false);
                 }
 
-            var request = _template with { ImagePath = imagePath };
-            var response = await _sidecar.TagAsync(request, ct).ConfigureAwait(false);
+                var request = _template with { ImagePath = imagePath };
+                var response = await _sidecar.TagAsync(request, ct).ConfigureAwait(false);
 
-            // One multimodal call returns all three fields; keep only the ones
-            // the user asked to tag (original Step 2 checkbox behavior).
-            var category = _tagFields.Category ? response.Category : null;
-            var keywords = _tagFields.Keywords ? response.Keywords : Array.Empty<string>();
-            var description = _tagFields.Description ? response.Description : null;
+                // One multimodal call returns all three fields; keep only the ones
+                // the user asked to tag (original Step 2 checkbox behavior).
+                var category = _tagFields.Category ? response.Category : null;
+                // A reply that carries "keywords": null deserializes past the
+                // default, so the null is handled here rather than trusted.
+                var keywords = _tagFields.Keywords ? response.Keywords ?? Array.Empty<string>() : Array.Empty<string>();
+                var description = _tagFields.Description ? response.Description : null;
 
-            var tags = new TagResult(category, keywords, description);
-            var written = await WriteMetadataAsync(item, tags, ct).ConfigureAwait(false);
+                var tags = new TagResult(category, keywords, description);
+                var written = await WriteMetadataAsync(item, tags, ct).ConfigureAwait(false);
 
             // The sidecar had to put the reply back together before it could be
             // read (JSON hunts are normally clean — the prompt was tuned until
@@ -286,55 +292,64 @@ public sealed class ProcessingOrchestrator
             // this is a status on a success, not a failure. Null and empty mean
             // the same thing: a sidecar older than this field sends no member at
             // all, which deserializes to null.
-            var repairs = response.ReplyRepairs ?? Array.Empty<string>();
-            var repaired = repairs.Length > 0;
+                var repairs = response.ReplyRepairs ?? Array.Empty<string>();
+                var repaired = repairs.Length > 0;
 
             // The sidecar asked the model again when its first reply was not
             // readable JSON. Nothing about it is wrong on this side; it is
             // reported because a batch that needed a second ask for every image
             // otherwise looks exactly like a clean one.
-            if (response.ReplyRetried)
-            {
-                await _log("The first reply could not be read as JSON — asked the model again")
-                    .ConfigureAwait(false);
-            }
+                if (response.ReplyRetried)
+                {
+                    await _log("The first reply could not be read as JSON — asked the model again")
+                        .ConfigureAwait(false);
+                }
 
-            if (repaired)
-            {
-                await _log($"Reply repaired before reading: {string.Join("; ", repairs)}")
-                    .ConfigureAwait(false);
-            }
+                if (repaired)
+                {
+                    await _log($"Reply repaired before reading: {string.Join("; ", repairs)}")
+                        .ConfigureAwait(false);
+                }
 
-            var status = written
-                ? (repaired ? ProcessStatus.SuccessRepaired : ProcessStatus.Success)
-                : ProcessStatus.WriteFailed;
-            var tagsSummary = $"Cat: {category}, Kws: {keywords.Length}, Desc: {Truncate(description, 20)}";
-            await _log($"Result: {tagsSummary}").ConfigureAwait(false);
+                var status = written
+                    ? (repaired ? ProcessStatus.SuccessRepaired : ProcessStatus.Success)
+                    : ProcessStatus.WriteFailed;
+                var tagsSummary = $"Cat: {category}, Kws: {keywords.Length}, Desc: {Truncate(description, 20)}";
+                await _log($"Result: {tagsSummary}").ConfigureAwait(false);
 
-            var result = new ProcessItemResult(
-                item.FileName, status, tagsSummary,
-                category, keywords, description,
-                response.Probabilities,
-                response.Scoring is null ? null : new ScoringResultDto(response.Scoring.Tier, response.Scoring.Calibrated),
-                item.DaminionId);
-            if (_results is not null)
-            {
-                lock (_resultsLock) _results.Add(result);
-            }
+                var result = new ProcessItemResult(
+                    item.FileName, status, tagsSummary,
+                    category, keywords, description,
+                    response.Probabilities,
+                    response.Scoring is null ? null : new ScoringResultDto(response.Scoring.Tier, response.Scoring.Calibrated),
+                    item.DaminionId);
+                if (_results is not null)
+                {
+                    lock (_resultsLock) _results.Add(result);
+                }
 
-            // Success is "the item was processed to the end": a metadata write
-            // that did not land shows up in the results grid as "Write Failed"
-            // (historical behavior) rather than in the failed counter.
-            return new WorkflowItemOutcome(true, status);
-        }
-        finally
-        {
-            if (tempFile is not null)
-            {
-                try { File.Delete(tempFile); }
-                catch { /* cleanup best-effort */ }
+                // Success is "the item was processed to the end": a metadata write
+                // that did not land shows up in the results grid as "Write Failed"
+                // (historical behavior) rather than in the failed counter.
+                return new WorkflowItemOutcome(true, status);
             }
-        }
+            finally
+            {
+                if (tempFile is not null)
+                {
+                    try
+                    {
+                        File.Delete(tempFile);
+                    }
+                    catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                    {
+                        // Not fatal for this item, but a leftover temp image should
+                        // be visible in the log rather than vanish without a trace.
+                        SynapicLog.Warning(nameof(ProcessingOrchestrator),
+                            $"Could not delete temp image {tempFile}: {e.Message}");
+                    }
+                }
+            }
         }
 
         private async Task<bool> WriteMetadataAsync(ProcessWorkItem item, TagResult tags, CancellationToken ct)

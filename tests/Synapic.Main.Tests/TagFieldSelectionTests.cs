@@ -6,7 +6,7 @@ using Xunit;
 namespace Synapic.Main.Tests;
 
 /// <summary>Sidecar fake returning all three fields in one multimodal response.</summary>
-internal sealed class FixedTagSidecar : IInferenceSidecar
+internal class FixedTagSidecar : IInferenceSidecar
 {
     public SidecarStatus CurrentStatus => SidecarStatus.Ready;
     public int SidecarPort => 0;
@@ -20,7 +20,7 @@ internal sealed class FixedTagSidecar : IInferenceSidecar
     public Task StartAsync(CancellationToken ct = default) => Task.CompletedTask;
     public Task StopAsync(TimeSpan? gracefulTimeout = null) => Task.CompletedTask;
 
-    public Task<TagResponse> TagAsync(TagRequest request, CancellationToken ct = default)
+    public virtual Task<TagResponse> TagAsync(TagRequest request, CancellationToken ct = default)
         => Task.FromResult(new TagResponse
         {
             Category = "Nature",
@@ -32,6 +32,13 @@ internal sealed class FixedTagSidecar : IInferenceSidecar
     public Task DownloadModelAsync(string modelId, CancellationToken ct = default) => Task.CompletedTask;
     public Task<HealthResponse> GetHealthAsync(CancellationToken ct = default) => Task.FromResult(new HealthResponse());
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+}
+
+/// <summary>A reply whose keywords member is JSON null, which bypasses the default.</summary>
+internal sealed class NullKeywordsTagSidecar : FixedTagSidecar
+{
+    public override Task<TagResponse> TagAsync(TagRequest request, CancellationToken ct = default)
+        => Task.FromResult(new TagResponse { Category = "Nature", Keywords = null!, Description = "A forest" });
 }
 
 /// <summary>Metadata-writer stub that records what it was asked to write.</summary>
@@ -80,6 +87,36 @@ public class TagFieldSelectionTests
                 CancellationToken.None, results, pause: null, tagFields: fields);
 
             return Assert.Single(results);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// A reply with "keywords": null used to throw while the run summary read
+    /// the count, so the item was lost as a failure. It must be recorded with no
+    /// keywords instead.
+    /// </summary>
+    [Fact]
+    public async Task A_reply_with_null_keywords_is_recorded_with_no_keywords()
+    {
+        var dir = MakeImageDir();
+        try
+        {
+            var writer = new CapturingMetadataWriter();
+            var orchestrator = new ProcessingOrchestrator(new NullKeywordsTagSidecar(), writer, maxDegreeOfParallelism: 1);
+            var results = new List<ProcessItemResult>();
+            var template = new TagRequest { ImagePath = "", ModelId = "LiquidAI/LFM2.5-VL-450M", Task = "image-text-to-text" };
+
+            await orchestrator.RunAsync(
+                LocalSelection(dir), template, new Progress<ProcessProgress>(), _ => Task.CompletedTask,
+                CancellationToken.None, results, pause: null, tagFields: TagFieldSelection.All);
+
+            var result = Assert.Single(results);
+            Assert.Empty(result.Keywords);
+            Assert.Equal("Nature", result.Category);
         }
         finally
         {

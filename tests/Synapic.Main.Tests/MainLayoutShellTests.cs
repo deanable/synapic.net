@@ -93,12 +93,16 @@ public class MainLayoutShellTests
                 c => c.Classes.Contains("dashboardPanel"));
 
             // The Settings view — the first row's content — is what is on screen,
-            // and it hosts the configuration sections.
+            // and its tabs reach every configuration section (each tab realizes
+            // only its own sections, so each is reached by switching to it).
             var settings = Assert.Single(window.GetVisualDescendants().OfType<SettingsTab>());
             Assert.True(EffectivelyVisible(settings));
-            Assert.NotNull(settings.GetVisualDescendants().OfType<Control>().FirstOrDefault(c => c.Name == "SectionDataSource"));
-            Assert.NotNull(settings.GetVisualDescendants().OfType<Control>().FirstOrDefault(c => c.Name == "SectionInferenceServer"));
-            Assert.NotNull(settings.GetVisualDescendants().OfType<Control>().FirstOrDefault(c => c.Name == "SectionEngine"));
+            foreach (var section in new[] { "SectionDataSource", "SectionInferenceServer", "SectionEngine" })
+            {
+                settings.ShowSection(section);
+                Dispatcher.UIThread.RunJobs();
+                Assert.NotNull(settings.GetVisualDescendants().OfType<Control>().FirstOrDefault(c => c.Name == section));
+            }
 
             // The processing view is off screen while Settings is on screen.
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<OperationLayout>(), EffectivelyVisible);
@@ -279,7 +283,10 @@ public class MainLayoutShellTests
         window.Show();
         try
         {
-            // Editable on the Settings view (the app opens there).
+            // Editable on the Settings view (the app opens there); the engine
+            // form is behind the Tagging tab.
+            Assert.Single(window.GetVisualDescendants().OfType<SettingsTab>()).ShowSection("SectionEngine");
+            Dispatcher.UIThread.RunJobs();
             var form = Assert.Single(window.GetVisualDescendants().OfType<Views.Wizard.Step2Engine>());
             Assert.Same(shell.Operations.TagParameters, form.DataContext);
             Assert.Contains(form.GetVisualDescendants().OfType<CheckBox>(),

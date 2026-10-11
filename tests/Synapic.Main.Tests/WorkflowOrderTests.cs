@@ -239,14 +239,24 @@ public class WorkflowOrderTests
             var settings = Assert.Single(window.GetVisualDescendants().OfType<SettingsTab>());
 
             // The whole form is inside the Settings view, not a modal of its own.
-            Assert.Same(shell.Operations.Source, Assert.Single(
-                settings.GetVisualDescendants().OfType<DatasourceSourcePanel>()).DataContext);
-            Assert.Same(shell.Operations.TagParameters, Assert.Single(
-                settings.GetVisualDescendants().OfType<Step2Engine>()).DataContext);
-            Assert.Same(shell.Operations.Dedup, Assert.Single(
-                settings.GetVisualDescendants().OfType<DedupSettingsPanel>()).DataContext);
+            // Each form lives behind its own tab; a TabControl materializes a tab's
+            // content only once it is selected, so each is visited in turn.
+            settings.ShowTab("TabUpscale");
+            Dispatcher.UIThread.RunJobs();
             Assert.Same(shell.Operations.Upscale, Assert.Single(
                 settings.GetVisualDescendants().OfType<UpscaleSettingsPanel>()).DataContext);
+            settings.ShowTab("TabConnection");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Same(shell.Operations.Source, Assert.Single(
+                settings.GetVisualDescendants().OfType<DatasourceSourcePanel>()).DataContext);
+            settings.ShowTab("TabEngine");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Same(shell.Operations.TagParameters, Assert.Single(
+                settings.GetVisualDescendants().OfType<Step2Engine>()).DataContext);
+            settings.ShowTab("TabDedup");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Same(shell.Operations.Dedup, Assert.Single(
+                settings.GetVisualDescendants().OfType<DedupSettingsPanel>()).DataContext);
 
             // And the window owning them is the shell itself.
             Assert.Same(window, settings.GetVisualAncestors().OfType<Window>().Last());

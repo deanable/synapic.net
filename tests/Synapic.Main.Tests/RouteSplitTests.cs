@@ -75,7 +75,11 @@ public class RouteSplitTests
             var settings = Assert.Single(window.GetVisualDescendants().OfType<SettingsTab>());
             Assert.True(EffectivelyVisible(settings));
             foreach (var section in new[] { "SectionDataSource", "SectionInferenceServer", "SectionEngine", "SectionDedup", "SectionUpscale" })
+            {
+                settings.ShowSection(section);
+                Dispatcher.UIThread.RunJobs();
                 Assert.NotNull(settings.GetVisualDescendants().OfType<Control>().FirstOrDefault(c => c.Name == section));
+            }
 
             // The dashboard's panels and route cards are gone from the tree.
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<Control>(),
@@ -356,16 +360,18 @@ public class RouteSplitTests
             Dispatcher.UIThread.RunJobs();
 
             var panel = Assert.Single(window.GetVisualDescendants().OfType<DatasourceSourcePanel>());
+
+            // With tabs, the source form and the engine live on different tabs,
+            // so the assertion is that each tab lays its own content out above
+            // the fold — not a vertical ordering that no longer exists.
+            var settings = Assert.Single(window.GetVisualDescendants().OfType<SettingsTab>());
+            settings.ShowSection("SectionEngine");
+            Dispatcher.UIThread.RunJobs();
             var engine = Assert.Single(window.GetVisualDescendants().OfType<Border>(),
                 b => b.Name == "SectionEngine");
 
             Assert.True(panel.Bounds.Height > 0, "the source form did not lay out");
             Assert.True(engine.Bounds.Height > 0, "the engine section did not lay out");
-
-            var panelEnd = panel.TranslatePoint(new Point(0, panel.Bounds.Height), window)!.Value.Y;
-            var engineTop = engine.TranslatePoint(new Point(0, 0), window)!.Value.Y;
-            Assert.True(engineTop >= panelEnd,
-                $"the engine section overlaps the source form (source ends at {panelEnd}, engine starts at {engineTop})");
         }
         finally
         {

@@ -241,10 +241,9 @@ public class UiLayoutAuditTests
     }
 
     /// <summary>
-    /// The Settings view is one reading-order column of configuration sections:
-    /// the connection first, then the inference server, the engine and the
-    /// operation rules, with the app preferences last. The sections stack in that
-    /// order at every audited size.
+    /// The Settings view is six tabs, one concern per tab (ui-design §5, 2026-10-11
+    /// revision). Every tab is visited at every audited size: each lays its own
+    /// sections out cleanly, and the tab strip itself shows all six entries.
     /// </summary>
     [AvaloniaTheory]
     [InlineData(1600, 900)]
@@ -252,7 +251,7 @@ public class UiLayoutAuditTests
     [InlineData(1024, 700)]
     [InlineData(900, 600)]
     [InlineData(640, 480)]
-    public void Settings_view_stacks_its_sections_in_reading_order(double width, double height)
+    public void Settings_view_is_six_tabs_and_every_tab_lays_out_cleanly(double width, double height)
     {
         var window = new MainWindow { DataContext = Shell("daminion") };
         window.Width = width;
@@ -266,29 +265,24 @@ public class UiLayoutAuditTests
             Assert.Equal(height, window.ClientSize.Height);
 
             var settings = Assert.Single(window.GetVisualDescendants().OfType<SettingsTab>());
-            double Top(string name) => settings.GetVisualDescendants().OfType<Border>()
-                .Single(b => b.Name == name)
-                .TranslatePoint(new Point(0, 0), window)!.Value.Y;
+            var tabs = settings.GetVisualDescendants().OfType<TabItem>
+                ().ToList();
+            Assert.Equal(6, tabs.Count);
 
-            var ordered = new[]
+            foreach (var tab in new[]
+                     {
+                         "TabConnection", "TabServer", "TabEngine",
+                         "TabDedup", "TabUpscale", "TabApp",
+                     })
             {
-                "SectionDataSource", "SectionInferenceServer", "SectionEngine",
-                "SectionDedup", "SectionUpscale",
-            };
+                settings.ShowTab(tab);
+                for (var i = 0; i < 3; i++)
+                    Dispatcher.UIThread.RunJobs();   // let the tab realize and lay out
 
-            for (var i = 1; i < ordered.Length; i++)
-                Assert.True(Top(ordered[i]) > Top(ordered[i - 1]),
-                    $"{ordered[i]} is not below {ordered[i - 1]} at {width}x{height}");
-
-            // The app preferences follow the operation rules.
-            var preferences = settings.GetVisualDescendants().OfType<Border>()
-                .Single(b => b.Name == "SectionAppearance");
-            Assert.True(preferences.TranslatePoint(new Point(0, 0), window)!.Value.Y > Top("SectionUpscale"),
-                "the app preferences are not below the operation settings");
-
-            var report = Audit(window);
-            Assert.True(report.Length == 0,
-                $"Settings at {width}x{height} ({_panelsAudited} panels):\n{report}");
+                var report = Audit(window);
+                Assert.True(report.Length == 0,
+                    $"Settings tab {tab} at {width}x{height}:\n{report}");
+            }
         }
         finally
         {
