@@ -188,6 +188,6 @@ public partial class HelpScopeTests
     // ── Helpers ───────────────────────────────────────────────────────────
 
     private static MainWindowViewModel NewViewModel(IHelpService help, string? exe) =>
-        new(new FakeSidecar(), new FakeBuildService(), new Session(), () => exe, null, null, _ => exe,
+        new(new FakeSidecar(), new Session(), () => exe, null, null, _ => exe,
             null, null, help);
 }

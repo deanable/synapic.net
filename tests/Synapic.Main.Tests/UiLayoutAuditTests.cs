@@ -36,7 +36,7 @@ public class UiLayoutAuditTests
         session.Datasource.LocalPath = path;
         if (sourceType == "daminion")
             session.Datasource.DaminionUrl = "http://damserver.local/daminion";
-        return new MainWindowViewModel(new FakeSidecar(), new FakeBuildService(), session,
+        return new MainWindowViewModel(new FakeSidecar(), session,
             () => null, null, null, _ => null);
     }
 

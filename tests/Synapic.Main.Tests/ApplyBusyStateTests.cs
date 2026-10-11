@@ -55,7 +55,7 @@ public class ApplyBusyStateTests
         public void Release() => _gate.TrySetResult();
 
         public async Task<bool> ApplyToPathsAsync(IEnumerable<string> paths, DedupAction action,
-            CancellationToken ct = default)
+            string? moveDestination = null, CancellationToken ct = default)
         {
             ApplyCalls++;
             Started.TrySetResult();
@@ -84,7 +84,7 @@ public class ApplyBusyStateTests
             DedupOptions opts)
             => new() { TotalFiles = 0 };
 
-        public Task<bool> ApplyActionsAsync(DedupResult result, DedupAction action, CancellationToken ct = default)
+        public Task<bool> ApplyActionsAsync(DedupResult result, DedupAction action, string? moveDestination = null, CancellationToken ct = default)
             => Task.FromResult(true);
     }
 

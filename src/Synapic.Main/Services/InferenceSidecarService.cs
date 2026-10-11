@@ -327,8 +327,8 @@ public sealed class InferenceSidecarService : IInferenceSidecar
     /// in the instructions that unblock the run.</summary>
     public static string FormatStaleLaunchBlock(string staleness) =>
         $"The inference server is out of date and will not be started: {staleness}. " +
-        "Rebuild it with Build sidecar, or use Download to fetch the prebuilt executable, " +
-        "in the Settings view's Inference server section - then start the server again.";
+        "Use Download to fetch the latest prebuilt executable in the Settings view's " +
+        "Inference tab - then start the server again.";
 
     private static bool IsSidecarSourceFile(string path)
     {
@@ -401,7 +401,7 @@ public sealed class InferenceSidecarService : IInferenceSidecar
 
         SynapicLog.Warning(nameof(InferenceSidecarService),
             $"CUDA is selected in Step 2 but '{sidecarPath}' ({rid}) is a CPU build - " +
-            "tagging will run on the CPU. Build or download the CUDA variant in the setup panel.");
+            "tagging will run on the CPU. Download the CUDA variant in the setup panel.");
     }
 
     /// <summary>
@@ -445,7 +445,7 @@ public sealed class InferenceSidecarService : IInferenceSidecar
             SynapicLog.Error(nameof(InferenceSidecarService),
                 $"Sidecar executable not found. Searched bundled: {Path.Combine(AppContext.BaseDirectory, exeName)} and artifacts/ under repo root: {FindRepoRoot() ?? "<repo root not found>"}");
             SetStatus(SidecarStatus.Error, "Sidecar executable not found - build it first");
-            throw new FileNotFoundException("Sidecar executable not found. Use Build Server first.");
+            throw new FileNotFoundException("Sidecar executable not found. Download a variant in Settings first.");
         }
 
         WarnIfDeviceCannotBeHonoured(device, sidecarPath);
@@ -537,7 +537,7 @@ public sealed class InferenceSidecarService : IInferenceSidecar
 
         try
         {
-            var port = await ReadPortFileAsync(portFile, ct).ConfigureAwait(false);
+            var port = await ReadPortFileAsync(sidecarPath, portFile, ct).ConfigureAwait(false);
             ConfigurePort(port);
             SynapicLog.Info(nameof(InferenceSidecarService), $"Port file read: port {port}");
 
@@ -620,19 +620,33 @@ public sealed class InferenceSidecarService : IInferenceSidecar
         return Path.Combine(home, ".cache", "synapic", "models");
     }
 
-    private static async Task<int> ReadPortFileAsync(string portFile, CancellationToken ct)
+    private static async Task<int> ReadPortFileAsync(string sidecarPath, string portFile, CancellationToken ct)
     {
         SynapicLog.Debug(nameof(InferenceSidecarService), $"Waiting for port file: {portFile}");
-        // PyInstaller onefile unpack dominates cold starts (the 227 MB CPU bundle
-        // measured ~25 s to its port file; the CUDA one is 12x that), so this
-        // budget matches the /health poll's, not a spinner's patience.
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(HealthTimeout.TotalSeconds);
-        var waitedMs = 0;
+
+        // PyInstaller onefile unpack dominates cold starts: the 227 MB CPU bundle
+        // measured ~25 s to its port file, and the 2.7 GB CUDA bundle is roughly
+        // 12x that - under real startup load (Defender scanning a just-downloaded
+        // 2.7 GB exe, disk contention with the app itself booting) the first
+        // launch after a fresh download can need several minutes. So this budget
+        // scales with the bundle: ~25 s base + ~3 s per 100 MB, clamped, and the
+        // /health poll afterwards keeps the flat 120 s because by then the
+        // unpack is done and the server is up.
+        var elapsed = Stopwatch.StartNew();
+        var timeout = PortFileTimeoutFor(sidecarPath);
+        var deadline = DateTime.UtcNow + timeout;
+        SynapicLog.Info(nameof(InferenceSidecarService),
+            $"Port-file wait budget: {timeout.TotalSeconds:F0}s (exe {PortFileTimeoutExeSize(sidecarPath)} bytes)");
+        const int pollMs = 200;
+        var nextReportMs = 2000;
         while (DateTime.UtcNow < deadline)
         {
-            if (waitedMs > 0 && waitedMs % 2000 == 0)
-                SynapicLog.Debug(nameof(InferenceSidecarService), $"Still waiting for port file ({waitedMs / 1000.0:F0}s)... (sidecar booting)");
-            waitedMs += 200;
+            if (elapsed.ElapsedMilliseconds >= nextReportMs)
+            {
+                SynapicLog.Debug(nameof(InferenceSidecarService),
+                    $"Still waiting for port file ({nextReportMs / 1000} of {timeout.TotalSeconds:F0}s)... (sidecar unpacking/booting)");
+                nextReportMs += 2000;
+            }
             ct.ThrowIfCancellationRequested();
             try
             {
@@ -666,9 +680,40 @@ public sealed class InferenceSidecarService : IInferenceSidecar
             {
                 // File may be mid-write; retry.
             }
-            await Task.Delay(200, ct).ConfigureAwait(false);
+            await Task.Delay(pollMs, ct).ConfigureAwait(false);
         }
-        throw new TimeoutException("Timed out waiting for the sidecar port file");
+        throw new TimeoutException(
+            $"Timed out waiting for the sidecar port file after {timeout.TotalSeconds:F0}s "
+            + $"(elapsed {elapsed.Elapsed.TotalSeconds:F0}s)");
+    }
+
+    /// <summary>
+    /// Wait budget for the port file, scaled to the size of the launched exe.
+    /// PyInstaller onefile bootloaders unpack to a temp dir before the program
+    /// runs, and that unpack is the whole of a cold start: the 227 MB CPU bundle
+    /// measured ~25 s to its port file, the 2.7 GB CUDA bundle is 12x the bytes
+    /// and proportionally slower when Defender re-scans a just-downloaded exe
+    /// under app startup disk contention. Budget = 25 s base + 3 s per 100 MB,
+    /// clamped to [40 s, 10 min]; never below the flat /health budget of 120 s
+    /// for bundles small enough that 120 s was already the answer.
+    /// </summary>
+    private static TimeSpan PortFileTimeoutFor(string sidecarPath)
+    {
+        var megaBytes = PortFileTimeoutExeSize(sidecarPath) / (1024.0 * 1024.0);
+        var seconds = Math.Clamp(25.0 + megaBytes * 0.03, 40.0, 600.0);
+        return TimeSpan.FromSeconds(seconds);
+    }
+
+    private static long PortFileTimeoutExeSize(string sidecarPath)
+    {
+        try
+        {
+            return new FileInfo(sidecarPath).Length;
+        }
+        catch
+        {
+            return 0;
+        }
     }
 
     private async Task WaitUntilReadyAsync(CancellationToken ct)

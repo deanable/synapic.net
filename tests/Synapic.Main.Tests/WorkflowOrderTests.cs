@@ -35,7 +35,7 @@ public class WorkflowOrderTests
             session.Datasource.DaminionScope = "all";
         }
 
-        return new MainWindowViewModel(new FakeSidecar(), new FakeBuildService(), session,
+        return new MainWindowViewModel(new FakeSidecar(), session,
             () => null, null, null, _ => null);
     }
 

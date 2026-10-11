@@ -144,6 +144,26 @@ public sealed class SidecarDownloadService : ISidecarDownloadService
             progress.Report(new(100, "Installing"));
             File.Move(stagingPath, destinationPath, overwrite: true);
 
+            // Windows marks files downloaded with a browser (Zone.Identifier ADS)
+            // as untrusted; PyInstaller's bootloader can then be blocked by
+            // SmartScreen/MOTW policy, sometimes dying silently before it writes
+            // any log output. A file assembled byte-by-byte through our own HTTP
+            // streams gets no mark, and the hash already proved integrity - so
+            // remove any inherited mark from a pre-existing file this replaces
+            // (overwrite:true above does not clear it). Best effort: an OS that
+            // refuses the delete leaves a harmless, inert stream.
+            if (OperatingSystem.IsWindows())
+            {
+                try
+                {
+                    File.Delete(destinationPath + ":Zone.Identifier");
+                }
+                catch
+                {
+                    // Nothing depended on it.
+                }
+            }
+
             // Release assets are plain bytes: the download never carries the
             // unix executable bit, and without it the sidecar cannot launch on
             // Linux/macOS (this was equally true of the versioned releases).
@@ -169,7 +189,7 @@ public sealed class SidecarDownloadService : ISidecarDownloadService
         {
             throw new InvalidOperationException(
                 "GitHub publishes no release with a SHA256SUMS.txt manifest — " +
-                "the download cannot be verified, so it is refused. Build the sidecar locally instead (Build Server).");
+                "the download cannot be verified, so it is refused. Retry or use an older release that carries the checksum.");
         }
 
         var wanted = AssetPrefix + rid;
@@ -196,7 +216,7 @@ public sealed class SidecarDownloadService : ISidecarDownloadService
         if (shaAsset is null)
             throw new InvalidOperationException(
                 $"The latest release ({release?.TagName ?? "an unknown tag"}) does not publish SHA256SUMS.txt — " +
-                "the download cannot be verified, so it is refused. Build the sidecar locally instead (Build Server), " +
+                "the download cannot be verified, so it is refused. Retry, or verify the release, " +
                 "or pick a release that ships checksums.");
 
         return (assets, await _http.GetStringAsync(shaAsset.Url!, ct).ConfigureAwait(false));
@@ -291,7 +311,7 @@ public sealed class SidecarDownloadService : ISidecarDownloadService
         if (actual != expected)
             throw new InvalidOperationException(
                 $"Checksum mismatch for {assetName}: expected {expected}, got {actual}. " +
-                "The download or the release is corrupted — retry, or rebuild the sidecar locally (Build Server).");
+                "The download or the release is corrupted — retry, or report the release.");
     }
 
     /// <summary>The expected lowercase hex SHA-256 of an asset from SHA256SUMS.txt; null when absent.</summary>

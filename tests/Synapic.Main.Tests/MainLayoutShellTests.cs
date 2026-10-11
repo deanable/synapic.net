@@ -29,7 +29,7 @@ public class MainLayoutShellTests
 {
     private static MainWindowViewModel NewShell(string? exe = null, Session? session = null,
         ConfigService? config = null, IHelpService? help = null) =>
-        new(new FakeSidecar(), new FakeBuildService(), session ?? new Session(), () => exe, null, null, _ => exe,
+        new(new FakeSidecar(), session ?? new Session(), () => exe, null, null, _ => exe,
             configService: config, help: help);
 
     private static bool EffectivelyVisible(Control control) =>

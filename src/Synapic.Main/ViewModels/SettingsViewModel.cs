@@ -57,16 +57,21 @@ public partial class SettingsViewModel : ViewModelBase
 
     private readonly Session _session;
     private readonly Func<ConfigService?> _configProvider;
+    private readonly Func<ComputeAvailability> _availabilityProbe;
     private readonly Action<string> _openExternal;
 
     public SettingsViewModel(
         Session session,
         Func<ConfigService?>? configProvider = null,
-        Action<string>? openExternal = null)
+        Action<string>? openExternal = null,
+        Func<ComputeAvailability>? availabilityProbe = null)
     {
         _session = session;
         _configProvider = configProvider ?? (() => null);
         _openExternal = openExternal ?? OpenWithShell;
+        // Same overridable machine probe the engine form uses, so the CUDA
+        // preference can be tested without depending on the GPU under the runner.
+        _availabilityProbe = availabilityProbe ?? ComputeAvailability.Detect;
 
         // Loaded through the field initializers' defaults when there is no config
         // (a test, or an install that has never saved one): the panel then shows
@@ -244,10 +249,21 @@ public partial class SettingsViewModel : ViewModelBase
     /// (first run, or after the stored engine settings were cleared). The shell
     /// calls this once, before the step view models hydrate, so the form opens
     /// on these values rather than on the shipped ones.
+    ///
+    /// Device preference (user request): when the saved default is empty — the
+    /// user has never picked one — CUDA is preferred when the machine can run
+    /// it. A saved default ("cpu" on a GPU machine) is always respected: the
+    /// preference seeds a first run, it never overrides an explicit choice.
     /// </summary>
     public void ApplyDefaultsToNewSession()
     {
-        if (DefaultDeviceOption.Value.Length > 0) _session.Engine.Device = DefaultDeviceOption.Value;
+        var device = DefaultDeviceOption.Value;
+        if (device.Length == 0)
+        {
+            // Seed order: saved default → CUDA when able → CPU.
+            device = _availabilityProbe().Cuda ? "cuda" : "cpu";
+        }
+        _session.Engine.Device = device;
         if (DefaultConfidenceThreshold > 0) _session.Engine.ConfidenceThreshold = DefaultConfidenceThreshold;
         if (DefaultMaxItems > 0) _session.Datasource.MaxItems = DefaultMaxItems;
 

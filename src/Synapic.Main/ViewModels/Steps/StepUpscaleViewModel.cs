@@ -22,13 +22,19 @@ public partial class StepUpscaleViewModel : RunStateViewModel
 {
     private readonly Step1DatasourceViewModel? _step1;
     private readonly IInferenceSidecar? _sidecar;
+    private readonly AppSettingsRegistryStore? _appSettingsStore;
 
     /// <param name="step1">Provides the source (connection + scope or folder), like tagging and dedup.</param>
     /// <param name="sidecar">Runs the algorithm via POST /upscale.</param>
-    public StepUpscaleViewModel(Step1DatasourceViewModel? step1 = null, IInferenceSidecar? sidecar = null)
+    /// <param name="appSettingsStore">Registry-backed general settings; when given,
+    /// the workflow parameters restored from it and are persisted on change.</param>
+    public StepUpscaleViewModel(Step1DatasourceViewModel? step1 = null, IInferenceSidecar? sidecar = null,
+        AppSettingsRegistryStore? appSettingsStore = null)
     {
         _step1 = step1;
         _sidecar = sidecar;
+        _appSettingsStore = appSettingsStore;
+        LoadPersistedState();
 
         // The source can be re-picked (or re-connected) while this step shows:
         // re-evaluate Start and the source line on any Step 1 change.
@@ -90,21 +96,50 @@ public partial class StepUpscaleViewModel : RunStateViewModel
         OnPropertyChanged(nameof(IsDenoiseEnabled));
         OnPropertyChanged(nameof(IsPrecisionEnabled));
         OnPropertyChanged(nameof(SettingsSummary));
+        PersistState();
     }
 
-    partial void OnSelectedFactorChanged(int value) => OnPropertyChanged(nameof(SettingsSummary));
+    partial void OnSelectedFactorChanged(int value)
+    {
+        OnPropertyChanged(nameof(SettingsSummary));
+        PersistState();
+    }
 
-    partial void OnSelectedPrecisionChanged(int value) => OnPropertyChanged(nameof(SettingsSummary));
+    partial void OnSelectedPrecisionChanged(int value)
+    {
+        OnPropertyChanged(nameof(SettingsSummary));
+        PersistState();
+    }
 
-    partial void OnSelectedOutputFormatChanged(int value) => OnPropertyChanged(nameof(SettingsSummary));
+    partial void OnSelectedOutputFormatChanged(int value)
+    {
+        OnPropertyChanged(nameof(SettingsSummary));
+        PersistState();
+    }
 
-    partial void OnJpegQualityChanged(int value) => OnPropertyChanged(nameof(SettingsSummary));
+    partial void OnJpegQualityChanged(int value)
+    {
+        OnPropertyChanged(nameof(SettingsSummary));
+        PersistState();
+    }
 
-    partial void OnDenoiseStrengthChanged(double value) => OnPropertyChanged(nameof(SettingsSummary));
+    partial void OnDenoiseStrengthChanged(double value)
+    {
+        OnPropertyChanged(nameof(SettingsSummary));
+        PersistState();
+    }
 
-    partial void OnSharpenAmountChanged(double value) => OnPropertyChanged(nameof(SettingsSummary));
+    partial void OnSharpenAmountChanged(double value)
+    {
+        OnPropertyChanged(nameof(SettingsSummary));
+        PersistState();
+    }
 
-    partial void OnOverwriteExistingChanged(bool value) => OnPropertyChanged(nameof(SettingsSummary));
+    partial void OnOverwriteExistingChanged(bool value)
+    {
+        OnPropertyChanged(nameof(SettingsSummary));
+        PersistState();
+    }
 
     /// <summary>
     /// Read-back of the parameters for the run page: they live in the Parameters
@@ -146,6 +181,63 @@ public partial class StepUpscaleViewModel : RunStateViewModel
         JpegQuality = Math.Clamp(JpegQuality, 70, 100),
         OverwriteExisting = OverwriteExisting,
     };
+
+    // ── Persisted settings (registry) ──────────────────────────────────────
+
+    private bool _hydratingUpscale;
+
+    /// <summary>Restore the remembered workflow parameters (best effort).</summary>
+    private void LoadPersistedState()
+    {
+        if (_appSettingsStore?.Load() is not { } s) return;
+        _hydratingUpscale = true;
+        try
+        {
+            SelectedWorkflow = Math.Clamp(s.UpscaleWorkflow, 0, Workflows.Length - 1);
+            SelectedFactor = Math.Clamp(s.UpscaleFactor, 0, Factors.Length - 1);
+            SelectedPrecision = Math.Clamp(s.UpscalePrecision, 0, Precisions.Length - 1);
+            SelectedOutputFormat = Math.Clamp(s.UpscaleOutputFormat, 0, OutputFormats.Length - 1);
+            JpegQuality = Math.Clamp(s.UpscaleJpegQuality, 70, 100);
+            DenoiseStrength = Math.Clamp(s.UpscaleDenoiseStrength, 0.0, 1.0);
+            SharpenAmount = Math.Clamp(s.UpscaleSharpenAmount, 0.0, 2.0);
+            OverwriteExisting = s.UpscaleOverwriteExisting;
+        }
+        finally
+        {
+            _hydratingUpscale = false;
+        }
+    }
+
+    /// <summary>Write the current parameters back to the registry store.
+    /// Called when the session is not active; hydration suppresses it.</summary>
+    private void PersistState()
+    {
+        if (_appSettingsStore is null || _hydratingUpscale) return;
+        try
+        {
+            var existing = _appSettingsStore.Load() ?? new AppSettingsState(
+                "system", "info", false, true, false,
+                "", 0, 0,
+                "PHash", 0.90, "Exact", false, false, false, false, 0, "",
+                0, 0, 0, 0, 95, 1.0, 0, true,
+                "", false, 100, false, 100, false);
+            _appSettingsStore.Save(existing with
+            {
+                UpscaleWorkflow = SelectedWorkflow,
+                UpscaleFactor = SelectedFactor,
+                UpscalePrecision = SelectedPrecision,
+                UpscaleOutputFormat = SelectedOutputFormat,
+                UpscaleJpegQuality = JpegQuality,
+                UpscaleDenoiseStrength = DenoiseStrength,
+                UpscaleSharpenAmount = SharpenAmount,
+                UpscaleOverwriteExisting = OverwriteExisting,
+            });
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Warning(nameof(StepUpscaleViewModel), $"Failed to persist upscale settings: {e.Message}");
+        }
+    }
 
     // ── Source (read back from Step 1 — same as the tagging route) ──────────
 

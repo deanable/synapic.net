@@ -24,7 +24,7 @@ window → detect/auto-launch the sidecar → stop it on shutdown. See the
 [startup sequence](codebase-guide.md#4-startup-sequence-apponframeworkinitializationcompleted).
 
 ### `Views/MainWindow.axaml(.cs)`
-Shell layout: toolbar (server indicator, Start/Stop Server, Build Server,
+Shell layout: toolbar (server indicator, Start/Stop Server,
 download progress), a **start screen** with the **source panel**
 (`DatasourceSourcePanel` — folder picker, Daminion connect, scope, filters and the
 record count — bound to `Wizard.Step1`, the same view model every route runs on)
@@ -679,7 +679,7 @@ plus IPTC/EXIF fallbacks. `TagResult(Category, Keywords, Description)`. See
 
 ### Build pipeline
 
-- **`SidecarBuildService`** (`ISidecarBuildService`) — runs
+- —
   `build/build-server.ps1|sh <rid>` with streamed output, de-duplicated
   progress reporting, cancellation (kills the whole process tree), and
   `CanBuild` (repo root + build script present). Rejects malformed RIDs.

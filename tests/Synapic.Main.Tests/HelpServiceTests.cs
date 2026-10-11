@@ -545,7 +545,7 @@ public class HelpServiceTests : IDisposable
     // ── Helpers ─────────────────────────────────────────────────────────
 
     private static MainWindowViewModel NewViewModel(IHelpService help, string? exe) =>
-        new(new FakeSidecar(), new FakeBuildService(), new Session(), () => exe, null, null, _ => exe,
+        new(new FakeSidecar(), new Session(), () => exe, null, null, _ => exe,
             null, null, help);
 
     /// <summary>Every topic name the app can pass to IHelpService.Open.</summary>

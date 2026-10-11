@@ -61,9 +61,6 @@ that:</p>
 <span class="ui">Platform variants</span> to fetch the prebuilt executable
 &mdash; works on any machine, no toolchain needed. CUDA users: the CUDA row, if
 this machine has an NVIDIA GPU.</li>
-<li>No prebuilt fits? <span class="ui">Build sidecar</span> compiles from
-source; that first build downloads a private Python and the packages the model
-needs, so expect minutes.</li>
 <li>Wait for the status dot at the bottom of the sidebar to turn green:
 <span class="ui">Server running (port &hellip;)</span>. The very first launch
 is slow &mdash; up to a couple of minutes &mdash; because the executable is
@@ -73,7 +70,7 @@ unpacked and the model is loaded.</li>
 <div class="tip">
 <p class="first">Checkpoint: the workspace is no longer disabled.</p>
 <p>The Settings sections respond and the log shows the server's port. If the dot
-stays red, read <a href="first-run-sidecar.html">Build the inference
+stays red, read <a href="first-run-sidecar.html">Get the inference
 server</a> and <a href="troubleshooting.html#sidecar">Troubleshooting: the
 inference server</a> before going further.</p>
 </div>
@@ -222,7 +219,7 @@ default) and <code>ui.theme</code>. Explained in
 <table>
 <tr><th class="setting">Done when&hellip;</th><th>Stage</th><th>Detail</th></tr>
 <tr><td>The installer finished and the app opens</td><td>1. Install</td><td><a href="getting-started.html">Getting started with Synapic</a></td></tr>
-<tr><td>The status dot is green and the workspace is enabled</td><td>2. Server</td><td><a href="first-run-sidecar.html">Build the inference server</a></td></tr>
+<tr><td>The status dot is green and the workspace is enabled</td><td>2. Server</td><td><a href="first-run-sidecar.html">Get the inference server</a></td></tr>
 <tr><td>A folder or a Daminion connection is selected</td><td>3&ndash;4. Images</td><td><a href="step1-datasource.html">The data source</a></td></tr>
 <tr><td>The record count reports a sensible number</td><td>4. Scope</td><td><a href="step1-scope-filters.html">Scope and filters</a></td></tr>
 <tr><td>Model, device and tag fields are as you want them</td><td>5. Engine</td><td><a href="step2-engine.html">Inference engine</a></td></tr>

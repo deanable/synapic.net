@@ -267,7 +267,7 @@ public class StepDedupViewModelTests
 
         Assert.True(vm.IsLocalSelected);
         Assert.False(vm.IsDaminionSelected);
-        Assert.Equal(new[] { "Tag", "Move", "Delete" }, vm.Actions);
+        Assert.Equal(new[] { "Tag", "Move to folder…", "Delete from disk" }, vm.Actions);
 
         vm.IsDaminionSelected = true;
 
@@ -278,7 +278,7 @@ public class StepDedupViewModelTests
         Assert.Equal(0, vm.SelectedAction); // clamped back to the new list
 
         vm.IsLocalSelected = true;
-        Assert.Equal(new[] { "Tag", "Move", "Delete" }, vm.Actions);
+        Assert.Equal(new[] { "Tag", "Move to folder…", "Delete from disk" }, vm.Actions);
     }
 
     [Fact]
@@ -417,11 +417,13 @@ public class StepDedupViewModelTests
                 },
                 new DedupItemViewModel(dup, "dup.jpg")));
             vm.SelectedAction = 1; // Move
+            var dest = System.IO.Path.Combine(dir, "go-here");
+            vm.MoveDestinationFolder = dest;
             await vm.ApplyCommand.ExecuteAsync(null);
 
             Assert.False(prompted);
-            Assert.False(System.IO.File.Exists(dup)); // moved into duplicates/
-            Assert.True(System.IO.File.Exists(System.IO.Path.Combine(dir, "duplicates", "dup.jpg")));
+            Assert.False(System.IO.File.Exists(dup)); // moved to the destination
+            Assert.True(System.IO.File.Exists(System.IO.Path.Combine(dest, "dup.jpg")));
         }
         finally
         {

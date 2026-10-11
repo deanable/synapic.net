@@ -73,7 +73,8 @@ password never replaces a working configuration.</p>
 </table>
 
 <h2 id="scope">Scope and filters &mdash; chosen on the processing view</h2>
-<p>What the batch considers. These do not live in the Settings view: the
+
+<p>What the batch considers. These do not live in the Settings view: the
 scope and its filters are chosen on the processing view that runs
 (<a href="workflow-overview.html">How a run works</a>). They live in the Daminion registry key and
 <code>datasource.daminion.*</code>. The narrative version is
@@ -89,7 +90,7 @@ scope and its filters are chosen on the processing view that runs
 <tr><td><a name="untagged-filters"></a><span class="ui">Only items with untagged: Keywords / Categories / Description</span><br><code>untaggedKeywords</code> &middot; <code>untaggedCategories</code> &middot; <code>untaggedDescription</code></td><td>Three independent switches that keep already-tagged items out of the batch &mdash; the cheapest way to resume a big catalog where it left off. <span class="ui">Select all untagged</span> ticks them together.</td><td>all off</td></tr>
 </table>
 
-<h2 id="limits">Batch limits and image scale &mdash; Connection tab</h2>
+<h2 id="limits">Batch limits and image scale &mdash; Tagging tab</h2>
 
 <p>These live in the <span class="ui">Connection</span> tab too, under the
 source form. Registry values <code>MaxItems</code>, <code>ProcessAll</code>,
@@ -188,7 +189,7 @@ in the session only: every launch starts over. Narrative: <a href="dedup.html">D
 <tr><td><a name="dedup-threshold"></a><span class="ui">Threshold</span></td><td>How similar is duplicate: from 0.5 to 1.0. Higher is stricter &mdash; near-exact copies cluster at 0.97+, resized and lightly edited images need lower.</td><td>0.90</td></tr>
 <tr><td><a name="dedup-server-hash"></a><span class="ui">Server hash</span></td><td>How the Daminion catalog's own content hashes are compared, shown for the catalog source. <code>Exact</code> (the default) groups only items whose <code>hashCode</code> is identical &mdash; the safe choice while it is unconfirmed whether the server hash is byte-exact or perceptual. <code>Hamming</code> compares those values by distance at the threshold, like the algorithmic hashes. Either way server hashes are only compared with each other, never with the algorithmic hashes of downloaded items.</td><td>Exact</td></tr>
 <tr><td><a name="dedup-autoselect"></a><span class="ui">Auto-select keep-set: Oldest / Newest / Smallest / Largest</span></td><td>Four switches that drive every group's per-item checkboxes at once. Each active switch ticks the item it names in every group (oldest/newest by capture date, smallest/largest by file size); several switches tick the union of their picks. A checked item is <em>kept</em> &mdash; the action applies to the unchecked ones. With no switch active, the first item of each group is kept. Toggling a switch recomputes the selection and overwrites manual tweaks.</td><td>all off</td></tr>
-<tr><td><a name="dedup-action"></a><span class="ui">Action for unchecked duplicates</span></td><td>What <span class="ui">Apply</span> does to every unchecked item across all groups: <code>Tag</code> the images as duplicates, <code>Move</code> the extras to a subfolder, or <code>Delete</code> them (local source &mdash; delete asks for confirmation first, because it cannot be undone). With the Daminion source the only action is <code>Delete from catalog</code>, which also asks for confirmation before removing the items from the catalog.</td><td>Tag</td></tr>
+<tr><td><a name="dedup-action"></a><span class="ui">Action for unchecked duplicates</span></td><td>What <span class="ui">Apply</span> does to every unchecked item across all groups: <code>Tag</code> the images as duplicates, <code>Move to folder&hellip;</code> the extras into a folder you choose (a destination box appears when it is selected; the folder is remembered), or <code>Delete from disk</code> them (local source &mdash; delete asks for confirmation first, because it cannot be undone). With the Daminion source the only action is <code>Delete from catalog</code>, which also asks for confirmation before removing the items from the catalog.</td><td>Tag</td></tr>
 </table>
 
 <h2>Changing settings by hand</h2>

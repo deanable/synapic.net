@@ -13,11 +13,12 @@
        long single column is now one concern per tab, because a new user could
        not see where one concern ended and the next began —
 
-         · Connection   — the data source and its limits (the run's scope is
+         · Connection   — the data source (the run's scope is
                           chosen on the processing view, D10; the source itself
-                          and its limits are app configuration).
-         · Inference    — the sidecar: status, Start/Stop/Build/Download.
-         · Tagging      — the model, device and tagging behaviour.
+                          is app configuration).
+         · Inference    — the sidecar: status, Start/Stop/Download.
+         · Tagging      — the model, device, tagging behaviour and run limits
+                          (max items / per-image scale).
          · Dedup        — the scan and keep-set rules.
          · Upscale      — the workflow, factor and output.
          · App          — appearance, logging, defaults and about.
@@ -62,10 +63,6 @@
                 <TextBlock Classes="hint" TextWrapping="Wrap"
                            Text="One source for every operation: a local folder, or a Daminion catalog with its scope and filters. Connect to the server here. The catalog scope and its filters are chosen on the processing view that runs." />
                 <steps:DatasourceSourcePanel DataContext="{Binding Operations.Source}" />
-
-                <Separator Margin="0,2" />
-
-                <op:SourceLimitsPanel DataContext="{Binding Operations.Source}" />
               </StackPanel>
             </Border>
           </StackPanel>
@@ -92,6 +89,15 @@
                 <TextBlock Classes="hint" TextWrapping="Wrap"
                            Text="The model, the compute device and the tagging behaviour every tagging run uses." />
                 <steps:Step2Engine DataContext="{Binding Operations.TagParameters}" />
+
+                <Separator Margin="0,2" />
+
+                <!-- The run limits (max items / pagination / AI image scale)
+                     moved here from the Connection tab (2026-10-11): they describe
+                     how a tagging run works, and “how many items” was what the
+                     user asked to find under Tagging. The other modes' scopes and
+                     limits travel with their own forms on the processing views. -->
+                <op:SourceLimitsPanel DataContext="{Binding Operations.Source}" />
               </StackPanel>
             </Border>
           </StackPanel>

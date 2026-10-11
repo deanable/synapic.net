@@ -39,7 +39,6 @@ public enum ServerUiState
 public partial class MainWindowViewModel : ViewModelBase
 {
     private readonly IInferenceSidecar _sidecar;
-    private readonly ISidecarBuildService _build;
     private readonly ISidecarDownloadService _download;
     private readonly IHelpService _help;
     private readonly Session _session;
@@ -61,7 +60,6 @@ public partial class MainWindowViewModel : ViewModelBase
     /// </param>
     public MainWindowViewModel(
         IInferenceSidecar sidecar,
-        ISidecarBuildService build,
         Session session,
         Func<string?>? sidecarExecutableLocator = null,
         DaminionConnectionStore? connectionStore = null,
@@ -71,10 +69,10 @@ public partial class MainWindowViewModel : ViewModelBase
         ISidecarDownloadService? download = null,
         IHelpService? help = null,
         ConfigService? configService = null,
+        AppSettingsRegistryStore? appSettingsStore = null,
         Func<ComputeAvailability>? computeAvailabilityProbe = null)
     {
         _sidecar = sidecar;
-        _build = build;
         _download = download ?? new SidecarDownloadService();
         _help = help ?? new HelpService();
         _session = session;
@@ -93,9 +91,12 @@ public partial class MainWindowViewModel : ViewModelBase
         // and the step view models read the session as they are constructed.
         // Everything else in it is a live view over config.json, so a change
         // takes effect on the run in progress (theme, log level, diagnostics).
+        // The settings view needs the same overridable machine probe the engine
+        // form takes, so the CUDA-preference seeding is testable without the GPU.
         AppSettings = new SettingsViewModel(
             _session,
-            configProvider: () => configService ?? ResolveConfigService());
+            configProvider: () => configService ?? ResolveConfigService(),
+            availabilityProbe: computeAvailabilityProbe);
         AppSettings.Shell = this;
         AppSettings.PropertyChanged += (_, e) =>
         {
@@ -105,7 +106,7 @@ public partial class MainWindowViewModel : ViewModelBase
         if (engineStore?.Load() is null) AppSettings.ApplyDefaultsToNewSession();
 
         Operations = new OperationShellViewModel(
-            _session, _sidecar, connectionStore, engineStore, presetStore, computeAvailabilityProbe);
+            _session, _sidecar, connectionStore, engineStore, presetStore, computeAvailabilityProbe, appSettingsStore);
         Operations.NavigationLockChanged += (_, _) => OnPropertyChanged(nameof(IsNavigationLocked));
 
         // The shared source is the dashboard panels' status line and the header
@@ -463,8 +464,9 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public bool IsServerRunning => ServerState is ServerUiState.Starting or ServerUiState.Running;
 
-    /// <summary>True when no sidecar executable exists and building is possible.</summary>
-    public bool IsBuildButtonVisible => ServerState is ServerUiState.NotDetected && _build.CanBuild;
+    /// <summary>True when no sidecar executable exists (desktop checkouts only; the
+    /// build toolbar command was retired in favour of the Download rows).</summary>
+    public bool IsBuildButtonVisible => false;
 
     // ── Per-platform sidecar setup (the sidecar gates the whole workspace) ──
 
@@ -486,7 +488,7 @@ public partial class MainWindowViewModel : ViewModelBase
     public string SidecarStaleText => _detectedStale is null
         ? string.Empty
         : $"The inference server is out of date and cannot run: {_detectedStale}. " +
-          "Rebuild it (Build sidecar) or download the prebuilt executable in the Inference server section below, " +
+          "Download the latest prebuilt executable in the Inference tab below, " +
           "then start the server again.";
 
     /// <summary>True when nothing has been built yet - the blocking setup state.</summary>
@@ -495,18 +497,15 @@ public partial class MainWindowViewModel : ViewModelBase
     /// <summary>
     /// Shows the setup panel while any variant is still missing, or while a built
     /// one is outdated - a stale executable, or a newer prebuilt on GitHub, is
-    /// exactly when the Build/Download pair must be reachable, so the panel must
-    /// not hide itself then. Deliberately not gated on CanBuild: a prebuilt
-    /// executable can be fetched from the GitHub release, so an installed app
-    /// with no build scripts can still pick up the variant it did not ship with
-    /// (CUDA beside a CPU-only install).
+    /// exactly when the Download button must be reachable, so the panel must
+    /// not hide itself then.
     /// </summary>
     public bool IsSidecarPanelVisible => SidecarVariants.Any(v => !v.IsBuilt || v.IsStale || v.IsGitHubUpdate);
 
     /// <summary>
     /// The wizard (datasource, engine, processing, results) is inert without a
     /// sidecar: nothing can be tagged, so the rest of the UI stays disabled
-    /// until at least one variant is built.
+    /// until at least one variant is downloaded.
     /// </summary>
     public bool IsWorkspaceEnabled => IsSidecarReady && !IsSidecarStale;
 
@@ -581,13 +580,13 @@ public partial class MainWindowViewModel : ViewModelBase
         var expected = InferenceSidecarService.NormalizeDevice(_session.Engine.Device);
         DeviceNotice = device.Length == 0 || string.Equals(device, expected, StringComparison.OrdinalIgnoreCase)
             ? null
-            : string.Equals(device, "cpu", StringComparison.OrdinalIgnoreCase) && expected == "cuda"
-                // The exact case this notice exists for: the run is on the CPU
-                // while the GPU was asked for. The server says why in its own
-                // log ("Requested device 'cuda' not available ... falling back
-                // to CPU"), and the fix is a sidecar build that has CUDA.
-                ? "Inference is running on the CPU, not the GPU: this server has no usable CUDA. "
-                    + "Build or download the CUDA variant in the setup panel, then start the server again."
+            : string.Equals(device, "cpu", StringComparison.OrdinalIgnoreCase) && expected == "cuda" // The exact case this notice exists for: the run is on the CPU
+ // while the GPU was asked for. The server says why in its own
+ // log ("Requested device 'cuda' not available ... falling back
+ // to CPU"), and the fix is the CUDA variant of the prebuilt
+ // sidecar.
+ ? "Inference is running on the CPU, not the GPU: this server has no usable CUDA. "
+ + "Download the CUDA variant in the setup panel, then start the server again."
                 : $"Inference is running on {device.ToUpperInvariant()} while {expected.ToUpperInvariant()} is selected.";
 
         // Log once per change, so the file log records which device the batch ran on.
@@ -604,13 +603,12 @@ public partial class MainWindowViewModel : ViewModelBase
     partial void OnServerStateChanged(ServerUiState value)
     {
         OnPropertyChanged(nameof(IsServerRunning));
-        OnPropertyChanged(nameof(IsBuildButtonVisible));
         OnPropertyChanged(nameof(ServerBrush));
         StatusText = value switch
         {
             ServerUiState.Detecting => "Detecting server\u2026",
             ServerUiState.NotDetected => "Server not detected",
-            ServerUiState.Building => "Building server\u2026 (first build downloads Python + packages)",
+            ServerUiState.Building => "Preparing server\u2026",  // retired state; retained for enum compat
             ServerUiState.Downloading => "Downloading server\u2026",
             ServerUiState.Stopped => "Server stopped",
             ServerUiState.Starting => "Server starting\u2026 (first launch can take up to 2 minutes)",
@@ -648,7 +646,6 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         StartServerCommand.NotifyCanExecuteChanged();
         StopServerCommand.NotifyCanExecuteChanged();
-        BuildServerCommand.NotifyCanExecuteChanged();
     }
 
     private void NotifySidecarSetupChanged()
@@ -677,14 +674,13 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             foreach (var rid in InferenceSidecarService.BuildableRids())
                 SidecarVariants.Add(new SidecarVariantViewModel(
-                    rid, DescribeVariant(rid), _build.CanBuild, BuildVariantAsync, DownloadVariantAsync));
+                    rid, DescribeVariant(rid), DownloadVariantAsync));
         }
 
         var repoRoot = InferenceSidecarService.FindRepoRoot();
         foreach (var variant in SidecarVariants)
         {
-            variant.CanBuild = _build.CanBuild;
-            // A finished (or never-started) refresh re-arms every way of getting a variant.
+            // A finished (or never-started) refresh re-arms the way of getting a variant.
             variant.CanDownload = true;
             var exe = _findSidecarVariant(variant.Rid);
             variant.ApplyBuildState(exe, exe is null ? null : InferenceSidecarService.DescribeStaleness(exe, repoRoot));
@@ -694,26 +690,27 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Builds one variant, then re-detects so the workspace unlocks as soon as
-    /// the first build lands. Only one build runs at a time: the pipeline
-    /// shares a work directory and the build service rejects concurrent runs.
-    /// A running server is stopped first: PyInstaller cannot replace an
-    /// executable the OS still holds open (the build would die with
-    /// PermissionError only after minutes of packaging).
+    /// Fetches one variant from the GitHub release. The only way the app gets a
+    /// sidecar in a release build: no local toolchain is needed, and an
+    /// installed app can pick up a variant it did not ship with (CUDA beside a
+    /// CPU-only install). The row only offers Download while the variant is
+    /// missing or outdated, so on an outdated row this replaces the executable
+    /// that is already there - which needs the running server stopped first
+    /// (Windows holds a running exe open, so the file move would fail
+    /// otherwise). One operation at a time, then re-detect so the workspace
+    /// unlocks the moment the file lands.
     /// </summary>
-    private async Task BuildVariantAsync(SidecarVariantViewModel variant, CancellationToken ct)
+    private async Task DownloadVariantAsync(SidecarVariantViewModel variant, CancellationToken ct)
     {
-        if (!variant.CanBuild || variant.IsBuilding) return;
+        if (variant.IsDownloading) return;
         await WithServerStoppedForReplacementAsync(
-            () => BuildVariantCoreAsync(variant, ct), ct, "build");
+            () => DownloadVariantCoreAsync(variant, ct), ct, "download");
     }
 
     /// <summary>
     /// Stop the managed server around a replacement of its executable, then
     /// put it back the way the user left it (started again on the new bytes).
-    /// Shared by the Build and Download commands, so both paths get the
-    /// same lock-avoidance; orphans that outlived a previous run are swept by
-    /// the build service's own pre-flight.
+    /// Orphans that outlived a previous run are swept at launch.
     /// </summary>
     private async Task WithServerStoppedForReplacementAsync(Func<Task> replace, CancellationToken ct, string initiator)
     {
@@ -740,81 +737,23 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
-    private async Task BuildVariantCoreAsync(SidecarVariantViewModel variant, CancellationToken ct)
-    {
-        if (!variant.CanBuild || variant.IsBuilding) return;
-
-        foreach (var other in SidecarVariants)
-        {
-            other.CanBuild = false;
-            other.CanDownload = false;
-        }
-        variant.IsBuilding = true;
-        variant.ResetBuildProgress();
-        IsBusy = true;
-        SetState(ServerUiState.Building);
-        try
-        {
-            // Progress<T> marshals back to this (UI) thread as it is raised.
-            var progress = new Progress<SidecarBuildProgress>(variant.ApplyProgress);
-            await _build.BuildAsync(variant.Rid, AppendLog, progress, ct);
-            AppendLog($"[build] {variant.DisplayName} sidecar built.");
-            variant.GitHubUpdateText = null;   // fresh bytes beat whatever GitHub offers
-        }
-        catch (OperationCanceledException)
-        {
-            AppendLog($"[build] {variant.DisplayName} build cancelled.");
-        }
-        catch (Exception e)
-        {
-            AppendLog($"[build] {variant.DisplayName} build failed: {e.Message}");
-        }
-        finally
-        {
-            variant.IsBuilding = false;
-            IsBusy = false;
-            // Re-detect: restores per-variant availability and, on success,
-            // flips the server state out of Building and unlocks the wizard.
-            await DetectServerAsync();
-        }
-    }
-
-    /// <summary>
-    /// Fetches one variant from the GitHub release instead of compiling it -
-    /// the way out for a machine with no Python/PyInstaller toolchain, and for
-    /// an installed app that wants a variant it did not ship with. The row only
-    /// offers Download while the variant is missing or outdated, so on an
-    /// outdated row this replaces the executable that is already there - which
-    /// needs the running server stopped first, exactly like a build (Windows
-    /// holds a running exe open, so the file move would fail otherwise).
-    /// Mirrors <see cref="BuildVariantAsync"/>: one operation at a time, then
-    /// re-detect so the workspace unlocks the moment the file lands.
-    /// </summary>
-    private async Task DownloadVariantAsync(SidecarVariantViewModel variant, CancellationToken ct)
-    {
-        if (variant.IsBuilding || variant.IsDownloading) return;
-        await WithServerStoppedForReplacementAsync(
-            () => DownloadVariantCoreAsync(variant, ct), ct, "download");
-    }
-
     private async Task DownloadVariantCoreAsync(SidecarVariantViewModel variant, CancellationToken ct)
     {
-        if (variant.IsBuilding || variant.IsDownloading) return;
+        if (variant.IsDownloading) return;
 
         foreach (var other in SidecarVariants)
         {
-            other.CanBuild = false;
             other.CanDownload = false;
         }
         variant.IsDownloading = true;
-        variant.ResetBuildProgress();
+        variant.ResetDownloadProgress();
         IsBusy = true;
         SetState(ServerUiState.Downloading);
         try
         {
             var destination = InferenceSidecarService.SidecarInstallPath(variant.Rid);
-            var progress = new Progress<SidecarDownloadProgress>(
-                p => variant.ApplyProgress(new SidecarBuildProgress(p.Percent, p.Stage)));
+            // Progress<T> marshals back to this (UI) thread as it is raised.
+            var progress = new Progress<SidecarDownloadProgress>(variant.ApplyProgress);
             await _download.DownloadAsync(variant.Rid, destination, progress, ct);
             AppendLog($"[download] {variant.DisplayName} sidecar downloaded to {destination}.");
             variant.GitHubUpdateText = null;   // just fetched what GitHub offered
@@ -866,10 +805,10 @@ public partial class MainWindowViewModel : ViewModelBase
                     ? $", published {at.ToLocalTime():yyyy-MM-dd}"
                     : "";
                 variant.GitHubUpdateText = info.LocalMissing
-                    ? $"Prebuilt sidecar available on GitHub ({info.TagName}{published}) \u2014 use Download instead of building."
-                    : $"Newer prebuilt sidecar on GitHub ({info.TagName}{published}) \u2014 the row offers Build and Download: Download fetches this prebuilt, Build recompiles from source.";
+                    ? $"Prebuilt sidecar available on GitHub ({info.TagName}{published}) \u2014 press Download."
+                    : $"Newer prebuilt sidecar on GitHub ({info.TagName}{published}) \u2014 press Download to replace the old executable.";
                 AppendLog($"[update] GitHub offers a newer prebuilt {variant.DisplayName} sidecar ({info.TagName}{published}); " +
-                          "use Download instead of building.");
+                          "press Download.");
                 SynapicLog.Info(nameof(MainWindowViewModel),
                     $"Sidecar update available for {variant.Rid}: {info.TagName}, " +
                     $"published {info.PublishedAt ?? "unknown"}, {info.TotalBytes:N0} bytes, localMissing={info.LocalMissing}");
@@ -948,12 +887,9 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             SetState(ServerUiState.NotDetected);
             var missing = string.Join(", ", SidecarVariants.Where(v => !v.IsBuilt).Select(v => v.DisplayName));
-            if (_build.CanBuild)
-                AppendLog(missing.Length > 0
-                    ? $"[server] No inference server built. Build one of: {missing}."
-                    : "[server] Inference server not found. Use \"Build Server\" to build it from source (one-time).");
-            else
-                AppendLog("[server] Inference server not found in this installation.");
+            AppendLog(missing.Length > 0
+                ? $"[server] No inference server downloaded. Download one of: {missing}."
+                : "[server] Inference server not found in this installation.");
             return;
         }
 
@@ -1008,28 +944,6 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     private bool CanStopServer() => IsServerRunning && !IsBusy;
-
-    /// <summary>
-    /// Toolbar shortcut: builds the recommended variant (the preferred RID for
-    /// this machine). The setup panel offers the explicit per-platform choice.
-    /// </summary>
-    [RelayCommand(CanExecute = nameof(CanBuildServer))]
-    private async Task BuildServerAsync(CancellationToken ct)
-    {
-        if (SidecarVariants.Count == 0) RefreshSidecarVariants();
-
-        var target = SidecarVariants.FirstOrDefault(v => !v.IsBuilt) ?? SidecarVariants.FirstOrDefault();
-        if (target is null)
-        {
-            AppendLog("[build] No buildable sidecar variant on this platform.");
-            SetState(ServerUiState.NotDetected);
-            return;
-        }
-
-        await BuildVariantAsync(target, ct);
-    }
-
-    private bool CanBuildServer() => ServerState is ServerUiState.NotDetected && !IsBusy && _build.CanBuild;
 
     // ── Background model download progress (polled from /health) ───────────
 

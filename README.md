@@ -1191,7 +1191,7 @@ jobs:
 
         run: ./build/install-python-deps.sh ${{ matrix.rid }}
 
-      - name: Build sidecar (PyInstaller)
+      - name: Build sidecar (PyInstaller)  # CI-only; the app downloads instead
 
         run: ./build/build-sidecar.sh ${{ matrix.rid }}
 

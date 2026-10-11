@@ -50,7 +50,7 @@ public class SettingsViewTests
     }
 
     private static MainWindowViewModel NewShell(ConfigService? config = null, Session? session = null) =>
-        new(new FakeSidecar(), new FakeBuildService(), session ?? new Session(), () => null, null, null, _ => null,
+        new(new FakeSidecar(), session ?? new Session(), () => null, null, null, _ => null,
             configService: config);
 
     private static MainWindow NewWindow(MainWindowViewModel shell)
@@ -294,7 +294,7 @@ public class SettingsViewTests
             Assert.Single(buttons, b => b.Command == shell.StopServerCommand);
 
             // One realized row per variant, rendered from the shell's own rows
-            // (not a copy), and each row's Build command is wired - a broken
+            // (not a copy), and each row's Download command is wired - a broken
             // binding leaves Command null and looks fine until it is clicked.
             var items = Assert.Single(section.GetVisualDescendants().OfType<ItemsControl>());
             Assert.Same(shell.SidecarVariants, items.ItemsSource);
@@ -302,7 +302,7 @@ public class SettingsViewTests
                 .Select(b => b.DataContext).OfType<SidecarVariantViewModel>()
                 .Distinct().ToList();
             Assert.Equal(shell.SidecarVariants.Count, rendered.Count);
-            Assert.All(shell.SidecarVariants, v => Assert.NotNull(v.BuildCommand));
+            Assert.All(shell.SidecarVariants, v => Assert.NotNull(v.DownloadCommand));
 
             // The auto-launch toggle is the persisted opt-out (the shell's
             // blocking banner points here rather than offering a second copy).

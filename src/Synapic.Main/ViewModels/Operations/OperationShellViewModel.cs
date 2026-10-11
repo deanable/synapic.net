@@ -48,15 +48,16 @@ public partial class OperationShellViewModel : ViewModelBase
         DaminionConnectionStore? connectionStore = null,
         EngineSettingsStore? engineStore = null,
         SystemPromptPresetStore? presetStore = null,
-        Func<ComputeAvailability>? computeAvailabilityProbe = null)
+        Func<ComputeAvailability>? computeAvailabilityProbe = null,
+        AppSettingsRegistryStore? appSettingsStore = null)
     {
         Source = new Step1DatasourceViewModel(session, connectionStore);
         TagParameters = new Step2EngineViewModel(
             session, sidecar, engineStore, presetStore, computeAvailabilityProbe);
         TagRun = new Step3ProcessViewModel(session, sidecar, Source);
         TagReport = new Step4ResultsViewModel(session, Source, TagRun);
-        Dedup = new StepDedupViewModel(step1: Source);
-        Upscale = new StepUpscaleViewModel(step1: Source, sidecar: sidecar);
+        Dedup = new StepDedupViewModel(step1: Source, appSettingsStore: appSettingsStore);
+        Upscale = new StepUpscaleViewModel(step1: Source, sidecar: sidecar, appSettingsStore: appSettingsStore);
 
         // The tag-field checkboxes gate the tagging run. The wizard used to own
         // half of that gate (Next); now the run owns all of it, so it has to

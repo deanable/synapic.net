@@ -18,7 +18,7 @@ the way Synapic means them.</p>
 
 <table>
 <tr><th class="setting">Term</th><th>Meaning</th></tr>
-<tr><td><span class="term">Inference server</span> / <span class="term">sidecar</span></td><td>The separate program that loads the model and answers one tagging request per image. Synapic starts it, talks to it over a local port, and stops it. See <a href="first-run-sidecar.html">Build the inference server</a>.</td></tr>
+<tr><td><span class="term">Inference server</span> / <span class="term">sidecar</span></td><td>The separate program that loads the model and answers one tagging request per image. Synapic starts it, talks to it over a local port, and stops it. See <a href="first-run-sidecar.html">Get the inference server</a>.</td></tr>
 <tr><td><span class="term">Variant</span></td><td>A build of the inference server for a particular runtime: the CPU build, or the CUDA build for NVIDIA GPUs.</td></tr>
 <tr><td><span class="term">Device</span></td><td>Where the model is computed: the CPU, an NVIDIA GPU (CUDA) or Apple silicon (MPS). The <span class="ui">Tagging</span> tab offers only the devices this machine can run, and the choice both selects the device for the next run and decides which server variant is launched. The status bar names the device the running server reports.</td></tr>
 <tr><td><span class="term">CUDA</span></td><td>NVIDIA's GPU compute platform. Needs an NVIDIA driver on the machine <em>and</em> the CUDA build of the inference server; with both, tagging is many times faster than on the CPU. Missing either one means the run falls back to the CPU.</td></tr>

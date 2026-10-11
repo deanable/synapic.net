@@ -58,4 +58,4 @@ python -m pytest tests/Synapic.Inference.Tests
 
 The host locates a sidecar either bundled next to `Synapic.exe` or in
 `artifacts/<rid>/` of a dev checkout. With neither present the wizard stays
-disabled and a **Build Server** panel is shown.
+disabled and a **Download** panel is shown.

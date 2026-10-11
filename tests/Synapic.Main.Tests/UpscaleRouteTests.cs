@@ -31,7 +31,7 @@ public class UpscaleRouteTests
     }
 
     private static MainWindowViewModel Shell(Session session) =>
-        new(new FakeSidecar(), new FakeBuildService(), session, () => null, null, null, _ => null);
+        new(new FakeSidecar(), session, () => null, null, null, _ => null);
 
     private static bool EffectivelyVisible(Control control) =>
         control.IsVisible &&

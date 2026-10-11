@@ -240,7 +240,7 @@ public partial class RetiredUiConceptTests
         var session = new Session();
         session.Datasource.Type = "local";
         session.Datasource.LocalPath = Path.GetTempPath();
-        return new MainWindowViewModel(new FakeSidecar(), new FakeBuildService(), session,
+        return new MainWindowViewModel(new FakeSidecar(), session,
             () => null, null, null, _ => null);
     }
 

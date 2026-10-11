@@ -33,7 +33,7 @@ build/package-linux.sh               # linuxdeploy → Synapic-x86_64.AppImage
 build/package-macos.sh <rid>         # codesign + notarytool + create-dmg
 ```
 
-`build-server.ps1|.sh` chains the first three steps; the app's **Build Server**
+`build-server.ps1|.sh` chains the first three steps (CI); end users use **Download**
 button and CI both call it.
 
 ### Building an installer
@@ -486,7 +486,7 @@ after a 2.7 GB download.
 
 Standalone sidecars matter because they let someone swap the CPU server for the
 CUDA one (or pick up a newer server) without reinstalling the app — and without
-needing a source checkout to run **Build Server**. The app finds its server by
+needing a source checkout (the in-app build option was removed; CI publishes the prebuilt). The app finds its server by
 file name, so a downloaded executable has to be renamed to
 `synapic-inference.exe` (`synapic-inference` on Linux/macOS) and placed next to
 the app.
@@ -539,7 +539,7 @@ its own model.
 **"Barebones that builds the sidecar" is not a shipping option.** Building the
 sidecar needs a source checkout, `build/fetch-python.ps1`, ~2.5 GB of pinned
 torch wheels, PyInstaller and about 20 minutes of CPU. That is the developer
-path - `build-server.ps1`, the app's **Build Server** button, or **Update** on
+path - `build-server.ps1` (CI), or **Update** on
 a built row - and it only works for someone who already has the repository.
 Someone who is handed an installer, or the standalone CPU server, never
 compiles anything.

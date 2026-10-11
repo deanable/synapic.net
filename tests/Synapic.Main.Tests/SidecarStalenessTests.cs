@@ -119,7 +119,7 @@ public class SidecarStalenessTests : IDisposable
     }
 
     [Fact]
-    public void Stale_launch_is_blocked_with_the_rebuild_instructions()
+    public void Stale_launch_is_blocked_with_the_download_instructions()
     {
         try
         {
@@ -134,8 +134,10 @@ public class SidecarStalenessTests : IDisposable
 
             Assert.NotNull(block);
             Assert.Contains("will not be started", block);
-            Assert.Contains("Build sidecar", block);
+            // The only way forward is the prebuilt download: the local-build
+            // option was retired, so the instruction names it and only it.
             Assert.Contains("Download", block);
+            Assert.DoesNotContain("Build", block);
         }
         finally
         {

@@ -52,38 +52,59 @@
       <StackPanel Spacing="8">
         <TextBlock Classes="sectionTitle" Text="Server" />
 
-        <TextBox Watermark="Server URL, e.g. http://dam.local/daminion"
-                 Text="{Binding DaminionUrl}"
-                 help:HelpScope.Topic="settings-reference.html#server-url" />
+        <!-- Connected state: the credentials are for the login only, so once
+             authenticated the form is replaced by the status line and Disconnect.
+             Editing the URL/user mid-session would silently describe a server
+             Synapic is not talking to: change servers by Disconnect + Connect. -->
+        <StackPanel Spacing="8" IsVisible="{Binding IsDaminionConnected}">
 
-        <Grid ColumnDefinitions="*,*,Auto" help:HelpScope.Topic="settings-reference.html#server-url">
-          <TextBox Grid.Column="0" Watermark="Username" Text="{Binding DaminionUser}"
-                   Margin="0,0,8,0" />
-          <TextBox Grid.Column="1" Watermark="Password" Text="{Binding DaminionPass}"
-                   PasswordChar="*" Margin="0,0,8,0" />
-          <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
-            <Button Content="Connect" Command="{Binding ConnectCommand}" Classes="accent" />
+          <TextBlock Text="{Binding DaminionUrl}" FontWeight="SemiBold"
+                     TextTrimming="CharacterEllipsis"
+                     ToolTip.Tip="{Binding DaminionUrl}" />
+
+          <!-- The catalog is chosen by the server URL, so there is nothing to fill
+               in by hand. Daminion exposes no endpoint that lists a server's
+               catalogs, so after connecting we report the one the login landed on. -->
+          <TextBlock Classes="hint" TextWrapping="Wrap"
+                     Text="{Binding ActiveCatalogText}"
+                     IsVisible="{Binding HasActiveCatalog}"
+                     ToolTip.Tip="The catalog this login is bound to, selected by the server URL. Daminion has no API to list a server's catalogs, so this reports the one in use." />
+
+          <WrapPanel>
             <Button Content="Disconnect" Command="{Binding DisconnectCommand}"
-                    IsVisible="{Binding IsDaminionConnected}" />
-          </StackPanel>
-        </Grid>
+                    Margin="0,0,12,8" />
+            <ProgressBar IsIndeterminate="True" Width="90" Height="6" VerticalAlignment="Center"
+                         IsVisible="{Binding IsLoadingCatalog}" Margin="0,0,12,8" />
+            <TextBlock Text="{Binding ConnectionMessage}" Opacity="0.85" TextWrapping="Wrap"
+                       VerticalAlignment="Center"
+                       IsVisible="{Binding ConnectionMessage}" Margin="0,0,12,8" />
+          </WrapPanel>
+        </StackPanel>
 
-        <!-- The catalog is chosen by the server URL, so there is nothing to fill
-             in by hand. Daminion exposes no endpoint that lists a server's
-             catalogs, so after connecting we report the one the login landed on. -->
-        <TextBlock Classes="hint" TextWrapping="Wrap"
-                   Text="{Binding ActiveCatalogText}"
-                   IsVisible="{Binding HasActiveCatalog}"
-                   ToolTip.Tip="The catalog this login is bound to, selected by the server URL. Daminion has no API to list a server's catalogs, so this reports the one in use." />
+        <!-- Not connected: the login form, shown as before. -->
+        <StackPanel Spacing="8" IsVisible="{Binding !IsDaminionConnected}">
 
-        <WrapPanel>
-          <ProgressBar IsIndeterminate="True" Width="90" Height="6"
-                       IsVisible="{Binding IsConnecting}" Margin="0,0,12,8" />
-          <ProgressBar IsIndeterminate="True" Width="90" Height="6"
-                       IsVisible="{Binding IsLoadingCatalog}" Margin="0,0,12,8" />
-          <TextBlock Text="{Binding ConnectionMessage}" Opacity="0.85" TextWrapping="Wrap"
-                     IsVisible="{Binding ConnectionMessage}" Margin="0,0,12,8" />
-        </WrapPanel>
+          <TextBox Watermark="Server URL, e.g. http://dam.local/daminion"
+                   Text="{Binding DaminionUrl}"
+                   help:HelpScope.Topic="settings-reference.html#server-url" />
+
+          <Grid ColumnDefinitions="*,*,Auto" help:HelpScope.Topic="settings-reference.html#server-url">
+            <TextBox Grid.Column="0" Watermark="Username" Text="{Binding DaminionUser}"
+                     Margin="0,0,8,0" />
+            <TextBox Grid.Column="1" Watermark="Password" Text="{Binding DaminionPass}"
+                     PasswordChar="*" Margin="0,0,8,0" />
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
+              <Button Content="Connect" Command="{Binding ConnectCommand}" Classes="accent" />
+            </StackPanel>
+          </Grid>
+
+          <WrapPanel>
+            <ProgressBar IsIndeterminate="True" Width="90" Height="6"
+                         IsVisible="{Binding IsConnecting}" Margin="0,0,12,8" />
+            <TextBlock Text="{Binding ConnectionMessage}" Opacity="0.85" TextWrapping="Wrap"
+                       IsVisible="{Binding ConnectionMessage}" Margin="0,0,12,8" />
+          </WrapPanel>
+        </StackPanel>
 
         <!-- The scope now travels with the run: each processing view carries the
              scope and filter choice, so the selection is made where the work

@@ -6,11 +6,12 @@
              x:DataType="vm:MainWindowViewModel">
 
   <!-- §5 Inference server: the local sidecar that runs the models — status, the
-       Start/Stop/Build controls, the auto-launch toggle, the background download
-       progress and one row per buildable variant (build from source, or fetch the
-       prebuilt executable). It is the Settings view's own section now, bound to
-       the shell it operates (its DataContext is the MainWindowViewModel), so the
-       server is configured and driven from exactly one place. -->
+       Start/Stop controls, the auto-launch toggle, the background download
+       progress and one row per variant (fetch the prebuilt executable from the
+       GitHub release; the build-from-source option was retired for release). It
+       is the Settings view's own tab now, bound to the shell it operates (its
+       DataContext is the MainWindowViewModel), so the server is configured and
+       driven from exactly one place. -->
   <StackPanel Spacing="8" help:HelpScope.Topic="first-run-sidecar.html">
     <TextBlock Text="Inference server" Classes="sectionTitle" />
     <TextBlock Classes="hint" TextWrapping="Wrap"
@@ -34,8 +35,6 @@
               Margin="0,0,8,8" />
       <Button Content="Stop Server" Command="{Binding StopServerCommand}"
               Margin="0,0,8,8" />
-      <Button Content="Build Server" Command="{Binding BuildServerCommand}"
-              IsVisible="{Binding IsBuildButtonVisible}" Margin="0,0,8,8" />
       <CheckBox Content="Start the server with the app"
                 IsChecked="{Binding AppSettings.AutoLaunchSidecar}" VerticalAlignment="Center"
                 Margin="0,0,8,8"
@@ -66,8 +65,8 @@
 
     <Separator Margin="0,2" />
 
-    <!-- One row per buildable variant (CPU / CUDA): build it from source, or
-         fetch the prebuilt one from the release. -->
+    <!-- One row per variant (CPU / CUDA): fetch the prebuilt executable from
+         the GitHub release. -->
     <TextBlock Text="Platform variants" FontWeight="SemiBold" FontSize="12" />
     <ItemsControl ItemsSource="{Binding SidecarVariants}">
       <ItemsControl.ItemTemplate>
@@ -83,20 +82,17 @@
               <TextBlock Text="{Binding Rid}" VerticalAlignment="Center"
                          Opacity="0.45" FontSize="11" Margin="0,0,8,6" />
               <ProgressBar IsVisible="{Binding IsBusy}"
-                           IsIndeterminate="{Binding IsBuildIndeterminate}"
-                           Value="{Binding BuildPercent}" Maximum="100"
+                           IsIndeterminate="{Binding IsDownloadIndeterminate}"
+                           Value="{Binding DownloadPercent}" Maximum="100"
                            Width="170" Height="6" VerticalAlignment="Center"
                            Margin="0,0,8,6" />
-              <Button Content="Build sidecar" Command="{Binding BuildCommand}"
-                      IsVisible="{Binding IsBuildButtonVisible}" Margin="0,0,8,6"
-                      ToolTip.Tip="Compile this variant from source; replaces an outdated executable with fresh bytes" />
               <Button Content="Download" Command="{Binding DownloadCommand}"
                       IsVisible="{Binding IsDownloadButtonVisible}" Margin="0,0,8,6"
-                      ToolTip.Tip="Fetch the prebuilt executable from the latest GitHub release instead of compiling it; replaces an outdated executable" />
+                      ToolTip.Tip="Fetch the prebuilt executable from the latest GitHub release; replaces an outdated executable" />
               <Button Content="Up to date" IsEnabled="False"
                       IsVisible="{Binding IsUpToDateVisible}" Margin="0,0,8,6"
-                      ToolTip.Tip="Nothing to do: this executable matches the source it was built from, and the GitHub release carries nothing newer for it." />
-              <TextBlock Text="{Binding BuildStage}" IsVisible="{Binding IsBusy}"
+                      ToolTip.Tip="Nothing to do: this executable matches the latest GitHub release for it." />
+              <TextBlock Text="{Binding DownloadStage}" IsVisible="{Binding IsBusy}"
                          VerticalAlignment="Center" Opacity="0.8" FontSize="11"
                          TextTrimming="CharacterEllipsis" MaxWidth="280"
                          Margin="0,0,8,6" />

@@ -343,7 +343,7 @@ Dependency-free core shared by every tier.
   default; the `-cuda` RID suffix swaps in the CUDA wheel index).
 - `build/build-sidecar.*` runs PyInstaller against
   `synapic-inference.spec` and writes `artifacts/<rid>/synapic-inference(.exe)`.
-- `build/build-server.*` chains the three (used by the app's Build Server
+- `build/build-server.*` chains the three (CI; the app downloads instead of running it,
   button and CI).
 - CI additionally runs `build/check-lfm2vl-tie.py` before packaging to fail
   fast on a bad transformers pin.

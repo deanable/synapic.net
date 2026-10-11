@@ -38,7 +38,7 @@
 		<param name="Local" value="step2-engine.html">
 		</OBJECT>
 	<LI> <OBJECT type="text/sitemap">
-		<param name="Name" value="build the inference server">
+		<param name="Name" value="get the inference server">
 		<param name="Local" value="first-run-sidecar.html">
 		</OBJECT>
 	<LI> <OBJECT type="text/sitemap">

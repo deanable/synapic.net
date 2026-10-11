@@ -160,20 +160,27 @@ public partial class StepDedupViewModel : RunStateViewModel
 {
     private readonly IDedupService _dedup;
     private readonly Step1DatasourceViewModel? _step1;
+    private readonly AppSettingsRegistryStore? _appSettingsStore;
 
     /// <param name="dedup">Injectable dedup engine (tests).</param>
     /// <param name="step1">Step 1 provides the Daminion source (connection +
     /// scope collection), mirroring how tagging gets its datasource.</param>
     /// <param name="confirm">Modal confirmation for the catalog delete; the dedup
     /// view wires the real dialog, tests inject answers. Null = cancel (fail closed).</param>
+    /// <param name="appSettingsStore">Registry-backed general settings; when
+    /// given, the scan rules, keep-set checkboxes, selected action and the move
+    /// destination are restored from it and persisted to it on change.</param>
     public StepDedupViewModel(
         IDedupService? dedup = null,
         Step1DatasourceViewModel? step1 = null,
-        Func<string, Task<bool>>? confirm = null)
+        Func<string, Task<bool>>? confirm = null,
+        AppSettingsRegistryStore? appSettingsStore = null)
     {
         _dedup = dedup ?? new DedupService();
         _step1 = step1;
+        _appSettingsStore = appSettingsStore;
         ConfirmAction = confirm;
+        LoadPersistedState();
 
         // Step 1 owns the source while the shell hosts both: anything that moves
         // there (type, folder, connection, scope) moves this step's own gate and
@@ -206,6 +213,70 @@ public partial class StepDedupViewModel : RunStateViewModel
     /// null cancels every destructive action (Daminion catalog delete and local
     /// file delete alike) — fail closed.</summary>
     public Func<string, Task<bool>>? ConfirmAction { get; set; }
+
+    // ── Persisted dedup settings (registry) ─────────────────────────────────
+
+    /// <summary>
+    /// Restore what this form remembers: algorithm, threshold, server-hash
+    /// match, keep-set rules, selected action and the move destination. Best
+    /// effort — a bad registry read falls back to the shipped defaults.
+    /// </summary>
+    private void LoadPersistedState()
+    {
+        if (_appSettingsStore?.Load() is not { } s) return;
+        _hydratingDedup = true;
+        try
+        {
+            var algoIndex = Array.IndexOf(Algorithms, s.DedupAlgorithm);
+            SelectedAlgorithm = algoIndex >= 0 ? algoIndex : 0;
+            Threshold = s.DedupThreshold is > 0.5 and <= 1 ? s.DedupThreshold : 0.90;
+            var matchIndex = Array.IndexOf(ServerHashMatches, s.DedupServerHashMatch);
+            SelectedServerHashMatch = matchIndex >= 0 ? matchIndex : 0;
+            SelectOldest = s.DedupSelectOldest;
+            SelectNewest = s.DedupSelectNewest;
+            SelectSmallest = s.DedupSelectSmallest;
+            SelectLargest = s.DedupSelectLargest;
+            MoveDestinationFolder = s.DedupMoveDestination;
+        }
+        finally
+        {
+            _hydratingDedup = false;
+        }
+    }
+
+    private bool _hydratingDedup;
+
+    /// <summary>Write the form's current rules back to the registry store.
+    /// Called after anything the store records changes (not during hydration).</summary>
+    private void PersistState()
+    {
+        if (_appSettingsStore is null || _hydratingDedup) return;
+        try
+        {
+            var existing = _appSettingsStore.Load() ?? new AppSettingsState(
+                "system", "info", false, true, false,
+                "", 0, 0,
+                "PHash", 0.90, "Exact", false, false, false, false, 0, "",
+                0, 0, 0, 0, 95, 1.0, 0, true,
+                "", false, 100, false, 100, false);
+            _appSettingsStore.Save(existing with
+            {
+                DedupAlgorithm = Algorithms[Math.Clamp(SelectedAlgorithm, 0, Algorithms.Length - 1)],
+                DedupThreshold = Threshold,
+                DedupServerHashMatch = ServerHashMatches[Math.Clamp(SelectedServerHashMatch, 0, ServerHashMatches.Length - 1)],
+                DedupSelectOldest = SelectOldest,
+                DedupSelectNewest = SelectNewest,
+                DedupSelectSmallest = SelectSmallest,
+                DedupSelectLargest = SelectLargest,
+                DedupSelectedAction = Math.Clamp(SelectedAction, 0, Math.Max(Actions.Length - 1, 0)),
+                DedupMoveDestination = MoveDestinationFolder,
+            });
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Warning(nameof(StepDedupViewModel), $"Failed to persist dedup settings: {e.Message}");
+        }
+    }
 
     // ── Source (local vs Daminion) ──────────────────────────────────────────
     // The source is shared, not dedup's own: with a Step 1 in the shell every
@@ -348,11 +419,20 @@ public partial class StepDedupViewModel : RunStateViewModel
     {
         OnPropertyChanged(nameof(ServerHashMatchHint));
         OnPropertyChanged(nameof(ScanSettingsSummary));
+        PersistState();
     }
 
-    partial void OnSelectedAlgorithmChanged(int value) => OnPropertyChanged(nameof(ScanSettingsSummary));
+    partial void OnSelectedAlgorithmChanged(int value)
+    {
+        OnPropertyChanged(nameof(ScanSettingsSummary));
+        PersistState();
+    }
 
-    partial void OnThresholdChanged(double value) => OnPropertyChanged(nameof(ScanSettingsSummary));
+    partial void OnThresholdChanged(double value)
+    {
+        OnPropertyChanged(nameof(ScanSettingsSummary));
+        PersistState();
+    }
 
     /// <summary>
     /// Read-back of the scan rules for the review page: those rules live in the
@@ -380,7 +460,7 @@ public partial class StepDedupViewModel : RunStateViewModel
         }
     }
 
-    public string[] LocalActions { get; } = { "Tag", "Move", "Delete" };
+    public string[] LocalActions { get; } = { "Tag", "Move to folder…", "Delete from disk" };
 
     /// <summary>Actions offered per source: Daminion only supports deleting catalog entries.</summary>
     public string[] Actions => IsDaminion ? new[] { "Delete from catalog" } : LocalActions;
@@ -388,7 +468,31 @@ public partial class StepDedupViewModel : RunStateViewModel
     [ObservableProperty]
     private int _selectedAction; // index into Actions
 
-    partial void OnSelectedActionChanged(int value) => UpdateSummary();
+    /// <summary>Destination folder for the local "Move to folder…" action.
+    /// Persisted through the app config so a run on Monday reuses the folder
+    /// chosen on Friday. Empty = the action is not usable yet.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsMoveActionAvailable))]
+    private string _moveDestinationFolder = "";
+
+    public bool IsMoveActionAvailable => IsLocal && SelectedAction == 1 && !string.IsNullOrWhiteSpace(MoveDestinationFolder);
+
+    /// <summary>Whether the action combo currently has "Move to folder…" selected
+    /// (local source only) — drives the destination picker's visibility.</summary>
+    public bool IsMoveActionSelected => IsLocal && SelectedAction == 1;
+
+    partial void OnSelectedActionChanged(int value)
+    {
+        OnPropertyChanged(nameof(IsMoveActionAvailable));
+        UpdateSummary();
+        PersistState();
+    }
+
+    partial void OnMoveDestinationFolderChanged(string value)
+    {
+        OnPropertyChanged(nameof(IsMoveActionAvailable));
+        PersistState();
+    }
 
     public ObservableCollection<DuplicateGroupViewModel> Groups { get; } = new();
 
@@ -414,13 +518,29 @@ public partial class StepDedupViewModel : RunStateViewModel
     [ObservableProperty]
     private bool _selectLargest;
 
-    partial void OnSelectOldestChanged(bool value) => RuleChanged();
+    partial void OnSelectOldestChanged(bool value)
+    {
+        RuleChanged();
+        PersistState();
+    }
 
-    partial void OnSelectNewestChanged(bool value) => RuleChanged();
+    partial void OnSelectNewestChanged(bool value)
+    {
+        RuleChanged();
+        PersistState();
+    }
 
-    partial void OnSelectSmallestChanged(bool value) => RuleChanged();
+    partial void OnSelectSmallestChanged(bool value)
+    {
+        RuleChanged();
+        PersistState();
+    }
 
-    partial void OnSelectLargestChanged(bool value) => RuleChanged();
+    partial void OnSelectLargestChanged(bool value)
+    {
+        RuleChanged();
+        PersistState();
+    }
 
     /// <summary>A keep-set rule moved: recompute the checkboxes and the read-back.</summary>
     private void RuleChanged()
@@ -875,7 +995,36 @@ public partial class StepDedupViewModel : RunStateViewModel
         !IsScanning &&
         Groups.Count > 0 &&
         SelectedForActionCount > 0 &&
-        (IsLocal || DaminionReady);
+        (IsDaminion ? DaminionReady : IsMoveActionUsable);
+
+    /// <summary>
+    /// The local Apply's extra gate: "Move to folder…" needs a destination, and
+    /// it must not be inside the scanned source folder (moving a copy of a
+    /// duplicate into the very folder the scan reads would grow the scan). Tag
+    /// and Delete need nothing more.
+    /// </summary>
+    private bool IsMoveActionUsable =>
+        SelectedAction switch
+        {
+            1 => !string.IsNullOrWhiteSpace(MoveDestinationFolder) &&
+                 Directory.Exists(MoveDestinationFolder) &&
+                 !IsSameOrSubPath(MoveDestinationFolder, FolderPath),
+            _ => true,
+        };
+
+    internal static bool IsSameOrSubPath(string? candidate, string? root)
+    {
+        if (string.IsNullOrWhiteSpace(candidate) || string.IsNullOrWhiteSpace(root)) return false;
+        try
+        {
+            var fullCandidate = Path.GetFullPath(candidate.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            var fullRoot = Path.GetFullPath(root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            return fullCandidate.Equals(fullRoot, StringComparison.OrdinalIgnoreCase) ||
+                   fullCandidate.StartsWith(fullRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+        }
+        catch { return false; }
+    }
+
 
     /// <summary>Cancels the Apply in flight; enabled exactly while it is running.</summary>
     [RelayCommand(CanExecute = nameof(IsApplying))]
@@ -958,9 +1107,22 @@ public partial class StepDedupViewModel : RunStateViewModel
             }
             else
             {
-                ok = await _dedup.ApplyToPathsAsync(targets.Select(t => t.Key), action, ct);
+                if (action == DedupAction.Move)
+                {
+                    if (string.IsNullOrWhiteSpace(MoveDestinationFolder))
+                    {
+                        ScanSummary = "Move cancelled — no destination folder chosen.";
+                        SynapicLog.Info(nameof(StepDedupViewModel), "Local move cancelled: no destination folder");
+                        return;
+                    }
+                    Directory.CreateDirectory(MoveDestinationFolder);
+                }
+
+                ok = await _dedup.ApplyToPathsAsync(targets.Select(t => t.Key), action, MoveDestinationFolder, ct);
                 summary = ok
-                    ? $"{action} applied to {targets.Count} duplicate(s)"
+                    ? action == DedupAction.Move
+                        ? $"Moved {targets.Count} duplicate(s) to {MoveDestinationFolder}"
+                        : $"{action} applied to {targets.Count} duplicate(s)"
                     : $"{action} completed with errors — see log";
             }
         }

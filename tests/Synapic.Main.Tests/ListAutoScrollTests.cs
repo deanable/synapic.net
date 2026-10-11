@@ -27,7 +27,7 @@ namespace Synapic.Main.Tests;
 public class ListAutoScrollTests
 {
     private static MainWindowViewModel NewViewModel() =>
-        new(new FakeSidecar(), new FakeBuildService(), new Session(), () => null, null, null, _ => null);
+        new(new FakeSidecar(), new Session(), () => null, null, null, _ => null);
 
     /// <summary>A log line exactly as <see cref="UiLogSink"/> would deliver one.</summary>
     private static void EmitLogLine() =>

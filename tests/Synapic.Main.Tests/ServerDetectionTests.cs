@@ -19,16 +19,16 @@ public class ServerDetectionTests
     private const string Exe = "synapic-inference.exe";
 
     [AvaloniaFact]
-    public async Task Missing_executable_shows_not_detected_with_build_button()
+    public async Task Missing_executable_shows_not_detected_with_the_setup_panel()
     {
-        var vm = new MainWindowViewModel(new FakeSidecar(), new FakeBuildService(), new Session(), () => null, null, null, _ => null);
+        var vm = new MainWindowViewModel(new FakeSidecar(), new Session(), () => null, null, null, _ => null);
 
         await vm.DetectServerAsync();
 
         Assert.Equal(ServerUiState.NotDetected, vm.ServerState);
         Assert.Equal(Colors.Black, ((ISolidColorBrush)vm.ServerBrush).Color);
         Assert.Equal("Server not detected", vm.StatusText);
-        Assert.True(vm.IsBuildButtonVisible);
+        Assert.True(vm.IsSidecarPanelVisible);
         Assert.False(vm.StartServerCommand.CanExecute(null));
         Assert.False(vm.StopServerCommand.CanExecute(null));
         // The sidecar gates the workspace: nothing is usable until one exists.
@@ -40,14 +40,13 @@ public class ServerDetectionTests
     [AvaloniaFact]
     public async Task Present_executable_shows_stopped_with_start_enabled()
     {
-        var vm = new MainWindowViewModel(new FakeSidecar(), new FakeBuildService(), new Session(), () => Exe, null, null, _ => Exe);
+        var vm = new MainWindowViewModel(new FakeSidecar(), new Session(), () => Exe, null, null, _ => Exe);
 
         await vm.DetectServerAsync();
 
         Assert.Equal(ServerUiState.Stopped, vm.ServerState);
         Assert.Equal(Colors.Red, ((ISolidColorBrush)vm.ServerBrush).Color);
         Assert.Equal("Server stopped", vm.StatusText);
-        Assert.False(vm.IsBuildButtonVisible);
         Assert.True(vm.StartServerCommand.CanExecute(null));
         Assert.False(vm.StopServerCommand.CanExecute(null));
     }
@@ -58,7 +57,7 @@ public class ServerDetectionTests
         // Strict lifecycle: launch = server not running; only Start (button or
         // auto-launch) starts it, and nothing adopts leftover servers.
         var sidecar = new FakeSidecar();
-        var vm = new MainWindowViewModel(sidecar, new FakeBuildService(), new Session(), () => Exe, null, null, _ => Exe);
+        var vm = new MainWindowViewModel(sidecar, new Session(), () => Exe, null, null, _ => Exe);
 
         await vm.DetectServerAsync();
 
@@ -69,51 +68,10 @@ public class ServerDetectionTests
     }
 
     [AvaloniaFact]
-    public async Task Build_command_builds_then_redetects_and_enables_start()
-    {
-        var exe = new string?[] { null };
-        var sidecar = new FakeSidecar();
-        var build = new FakeBuildService
-        {
-            OnBuild = (_, _, _, _) => { exe[0] = Exe; return Task.CompletedTask; },
-        };
-        var vm = new MainWindowViewModel(sidecar, build, new Session(), () => exe[0], null, null,
-            rid => rid == InferenceSidecarService.PreferredRid() ? exe[0] : null);
-
-        await vm.DetectServerAsync();
-        Assert.Equal(ServerUiState.NotDetected, vm.ServerState);
-        Assert.False(vm.IsWorkspaceEnabled);
-
-        await vm.BuildServerCommand.ExecuteAsync(null);
-
-        Assert.Equal(1, build.BuildCalls);
-        Assert.Equal(ServerUiState.Stopped, vm.ServerState);
-        Assert.True(vm.StartServerCommand.CanExecute(null));
-        Assert.False(vm.IsBuildButtonVisible);
-        Assert.True(vm.IsWorkspaceEnabled);
-    }
-
-    [AvaloniaFact]
-    public async Task Failed_build_returns_to_not_detected_so_button_reappears()
-    {
-        var build = new FakeBuildService
-        {
-            OnBuild = (_, _, _, _) => throw new InvalidOperationException("boom"),
-        };
-        var vm = new MainWindowViewModel(new FakeSidecar(), build, new Session(), () => null, null, null, _ => null);
-
-        await vm.DetectServerAsync();
-        await vm.BuildServerCommand.ExecuteAsync(null);
-
-        Assert.Equal(ServerUiState.NotDetected, vm.ServerState);
-        Assert.True(vm.IsBuildButtonVisible);
-    }
-
-    [AvaloniaFact]
     public void Sidecar_status_events_drive_indicator_colors()
     {
         var sidecar = new FakeSidecar();
-        var vm = new MainWindowViewModel(sidecar, new FakeBuildService(), new Session(), () => Exe);
+        var vm = new MainWindowViewModel(sidecar, new Session(), () => Exe);
 
         sidecar.RaiseStatus(SidecarStatus.Starting);
         Assert.Equal(ServerUiState.Starting, vm.ServerState);
@@ -130,21 +88,21 @@ public class ServerDetectionTests
     [AvaloniaFact]
     public async Task Variants_list_one_row_per_buildable_rid_for_this_machine()
     {
-        var vm = new MainWindowViewModel(new FakeSidecar(), new FakeBuildService(), new Session(),
+        var vm = new MainWindowViewModel(new FakeSidecar(), new Session(),
             () => null, null, null, _ => null);
 
         await vm.DetectServerAsync();
 
         Assert.Equal(InferenceSidecarService.BuildableRids(), vm.SidecarVariants.Select(v => v.Rid).ToArray());
         Assert.All(vm.SidecarVariants, v => Assert.False(v.IsBuilt));
-        Assert.All(vm.SidecarVariants, v => Assert.True(v.IsBuildButtonVisible));
+        Assert.All(vm.SidecarVariants, v => Assert.True(v.IsDownloadButtonVisible));
         Assert.All(vm.SidecarVariants, v => Assert.Equal("Not built", v.StatusText));
     }
 
     [AvaloniaFact]
     public async Task Cuda_variant_is_offered_on_windows_only()
     {
-        var vm = new MainWindowViewModel(new FakeSidecar(), new FakeBuildService(), new Session(),
+        var vm = new MainWindowViewModel(new FakeSidecar(), new Session(),
             () => null, null, null, _ => null);
 
         await vm.DetectServerAsync();
@@ -163,63 +121,63 @@ public class ServerDetectionTests
     }
 
     [AvaloniaFact]
-    public async Task Per_variant_build_calls_the_service_with_that_variant_rid()
+    public async Task Per_variant_download_calls_the_service_with_that_variant_rid()
     {
-        var build = new FakeBuildService();
-        var vm = new MainWindowViewModel(new FakeSidecar(), build, new Session(),
-            () => null, null, null, _ => null);
+        var download = new FakeDownloadService();
+        var vm = new MainWindowViewModel(new FakeSidecar(), new Session(),
+            () => null, null, null, _ => null, download: download);
         await vm.DetectServerAsync();
 
         var target = vm.SidecarVariants[^1];
-        await target.BuildCommand.ExecuteAsync(null);
+        await target.DownloadCommand.ExecuteAsync(null);
 
-        Assert.Equal(new[] { target.Rid }, build.BuiltRids);
+        Assert.Equal(new[] { target.Rid }, download.DownloadedRids);
     }
 
     [AvaloniaFact]
-    public async Task Failed_variant_build_leaves_the_workspace_disabled()
+    public async Task Failed_variant_download_leaves_the_workspace_disabled()
     {
-        var build = new FakeBuildService
+        var download = new FakeDownloadService
         {
-            OnBuild = (_, _, _, _) => throw new InvalidOperationException("boom"),
+            OnDownload = (_, _, _, _) => throw new InvalidOperationException("boom"),
         };
-        var vm = new MainWindowViewModel(new FakeSidecar(), build, new Session(),
-            () => null, null, null, _ => null);
+        var vm = new MainWindowViewModel(new FakeSidecar(), new Session(),
+            () => null, null, null, _ => null, download: download);
 
         await vm.DetectServerAsync();
-        await vm.SidecarVariants[0].BuildCommand.ExecuteAsync(null);
+        await vm.SidecarVariants[0].DownloadCommand.ExecuteAsync(null);
 
         Assert.False(vm.IsWorkspaceEnabled);
         Assert.Equal(ServerUiState.NotDetected, vm.ServerState);
-        Assert.True(vm.SidecarVariants[0].IsBuildButtonVisible);
+        Assert.True(vm.SidecarVariants[0].IsDownloadButtonVisible);
     }
 
     [AvaloniaFact]
-    public async Task Building_a_variant_unlocks_the_workspace()
+    public async Task Downloading_a_variant_unlocks_the_workspace()
     {
         var exe = new string?[] { null };
-        var build = new FakeBuildService
+        var download = new FakeDownloadService
         {
-            OnBuild = (_, _, _, _) => { exe[0] = Exe; return Task.CompletedTask; },
+            OnDownload = (_, dest, _, _) => { exe[0] = Exe; return Task.CompletedTask; },
         };
-        var vm = new MainWindowViewModel(new FakeSidecar(), build, new Session(), () => exe[0], null, null,
-            rid => rid == InferenceSidecarService.PreferredRid() ? exe[0] : null);
+        var vm = new MainWindowViewModel(new FakeSidecar(), new Session(), () => exe[0], null, null,
+            rid => rid == InferenceSidecarService.PreferredRid() ? exe[0] : null, download: download);
 
         await vm.DetectServerAsync();
         Assert.False(vm.IsWorkspaceEnabled);
 
-        await vm.SidecarVariants[0].BuildCommand.ExecuteAsync(null);
+        await vm.SidecarVariants[0].DownloadCommand.ExecuteAsync(null);
 
         Assert.True(vm.IsWorkspaceEnabled);
         Assert.True(vm.StartServerCommand.CanExecute(null));
-        Assert.Equal(InferenceSidecarService.PreferredRid(), build.BuiltRids.Single());
+        Assert.Equal(InferenceSidecarService.PreferredRid(), download.DownloadedRids.Single());
     }
 
     [AvaloniaFact]
     public async Task Built_variant_survives_while_the_other_platform_is_still_offered()
     {
         var cpuRid = InferenceSidecarService.PreferredRid();
-        var vm = new MainWindowViewModel(new FakeSidecar(), new FakeBuildService(), new Session(),
+        var vm = new MainWindowViewModel(new FakeSidecar(), new Session(),
             () => Exe, null, null, rid => rid == cpuRid ? Exe : null);
 
         await vm.DetectServerAsync();
@@ -230,14 +188,14 @@ public class ServerDetectionTests
 
         var built = vm.SidecarVariants.Single(v => v.Rid == cpuRid);
         Assert.True(built.IsBuilt);
-        Assert.False(built.IsBuildButtonVisible);
+        Assert.False(built.IsDownloadButtonVisible);
         Assert.Contains("Built", built.StatusText);
 
-        // Whatever else this machine can build stays available to add later.
+        // Whatever else this machine can run stays available to add later.
         foreach (var missing in vm.SidecarVariants.Where(v => v.Rid != cpuRid))
         {
             Assert.False(missing.IsBuilt);
-            Assert.True(missing.IsBuildButtonVisible);
+            Assert.True(missing.IsDownloadButtonVisible);
         }
     }
 
@@ -250,7 +208,7 @@ public class ServerDetectionTests
             var exe = Path.Combine(dir.FullName, InferenceSidecarService.ExeName);
             File.WriteAllText(exe, "stub");
 
-            var vm = new MainWindowViewModel(new FakeSidecar(), new FakeBuildService(), new Session(),
+            var vm = new MainWindowViewModel(new FakeSidecar(), new Session(),
                 () => exe, null, null, _ => exe);
             await vm.DetectServerAsync();
 
@@ -266,7 +224,7 @@ public class ServerDetectionTests
             Assert.True(vm.IsSidecarStale);
             Assert.False(vm.IsWorkspaceEnabled);
             Assert.Contains("cannot run", vm.SidecarStaleText);
-            Assert.Contains("Build sidecar", vm.SidecarStaleText);
+            Assert.Contains("Download", vm.SidecarStaleText);
         }
         finally
         {
@@ -278,7 +236,7 @@ public class ServerDetectionTests
     public void A_refused_launch_is_shown_as_an_error_not_silently_ignored()
     {
         var sidecar = new FakeSidecar();
-        var vm = new MainWindowViewModel(sidecar, new FakeBuildService(), new Session(), () => Exe);
+        var vm = new MainWindowViewModel(sidecar, new Session(), () => Exe);
 
         sidecar.RaiseStatus(SidecarStatus.Error,
             "The inference server is out of date and will not be started: stale");
@@ -298,7 +256,7 @@ public class ServerDetectionTests
     public async Task A_current_variant_offers_a_disabled_up_to_date_marker_instead_of_actions()
     {
         var rid = InferenceSidecarService.PreferredRid();
-        var vm = new MainWindowViewModel(new FakeSidecar(), new FakeBuildService(), new Session(),
+        var vm = new MainWindowViewModel(new FakeSidecar(), new Session(),
             () => Exe, null, null, r => r == rid ? Exe : null);
         await vm.DetectServerAsync();
 
@@ -306,41 +264,36 @@ public class ServerDetectionTests
 
         Assert.True(built.IsBuilt);
         // No enabled action when there is nothing to do - just the marker.
-        Assert.False(built.IsBuildButtonVisible);
         Assert.False(built.IsDownloadButtonVisible);
         Assert.True(built.IsUpToDateVisible);
     }
 
     [AvaloniaFact]
-    public async Task A_machine_without_a_toolchain_offers_only_download()
+    public async Task Every_variant_row_offers_download_when_the_executable_is_missing()
     {
         var rid = InferenceSidecarService.PreferredRid();
-        var build = new FakeBuildService { CanBuild = false };
         var download = new FakeDownloadService();
-        var vm = new MainWindowViewModel(new FakeSidecar(), build, new Session(),
+        var vm = new MainWindowViewModel(new FakeSidecar(), new Session(),
             () => null, null, null, _ => null, download: download);
         await vm.DetectServerAsync();
 
         var row = vm.SidecarVariants.Single(v => v.Rid == rid);
-        Assert.False(row.IsBuildButtonVisible);
         Assert.True(row.IsDownloadButtonVisible);
 
         await row.DownloadCommand.ExecuteAsync(null);
 
         Assert.Equal(new[] { rid }, download.DownloadedRids);
-        Assert.Empty(build.BuiltRids);
     }
 
     [AvaloniaFact]
-    public async Task A_newer_prebuilt_on_github_swaps_update_for_build_and_download()
+    public async Task A_newer_prebuilt_on_github_swaps_up_to_date_for_download()
     {
         var rid = InferenceSidecarService.PreferredRid();
-        var build = new FakeBuildService();
         var download = new FakeDownloadService
         {
             UpdateInfo = new SidecarUpdateInfo("nightly", "2026-10-05T07:29:16Z", 100, LocalMissing: false),
         };
-        var vm = new MainWindowViewModel(new FakeSidecar(), build, new Session(),
+        var vm = new MainWindowViewModel(new FakeSidecar(), new Session(),
             () => Exe, null, null, r => r == rid ? Exe : null, download: download);
         await vm.DetectServerAsync();
 
@@ -350,11 +303,10 @@ public class ServerDetectionTests
 
         await vm.CheckForSidecarUpdatesAsync();
 
-        // The row flips to the two ways forward, and the panel that holds them
-        // reopens even though nothing is stale on disk.
+        // The row flips to the way forward, and the panel that holds it reopens
+        // even though nothing is stale on disk.
         Assert.True(built.IsGitHubUpdate);
-        Assert.Contains("Build and Download", built.GitHubUpdateText);
-        Assert.True(built.IsBuildButtonVisible);
+        Assert.Contains("Download", built.GitHubUpdateText);
         Assert.True(built.IsDownloadButtonVisible);
         Assert.False(built.IsUpToDateVisible);
         Assert.True(vm.IsSidecarPanelVisible);
@@ -364,7 +316,6 @@ public class ServerDetectionTests
         // moment a variant existed.
         await built.DownloadCommand.ExecuteAsync(null);
         Assert.Equal(new[] { rid }, download.DownloadedRids);
-        Assert.Empty(build.BuiltRids);
     }
 
     [AvaloniaFact]
@@ -378,7 +329,7 @@ public class ServerDetectionTests
             File.WriteAllText(exe, "stub");
 
             // Every variant exists, so only staleness can hold the panel open.
-            var vm = new MainWindowViewModel(new FakeSidecar(), new FakeBuildService(), new Session(),
+            var vm = new MainWindowViewModel(new FakeSidecar(), new Session(),
                 () => exe, null, null, _ => exe);
 
             File.SetLastWriteTimeUtc(exe, DateTime.UtcNow.AddHours(1));
@@ -387,7 +338,6 @@ public class ServerDetectionTests
             Assert.All(vm.SidecarVariants, v => Assert.False(v.IsStale));
             // Nothing is stale, so there is no action to offer: the row only
             // shows the disabled "Up to date" marker.
-            Assert.All(vm.SidecarVariants, v => Assert.False(v.IsBuildButtonVisible));
             Assert.All(vm.SidecarVariants, v => Assert.False(v.IsDownloadButtonVisible));
             Assert.All(vm.SidecarVariants, v => Assert.True(v.IsUpToDateVisible));
 
@@ -400,9 +350,8 @@ public class ServerDetectionTests
             var stale = vm.SidecarVariants.Single(v => v.Rid == rid);
             Assert.True(stale.IsStale);
             Assert.Contains("Update available", stale.StaleText);
-            // An outdated row offers exactly two buttons - Build and Download -
+            // An outdated row offers exactly one button - Download -
             // and never an enabled action when there is nothing to do.
-            Assert.True(stale.IsBuildButtonVisible);
             Assert.True(stale.IsDownloadButtonVisible);
             Assert.False(stale.IsUpToDateVisible);
         }
@@ -413,15 +362,15 @@ public class ServerDetectionTests
     }
 
     [AvaloniaFact]
-    public async Task Build_in_progress_disables_the_other_variants_button()
+    public async Task Download_in_progress_disables_the_other_variants_button()
     {
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var build = new FakeBuildService
+        var download = new FakeDownloadService
         {
-            OnBuild = (_, _, _, _) => gate.Task,
+            OnDownload = (_, _, _, _) => gate.Task,
         };
-        var vm = new MainWindowViewModel(new FakeSidecar(), build, new Session(),
-            () => null, null, null, _ => null);
+        var vm = new MainWindowViewModel(new FakeSidecar(), new Session(),
+            () => null, null, null, _ => null, download: download);
         await vm.DetectServerAsync();
 
         if (vm.SidecarVariants.Count < 2) return; // a second variant exists on Windows only
@@ -429,42 +378,42 @@ public class ServerDetectionTests
         var first = vm.SidecarVariants[0];
         var second = vm.SidecarVariants[1];
 
-        var run = first.BuildCommand.ExecuteAsync(null);
+        var run = first.DownloadCommand.ExecuteAsync(null);
 
-        // The build body runs synchronously up to its first await, so the
-        // one-build-at-a-time side effects are observable immediately.
-        Assert.True(first.IsBuilding);
-        Assert.False(second.CanBuild);
-        Assert.False(second.BuildCommand.CanExecute(null));
+        // The download body runs synchronously up to its first await, so the
+        // one-at-a-time side effects are observable immediately.
+        Assert.True(first.IsDownloading);
+        Assert.False(second.CanDownload);
+        Assert.False(second.DownloadCommand.CanExecute(null));
 
         gate.SetResult();
         await run;
     }
 
-    // ── Build progress wiring ───────────────────────────────────────────────
+    // ── Sidecar download progress wiring ────────────────────────────────────
 
     [AvaloniaFact]
-    public async Task Build_progress_streams_into_the_variant_row()
+    public async Task Download_progress_streams_into_the_variant_row()
     {
-        var build = new FakeBuildService
+        var download = new FakeDownloadService
         {
-            OnBuild = (_, _, progress, _) =>
+            OnDownload = (_, _, progress, _) =>
             {
-                progress.Report(new SidecarBuildProgress(8, "Downloading CUDA torch wheels (~2.5 GB) - the longest step"));
-                progress.Report(new SidecarBuildProgress(66, "Packaging: assembling archive"));
+                progress.Report(new SidecarDownloadProgress(8, "Downloading part 1 of 3"));
+                progress.Report(new SidecarDownloadProgress(66, "Downloading part 2 of 3"));
                 return Task.CompletedTask;
             },
         };
-        var vm = new MainWindowViewModel(new FakeSidecar(), build, new Session(),
-            () => null, null, null, _ => null);
+        var vm = new MainWindowViewModel(new FakeSidecar(), new Session(),
+            () => null, null, null, _ => null, download: download);
         await vm.DetectServerAsync();
 
         var variant = vm.SidecarVariants[0];
         // Before any stage arrives the bar spins rather than sitting at zero.
         Assert.False(variant.HasProgress);
-        Assert.True(variant.IsBuildIndeterminate);
+        Assert.True(variant.IsDownloadIndeterminate);
 
-        await variant.BuildCommand.ExecuteAsync(null);
+        await variant.DownloadCommand.ExecuteAsync(null);
 
         // Reports are marshalled through Progress<T>, so let the queue drain.
         var deadline = DateTime.UtcNow.AddSeconds(5);
@@ -472,32 +421,32 @@ public class ServerDetectionTests
             await Task.Delay(10);
 
         Assert.True(variant.HasProgress);
-        Assert.False(variant.IsBuildIndeterminate);
-        Assert.Equal(66, variant.BuildPercent);
-        Assert.Contains("Packaging", variant.BuildStage);
+        Assert.False(variant.IsDownloadIndeterminate);
+        Assert.Equal(66, variant.DownloadPercent);
+        Assert.Contains("Downloading part 2", variant.DownloadStage);
     }
 
     [AvaloniaFact]
-    public async Task Starting_a_build_clears_a_stale_bar()
+    public async Task Starting_a_download_clears_a_stale_bar()
     {
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var build = new FakeBuildService
+        var download = new FakeDownloadService
         {
-            OnBuild = (_, _, _, _) => gate.Task,
+            OnDownload = (_, _, _, _) => gate.Task,
         };
-        var vm = new MainWindowViewModel(new FakeSidecar(), build, new Session(),
-            () => null, null, null, _ => null);
+        var vm = new MainWindowViewModel(new FakeSidecar(), new Session(),
+            () => null, null, null, _ => null, download: download);
         await vm.DetectServerAsync();
 
         var variant = vm.SidecarVariants[0];
 
         // A leftover reading from a previous run must not persist.
-        variant.ApplyProgress(new SidecarBuildProgress(80, "Packaging: assembling archive"));
+        variant.ApplyProgress(new SidecarDownloadProgress(80, "Downloading part 3 of 3"));
         Assert.True(variant.HasProgress);
 
-        var run = variant.BuildCommand.ExecuteAsync(null);
+        var run = variant.DownloadCommand.ExecuteAsync(null);
         Assert.False(variant.HasProgress);
-        Assert.True(variant.IsBuildIndeterminate);
+        Assert.True(variant.IsDownloadIndeterminate);
 
         gate.SetResult();
         await run;
@@ -508,7 +457,7 @@ public class ServerDetectionTests
     [AvaloniaFact]
     public void Download_progress_shows_bytes_and_percent()
     {
-        var vm = new MainWindowViewModel(new FakeSidecar(), new FakeBuildService(), new Session(), () => Exe, null, null, _ => Exe);
+        var vm = new MainWindowViewModel(new FakeSidecar(), new Session(), () => Exe, null, null, _ => Exe);
 
         vm.ApplyDownloadStatus(new HealthResponse
         {
@@ -532,7 +481,7 @@ public class ServerDetectionTests
     [AvaloniaFact]
     public void Download_without_total_shows_bytes_only()
     {
-        var vm = new MainWindowViewModel(new FakeSidecar(), new FakeBuildService(), new Session(), () => Exe, null, null, _ => Exe);
+        var vm = new MainWindowViewModel(new FakeSidecar(), new Session(), () => Exe, null, null, _ => Exe);
 
         vm.ApplyDownloadStatus(new HealthResponse
         {
@@ -546,7 +495,7 @@ public class ServerDetectionTests
     [AvaloniaFact]
     public void Download_transitions_log_once_then_panel_hides_when_clear()
     {
-        var vm = new MainWindowViewModel(new FakeSidecar(), new FakeBuildService(), new Session(), () => Exe, null, null, _ => Exe);
+        var vm = new MainWindowViewModel(new FakeSidecar(), new Session(), () => Exe, null, null, _ => Exe);
 
         var downloading = new HealthResponse
         {
@@ -571,7 +520,7 @@ public class ServerDetectionTests
     [AvaloniaFact]
     public void Download_failure_is_shown_and_logged()
     {
-        var vm = new MainWindowViewModel(new FakeSidecar(), new FakeBuildService(), new Session(), () => Exe, null, null, _ => Exe);
+        var vm = new MainWindowViewModel(new FakeSidecar(), new Session(), () => Exe, null, null, _ => Exe);
 
         vm.ApplyDownloadStatus(new HealthResponse
         {
@@ -595,7 +544,7 @@ public class ServerDetectionTests
     /// rule of offering only the devices the probe reports.
     /// </summary>
     private static MainWindowViewModel ShellOfferingCuda(Session session) =>
-        new(new FakeSidecar(), new FakeBuildService(), session, () => Exe, null, null, _ => Exe,
+        new(new FakeSidecar(), session, () => Exe, null, null, _ => Exe,
             computeAvailabilityProbe: () => new ComputeAvailability(Cuda: true, Mps: false));
 
     [AvaloniaFact]
@@ -642,7 +591,10 @@ public class ServerDetectionTests
     {
         var session = new Session();
         session.Engine.Device = "cpu";
-        var vm = new MainWindowViewModel(new FakeSidecar(), new FakeBuildService(), session, () => Exe, null, null, _ => Exe);
+        // No-CUDA probe: the fresh-session CUDA preference must not rewrite the
+        // explicit "cpu" the test just set, on a machine that has a GPU.
+        var vm = new MainWindowViewModel(new FakeSidecar(), session, () => Exe, null, null, _ => Exe,
+            computeAvailabilityProbe: () => new ComputeAvailability(Cuda: false, Mps: false));
 
         vm.ApplyServerDevice("mps");
 
@@ -653,7 +605,7 @@ public class ServerDetectionTests
     [AvaloniaFact]
     public void Device_is_unknown_until_a_model_is_loaded()
     {
-        var vm = new MainWindowViewModel(new FakeSidecar(), new FakeBuildService(), new Session(), () => Exe, null, null, _ => Exe);
+        var vm = new MainWindowViewModel(new FakeSidecar(), new Session(), () => Exe, null, null, _ => Exe);
 
         // /health reports no device before the first load; the strip stays empty
         // rather than claiming CPU.
@@ -667,7 +619,7 @@ public class ServerDetectionTests
     public void Device_strip_clears_when_the_server_stops()
     {
         var sidecar = new FakeSidecar();
-        var vm = new MainWindowViewModel(sidecar, new FakeBuildService(), new Session(), () => Exe, null, null, _ => Exe);
+        var vm = new MainWindowViewModel(sidecar, new Session(), () => Exe, null, null, _ => Exe);
         sidecar.RaiseStatus(SidecarStatus.Ready);
         vm.ApplyServerDevice("cpu");
         Assert.True(vm.IsServerDeviceVisible);

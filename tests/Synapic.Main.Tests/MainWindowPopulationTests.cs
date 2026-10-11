@@ -32,7 +32,7 @@ public class MainWindowPopulationTests
     public async Task MainWindow_datacontext_attaches_and_status_dot_binds()
     {
         var window = new MainWindow();
-        var vm = new MainWindowViewModel(new FakeSidecar(), new FakeBuildService(), new Session(),
+        var vm = new MainWindowViewModel(new FakeSidecar(), new Session(),
             () => null, null, null, _ => null);
         window.DataContext = vm;
 
@@ -43,7 +43,7 @@ public class MainWindowPopulationTests
 
         Assert.Equal("Server not detected", vm.StatusText);
         Assert.Equal(Colors.Black, ((ISolidColorBrush)vm.ServerBrush).Color);
-        Assert.True(vm.IsBuildButtonVisible);
+        Assert.True(vm.IsSidecarPanelVisible);
         Assert.False(vm.IsWorkspaceEnabled);
     }
 

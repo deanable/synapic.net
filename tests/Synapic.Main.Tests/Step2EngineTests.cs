@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Synapic.Main.Models;
+using Synapic.Main.Services;
 using Synapic.Main.ViewModels.Steps;
 using Synapic.Main.ViewModels;
 using Synapic.Main.Views;
@@ -79,8 +80,9 @@ public class Step2EngineTests
     {
         var session = new Session();
         session.Datasource.LocalPath = System.IO.Path.GetTempPath();
-        var shell = new MainWindowViewModel(new FakeSidecar(), new FakeBuildService(), session,
-            () => null, null, null, _ => null);
+        var shell = new MainWindowViewModel(new FakeSidecar(), session,
+            () => null, null, null, _ => null,
+            computeAvailabilityProbe: () => new ComputeAvailability(Cuda: false, Mps: false));
         var window = new MainWindow { DataContext = shell };
         window.Show();
         try
@@ -109,8 +111,9 @@ public class Step2EngineTests
     {
         var session = new Session();
         session.Datasource.LocalPath = System.IO.Path.GetTempPath();
-        var shell = new MainWindowViewModel(new FakeSidecar(), new FakeBuildService(),
-            session, () => "synapic-inference.exe", null, null, _ => "synapic-inference.exe");
+        var shell = new MainWindowViewModel(new FakeSidecar(),
+            session, () => "synapic-inference.exe", null, null, _ => "synapic-inference.exe",
+            computeAvailabilityProbe: () => new ComputeAvailability(Cuda: false, Mps: false));
         var window = new MainWindow { DataContext = shell };
         window.Show();
         try

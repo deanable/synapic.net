@@ -109,7 +109,7 @@ public class ConfigServicePersistenceTests
             session.Datasource.LocalPath = folder;
             session.Datasource.LocalRecursive = true;
             var vm = new MainWindowViewModel(
-                new FakeSidecar(), new FakeBuildService(), session,
+                new FakeSidecar(), session,
                 () => "x.exe", null, null, _ => null);
 
             vm.PersistConfig(new ConfigService(path));
@@ -141,7 +141,7 @@ public class ConfigServicePersistenceTests
             var session = new Session();
             session.Engine.ModelId = "test/model";
             var vm = new MainWindowViewModel(
-                new FakeSidecar(), new FakeBuildService(), session,
+                new FakeSidecar(), session,
                 () => "x.exe", null, null, _ => null);
 
             vm.PersistConfig(new ConfigService(path));

@@ -85,6 +85,16 @@
                      help:HelpScope.Topic="settings-reference.html#dedup-action" />
           <ComboBox SelectedIndex="{Binding SelectedAction}" ItemsSource="{Binding Actions}"
                     MinWidth="180" Margin="0,0,16,8" />
+          <!-- Destination folder for "Move to folder…": chosen once, remembered
+               in the registry, and the same for every run (local source only). -->
+          <TextBox Width="260" Margin="0,0,8,8"
+                   Text="{Binding MoveDestinationFolder}"
+                   IsVisible="{Binding IsMoveActionSelected}"
+                   Watermark="Destination folder for moved duplicates"
+                   help:HelpScope.Topic="settings-reference.html#dedup-action" />
+          <Button Content="Browse…" Margin="0,0,16,8"
+                  IsVisible="{Binding IsMoveActionSelected}"
+                  Click="OnBrowseMoveFolder" />
           <Button Content="Apply" Command="{Binding ApplyCommand}" Classes="accent"
                   IsEnabled="{Binding !IsApplying}" Margin="0,0,16,8" />
           <!-- UI-REVIEW #1, apply half: the operation is indeterminate for its

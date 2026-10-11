@@ -73,29 +73,6 @@ internal sealed class FakeSidecar : IInferenceSidecar
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 }
 
-/// <summary>In-memory ISidecarBuildService for view-model tests.</summary>
-internal sealed class FakeBuildService : ISidecarBuildService
-{
-    public bool CanBuild { get; set; } = true;
-    public bool IsBuilding { get; set; }
-
-    /// <summary>(rid, log, progress, ct) — returns the task the fake build awaits.</summary>
-    public Func<string, Action<string>, IProgress<SidecarBuildProgress>, CancellationToken, Task>? OnBuild { get; set; }
-
-    /// <summary>Every RID a build was requested for, in order.</summary>
-    public List<string> BuiltRids { get; } = new();
-
-    public int BuildCalls => BuiltRids.Count;
-
-    public Task BuildAsync(string rid, Action<string> log, IProgress<SidecarBuildProgress> progress, CancellationToken ct)
-    {
-        BuiltRids.Add(rid);
-        return OnBuild is { } callback ? callback(rid, log, progress, ct) : Task.CompletedTask;
-    }
-
-    public void Cancel() { }
-}
-
 /// <summary>In-memory ISidecarDownloadService for view-model tests.</summary>
 internal sealed class FakeDownloadService : ISidecarDownloadService
 {

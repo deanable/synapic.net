@@ -33,10 +33,15 @@ public sealed record ProcessProgress(
     TimeSpan? PerItem = null)
 {
     /// <summary>Human-readable duration for the ETA lines shared by every
-    /// batch-style step (port of step3_process.py._format_duration).</summary>
+    /// batch-style step (port of step3_process.py._format_duration).
+    /// Sub-second estimates show "<1s" rather than "0s": the estimate is real
+    /// (a fast workflow really is under a second per image), so rounding it
+    /// down to zero would read as "done" while items are still left.</summary>
     public static string FormatDuration(TimeSpan? value)
     {
-        var seconds = value is { } v ? Math.Max((long)v.TotalSeconds, 0) : 0;
+        var totalSeconds = value?.TotalSeconds ?? 0;
+        if (totalSeconds > 0 && totalSeconds < 1) return "<1s";
+        var seconds = Math.Max((long)totalSeconds, 0);
         var days = seconds / 86400;
         var hours = seconds % 86400 / 3600;
         var minutes = seconds % 3600 / 60;

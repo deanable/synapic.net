@@ -17,7 +17,7 @@ public class OperationLockWiringTests
     [AvaloniaFact]
     public void A_running_batch_locks_navigation_and_unlocks_when_it_stops()
     {
-        var vm = new MainWindowViewModel(new FakeSidecar(), new FakeBuildService(), new Session(),
+        var vm = new MainWindowViewModel(new FakeSidecar(), new Session(),
             () => null, null, null, _ => null);
         var lockNotices = 0;
         vm.PropertyChanged += (_, e) =>

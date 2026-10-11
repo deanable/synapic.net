@@ -55,10 +55,10 @@ public class DedupScanHandlerTests
             DedupOptions opts)
             => new DedupResult { TotalFiles = perceptualHashes.Count + exactHashes.Count };
 
-        Task<bool> IDedupService.ApplyToPathsAsync(IEnumerable<string> paths, DedupAction action, CancellationToken ct)
+        Task<bool> IDedupService.ApplyToPathsAsync(IEnumerable<string> paths, DedupAction action, string? moveDestination, CancellationToken ct)
             => Task.FromResult(true);
 
-        Task<bool> IDedupService.ApplyActionsAsync(DedupResult result, DedupAction action, CancellationToken ct)
+        Task<bool> IDedupService.ApplyActionsAsync(DedupResult result, DedupAction action, string? moveDestination, CancellationToken ct)
             => Task.FromResult(true);
     }
 
@@ -82,10 +82,10 @@ public class DedupScanHandlerTests
             DedupOptions opts)
             => new DedupResult { TotalFiles = perceptualHashes.Count + exactHashes.Count };
 
-        Task<bool> IDedupService.ApplyToPathsAsync(IEnumerable<string> paths, DedupAction action, CancellationToken ct)
+        Task<bool> IDedupService.ApplyToPathsAsync(IEnumerable<string> paths, DedupAction action, string? moveDestination, CancellationToken ct)
             => Task.FromResult(true);
 
-        Task<bool> IDedupService.ApplyActionsAsync(DedupResult result, DedupAction action, CancellationToken ct)
+        Task<bool> IDedupService.ApplyActionsAsync(DedupResult result, DedupAction action, string? moveDestination, CancellationToken ct)
             => Task.FromResult(true);
     }
 

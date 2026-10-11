@@ -105,10 +105,13 @@ public interface IDedupService
         DedupOptions opts);
 
     /// <summary>Apply an action to an explicit set of file paths — the unchecked
-    /// (duplicate) items the user reviewed, across all groups.</summary>
-    Task<bool> ApplyToPathsAsync(IEnumerable<string> paths, DedupAction action, CancellationToken ct = default);
+    /// (duplicate) items the user reviewed, across all groups. <paramref
+    /// name="moveDestination"/> is the target folder for
+    /// <see cref="DedupAction.Move"/> (created when missing); other actions
+    /// ignore it.</summary>
+    Task<bool> ApplyToPathsAsync(IEnumerable<string> paths, DedupAction action, string? moveDestination = null, CancellationToken ct = default);
 
-    Task<bool> ApplyActionsAsync(DedupResult result, DedupAction action, CancellationToken ct = default);
+    Task<bool> ApplyActionsAsync(DedupResult result, DedupAction action, string? moveDestination = null, CancellationToken ct = default);
 }
 
 public sealed class DedupService : IDedupService
@@ -204,7 +207,7 @@ public sealed class DedupService : IDedupService
         return result;
     }
 
-    public async Task<bool> ApplyToPathsAsync(IEnumerable<string> paths, DedupAction action, CancellationToken ct = default)
+    public async Task<bool> ApplyToPathsAsync(IEnumerable<string> paths, DedupAction action, string? moveDestination = null, CancellationToken ct = default)
     {
         var ok = true;
         foreach (var item in paths)
@@ -220,11 +223,27 @@ public sealed class DedupService : IDedupService
                         break;
                     case DedupAction.Move:
                     {
-                        var dupDir = Path.Combine(Path.GetDirectoryName(item) ?? ".", "duplicates");
+                        var dupDir = moveDestination;
+                        if (string.IsNullOrWhiteSpace(dupDir))
+                        {
+                            // Backwards-compatible default: a "duplicates"
+                            // folder next to the file, as before a destination
+                            // picker existed. Now only a fallback.
+                            dupDir = Path.Combine(Path.GetDirectoryName(item) ?? ".", "duplicates");
+                        }
                         Directory.CreateDirectory(dupDir);
                         var dest = Path.Combine(dupDir, Path.GetFileName(item));
-                        File.Move(item, dest, overwrite: false);
-                        SynapicLog.Info(nameof(DedupService), $"Moved duplicate: {item} → {dest}");
+                        // Name collisions inside the destination get a numeric
+                        // suffix (photo.jpg, photo (2).jpg): a later duplicate
+                        // with the same name must never silently overwrite one
+                        // this run already moved.
+                        var unique = dest;
+                        var stem = Path.GetFileNameWithoutExtension(dest);
+                        var ext = Path.GetExtension(dest);
+                        for (var n = 2; File.Exists(unique); n++)
+                            unique = Path.Combine(dupDir!, $"{stem} ({n}){ext}");
+                        File.Move(item, unique, overwrite: false);
+                        SynapicLog.Info(nameof(DedupService), $"Moved duplicate: {item} → {unique}");
                         break;
                     }
                     case DedupAction.Tag:
@@ -244,7 +263,7 @@ public sealed class DedupService : IDedupService
         return ok;
     }
 
-    public async Task<bool> ApplyActionsAsync(DedupResult result, DedupAction action, CancellationToken ct = default)
+    public async Task<bool> ApplyActionsAsync(DedupResult result, DedupAction action, string? moveDestination = null, CancellationToken ct = default)
     {
         var ok = true;
         foreach (var group in result.Groups)
@@ -252,7 +271,7 @@ public sealed class DedupService : IDedupService
             var targets = group.Items
                 .Where(i => !string.Equals(i, group.KeepItem, StringComparison.OrdinalIgnoreCase))
                 .ToArray();
-            ok &= await ApplyToPathsAsync(targets, action, ct).ConfigureAwait(false);
+            ok &= await ApplyToPathsAsync(targets, action, moveDestination, ct).ConfigureAwait(false);
         }
         return ok;
     }

@@ -29,7 +29,7 @@
 			<param name="Local" value="setup-guide.html">
 			</OBJECT>
 		<LI> <OBJECT type="text/sitemap">
-			<param name="Name" value="Build the inference server">
+			<param name="Name" value="Get the inference server">
 			<param name="Local" value="first-run-sidecar.html">
 			</OBJECT>
 		<LI> <OBJECT type="text/sitemap">

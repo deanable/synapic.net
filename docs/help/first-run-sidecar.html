@@ -2,14 +2,14 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
-<title>Build the inference server</title>
+<title>Get the inference server</title>
 <link rel="stylesheet" type="text/css" href="help.css">
 </head>
 <body>
 
-<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; Getting started &rsaquo; Build the inference server</p>
+<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; Getting started &rsaquo; Get the inference server</p>
 
-<h1>Build the inference server</h1>
+<h1>Get the inference server</h1>
 
 <p class="lead">The model does not run inside Synapic. It runs in a second
 program, the inference server, which Synapic starts and talks to over a local
@@ -26,58 +26,53 @@ sends it one request per image, and shuts it down when the app closes.</p>
 <p>You only see it in two places: the status dot at the bottom of the sidebar,
 and the <span class="ui">Inference server</span> section in the Settings view.</p>
 
-<h2>Building one</h2>
+<h2>Download one</h2>
 
 <ol class="steps">
-<li>Look at the <span class="ui">Inference server</span> section in the Settings view. Each row under <span class="ui">Platform variants</span> is something you can get on this
-machine: <span class="ui">CPU</span> (runs anywhere) and, on Windows,
+<li>Look at the <span class="ui">Inference</span> tab in the Settings view. Each
+row under <span class="ui">Platform variants</span> is a server you can run on
+this machine: <span class="ui">CPU</span> (runs anywhere) and, on Windows,
 <span class="ui">CUDA (NVIDIA GPU)</span> (much faster on a supported card). The
 small grey text next to the name is the variant's runtime identifier, for example
 <code>win-x64</code> or <code>win-x64-cuda</code>.</li>
-<li>Press <span class="ui">Build sidecar</span> on the row you want, or
-<span class="ui">Download</span> to skip the build entirely (see below).</li>
+<li>Press <span class="ui">Download</span> on the row you want. Synapic fetches
+the executable the GitHub release already published: about 216 MB for
+<span class="ui">CPU</span>, and for <span class="ui">CUDA (NVIDIA GPU)</span>
+two large parts that Synapic joins for you. Nothing on the machine needs Python,
+the packages, or a source checkout.</li>
 <li>Watch the row. It shows a progress bar and the current stage, such as
-fetching Python, installing packages, or packaging. A first build also fetches a
-private copy of Python and the inference packages, which is why it is slow; a
-rebuild reuses what it can.</li>
+<span class="ui">Downloading part 1 of 2</span>.</li>
 <li>When the row reads <span class="ui">Built</span> with a size, the server can
 start. Synapic starts it automatically; the status text moves to
 <span class="ui">Server running (port &hellip;)</span>.</li>
 </ol>
 
-<h2>Or download it instead</h2>
-
-<p>If this copy of Synapic has no Python toolchain &mdash; a packaged install,
-for instance &mdash; press <span class="ui">Download</span> on the row instead
-of <span class="ui">Build sidecar</span>. It fetches the executable the latest
-GitHub release already published: about 216 MB for <span class="ui">CPU</span>,
-and for <span class="ui">CUDA (NVIDIA GPU)</span> two large parts that Synapic
-joins for you. The file lands where the build button would have written it, the
-row shows the same progress bar and stage text, and nothing on the machine needs
-Python, the packages, or a source checkout.</p>
-
-<p>The two buttons produce the same thing: the release build is what the build
-button compiles, so a downloaded server behaves exactly like a built one.
-Download needs a network connection; building needs the repository and its
-toolchain, and works offline once its packages are cached.</p>
-
 <p>Synapic also checks GitHub for a newer prebuilt server every time it starts.
 When the release page carries a fresher executable than the one on disk &mdash;
 or no executable exists yet &mdash; a gold note appears on the row naming the
-release (for example <span class="ui">nightly</span>). The row then offers
-exactly two buttons, <span class="ui">Build sidecar</span> and
-<span class="ui">Download</span>, so the note is pointing at
-<span class="ui">Download</span> as the quick alternative to a local build.
+release (for example <span class="ui">nightly</span>), and the row offers
+<span class="ui">Download</span> again.
 The check never blocks startup: if GitHub is
-unreachable it stays silent, and a local build that is newer than the release
-is not offered back to you.</p>
+unreachable it stays silent.</p>
 
-<h2>Which variant should I build?</h2>
+<div class="note">
+<p class="first">Building from source is a developer workflow now.</p>
+<p>The repository still carries the build pipeline
+(<code>build/build-sidecar.ps1</code>), and the app still refuses to launch a
+server executable older than the Python source in a developer checkout, but the
+Build button is gone from the interface: GitHub's release builds are the shipped
+path, and keeping a parallel in-app toolchain only added a failure mode to the
+first run. To replace the server by hand, drop a downloaded
+<span class="path">synapic-inference.exe</span> next to
+<span class="path">Synapic.exe</span> and restart Synapic.</p>
+</div>
+
+<h2>Which variant should I download?</h2>
 
 <table>
 <tr><th class="setting">Variant</th><th>When to choose it</th></tr>
-<tr><td><span class="ui">CPU</span></td><td>Always a safe choice. Works on every machine, needs no GPU driver, and is what to build first. Tagging takes several seconds per image.</td></tr>
-<tr><td><span class="ui">CUDA (NVIDIA GPU)</span></td><td>When the machine has an NVIDIA card with a current driver. The build is larger (about 2.5 GB) and slower to produce, and it falls back to CPU if no usable GPU is present, so it is safe to install anywhere.</td></tr>
+<tr><td><span class="ui">CPU</span></td><td>Always a safe choice. Works on every machine, needs no GPU driver, and is what to download first. Tagging takes several seconds per image.</td></tr>
+<tr><td><span class="ui">CUDA (NVIDIA GPU)</span></td><td>When the machine has an NVIDIA card with a current driver. The download is larger (about 2.5 GB), and it falls back to CPU if no usable GPU is present, so it is safe to install anywhere.</td></tr>
 </table>
 
 <div class="tip">
@@ -93,19 +88,15 @@ device the running server reports, so a fallback is visible rather than silent.<
 
 <h2>Updating or replacing the server</h2>
 
-<p>When a row is <em>outdated</em> &mdash; its executable is older than the
-inference source it was built from (the row says
-<span class="ui">Update available</span>), or the startup check found a newer
-prebuilt on GitHub (the gold note) &mdash; that row offers exactly two buttons:
-<span class="ui">Build sidecar</span> to recompile from source, or
-<span class="ui">Download</span> to fetch the released executable instead.
-Whichever you pick, Synapic stops the server if it is running, replaces that
+<p>When a row is <em>outdated</em> &mdash; the startup check found a newer
+prebuilt on GitHub (the gold note) &mdash; that row offers
+<span class="ui">Download</span> to fetch the released executable.
+Synapic stops the server if it is running, replaces that
 variant's executable, and starts the server again on the replacement.</p>
 
 <p>When a row is already current, no action is offered: the button is relabelled
 <span class="ui">Up to date</span> and disabled, because there is nothing to
-fetch or rebuild. The moment the source or the release moves ahead, the row
-opens up to <span class="ui">Build sidecar</span> and
+fetch. The moment the release moves ahead, the row opens
 <span class="ui">Download</span> again.</p>
 
 <p>You can also do it by hand, which is the way to pin a specific release rather
@@ -123,7 +114,7 @@ first, close Synapic, then replace the file.</p>
 
 <h2>The model itself</h2>
 
-<p>Building a server does not download the model. The model arrives the first
+<p>Downloading a server does not yet fetch the model. The model arrives the first
 time an image is tagged, about 860 MB, and is cached per machine under <span
 class="path">%LOCALAPPDATA%\Synapic\models</span>. Later runs, and other
 installs of Synapic on the same machine, reuse it.</p>
@@ -138,10 +129,10 @@ href="admin-deploy.html">Deploying to many machines</a>.</p>
 <table>
 <tr><th class="setting">What you see</th><th>What to do</th></tr>
 <tr><td><span class="ui">Server not detected</span> and no rows at all</td><td>There is no source checkout and the latest release has nothing for this machine's platform either. Install a release build that includes one.</td></tr>
-<tr><td>Build fails part-way</td><td>The log drawer has the build's own output. A failed first build is usually the network (fetching Python or packages), and rebuilding after the network is back is the fix.</td></tr>
-<tr><td>Download fails</td><td>The log drawer names the release, the asset and the HTTP status. The usual cause is a release without this platform's server, or no network; <span class="ui">Build sidecar</span> is the way round it when this checkout has the toolchain.</td></tr>
-<tr><td>Status stuck on <span class="ui">Server starting&hellip;</span></td><td>A cold start really can take up to two minutes. If it exceeds that, the log says why; see <a href="troubleshooting.html#sidecar">Troubleshooting: the inference server</a>.</td></tr>
-<tr><td><span class="ui">stale build, rebuild recommended</span>, or <span class="ui">Update available</span> on a row</td><td>Developer checkouts only: the server executable is older than the inference source it was built from. Use <span class="ui">Build sidecar</span> or <span class="ui">Download</span> on that row; a running server is stopped and started again on the new build.</td></tr>
+<tr><td>Download fails part-way</td><td>The log drawer names the release, the asset and the HTTP status, and the row keeps offering Download. A broken download is usually the network; retry after it is back.</td></tr>
+<tr><td>Download fails</td><td>The log drawer names the release, the asset and the HTTP status. The usual cause is a release without this platform's server, or no network. Retry when the release carries the platform or the network is back.</td></tr>
+<tr><td>Status stuck on <span class="ui">Server starting&hellip;</span></td><td>A cold start really can take up to two minutes &mdash; the 2.7 GB CUDA executable is unpacked by Windows before anything runs. If it exceeds that, the log says why; see <a href="troubleshooting.html#sidecar">Troubleshooting: the inference server</a>.</td></tr>
+<tr><td><span class="ui">stale build, rebuild recommended</span>, or <span class="ui">Update available</span> on a row</td><td>Developer checkouts only: the server executable is older than the inference source it was built from. Use <span class="ui">Download</span> on that row, or hand-replace the file with a fetched release; a running server is stopped and started again on the replacement.</td></tr>
 </table>
 
 <div class="seealso">

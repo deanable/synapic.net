@@ -22,10 +22,20 @@ public partial class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
+        // General settings now live in the registry (user request: everything
+        // persists to the registry). On first run of this build the one-time
+        // import pulls whatever %APPDATA%\Synapic\config.json still holds and
+        // seeds the registry from it; from then on the registry is the source.
+        // When there is nothing anywhere (fresh install) the typed defaults in
+        // AppConfig apply - same values a missing JSON file always produced.
+        var appSettingsStore = new AppSettingsRegistryStore();
+        var restored = appSettingsStore.Load();
         var configService = new ConfigService();
-        var config = configService.Load();
-        SynapicLog.Initialize(minimumLevel: config.Ui.LogLevel);
+        var config = restored is null ? configService.Load() : new AppConfig();
+        SynapicLog.Initialize(minimumLevel: restored?.LogLevel ?? config.Ui.LogLevel);
         var log = SynapicLog.For(nameof(App));
+        if (restored is not null)
+            log.Information("App settings restored from registry (HKCU\\Software\\Synapic\\AppData)");
 
         // Crash reporting (P6.1, local-only): install before anything else so
         // even early-startup failures are captured. Reports land in the log
@@ -89,12 +99,47 @@ public partial class App : Application
                 : OperatingSystem.IsMacOS() ? "macOS" : "Linux");
         TelemetryService.Shared.RecordAppLaunch();
 
+        // The session's view over the restored settings: from the registry when
+        // it has anything, otherwise from config.json (which the store imports
+        // into the registry on first load, so this branch also settles that).
+        if (restored is not null)
+        {
+            config = new AppConfig
+            {
+                Ui = new UiSettings
+                {
+                    Theme = restored.Theme,
+                    LogLevel = restored.LogLevel,
+                    ShowDiagnostics = restored.ShowDiagnostics,
+                    AutoLaunchSidecar = restored.AutoLaunchSidecar,
+                    TelemetryEnabled = restored.TelemetryEnabled,
+                    DefaultDevice = restored.DefaultDevice,
+                    DefaultConfidenceThreshold = restored.DefaultConfidenceThreshold,
+                    DefaultMaxItems = restored.DefaultMaxItems,
+                },
+                Datasource = new DatasourceSettings
+                {
+                    LocalPath = restored.LocalPath,
+                    LocalRecursive = restored.LocalRecursive,
+                },
+                Processing = new ProcessingSettings
+                {
+                    ResizeScale = restored.ResizeScale,
+                    MaxItems = restored.MaxItems,
+                    UseThumbnailOverride = restored.UseThumbnailOverride,
+                },
+            };
+        }
+
         var services = new ServiceCollection();
         // ConfigService itself, not only the loaded AppConfig: MainWindowViewModel
         // resolves it (service locator, injected session/config would need ctor
         // churn) before merging config.json.
         services.AddSingleton(configService);
         services.AddSingleton(config);
+        // Registry-backed general settings (the ConfigService successor), so
+        // every durable setting has one store type behind it.
+        services.AddSingleton(appSettingsStore);
         // The start screen owns the source, and the record count runs on launch,
         // so the stored source comes back with the session: the folder and the
         // source type from config.json, the Daminion connection from the registry
@@ -106,7 +151,6 @@ public partial class App : Application
         services.AddSingleton(new EngineSettingsStore());
         services.AddSingleton(new SystemPromptPresetStore());
         services.AddSingleton<IInferenceSidecar, InferenceSidecarService>();
-        services.AddSingleton<ISidecarBuildService, SidecarBuildService>();
         services.AddSingleton<ISidecarDownloadService, SidecarDownloadService>();
         // Factory rather than the type: HelpService's constructor arguments are
         // all optional (a container would have to guess at them).
@@ -179,8 +223,7 @@ public partial class App : Application
                 if (shutdownHandled) return; // Shutdown() below re-raises this event
                 shutdownHandled = true;
                 e.Cancel = true; // finish shutdown after cleanup
-                log.Information("App shutdown requested - cancelling build (if any) and stopping the sidecar");
-                Services.GetService<ISidecarBuildService>()?.Cancel();
+                log.Information("App shutdown requested - stopping the sidecar");
                 try
                 {
                     var sidecar = Services.GetService<IInferenceSidecar>();
