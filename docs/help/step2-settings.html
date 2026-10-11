@@ -49,7 +49,7 @@ needs administrator rights: it is a per-user key.</p>
 <div class="note">
 <p class="first">Off Windows, nothing is remembered.</p>
 <p>That store is Windows-only by design. On Linux and macOS the app works
-normally, but the engine section starts from its defaults each time &mdash; worth knowing
+normally, but the <span class="ui">Tagging</span> tab starts from its defaults each time &mdash; worth knowing
 before you build a workflow that depends on a saved custom prompt.</p>
 </div>
 
@@ -57,7 +57,7 @@ before you build a workflow that depends on a saved custom prompt.</p>
 
 <table>
 <tr><th class="setting">To undo</th><th>Do this</th></tr>
-<tr><td>A changed setting</td><td>Change it back in the engine section. That is all: the values are read from the form.</td></tr>
+<tr><td>A changed setting</td><td>Change it back in the <span class="ui">Tagging</span> tab. That is all: the values are read from the form.</td></tr>
 <tr><td>A partial tag-field selection</td><td>Tick all three <span class="ui">Tag fields</span> boxes, and check the orange warning line has gone.</td></tr>
 <tr><td>A custom tag instruction</td><td><span class="ui">Reset to built-in</span>, which clears the box.</td></tr>
 <tr><td>Everything at once</td><td>Delete the <code>Engine</code> key (or edit individual values) with <span class="ui">Registry Editor</span>. The app recreates it on the next save with default values.</td></tr>
@@ -74,10 +74,11 @@ registry keys</a> lists every value by name.</p>
 <h2>Settings that live elsewhere</h2>
 
 <ul>
-<li><span class="term">The Daminion connection, scope, filters and limits</span>
-belong to the data source. See <a href="step1-daminion.html">Connecting to Daminion</a>.</li>
+<li><span class="term">The Daminion connection and the limits</span> belong to the
+<span class="ui">Connection</span> tab (the scope and the filters are chosen on the
+processing view). See <a href="step1-daminion.html">Connecting to Daminion</a>.</li>
 <li><span class="term">Whether the inference server starts with the app</span> is
-a checkbox in the inference server section, and <code>ui.autoLaunchSidecar</code> in
+a checkbox in the <span class="ui">Inference</span> tab, and <code>ui.autoLaunchSidecar</code> in
 <span class="path">%APPDATA%\Synapic\config.json</span>. See <a
 href="admin-settings-files.html#paths">Files, folders and registry keys</a>.</li>
 <li><span class="term">The model cache</span> is shared by every install on the

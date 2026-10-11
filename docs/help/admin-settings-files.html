@@ -20,7 +20,7 @@ interesting leaves the machine.</p>
 <table>
 <tr><th class="setting">What</th><th>Path</th><th>Notes</th></tr>
 <tr><td>Application settings</td><td><span class="path">%APPDATA%\Synapic\config.json</span></td><td>Settings-file defaults and UI preferences. Off Windows: <span class="path">$XDG_CONFIG_HOME/Synapic/config.json</span> or <span class="path">~/.config/Synapic/config.json</span>.</td></tr>
-<tr><td>Saved system prompts</td><td><span class="path">%APPDATA%\Synapic\system-prompts.json</span></td><td>The engine section's prompt history, newest first. Pruning it never changes a run's current settings. See <a href="step2-prompts.html">Prompts</a>.</td></tr>
+<tr><td>Saved system prompts</td><td><span class="path">%APPDATA%\Synapic\system-prompts.json</span></td><td>The Tagging tab's prompt history, newest first. Pruning it never changes a run's current settings. See <a href="step2-prompts.html">Prompts</a>.</td></tr>
 <tr><td>Current log</td><td><span class="path">logs\synapic.log</span> next to the executable</td><td>Falls back to <span class="path">%LOCALAPPDATA%\Synapic\logs</span> when the install folder is not writable. Starts empty each run.</td></tr>
 <tr><td>Previous logs</td><td><span class="path">logs\archives\</span></td><td>Each start moves the previous log in here; the ten most recent are kept.</td></tr>
 <tr><td>Crash reports</td><td><span class="path">logs\crashes\</span></td><td>One text file per crash: the exception plus a snapshot of the run's log.</td></tr>

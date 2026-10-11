@@ -48,7 +48,7 @@ metadata lives where your colleagues already look for it.</li>
 <div class="note">
 <p class="first">One call produces all three fields.</p>
 <p>There is no second request for the description and no per-field model. The
-engine section's <span class="ui">Tag fields</span> checkboxes decide what gets
+<span class="ui">Tagging</span> tab's <span class="ui">Tag fields</span> checkboxes decide what gets
 <em>written</em>, not what the model is asked &mdash; which is the answer to the
 most common "why are my keywords there but my description missing?" question. See
 <a href="step2-tag-fields.html">Tag fields: what gets written</a>.</p>
@@ -63,18 +63,20 @@ the view you get, and
 
 <table>
 <tr><th class="setting">Row</th><th>What it is</th></tr>
-<tr><td><span class="ui">Settings</span></td><td>Every configuration the app has, in one scrolling column: the data source and its server, the inference server, the inference engine, the deduplication and upscaling rules, and the app preferences. It is what you see on launch, and where you start.</td></tr>
+<tr><td><span class="ui">Settings</span></td><td>Every configuration the app has, arranged as one concern per tab: the data source and its limits, the inference server, the inference engine, the deduplication and upscaling rules, and the app preferences. It is what you see on launch, and where you start.</td></tr>
 <tr><td><span class="ui">Tagging</span></td><td>Run the model over the shared source and write the tags.</td></tr>
 <tr><td><span class="ui">Deduplication</span></td><td>Find near-duplicate images and resolve the groups.</td></tr>
 <tr><td><span class="ui">Upscaling</span></td><td>Raise image resolution, with AI (Swin2SR) or fast Lanczos resampling, over the same source.</td></tr>
 </table>
 
-<p>Three of the Settings view's six sections matter before your first run:
-<span class="ui">Data source</span> (what to work on),
-<span class="ui">Inference server</span> (the local engine) and
-<span class="ui">Inference engine</span> (how it tags). The rest
-&mdash; the deduplication and upscaling rules, and the app preferences &mdash;
-can wait.</p>
+<p>Three of the Settings tabs matter before your first run:
+<span class="ui">Connection</span> (what to work on),
+<span class="ui">Inference</span> (the local engine) and
+<span class="ui">Tagging</span> (how it tags). The rest &mdash; the dedup and
+upscale rules, and the app preferences &mdash; can wait. Not sure which tab a
+setting lives on? The search box at the top of the Settings view takes you
+directly to it: type what you are looking for, and the tab opens. See
+<a href="settings-reference.html">Settings reference</a>.</p>
 
 <p>Inside <span class="ui">Data source</span>, the shared source answers its
 question twice over: once in words you choose (a folder, or a Daminion login plus
@@ -122,7 +124,7 @@ the only part that takes real time:</p>
 
 <ol class="steps">
 <li><span class="term">Get an inference server.</span> In
-<span class="ui">Settings &rsaquo; Inference server</span>, press
+<span class="ui">Settings &rsaquo; Inference</span>, press
 <span class="ui">Download</span> on the CPU row to fetch the prebuilt
 executable, or <span class="ui">Build sidecar</span> to compile it from source
 &mdash; that first build downloads a private Python and the packages the model
@@ -134,7 +136,7 @@ green with <span class="ui">Server running (port &hellip;)</span>. The very firs
 launch is slow &mdash; up to a couple of minutes &mdash; because the model is
 unpacked and loaded.</li>
 <li><span class="term">Choose the images.</span> In
-<span class="ui">Settings &rsaquo; Data source</span>, either point at a folder
+<span class="ui">Settings &rsaquo; Connection</span>, either point at a folder
 on disk or connect to Daminion. Watch the matching light turn green and the
 record count appear; that pair is your confirmation that a run will see what you
 think it will. For a first test, a small folder is the kindest choice.</li>
@@ -161,7 +163,7 @@ Daminion, the items your scope and filters select are paged from the catalog and
 each image (or a thumbnail) is downloaded as it is reached.</li>
 <li><span class="term">Tag.</span> The image goes to the inference server, which
 returns the category, keywords and description in one call.</li>
-<li><span class="term">Write.</span> The fields you ticked in the engine section
+<li><span class="term">Write.</span> The fields you ticked in the <span class="ui">Tagging</span> tab
 are written &mdash; XMP into the file, or a metadata update for a Daminion item.
 Because the write replaces what Synapic manages, there is no undo; run a first
 batch on copies if that matters.</li>
@@ -195,11 +197,11 @@ and the server process is already running.</p>
 dozen images in a folder:</p>
 
 <ol class="steps">
-<li><span class="ui">Settings &rsaquo; Data source</span>: choose
+<li><span class="ui">Settings &rsaquo; Connection</span>: choose
 <span class="ui">Local Folder</span>, point at the copy, and leave
 <span class="ui">Include subfolders</span> off. The folder light turns green and
 the count reports roughly a dozen files.</li>
-<li><span class="ui">Settings &rsaquo; Inference engine</span>: leave the
+<li><span class="ui">Settings &rsaquo; Tagging</span>: leave the
 defaults. The three <span class="ui">Tag fields</span> boxes are ticked, so all
 three results are written into the files' XMP metadata.</li>
 <li>Pick <span class="ui">Tagging</span> and press

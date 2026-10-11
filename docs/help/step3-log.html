@@ -20,7 +20,7 @@ reports each image, and the one that ends the run.</p>
 <table>
 <tr><th class="setting">Where</th><th>What it holds</th></tr>
 <tr><td>The run log inside a processing view</td><td>The most recent lines of that operation's run, scrolling as the batch runs. Includes the inference server's own error output, prefixed <code>[sidecar:err]</code>.</td></tr>
-<tr><td>The log drawer at the bottom of the window</td><td>The app-wide log, and the place a build's or a download's own output appears. Shown only while <span class="ui">Show diagnostics</span> is ticked in Settings &rsaquo; App preferences &rsaquo; Logging.</td></tr>
+<tr><td>The log drawer at the bottom of the window</td><td>The app-wide log, and the place a build's or a download's own output appears. Shown only while <span class="ui">Show diagnostics</span> is ticked in Settings &rsaquo; App &rsaquo; Logging.</td></tr>
 <tr><td><span class="path">logs\synapic.log</span>, next to the executable</td><td>The current run, written as it happens. It starts empty each time the app starts.</td></tr>
 <tr><td><span class="path">logs\archives\</span></td><td>The previous runs. Each app start moves the old log here, and the ten most recent archives are kept.</td></tr>
 </table>
@@ -53,7 +53,7 @@ href="admin-logs-support.html#logs">Logs, crashes and support</a>.</p>
 <tr><td><code>Could not download image for item 12345</code></td><td>The catalog item could not be fetched &mdash; a permissions problem, or a file that no longer exists on the Daminion side.</td></tr>
 <tr><td><code>Daminion returned the same ids as the previous page</code></td><td>Paging hit a server that ignored the offset. Synapic stops instead of looping forever; the batch covers what it fetched.</td></tr>
 <tr><td><code>Timed out waiting for the sidecar port file</code></td><td>The inference server failed to start. Its own output is in the log just above this line.</td></tr>
-<tr><td><code>Sidecar process exited unexpectedly</code></td><td>The server crashed. Restart it from the inference server section and retry; the log holds its last words.</td></tr>
+<tr><td><code>Sidecar process exited unexpectedly</code></td><td>The server crashed. Restart it from the <span class="ui">Inference</span> tab of Settings and retry; the log holds its last words.</td></tr>
 <tr><td><code>[sidecar:err] ...</code></td><td>The server's own error stream, passed through unchanged for exactly this purpose.</td></tr>
 </table>
 

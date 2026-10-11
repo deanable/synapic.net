@@ -18,13 +18,14 @@ pick in the sidebar is the view you get.</p>
 
 <h2>The four views</h2>
 
-<p>The sidebar lists four rows, in this order. The lit row is the view that is
+<p>The sidebar lists four rows (Settings, Tagging, Deduplication, Upscaling), in
+this order. The lit row is the view that is
 open; the app derives it from what is on screen rather than remembering it, so
 the two can never disagree.</p>
 
 <table>
 <tr><th class="setting">Row</th><th>What it is for</th></tr>
-<tr><td><span class="ui">Settings</span></td><td>Every configuration the app has, in one scrolling column: the data source and its server, the inference server, the inference engine, the deduplication and upscaling rules, and the app preferences. It is the app's home &mdash; it is what you see on launch.</td></tr>
+<tr><td><span class="ui">Settings</span></td><td>Every configuration the app has, arranged as one concern per tab: the data source and its limits, the inference server, the tagging engine, the deduplication and upscaling rules, and the app preferences. It is the app's home &mdash; it is what you see on launch.</td></tr>
 <tr><td><span class="ui">Tagging</span></td><td>Run the model over the shared source and write the tags. Opens that operation's processing view.</td></tr>
 <tr><td><span class="ui">Deduplication</span></td><td>Scan the shared source for near-duplicate images and resolve the groups.</td></tr>
 <tr><td><span class="ui">Upscaling</span></td><td>Enhance the resolution of the shared source's images, with AI (Swin2SR) or Lanczos.</td></tr>
@@ -44,7 +45,7 @@ places. Where each one lives:
 <p>The server's state and the help entry are pinned to the bottom of the
 sidebar, so both are on screen from every view. There is no Start/Stop/Build
 control here: the buttons live in the Settings view's
-<span class="ui">Inference server</span> section, one home each.</p>
+<span class="ui">Inference</span> tab, one home each.</p>
 
 <table>
 <tr><th class="setting">What you see</th><th>Meaning</th></tr>
@@ -76,24 +77,38 @@ are being told that a rebuild would pick up changes. Prebuilt releases never sho
 this &mdash; it is a developer-checkout message.</p>
 </div>
 
-<h2>The Settings view</h2>
+<h2 id="settings-tabs">The Settings view</h2>
 
-<p>One scrolling column, in the order a run meets it. A search box at the top
-filters the column to the sections that mention what you type; an empty query
-shows every section.</p>
+<p>The Settings view is a row of tabs, one concern per tab. A tab shows an
+entirely different part of the app, so a setting always has exactly one home on
+exactly one tab. Every tab's content is a scrolling column, so no tab clips at
+a small window size.</p>
 
 <table>
-<tr><th class="setting">Section</th><th>What it configures</th></tr>
-<tr><td>Data source</td><td>What to work on: a local folder or a Daminion login, the catalog scope and filters, the record count that keeps itself current, and the processing limits (how many items, and how much of each image).</td></tr>
-<tr><td>Inference server</td><td>The local sidecar: its status, Start / Stop / Build Server, whether it starts with the app, and one row per platform variant with <span class="ui">Build sidecar</span> or <span class="ui">Download</span>.</td></tr>
-<tr><td>Inference engine</td><td>The model, the device, which tag fields get written, the scoring controls and the prompts &mdash; everything a tagging run uses.</td></tr>
-<tr><td>Deduplication</td><td>The scan rules (algorithm, threshold, server-hash comparison) and the keep-set rule.</td></tr>
-<tr><td>Upscaling</td><td>Workflow, factor, precision, output format and the post-processing the upscaling run uses.</td></tr>
-<tr><td>App preferences</td><td>Appearance, logging, what a new session starts from, and this build's version, links and settings-file path.</td></tr>
+<tr><th class="setting">Tab</th><th>What it configures</th></tr>
+<tr><td><span class="ui">Connection</span></td><td>What to work on: a local folder or a Daminion login, and the shared processing limits (how many items, and how much of each image). The catalog scope and its filters are chosen on the processing view that runs (see <a href="workflow-overview.html">How a run works</a>).</td></tr>
+<tr><td><span class="ui">Inference</span></td><td>The local sidecar: its status, Start / Stop / Build Server, whether it starts with the app, and one row per platform variant with <span class="ui">Build sidecar</span> or <span class="ui">Download</span>.</td></tr>
+<tr><td><span class="ui">Tagging</span></td><td>The model, the device, which tag fields get written, the scoring controls and the prompts &mdash; everything a tagging run uses.</td></tr>
+<tr><td><span class="ui">Dedup</span></td><td>The scan rules (algorithm, threshold, server-hash comparison) and the keep-set rule.</td></tr>
+<tr><td><span class="ui">Upscale</span></td><td>Workflow, factor, precision, output format and the post-processing the upscaling run uses.</td></tr>
+<tr><td><span class="ui">App</span></td><td>Appearance, logging, what a new session starts from, and this build's version, links and settings-file path.</td></tr>
 </table>
 
-<p>Every section is on screen at once &mdash; the column scrolls rather than
-hiding sections behind tabs, so nothing is one tab away from being forgotten.</p>
+<p>Only the selected tab is in the window; the other tabs keep their controls
+out of sight. Each tab keeps the concerns it does not own off the screen
+together &mdash; the reason the single column was split: a new user could not
+see where one concern ended and the next began. Every tab is one click away on
+the strip above, and the search box above it is the fast path when you are not
+sure which tab a setting lives on.</p>
+
+<h3>Finding a setting with the search box</h3>
+
+<p>At the top of the view is a search box. Typing in it does not hide controls:
+it switches to the tab the query names and writes what it found beside the box
+(&ldquo;<span class="ui">3 settings match &ldquo;dedup&rdquo; &mdash; showing
+Dedup</span>&rdquo;). Picking a suggestion from the dropdown does the same.
+Clearing the box clears the message and leaves you where you are. So to land on
+a setting: type what you are looking for, and the tab it lives on opens.</p>
 
 <h2>A processing view</h2>
 
@@ -125,7 +140,7 @@ back.</p>
 <h2>The diagnostics log</h2>
 
 <p>Off by default. When <span class="ui">Show diagnostics</span> is ticked in
-<span class="ui">Settings &rsaquo; App preferences &rsaquo; Logging</span>, a log
+<span class="ui">Settings &rsaquo; App &rsaquo; Logging</span>, a log
 drawer appears along the bottom of the window: the app's own progress messages,
 anything the inference server writes to its error stream (prefixed
 <code>[sidecar:err]</code>), and any warnings the app raises.</p>

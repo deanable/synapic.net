@@ -38,12 +38,13 @@ processing views report the settings back read-only, so nothing runs blind.</p>
 
 <table>
 <tr><th class="setting">What</th><th>Where it is set</th><th>Which topics</th></tr>
-<tr><td>Folder, folder recursion, Daminion login, scope, filters, record count</td><td>Settings &rsaquo; Data source</td><td><a href="step1-datasource.html">The data source</a>, <a href="step1-daminion.html">Connecting to Daminion</a>, <a href="step1-scope-filters.html">Scope and filters</a></td></tr>
-<tr><td>How many items, and how much of each image the model sees</td><td>Settings &rsaquo; Data source &rsaquo; How many items, and how much of each image</td><td><a href="step1-limits.html">How many items, and how much of each image</a></td></tr>
-<tr><td>Model, device, tag fields, scoring, prompts</td><td>Settings &rsaquo; Inference engine</td><td><a href="step2-engine.html">Inference engine</a>, <a href="step2-tag-fields.html">Tag fields</a>, <a href="step2-prompts.html">Prompts</a></td></tr>
-<tr><td>Deduplication algorithm, threshold, server-hash rule, keep-set rule</td><td>Settings &rsaquo; Deduplication</td><td><a href="dedup.html">Deduplication</a></td></tr>
-<tr><td>Upscaling workflow, factor, precision, output and post-processing</td><td>Settings &rsaquo; Upscaling</td><td><a href="upscale.html">Upscaling</a></td></tr>
-<tr><td>Appearance, logging, new-session defaults, about</td><td>Settings &rsaquo; App preferences</td><td><a href="settings-reference.html">Settings reference</a></td></tr>
+<tr><td>Folder, folder recursion, Daminion login</td><td>Settings &rsaquo; Connection</td><td><a href="step1-datasource.html">The data source</a>, <a href="step1-daminion.html">Connecting to Daminion</a></td></tr>
+<tr><td>Catalog scope, filters, record count</td><td>The processing view that runs (Tagging, Dedup or Upscale)</td><td><a href="step1-scope-filters.html">Scope and filters</a></td></tr>
+<tr><td>How many items, and how much of each image the model sees</td><td>Settings &rsaquo; Connection &rsaquo; limits</td><td><a href="step1-limits.html">How many items, and how much of each image</a></td></tr>
+<tr><td>Model, device, tag fields, scoring, prompts</td><td>Settings &rsaquo; Tagging</td><td><a href="step2-engine.html">Inference engine</a>, <a href="step2-tag-fields.html">Tag fields</a>, <a href="step2-prompts.html">Prompts</a></td></tr>
+<tr><td>Deduplication algorithm, threshold, server-hash rule, keep-set rule</td><td>Settings &rsaquo; Dedup</td><td><a href="dedup.html">Deduplication</a></td></tr>
+<tr><td>Upscaling workflow, factor, precision, output and post-processing</td><td>Settings &rsaquo; Upscale</td><td><a href="upscale.html">Upscaling</a></td></tr>
+<tr><td>Appearance, logging, new-session defaults, about</td><td>Settings &rsaquo; App</td><td><a href="settings-reference.html">Settings reference</a></td></tr>
 </table>
 
 <p><kbd>F1</kbd> in a processing view opens this topic, because both of its
@@ -64,7 +65,7 @@ it.</li>
 returns three things in one call: a category, a list of keywords, and a
 description.</li>
 <li><span class="term">Write.</span> Synapic keeps the fields ticked in
-<span class="ui">Tag fields</span> (Settings &rsaquo; Inference engine) and
+<span class="ui">Tag fields</span> (Settings &rsaquo; Tagging) and
 writes them &mdash; XMP metadata in the file for a folder, or a metadata update
 for a Daminion item. Fields you did not tick are discarded here, not at the
 model.</li>

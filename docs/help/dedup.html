@@ -32,10 +32,10 @@ href="workflow-overview.html">How a run works</a>.</p>
 
 <ol class="steps">
 <li>Deduplication reads the shared source, so there is no second source to choose. The
-catalog side reuses the scope configured in <span class="ui">Settings &rsaquo; Data source</span>
-(entire catalog, keyword search, shared collection or saved search) &mdash; its
-summary is shown above the scan button.</li>
-<li>For a local source, the folder is the one set in <span class="ui">Settings &rsaquo; Data source</span>. Subfolders are included
+catalog side reuses the scope chosen on the processing view that runs &mdash;
+for tagging that is the Tagging view (entire catalog, keyword search, shared
+collection or saved search). The summary is shown above the scan button.</li>
+<li>For a local source, the folder is the one set in <span class="ui">Settings &rsaquo; Connection</span>. Subfolders are included
 automatically, and the scan covers <span class="path">.jpg</span>,
 
 <span class="path">.jpeg</span>, <span class="path">.png</span>,
@@ -62,7 +62,7 @@ reports what it still holds &mdash; which should read zero files.</p>
 
 <ol class="steps">
 <li>The <span class="ui">algorithm</span> and the
-<span class="ui">Threshold</span> come from <span class="ui">Settings &rsaquo; Deduplication</span>; the defaults are a good starting point. For the catalog source the
+<span class="ui">Threshold</span> come from <span class="ui">Settings &rsaquo; Dedup</span>; the defaults are a good starting point. For the catalog source the
 <span class="ui">Server hash</span> rule decides how the catalog's own
 content hashes are compared: <span class="ui">Exact</span> (the default) trusts
 only identical values, <span class="ui">Hamming</span> compares them by
@@ -112,7 +112,7 @@ image cannot be decoded simply shows no thumbnail. <strong>A checked item is
 kept</strong>; the action applies to the unchecked ones.</p>
 
 <p>Instead of ticking rows by hand, use the <span class="ui">Keep-set
-rules</span> in <span class="ui">Settings &rsaquo; Deduplication</span>: <span class="ui">Oldest</span>,
+rules</span> in <span class="ui">Settings &rsaquo; Dedup</span>: <span class="ui">Oldest</span>,
 <span class="ui">Newest</span>, <span class="ui">Smallest</span> and
 <span class="ui">Largest</span>. Each active switch ticks the item it names in
 every group; several switches tick the union of their picks. Ties go to the
