@@ -583,9 +583,16 @@ Types: `HashAlgorithm`, `DedupAction`, `ServerHashMatchMode`, `DedupOptions`, `D
 ### Media & metadata
 
 **`MetadataWriterService`** (`IMetadataWriter`) — `ReadAsync` /
-`WriteAsync(filePath, TagResult, ct)`. Writes a minimal XMP packet for
-JPEG (APP1 byte surgery), PNG (`iTXt`), and TIFF (`.xmp` sidecar); reads XMP
-plus IPTC/EXIF fallbacks. `TagResult(Category, Keywords, Description)`. See
+`WriteAsync(filePath, TagResult, ct)`. Nonempty values patch JPEG APP1,
+PNG `iTXt`, or TIFF's adjacent `image.tif.xmp` sidecar; keywords merge and
+omitted fields/unowned XMP survive. `PatchAsync(filePath, MetadataPatch, ct)`
+on the concrete service adds explicit Unchanged/Replace/Merge/Clear semantics
+(Merge is keyword-only; description changes affect `x-default`, not translations).
+Writes stream to a same-directory staging file, validate XMP/image decoding,
+then atomically replace the destination; cancellation propagates before commit.
+Oversized basic JPEG packets and ambiguous/malformed/extended XMP are rejected.
+Reads XMP (including TIFF sidecars) plus IPTC/EXIF fallbacks.
+`TagResult(Category, Keywords, Description)`. See
 [metadata mapping](codebase-guide.md#9-metadata-writing-what-lands-where).
 
 ### Configuration, logging, diagnostics

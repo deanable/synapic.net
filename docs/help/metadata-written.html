@@ -33,18 +33,21 @@ means the same thing everywhere.</p>
 
 <table>
 <tr><th class="setting">Format</th><th>How it is written</th></tr>
-<tr><td>JPEG (<span class="path">.jpg</span>, <span class="path">.jpeg</span>)</td><td>A minimal XMP packet is inserted or replaced as an APP1 segment by byte surgery. The image is <em>not</em> re-encoded, so the pixels are untouched and the file does not lose quality.</td></tr>
-<tr><td>PNG (<span class="path">.png</span>)</td><td>An international-text chunk (<code>iTXt</code>, with the Adobe XMP identifier) is written just after the header. Like the JPEG path, the image data is left alone.</td></tr>
-<tr><td>TIFF (<span class="path">.tif</span>, <span class="path">.tiff</span>)</td><td>An <span class="path">.xmp</span> sidecar file is written next to the image, which is what Daminion and Windows Photos honour for TIFF. The tags are therefore <em>not</em> inside the TIFF itself &mdash; if you copy the image somewhere, copy the sidecar too, or the tags will not follow.</td></tr>
+<tr><td>JPEG (<span class="path">.jpg</span>, <span class="path">.jpeg</span>)</td><td>The existing XMP packet is patched, or a new one inserted as an APP1 segment through a staged file. The image is <em>not</em> re-encoded, so the pixels are untouched and the file does not lose quality.</td></tr>
+<tr><td>PNG (<span class="path">.png</span>)</td><td>The Adobe XMP international-text chunk (<code>iTXt</code>) is patched and replaced, or inserted after the header if absent. Repeated updates do not add duplicate XMP chunks. Like the JPEG path, the image data is left alone.</td></tr>
+<tr><td>TIFF (<span class="path">.tif</span>, <span class="path">.tiff</span>)</td><td>An adjacent sidecar named <span class="path">image.tif.xmp</span> (or <span class="path">image.tiff.xmp</span>) is patched and read back by Synapic. Other applications must support this sidecar naming convention. The tags are therefore <em>not</em> inside the TIFF itself &mdash; if you copy the image somewhere, copy the sidecar too, or the tags will not follow.</td></tr>
 <tr><td>Daminion items</td><td>Written back through the catalog's item-update API. No files on disk are touched by Synapic at all in this mode.</td></tr>
 </table>
 
 <h2>What happens to values that were already there</h2>
 
 <ul>
-<li><span class="term">Replaced, not merged.</span> A run writes the properties in
-the table above, replacing whatever they held. Keyword lists are not appended to:
-the new list becomes the list.</li>
+<li><span class="term">Folder runs patch selected fields.</span> Nonempty category
+and description values replace the selected headline/genre and default description.
+Keywords merge with the existing list, without duplicate values. Unticked fields and
+empty model values leave the existing metadata unchanged. Description translations
+and unrelated XMP properties are preserved. This file policy does not change the
+Daminion catalog API's existing behavior.</li>
 <li><span class="term">Untouched everywhere else.</span> Synapic does not write
 other XMP properties, EXIF, IPTC or filename fields. Your camera data, ratings,
 copyright and existing non-keyword metadata stay as they were.</li>
@@ -56,18 +59,33 @@ matches where the metadata is authoritative for you.</li>
 
 <div class="warning">
 <p class="first">Keep a backup before the first big run.</p>
-<p>There is no undo. A run over 5,000 images replaces the keywords, headline and
-description of each one, and the previous values are gone. Copy a sample, or the
-whole set, until you trust the settings.</p>
+<p>There is no undo for successful changes. Selected category and description
+values can replace previous values; new keywords are added. Copy a sample, or the
+whole set, until you trust the settings. TIFF sidecars must stay with their images;
+sidecar-aware duplicate move/delete actions are not yet implemented.</p>
 </div>
 
 <h2>Reading it back</h2>
 
-<p>Synapic can read the same properties it writes, plus IPTC and EXIF fallbacks
-for images tagged by other tools. That is what
-<span class="ui">Verify Daminion Writes</span> uses, and what the round-trip
-tests exercise: write a file, read it, and check the three values came back
-intact.</p>
+<p>Synapic reads its file XMP properties and TIFF sidecars, plus IPTC and EXIF
+fallbacks for images tagged by other tools. File round-trip tests check preservation
+as well as the new values. <span class="ui">Verify Daminion Writes</span> separately
+re-reads the catalog through its API; it does not use the file metadata reader.</p>
+
+<h2>Safe writes and supported limits</h2>
+
+<p>Changed metadata is streamed into a unique temporary file in the same folder,
+validated as XMP and decoded as an image, then atomically replaces the destination.
+Failed writes or cancellation before commit leave the prior artifact untouched.
+Cancellation after a completed commit cannot undo the write. The folder needs space
+for a staged copy and permission to replace files; read-only files and symbolic
+links are refused. TIFF pixels are never rewritten.</p>
+
+<p>Basic JPEG XMP must fit the APP1 segment's 65,535-byte length, including its
+header. Oversized, malformed, multiple or extended XMP packets are rejected rather
+than silently discarded. PNG text and TIFF sidecar XMP have a 16 MiB safety limit.
+Staging is not a multi-file transaction or protection against concurrent external
+editors; keep backups and avoid editing the same image in two applications.</p>
 
 <h2>Checking a file yourself</h2>
 

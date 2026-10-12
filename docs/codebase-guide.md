@@ -341,7 +341,10 @@ Notes:
 
 ## 9. Metadata writing (what lands where)
 
-`MetadataWriterService` writes a minimal, lossless **XMP packet**:
+`MetadataWriterService` applies lossless **XMP patches**, preserving unrelated
+properties and unselected fields. Nonempty legacy keywords merge with existing
+keywords; category/description replace their owned selected values. Explicit
+`MetadataPatch` fields support Unchanged/Replace/Clear and keyword-only Merge:
 
 | Tag result field | XMP property |
 |------------------|--------------|
@@ -349,15 +352,29 @@ Notes:
 | `Keywords` | `dc:subject` (rdf:Bag) |
 | `Description` | `dc:description` (rdf:Alt, `x-default`) |
 
-- **JPEG** — the XMP is inserted/replaced as an APP1 segment via byte surgery
-  (no re-encode).
-- **PNG** — written as an `iTXt` chunk (`XML:com.adobe.xmp`) after IHDR.
-- **TIFF** — an `.xmp` sidecar file is written next to the image (Daminion and
-  Windows Photos both honour it).
-- **Daminion** items are written back through `ItemData/BatchChange`.
+- **JPEG** — existing XMP is patched in APP1 without re-encoding pixels. The
+  basic segment's size limit includes its header; extended/multiple packets are
+  rejected rather than discarded.
+- **PNG** — existing XMP `iTXt` (`XML:com.adobe.xmp`) is replaced, not appended;
+  absent XMP is inserted after IHDR. Other chunks survive byte-for-byte.
+- **TIFF** — the adjacent `image.tif.xmp`/`image.tiff.xmp` sidecar is patched and
+  read back. Embedded XMP seeds a new sidecar; TIFF image bytes remain unchanged.
+  Other applications must support this naming convention. Move/delete ownership
+  is exposed by `AssociatedArtifacts`; integration with dedup actions belongs
+  to the subsequent safety phase, not this writer change.
+- **Daminion** items still use `ItemData/BatchChange`; these local-file changes
+  do not alter catalog mutation semantics.
 
-`ReadAsync` reads the same properties back (XMP plus IPTC/EXIF fallbacks) and is
-used by the round-trip tests and Daminion verification.
+Writes stream to a unique same-directory staging file, flush, validate XMP and
+force pixel decoding, then atomically replace the destination (non-overwriting
+move for a new sidecar). No unsafe in-place fallback exists. Cancellation before
+commit propagates and cleans staging; after commit the result is success. Read-only
+files/symlinks, malformed/ambiguous packets, invalid PNG CRCs and oversized metadata
+are refused. This is not a multi-file transaction or cross-application edit lock.
+
+`ReadAsync` reads XMP/sidecars plus IPTC/EXIF fallbacks. Daminion verification
+uses the catalog API separately. See [metadata help](help/metadata-written.html)
+and [Phase A evidence](phase-a-verification-2026-10-12.md).
 
 ## 10. Build, run, test
 

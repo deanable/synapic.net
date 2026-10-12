@@ -173,6 +173,38 @@ public class TagFieldSelectionTests
         Assert.Equal(new[] { "tree", "forest" }, result.Keywords);
     }
 
+    public static IEnumerable<object[]> RealWriterSelections()
+    {
+        foreach (var extension in new[] { ".jpg", ".png", ".tif" })
+        for (var mask = 0; mask < 8; mask++) yield return [extension, mask];
+    }
+
+    [Theory]
+    [MemberData(nameof(RealWriterSelections))]
+    public async Task Real_tagging_path_preserves_unselected_and_unowned_metadata(string extension, int mask)
+    {
+        using var fixture = new MetadataWriterTests.MetadataFixture(extension);
+        fixture.SeedXmp();
+        var fields = new TagFieldSelection((mask & 1) != 0, (mask & 2) != 0, (mask & 4) != 0);
+        var writer = new MetadataWriterService();
+        var orchestrator = new ProcessingOrchestrator(new FixedTagSidecar(), writer, maxDegreeOfParallelism: 1);
+        var results = new List<ProcessItemResult>();
+        await orchestrator.RunAsync(
+            LocalSelection(fixture.DirectoryPath), new TagRequest { ImagePath = "", ModelId = "test", Task = "image-text-to-text" },
+            new Progress<ProcessProgress>(), _ => Task.CompletedTask, CancellationToken.None, results, tagFields: fields);
+
+        Assert.Equal("Success", Assert.Single(results).Status);
+        var read = Assert.IsType<TagResult>(await writer.ReadAsync(fixture.Path));
+        Assert.Equal(fields.Category ? "Nature" : "Existing", read.Category);
+        Assert.Equal(fields.Description ? "A forest at dawn" : "Original description", read.Description);
+        Assert.Equal(fields.Keywords ? new[] { "old", "tree", "forest" } : new[] { "old" }, read.Keywords);
+        var xmp = fixture.ReadXmp();
+        Assert.Equal("Copyright holder", xmp.Descendants(MetadataWriterTests.MetadataFixture.Dc + "rights").Single().Value);
+        Assert.Equal("Creator", xmp.Descendants(MetadataWriterTests.MetadataFixture.Dc + "creator").Single().Value);
+        fixture.AssertPixelsDecode();
+        fixture.AssertNoStagingFiles();
+    }
+
     [Fact]
     public async Task CategoryAndDescription_WithoutKeywords()
     {
