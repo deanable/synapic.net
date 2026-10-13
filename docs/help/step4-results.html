@@ -59,9 +59,9 @@ quality is looking at the images &mdash; and at a few items in Daminion.</p>
 <table>
 <tr><th class="setting">Button</th><th>What it does</th></tr>
 <tr><td><span class="ui">Export CSV</span></td><td>Writes the whole result set to <span class="path">Documents\synapic_results_&lt;timestamp&gt;.csv</span>, with columns for file name, status, tags, category, keywords, description, probabilities and scoring tier. Useful when a curator wants to review the run away from Synapic.</td></tr>
-<tr><td><span class="ui">Retry Failed</span></td><td>Re-does only the rows whose status is not a success. Synapic re-fetches those items from the source, drops the old failed entries, and runs them again with the current settings. Fix the cause first &mdash; a missing file will fail the same way twice.</td></tr>
-<tr><td><span class="ui">Verify Daminion Writes</span></td><td>Available when the data source has a live Daminion connection. Re-reads the metadata of each successful Daminion item and compares it with what was supposed to be written: matching items become <span class="ui">Verified</span>, mismatches are listed in the summary and the log.</td></tr>
-<tr><td><span class="ui">Refresh</span></td><td>Reloads the grid from the run's results. Use it after a retry or a verification.</td></tr>
+<tr><td><span class="ui">Retry Failed</span></td><td>Re-does only the rows whose status is not a success. Synapic re-fetches those items from the source and runs them again with the current settings. <span class="ui">Cancel Retry</span> appears while it runs. The old rows are kept if the retry is cancelled or fails; once it completes, they are replaced by the retry results. Fix the cause first &mdash; a missing file will fail the same way twice.</td></tr>
+<tr><td><span class="ui">Verify Daminion Writes</span></td><td>Available when the data source has a live Daminion connection. Re-reads the metadata of each successful Daminion item and compares it with what was supposed to be written: matching items become <span class="ui">Verified</span>, mismatches are listed in the summary and the log. <span class="ui">Cancel Verification</span> stops the remaining checks; items already verified stay verified, and the summary reports partial progress.</td></tr>
+<tr><td><span class="ui">Refresh</span></td><td>Reloads the grid from the run's results. Use it after a retry or a verification. Export, retry, verify and refresh are unavailable while a retry or verification is running.</td></tr>
 </table>
 
 <div class="tip">

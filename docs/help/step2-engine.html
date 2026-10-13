@@ -25,9 +25,9 @@ what is already in the local model cache, with each model's task, size, and a
 
 <table>
 <tr><th class="setting">Control</th><th>What it does</th></tr>
-<tr><td><span class="ui">Refresh local models</span></td><td>Asks the inference server what models are in the cache. Run it after you download one elsewhere.</td></tr>
+<tr><td><span class="ui">Refresh local models</span></td><td>Asks the inference server what models are in the cache. Run it after you download one elsewhere. While a model action is running, both model actions are disabled and <span class="ui">Cancel model action</span> appears; cancel stops the current refresh or download.</td></tr>
 <tr><td>Model list</td><td>Pick a cached model. The grey text is its task and size.</td></tr>
-<tr><td><span class="ui">Download model&hellip;</span></td><td>Fetches the selected model into the cache before you run a batch, so the download does not happen in the middle of one.</td></tr>
+<tr><td><span class="ui">Download model&hellip;</span></td><td>Fetches the selected model into the cache before you run a batch, so the download does not happen in the middle of one. The list refresh is part of this action; cancelling it also stops that follow-up refresh.</td></tr>
 <tr><td>Model id box</td><td>Type any compatible model repository id, for example <code>LiquidAI/LFM2.5-VL-450M</code>. This is the id sent to the inference server.</td></tr>
 </table>
 
