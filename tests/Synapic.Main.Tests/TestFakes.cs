@@ -4,13 +4,16 @@ using Synapic.Shared.Contracts;
 namespace Synapic.Main.Tests;
 
 /// <summary>In-memory IInferenceSidecar for view-model tests.</summary>
-internal sealed class FakeSidecar : IInferenceSidecar
+internal class FakeSidecar : IInferenceSidecar
 {
     public SidecarStatus CurrentStatus { get; set; } = SidecarStatus.Stopped;
     public int SidecarPort { get; set; }
     public bool IsRunning { get; set; }
     public int StartCalls { get; private set; }
     public int StopCalls { get; private set; }
+    public int HealthCalls { get; private set; }
+    public Func<CancellationToken, Task<HealthResponse>>? HealthHandler { get; set; }
+    public Func<TagRequest, CancellationToken, Task<TagResponse>>? TagHandler { get; set; }
 
     public event EventHandler<SidecarStatusChangedEventArgs>? StatusChanged;
     public event Action<string>? LogReceived;
@@ -30,16 +33,23 @@ internal sealed class FakeSidecar : IInferenceSidecar
     }
 
     public Task<TagResponse> TagAsync(TagRequest request, CancellationToken ct = default)
-        => Task.FromResult(new TagResponse());
+        => TagHandler is { } handler
+            ? handler(request, ct)
+            : Task.FromResult(new TagResponse());
 
-    public Task<ModelInfo[]> ListModelsAsync(CancellationToken ct = default)
+    public virtual Task<ModelInfo[]> ListModelsAsync(CancellationToken ct = default)
         => Task.FromResult(Array.Empty<ModelInfo>());
 
     public Task DownloadModelAsync(string modelId, CancellationToken ct = default)
         => Task.CompletedTask;
 
     public Task<HealthResponse> GetHealthAsync(CancellationToken ct = default)
-        => Task.FromResult(new HealthResponse());
+    {
+        HealthCalls++;
+        return HealthHandler is { } handler
+            ? handler(ct)
+            : Task.FromResult(new HealthResponse());
+    }
 
     /// <summary>Every device pushed through SetDeviceAsync, in order.</summary>
     public List<string?> PushedDevices { get; } = new();

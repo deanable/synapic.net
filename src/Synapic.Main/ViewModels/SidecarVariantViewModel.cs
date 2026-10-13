@@ -30,6 +30,7 @@ public partial class SidecarVariantViewModel : ViewModelBase
         Detail = detail;
         _downloadAsync = downloadAsync;
         DownloadCommand = new AsyncRelayCommand(ct => _downloadAsync(this, ct), () => CanDownloadNow);
+        CancelDownloadCommand = new RelayCommand(DownloadCommand.Cancel, () => IsDownloading);
     }
 
     public string Rid { get; }
@@ -41,6 +42,9 @@ public partial class SidecarVariantViewModel : ViewModelBase
 
     /// <summary>Fetches the prebuilt executable from the GitHub release.</summary>
     public AsyncRelayCommand DownloadCommand { get; }
+
+    /// <summary>Cancels an in-progress sidecar download when the host supports it.</summary>
+    public RelayCommand CancelDownloadCommand { get; }
 
     [ObservableProperty]
     private bool _isBuilt;
@@ -146,6 +150,7 @@ public partial class SidecarVariantViewModel : ViewModelBase
     public void NotifyCommands()
     {
         DownloadCommand.NotifyCanExecuteChanged();
+        CancelDownloadCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(IsMissingOrOutdated));
         OnPropertyChanged(nameof(IsDownloadButtonVisible));
         OnPropertyChanged(nameof(IsUpToDateVisible));

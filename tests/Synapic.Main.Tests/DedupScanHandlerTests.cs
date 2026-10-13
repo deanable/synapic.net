@@ -282,6 +282,22 @@ public class DedupScanHandlerTests
     }
 
     [Fact]
+    public async Task A_non_Daminion_item_is_skipped_as_a_soft_failure()
+    {
+        var handler = new DedupScanHandler(new FakeDownloader(), Options, new FakeDedup());
+
+        var outcome = await handler.ProcessAsync(
+            new ProcessWorkItem { LocalPath = "local.jpg", FileName = "local.jpg" },
+            CancellationToken.None);
+
+        Assert.False(outcome.Success);
+        Assert.Equal("not a Daminion item", outcome.Status);
+        Assert.Empty(handler.Records);
+        Assert.Empty(handler.PerceptualHashes);
+        Assert.Empty(handler.ExactHashes);
+    }
+
+    [Fact]
     public async Task HashFailure_IsCounted_NotThrown()
     {
         var downloader = new FakeDownloader();

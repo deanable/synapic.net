@@ -19,11 +19,17 @@ public partial class Step1DatasourceViewModel : ViewModelBase
 {
     private readonly Session _session;
     private readonly DaminionConnectionStore? _connectionStore;
+    private readonly Func<string, bool, CancellationToken, Task<int>> _countLocalImages;
 
-    public Step1DatasourceViewModel(Session session, DaminionConnectionStore? connectionStore = null)
+    public Step1DatasourceViewModel(
+        Session session,
+        DaminionConnectionStore? connectionStore = null,
+        Func<string, bool, CancellationToken, Task<int>>? countLocalImages = null)
     {
         _session = session;
         _connectionStore = connectionStore;
+        _countLocalImages = countLocalImages ?? ((folder, recursive, ct) =>
+            Task.Run(() => WorkflowRunner.CountLocalImages(folder, recursive, ct), ct));
         // Hydration fills the form field by field; none of that may fire a
         // count. The launch sequence (InitializeAsync) counts once instead.
         _suppressAutoCount = true;
@@ -192,7 +198,11 @@ public partial class Step1DatasourceViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isConnecting;
 
-    partial void OnIsConnectingChanged(bool value) => ConnectCommand.NotifyCanExecuteChanged();
+    partial void OnIsConnectingChanged(bool value)
+    {
+        ConnectCommand.NotifyCanExecuteChanged();
+        CancelConnectCommand.NotifyCanExecuteChanged();
+    }
 
     [ObservableProperty]
     private string _datasourceType = "local";
@@ -572,8 +582,42 @@ public partial class Step1DatasourceViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanConnect))]
     private async Task ConnectAsync(CancellationToken ct)
     {
-        // The record count is automatic: a fresh session counts as soon as it lands.
-        if (await ConnectCoreAsync(ct)) await RefreshCountAsync(ct);
+        using var operation = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        _connectOperationCts = operation;
+        try
+        {
+            // The record count is automatic: a fresh session counts as soon as it lands.
+            if (await ConnectCoreAsync(operation.Token)) await RefreshCountAsync(operation.Token);
+        }
+        catch (OperationCanceledException) when (operation.IsCancellationRequested)
+        {
+            // ConnectCoreAsync has already put the cancellation message on screen.
+        }
+        finally
+        {
+            if (ReferenceEquals(_connectOperationCts, operation)) _connectOperationCts = null;
+        }
+    }
+
+    private bool CanCancelConnect() => IsConnecting;
+
+    [RelayCommand(CanExecute = nameof(CanCancelConnect))]
+    private void CancelConnect()
+    {
+        _connectOperationCts?.Cancel();
+        ConnectCommand.Cancel();
+    }
+
+    private bool CanCancelCount() => IsCounting;
+
+    [RelayCommand(CanExecute = nameof(CanCancelCount))]
+    private void CancelCount()
+    {
+        _countCancelRequested = true;
+        _countDebounce?.Cancel();
+        _activeCountCts?.Cancel();
+        CountCommand.Cancel();
+        CancelCountCommand.NotifyCanExecuteChanged();
     }
 
     /// <summary>
@@ -617,9 +661,17 @@ public partial class Step1DatasourceViewModel : ViewModelBase
             await LoadCatalogDataAsync(ct);
             await LoadActiveCatalogAsync(ct);
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            ConnectionMessage = IsDaminionConnected
+                ? $"Connected to {DaminionUrl} (catalog loading cancelled)"
+                : "Connection cancelled";
+            throw;
+        }
         catch (Exception e)
         {
             IsDaminionConnected = false;
+            ConnectedClient = null;
             ConnectionMessage = $"Connection failed: {e.Message}";
             SynapicLog.Warning(nameof(Step1DatasourceViewModel), ConnectionMessage);
         }
@@ -627,6 +679,7 @@ public partial class Step1DatasourceViewModel : ViewModelBase
         {
             IsConnecting = false;
             ConnectCommand.NotifyCanExecuteChanged();
+            CancelConnectCommand.NotifyCanExecuteChanged();
             CountCommand.NotifyCanExecuteChanged();
         }
 
@@ -674,6 +727,10 @@ public partial class Step1DatasourceViewModel : ViewModelBase
             _hydrating = false;
             ConnectionMessage = $"Connected to {DaminionUrl} — {searches.Count} saved searches, {collections.Count} collections";
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception e)
         {
             SynapicLog.Warning(nameof(Step1DatasourceViewModel), $"Catalog data load failed (pickers stay manual): {e.Message}");
@@ -698,6 +755,10 @@ public partial class Step1DatasourceViewModel : ViewModelBase
         {
             ActiveCatalog = await ConnectedClient.GetCatalogGuidAsync(ct);
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception e)
         {
             SynapicLog.Warning(nameof(Step1DatasourceViewModel), $"Active catalog lookup failed: {e.Message}");
@@ -715,6 +776,9 @@ public partial class Step1DatasourceViewModel : ViewModelBase
 
     private bool _countInFlight;
     private bool _countStale;
+    private bool _countCancelRequested;
+    private CancellationTokenSource? _activeCountCts;
+    private CancellationTokenSource? _connectOperationCts;
     private CancellationTokenSource? _countDebounce;
 
     private const int CountDebounceMs = 350;
@@ -764,31 +828,42 @@ public partial class Step1DatasourceViewModel : ViewModelBase
         if (_countInFlight)
         {
             _countStale = true;
+            _activeCountCts?.Cancel();
             return;
         }
 
+        _countCancelRequested = false;
+        _countStale = false;
         _countInFlight = true;
+        using var operation = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        _activeCountCts = operation;
         IsCounting = true;
+        CancelCountCommand.NotifyCanExecuteChanged();
         try
         {
             bool again;
             do
             {
+                operation.Token.ThrowIfCancellationRequested();
                 _countStale = false;
-                if (IsDaminion) await CountDaminionAsync(ct);
-                else await CountLocalAsync(ct);
+                if (IsDaminion) await CountDaminionAsync(operation.Token);
+                else await CountLocalAsync(operation.Token);
                 again = _countStale;
             } while (again);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (operation.IsCancellationRequested)
         {
-            // A newer change superseded this run; its own count will report.
+            // A newer change superseded this run, or the user cancelled it.
         }
         finally
         {
+            var rerunStaleCount = _countStale && !_countCancelRequested;
             _countInFlight = false;
+            if (ReferenceEquals(_activeCountCts, operation)) _activeCountCts = null;
             IsCounting = false;
+            if (rerunStaleCount) ScheduleCountRefresh();
             CountCommand.NotifyCanExecuteChanged();
+            CancelCountCommand.NotifyCanExecuteChanged();
         }
     }
 
@@ -804,7 +879,9 @@ public partial class Step1DatasourceViewModel : ViewModelBase
                 collectionId: int.TryParse(CollectionId, out var col) ? col : null,
                 searchTerm: string.IsNullOrWhiteSpace(SearchTerm) ? null : SearchTerm,
                 untaggedFields: _session.Datasource.UntaggedFields(),
-                statusFilter: StatusFilter);
+                statusFilter: StatusFilter,
+                ct: ct);
+            ct.ThrowIfCancellationRequested();
             CountText = count < 0
                 ? "Count failed — see log"
                 : count == 1
@@ -836,7 +913,8 @@ public partial class Step1DatasourceViewModel : ViewModelBase
         var recursive = LocalRecursive;
         try
         {
-            var count = await Task.Run(() => WorkflowRunner.CountLocalImages(folder, recursive), ct);
+            var count = await _countLocalImages(folder, recursive, ct);
+            ct.ThrowIfCancellationRequested();
             CountText = count == 1 ? "1 image file" : $"{count:N0} image files";
             SynapicLog.Info(nameof(Step1DatasourceViewModel),
                 $"Counted {count} image file(s) in {folder} (recursive={recursive})");
@@ -857,6 +935,8 @@ public partial class Step1DatasourceViewModel : ViewModelBase
     private void ScheduleCountRefresh()
     {
         if (_suppressAutoCount) return;   // constructor hydration: one count at launch instead
+        _countCancelRequested = false;
+        _activeCountCts?.Cancel();
         _countDebounce?.Cancel();
         var cts = new CancellationTokenSource();
         _countDebounce = cts;

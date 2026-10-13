@@ -1,5 +1,11 @@
 using Avalonia.Media;
+using Avalonia.Controls;
+using Avalonia.Headless.XUnit;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Synapic.Main.Models;
+using Synapic.Main.Views.Operation;
+using Synapic.Main.Views.Wizard;
 using Synapic.Main.Services;
 using Synapic.Main.ViewModels.Steps;
 using Xunit;
@@ -46,6 +52,22 @@ public class Step1DatasourceTests
         // Clearing a required field must disable the button again.
         vm.DaminionPass = "";
         Assert.False(vm.ConnectCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void Cancel_connect_command_tracks_connecting_state()
+    {
+        var vm = NewViewModel();
+        var changed = 0;
+        vm.CancelConnectCommand.CanExecuteChanged += (_, _) => changed++;
+
+        Assert.False(vm.CancelConnectCommand.CanExecute(null));
+        vm.IsConnecting = true;
+        Assert.True(vm.CancelConnectCommand.CanExecute(null));
+        vm.IsConnecting = false;
+
+        Assert.False(vm.CancelConnectCommand.CanExecute(null));
+        Assert.True(changed >= 2);
     }
 
     [Fact]
@@ -143,6 +165,58 @@ public class Step1DatasourceTests
     }
 
     private static Color Brush(IBrush brush) => ((ISolidColorBrush)brush).Color;
+
+    [AvaloniaFact]
+    public async Task Rendered_cancel_count_cancels_an_in_flight_local_scan_and_leaves_count_idle()
+    {
+        var folder = TempImageFolder(1);
+        var enteredScan = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var scanCancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var vm = new Step1DatasourceViewModel(new Session(), countLocalImages: async (_, _, ct) =>
+        {
+            enteredScan.TrySetResult();
+            try
+            {
+                await Task.Delay(Timeout.Infinite, ct);
+                return 0;
+            }
+            catch (OperationCanceledException)
+            {
+                scanCancelled.TrySetResult();
+                throw;
+            }
+        });
+        vm.LocalPath = folder;
+        var panel = new ScopeSelectionPanel { DataContext = vm };
+        var window = new Window { Content = panel, Width = 900, Height = 500 };
+        window.Show();
+
+        try
+        {
+            var count = vm.CountCommand.ExecuteAsync(null);
+            await enteredScan.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.True(vm.IsCounting);
+            var cancelButton = panel.GetVisualDescendants().OfType<Button>()
+                .Single(button => (string?)button.Content == "Cancel count");
+            Assert.True(cancelButton.IsVisible);
+            Assert.True(cancelButton.IsEnabled);
+
+            cancelButton.Command!.Execute(null);
+            await count.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.True(scanCancelled.Task.IsCompleted);
+            Assert.False(vm.IsCounting);
+            Assert.False(vm.CancelCountCommand.CanExecute(null));
+            Assert.Null(vm.CountText); // cancellation does not publish a stale count
+        }
+        finally
+        {
+            window.Close();
+            Directory.Delete(folder, recursive: true);
+        }
+    }
 
     [Fact]
     public async Task Choosing_a_folder_counts_its_images_without_a_button_press()

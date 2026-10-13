@@ -20,11 +20,14 @@
 
         <WrapPanel>
           <Button Content="Refresh local models" Command="{Binding RefreshModelsCommand}"
-                  Margin="0,0,12,8"
+                  IsEnabled="{Binding !IsLoadingModels}" Margin="0,0,12,8"
                   ToolTip.Tip="Ask the server which models are downloaded." />
           <Button Content="Download model…" Command="{Binding DownloadSelectedCommand}"
-                  Margin="0,0,12,8"
+                  IsEnabled="{Binding !IsLoadingModels}" Margin="0,0,12,8"
                   ToolTip.Tip="Download the model id below (or the selected one) from Hugging Face." />
+
+          <Button Content="Cancel model action" Command="{Binding CancelModelsCommand}"
+                  IsVisible="{Binding IsLoadingModels}" Margin="0,0,12,8" />
           <ProgressBar IsIndeterminate="True" Width="90" Height="6"
                        IsVisible="{Binding IsLoadingModels}"
                        VerticalAlignment="Center" Margin="0,0,12,8" />

@@ -88,19 +88,17 @@
                    Text="{Binding DaminionUrl}"
                    help:HelpScope.Topic="settings-reference.html#server-url" />
 
-          <Grid ColumnDefinitions="*,*,Auto" help:HelpScope.Topic="settings-reference.html#server-url">
-            <TextBox Grid.Column="0" Watermark="Username" Text="{Binding DaminionUser}"
-                     Margin="0,0,8,0" />
-            <TextBox Grid.Column="1" Watermark="Password" Text="{Binding DaminionPass}"
-                     PasswordChar="*" Margin="0,0,8,0" />
-            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
-              <Button Content="Connect" Command="{Binding ConnectCommand}" Classes="accent" />
-            </StackPanel>
-          </Grid>
-
+          <TextBox Watermark="Username" Text="{Binding DaminionUser}" />
+          <TextBox Watermark="Password" Text="{Binding DaminionPass}"
+                   PasswordChar="*" />
           <WrapPanel>
+            <Button Content="Connect" Command="{Binding ConnectCommand}" Classes="accent"
+                    IsEnabled="{Binding !IsConnecting}" Margin="0,0,8,8" />
+            <Button Content="Cancel" Command="{Binding CancelConnectCommand}"
+                    IsVisible="{Binding IsConnecting}" Margin="0,0,8,8" />
             <ProgressBar IsIndeterminate="True" Width="90" Height="6"
-                         IsVisible="{Binding IsConnecting}" Margin="0,0,12,8" />
+                         IsVisible="{Binding IsConnecting}" VerticalAlignment="Center"
+                         Margin="0,0,12,8" />
             <TextBlock Text="{Binding ConnectionMessage}" Opacity="0.85" TextWrapping="Wrap"
                        IsVisible="{Binding ConnectionMessage}" Margin="0,0,12,8" />
           </WrapPanel>

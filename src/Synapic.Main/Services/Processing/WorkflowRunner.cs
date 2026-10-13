@@ -85,11 +85,19 @@ public sealed class WorkflowRunner
     /// <see cref="FetchItemsAsync"/> applies — so a number shown before a run is
     /// the number the run will actually see.
     /// </summary>
-    public static int CountLocalImages(string folder, bool recursive)
+    public static int CountLocalImages(string folder, bool recursive, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder)) return 0;
         var option = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
-        return Directory.EnumerateFiles(folder, "*.*", option).Count(IsLocalImage);
+        ct.ThrowIfCancellationRequested();
+        var count = 0;
+        foreach (var path in Directory.EnumerateFiles(folder, "*.*", option))
+        {
+            ct.ThrowIfCancellationRequested();
+            if (IsLocalImage(path)) count++;
+        }
+        return count;
     }
 
     // ── Fetch (shared: local recursive scan or Daminion pagination) ─────────

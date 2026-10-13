@@ -365,8 +365,19 @@ public partial class Step2EngineViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isLoadingModels;
 
+    private CancellationTokenSource? _modelOperationCts;
+
     [ObservableProperty]
     private string? _modelsMessage;
+
+    partial void OnIsLoadingModelsChanged(bool value)
+    {
+        RefreshModelsCommand.NotifyCanExecuteChanged();
+        DownloadSelectedCommand.NotifyCanExecuteChanged();
+        CancelModelsCommand.NotifyCanExecuteChanged();
+    }
+
+    private bool CanRunModelAction() => !IsLoadingModels;
 
     partial void OnSelectedModelChanged(ModelInfo? value)
     {
@@ -745,18 +756,23 @@ public partial class Step2EngineViewModel : ViewModelBase
         SystemPromptMessage = $"Removed the system-prompt preset \"{value}\".";
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanRunModelAction))]
     private async Task RefreshModelsAsync(CancellationToken ct)
     {
-        IsLoadingModels = true;
-        ModelsMessage = null;
+        var operation = BeginModelOperation(ct, out var operationToken);
         try
         {
-            var models = await _sidecar.ListModelsAsync(ct);
+            ModelsMessage = null;
+            var models = await _sidecar.ListModelsAsync(operationToken);
+            operationToken.ThrowIfCancellationRequested();
             LocalModels.Clear();
             foreach (var m in models.OrderByDescending(m => m.Downloaded).ThenBy(m => m.Id))
                 LocalModels.Add(m);
             ModelsMessage = $"{LocalModels.Count} local models found";
+        }
+        catch (OperationCanceledException) when (operationToken.IsCancellationRequested)
+        {
+            ModelsMessage = "Model list refresh cancelled";
         }
         catch (Exception e)
         {
@@ -764,21 +780,56 @@ public partial class Step2EngineViewModel : ViewModelBase
         }
         finally
         {
-            IsLoadingModels = false;
+            EndModelOperation(operation);
         }
     }
 
-    [RelayCommand]
+    private bool CanCancelModels() => IsLoadingModels;
+
+    [RelayCommand(CanExecute = nameof(CanCancelModels))]
+    private void CancelModels() => _modelOperationCts?.Cancel();
+
+    private CancellationTokenSource BeginModelOperation(CancellationToken commandToken, out CancellationToken token)
+    {
+        var operation = CancellationTokenSource.CreateLinkedTokenSource(commandToken);
+        _modelOperationCts = operation;
+        IsLoadingModels = true;
+        CancelModelsCommand.NotifyCanExecuteChanged();
+        token = operation.Token;
+        return operation;
+    }
+
+    private void EndModelOperation(CancellationTokenSource operation)
+    {
+        var isCurrent = ReferenceEquals(_modelOperationCts, operation);
+        if (isCurrent) _modelOperationCts = null;
+        operation.Dispose();
+        if (isCurrent) IsLoadingModels = false;
+        CancelModelsCommand.NotifyCanExecuteChanged();
+    }
+
+    [RelayCommand(CanExecute = nameof(CanRunModelAction))]
     private async Task DownloadSelectedAsync(CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(ManualModelId)) return;
-        IsLoadingModels = true;
-        ModelsMessage = $"Downloading {ManualModelId}… (progress in the log)";
+        var modelId = ManualModelId;
+        using var operation = BeginModelOperation(ct, out var operationToken);
+        ModelsMessage = $"Downloading {modelId}… (progress in the log)";
         try
         {
-            await _sidecar.DownloadModelAsync(ManualModelId, ct);
-            ModelsMessage = $"Download started for {ManualModelId}";
-            await RefreshModelsAsync(ct);
+            await _sidecar.DownloadModelAsync(modelId, operationToken);
+            operationToken.ThrowIfCancellationRequested();
+            ModelsMessage = $"Download started for {modelId}";
+            var models = await _sidecar.ListModelsAsync(operationToken);
+            operationToken.ThrowIfCancellationRequested();
+            LocalModels.Clear();
+            foreach (var model in models.OrderByDescending(model => model.Downloaded).ThenBy(model => model.Id))
+                LocalModels.Add(model);
+            ModelsMessage = $"{LocalModels.Count} local models found";
+        }
+        catch (OperationCanceledException) when (operationToken.IsCancellationRequested)
+        {
+            ModelsMessage = $"Download cancelled for {modelId}";
         }
         catch (Exception e)
         {
@@ -786,7 +837,7 @@ public partial class Step2EngineViewModel : ViewModelBase
         }
         finally
         {
-            IsLoadingModels = false;
+            EndModelOperation(operation);
         }
     }
 

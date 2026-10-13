@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.VisualTree;
 using Synapic.Main.Models;
 using Synapic.Main.Services;
 using Synapic.Main.ViewModels.Steps;
@@ -7,6 +8,8 @@ using Synapic.Main.ViewModels;
 using Synapic.Main.Views;
 using Synapic.Main.Views.Wizard;
 using Xunit;
+using Synapic.Shared.Contracts;
+using Avalonia.Threading;
 
 namespace Synapic.Main.Tests;
 
@@ -134,6 +137,90 @@ public class Step2EngineTests
 
         Assert.Equal("cpu", shell.Operations.TagParameters.Device);   // after the window closes
     }
+
+    [AvaloniaFact]
+    public void Candidate_labels_are_visible_and_drive_the_next_tag_request()
+    {
+        var session = new Session();
+        var vm = new Step2EngineViewModel(session, new FakeSidecar());
+        var view = new Step2Engine { DataContext = vm };
+        var window = new Window { Content = view };
+        window.Show();
+        try
+        {
+            var candidates = view.GetVisualDescendants().OfType<TextBox>()
+                .Single(textBox => textBox.Watermark?.Contains("Candidate labels", StringComparison.Ordinal) == true);
+            candidates.Text = "cat, dog, bird";
+
+            Assert.Equal(new[] { "cat", "dog", "bird" }, session.Engine.ProbabilityCandidates);
+            var request = new Step3ProcessViewModel(session, new FakeSidecar(), new Step1DatasourceViewModel(session))
+                .BuildTagRequest();
+            Assert.Equal(new[] { "cat", "dog", "bird" }, request.Options!.CandidateLabels);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task Rendered_cancel_models_cancels_list_refresh_and_restores_actions()
+    {
+        var enteredList = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var listCancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var sidecar = new ModelOperationSidecar
+        {
+            OnListModels = async ct =>
+            {
+                enteredList.TrySetResult();
+                try
+                {
+                    await Task.Delay(Timeout.Infinite, ct);
+                    return Array.Empty<Synapic.Shared.Contracts.ModelInfo>();
+                }
+                catch (OperationCanceledException)
+                {
+                    listCancelled.TrySetResult();
+                    throw;
+                }
+            },
+        };
+        var vm = new Step2EngineViewModel(new Session(), sidecar);
+        var view = new Step2Engine { DataContext = vm };
+        var window = new Window { Content = view, Width = 900, Height = 700 };
+        window.Show();
+
+        try
+        {
+            var refresh = vm.RefreshModelsCommand.ExecuteAsync(null);
+            await enteredList.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.True(vm.IsLoadingModels);
+            var cancel = view.GetVisualDescendants().OfType<Button>()
+                .Single(button => (string?)button.Content == "Cancel model action");
+            Assert.True(cancel.IsVisible);
+            Assert.True(cancel.IsEnabled);
+            Assert.False(vm.RefreshModelsCommand.CanExecute(null));
+            Assert.False(vm.DownloadSelectedCommand.CanExecute(null));
+
+            cancel.Command!.Execute(null);
+            await refresh.WaitAsync(TimeSpan.FromSeconds(5));
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.True(listCancelled.Task.IsCompleted);
+            Assert.False(vm.IsLoadingModels);
+            Assert.False(cancel.IsVisible);
+            Assert.True(vm.RefreshModelsCommand.CanExecute(null));
+            Assert.True(vm.DownloadSelectedCommand.CanExecute(null));
+            Assert.Equal("Model list refresh cancelled", vm.ModelsMessage);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     [Fact]
     public void PinsMultimodalTask_AndCorrectsStaleSessionValue()
     {
@@ -203,6 +290,11 @@ public class Step2EngineTests
             Assert.Equal(0.25, vm.ProbabilityThreshold, 3);
             Assert.Equal(0.25, session.Engine.ProbabilityThreshold, 3);
 
+            var request = new Step3ProcessViewModel(session, new FakeSidecar(), new Step1DatasourceViewModel(session))
+                .BuildTagRequest();
+            Assert.Equal(0.75, request.Options!.ConfidenceThreshold, 3);
+            Assert.Equal(0.25, request.Options.ProbabilityThreshold, 3);
+
             // The readout beside each slider reports the value it was set to.
             Assert.Equal(0.75.ToString("0.00"),
                 view.FindControl<TextBlock>("ConfidenceThresholdValue")!.Text);
@@ -213,5 +305,13 @@ public class Step2EngineTests
         {
             window.Close();
         }
+    }
+
+    private sealed class ModelOperationSidecar : FakeSidecar
+    {
+        public Func<CancellationToken, Task<ModelInfo[]>>? OnListModels { get; init; }
+
+        public override Task<ModelInfo[]> ListModelsAsync(CancellationToken ct = default) =>
+            OnListModels is { } handler ? handler(ct) : base.ListModelsAsync(ct);
     }
 }

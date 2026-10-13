@@ -375,6 +375,10 @@ public sealed class DaminionApiClient
                 }
             }
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception e)
         {
             SynapicLog.Warning(nameof(DaminionApiClient), $"Tag id lookup for '{tagName}' failed: {e.Message}");
@@ -807,6 +811,7 @@ public sealed class DaminionApiClient
         string statusFilter = "all",
         CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         try
         {
             var qParts = new List<string>();
@@ -892,10 +897,11 @@ public sealed class DaminionApiClient
             // parity): match the keyword tag value id instead.
             if (count <= 0 && scope == "search" && !string.IsNullOrWhiteSpace(searchTerm))
             {
+                ct.ThrowIfCancellationRequested();
                 var kwId = await GetTagIdAsync("keywords", fallback: 0, ct).ConfigureAwait(false);
                 if (kwId > 0)
                 {
-                    var valueId = await FindTagValueIdAsync(kwId, searchTerm).ConfigureAwait(false);
+                    var valueId = await FindTagValueIdAsync(kwId, searchTerm, ct).ConfigureAwait(false);
                     if (valueId is { } vid)
                     {
                         count = (await GetApi().GetCount(
@@ -909,6 +915,10 @@ public sealed class DaminionApiClient
             SynapicLog.Info(nameof(DaminionApiClient),
                 $"Item count: {count} | scope: {scope} | query: '{combinedSearch}' | queryLine: '{queryLine}'");
             return count;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception e)
         {
@@ -943,6 +953,7 @@ public sealed class DaminionApiClient
         }
         catch (ApiException)
         {
+            ct.ThrowIfCancellationRequested();
             // Fallback route (daminion_api.py parity): some builds only expose
             // the bare /api/IndexedTagValues endpoint.
             json = await GetApi().GetIndexedTagValuesFallback(tagId, filter: filterText, pageSize: 100, ct: ct).ConfigureAwait(false);
@@ -1318,6 +1329,12 @@ public sealed class DaminionApiClient
             return missing.Count == 0
                 ? new DaminionVerifyResult(true, $"Item {itemId} verified")
                 : new DaminionVerifyResult(false, $"Item {itemId}: not found — {string.Join("; ", missing)}");
+        }
+        catch (OperationCanceledException)
+        {
+            // Cancellation is a caller decision, not a catalog mismatch. Let the
+            // report command stop promptly and preserve its cancelled outcome.
+            throw;
         }
         catch (Exception e)
         {

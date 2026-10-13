@@ -71,17 +71,171 @@ public class StepDedupViewModelTests
             var image = FindSampleImage() ?? throw new InvalidOperationException("TestData/sample.jpg not found");
             File.Copy(image, Path.Combine(folder, "one.jpg"));
             var vm = new StepDedupViewModel { FolderPath = folder };
+            var window = new Window { Content = new StepDedup { DataContext = vm }, Width = 1000, Height = 700 };
+            window.Show();
+            try
+            {
+                await vm.ScanCommand.ExecuteAsync(null);
+                Dispatcher.UIThread.RunJobs();
 
-            await vm.ScanCommand.ExecuteAsync(null);
-
-            Assert.Equal("No duplicates found among 1 images — try a lower threshold or another algorithm.",
-                vm.ScanSummary);
-            Assert.Empty(vm.Groups);
+                const string guidance = "No duplicates found among 1 images — try a lower threshold or another algorithm.";
+                Assert.Equal(guidance, vm.ScanSummary);
+                Assert.Empty(vm.Groups);
+                Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(),
+                    text => text.Text == guidance && text.IsVisible);
+            }
+            finally
+            {
+                window.Close();
+            }
         }
         finally
         {
             Directory.Delete(folder, recursive: true);
         }
+    }
+
+    [AvaloniaFact]
+    public async Task Unreadable_images_show_no_duplicate_groups_in_the_visible_scan_summary()
+    {
+        var folder = Directory.CreateTempSubdirectory("synapic-unreadable-dedup-").FullName;
+        try
+        {
+            File.WriteAllText(Path.Combine(folder, "broken.jpg"), "not an image");
+            // The real dedup service treats an unreadable image as an unhashable
+            // item, keeps the scanned-file count, and returns no duplicate groups.
+            var vm = new StepDedupViewModel { FolderPath = folder };
+            var window = new Window { Content = new StepDedup { DataContext = vm }, Width = 1000, Height = 700 };
+            window.Show();
+            try
+            {
+                await vm.ScanCommand.ExecuteAsync(null);
+                Dispatcher.UIThread.RunJobs();
+
+                const string guidance = "No duplicates found among 1 images — try a lower threshold or another algorithm.";
+                Assert.Equal(guidance, vm.ScanSummary);
+                Assert.Empty(vm.Groups);
+                Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(),
+                    text => text.Text == guidance && text.IsVisible);
+                Assert.Contains(Synapic.Main.Services.SynapicLog.UiSink.Snapshot(), entry =>
+                    entry.RenderedMessage.Contains("Could not hash '" + Path.Combine(folder, "broken.jpg") + "'", StringComparison.Ordinal));
+            }
+            finally
+            {
+                window.Close();
+            }
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task Scan_failure_reports_the_error_and_resets_scan_busy_state()
+    {
+        var folder = Directory.CreateTempSubdirectory("synapic-dedup-scan-fail-").FullName;
+        try
+        {
+            File.WriteAllText(Path.Combine(folder, "one.jpg"), "dummy image");
+            var vm = new StepDedupViewModel(new ThrowingDedupService { Error = new IOException("scan exploded") })
+            {
+                FolderPath = folder,
+            };
+            var view = new StepDedup { DataContext = vm };
+            var window = new Window { Content = view, Width = 1000, Height = 700 };
+            window.Show();
+            try
+            {
+                await vm.ScanCommand.ExecuteAsync(null);
+                Dispatcher.UIThread.RunJobs();
+
+                Assert.Equal("Scan failed: scan exploded", vm.ScanSummary);
+                Assert.False(vm.IsScanning);
+                Assert.True(vm.ScanCommand.CanExecute(null));
+                Assert.Contains(view.GetVisualDescendants().OfType<TextBlock>(),
+                    text => text.Text == vm.ScanSummary && text.IsVisible);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task Scan_cancellation_reports_cancelled_and_resets_scan_busy_state()
+    {
+        var folder = Directory.CreateTempSubdirectory("synapic-dedup-scan-cancel-").FullName;
+        try
+        {
+            File.WriteAllText(Path.Combine(folder, "one.jpg"), "dummy image");
+            var enteredScan = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var dedup = new ThrowingDedupService
+            {
+                OnFind = async ct =>
+                {
+                    enteredScan.TrySetResult();
+                    await Task.Delay(Timeout.Infinite, ct);
+                    return new DedupResult();
+                },
+            };
+            var vm = new StepDedupViewModel(dedup) { FolderPath = folder };
+            var view = new StepDedup { DataContext = vm };
+            var window = new Window { Content = view, Width = 1000, Height = 700 };
+            window.Show();
+            try
+            {
+                var scan = vm.ScanCommand.ExecuteAsync(null);
+                await enteredScan.Task.WaitAsync(TimeSpan.FromSeconds(5));
+                Assert.True(vm.IsScanning);
+                Assert.True(vm.StopScanCommand.CanExecute(null));
+
+                vm.StopScanCommand.Execute(null);
+                await scan;
+                Dispatcher.UIThread.RunJobs();
+
+                Assert.Equal("Scan cancelled", vm.ScanSummary);
+                Assert.False(vm.IsScanning);
+                Assert.True(vm.ScanCommand.CanExecute(null));
+                Assert.False(vm.StopScanCommand.CanExecute(null));
+                Assert.Contains(view.GetVisualDescendants().OfType<TextBlock>(),
+                    text => text.Text == "Scan cancelled" && text.IsVisible);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    private sealed class ThrowingDedupService : IDedupService
+    {
+        public Exception? Error { get; init; }
+        public Func<CancellationToken, Task<DedupResult>>? OnFind { get; init; }
+
+        public async Task<DedupResult> FindDuplicatesAsync(IEnumerable<string> imagePaths, DedupOptions opts,
+            IProgress<DedupProgress>? progress = null, CancellationToken ct = default)
+        {
+            if (OnFind is not null) return await OnFind(ct);
+            throw Error ?? new InvalidOperationException("No scan behavior configured");
+        }
+
+        public ulong? ComputeHash(string path, DedupOptions opts) => null;
+        public DedupResult GroupFromHashes(IReadOnlyDictionary<string, ulong> perceptualHashes,
+            IReadOnlyDictionary<string, ulong> exactHashes, DedupOptions opts) => new();
+        public Task<bool> ApplyToPathsAsync(IEnumerable<string> paths, DedupAction action,
+            string? moveDestination = null, CancellationToken ct = default) => Task.FromResult(true);
+        public Task<bool> ApplyActionsAsync(DedupResult result, DedupAction action,
+            string? moveDestination = null, CancellationToken ct = default) => Task.FromResult(true);
     }
 
     // ── Scan settings ───────────────────────────────────────────────────────
@@ -98,6 +252,26 @@ public class StepDedupViewModelTests
 
         vm.SelectedServerHashMatch = 1; // "Hamming"
         Assert.Equal(ServerHashMatchMode.Hamming, vm.BuildOptions().ServerHashMatch);
+    }
+
+    [Fact]
+    public void Each_selectable_algorithm_maps_to_its_dedup_engine_option()
+    {
+        var vm = new StepDedupViewModel();
+        var expected = new[]
+        {
+            HashAlgorithm.PHash,
+            HashAlgorithm.DHash,
+            HashAlgorithm.AHash,
+            HashAlgorithm.ColorMoment,
+        };
+
+        Assert.Equal(new[] { "PHash", "DHash", "AHash", "ColorMoment" }, vm.Algorithms);
+        for (var index = 0; index < expected.Length; index++)
+        {
+            vm.SelectedAlgorithm = index;
+            Assert.Equal(expected[index], vm.BuildOptions().Algorithm);
+        }
     }
 
     [Fact]

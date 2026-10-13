@@ -1,5 +1,9 @@
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
+using Avalonia.Controls;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
+using Synapic.Main.Views.Settings;
 using Synapic.Main.Models;
 using Synapic.Main.Services;
 using Synapic.Main.ViewModels;
@@ -427,6 +431,64 @@ public class ServerDetectionTests
     }
 
     [AvaloniaFact]
+    public async Task Rendered_cancel_download_cancels_the_transfer_and_releases_the_variant_row()
+    {
+        var downloadEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var downloadCancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var download = new FakeDownloadService
+        {
+            OnDownload = async (_, _, _, ct) =>
+            {
+                downloadEntered.TrySetResult();
+                try
+                {
+                    await Task.Delay(Timeout.Infinite, ct);
+                }
+                catch (OperationCanceledException)
+                {
+                    downloadCancelled.TrySetResult();
+                    throw;
+                }
+            },
+        };
+        var vm = new MainWindowViewModel(new FakeSidecar(), new Session(),
+            () => null, null, null, _ => null, download: download);
+        await vm.DetectServerAsync();
+        var section = new InferenceServerSection { DataContext = vm };
+        var window = new Window { Content = section, Width = 1100, Height = 800 };
+        window.Show();
+
+        try
+        {
+            var variant = vm.SidecarVariants[0];
+            var transfer = variant.DownloadCommand.ExecuteAsync(null);
+            await downloadEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.True(variant.IsDownloading);
+            var cancel = section.GetVisualDescendants().OfType<Button>()
+                .Single(button => (string?)button.Content == "Cancel download" && button.DataContext == variant);
+            Assert.True(cancel.IsVisible);
+            Assert.True(cancel.IsEnabled);
+            Assert.False(variant.DownloadCommand.CanExecute(null));
+
+            cancel.Command!.Execute(null);
+            await transfer.WaitAsync(TimeSpan.FromSeconds(5));
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.True(downloadCancelled.Task.IsCompleted);
+            Assert.False(variant.IsDownloading);
+            Assert.False(cancel.IsVisible);
+            Assert.True(variant.DownloadCommand.CanExecute(null));
+            Assert.False(vm.IsBusy);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
     public async Task Starting_a_download_clears_a_stale_bar()
     {
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -453,6 +515,49 @@ public class ServerDetectionTests
     }
 
     // ── Model download indicator ─────────────────────────────────────────────
+
+    [AvaloniaFact]
+    public async Task Health_polling_starts_with_running_server_and_stops_when_server_stops()
+    {
+        var firstPoll = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var sidecar = new FakeSidecar
+        {
+            SidecarPort = 8123,
+            HealthHandler = _ =>
+            {
+                firstPoll.TrySetResult();
+                return Task.FromResult(new HealthResponse
+                {
+                    Device = "cpu",
+                    Download = new ModelDownloadProgress
+                    {
+                        ModelId = "org/example-vlm",
+                        Status = "downloading",
+                        DoneBytes = 1,
+                        TotalBytes = 2,
+                    },
+                });
+            },
+        };
+        var vm = new MainWindowViewModel(sidecar, new Session(), () => Exe, null, null, _ => Exe);
+
+        sidecar.RaiseStatus(SidecarStatus.Starting);
+        sidecar.RaiseStatus(SidecarStatus.Ready);
+        await firstPoll.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.True(vm.IsDownloadVisible);
+        Assert.Equal(50, vm.DownloadPercent);
+        Assert.Contains("Downloading model", vm.DownloadText);
+        Assert.Equal("CPU", vm.ServerDeviceText);
+        Assert.Equal(1, sidecar.HealthCalls);
+
+        sidecar.HealthHandler = _ => Task.FromResult(new HealthResponse());
+        sidecar.RaiseStatus(SidecarStatus.Stopped);
+        var pollsAtStop = sidecar.HealthCalls;
+        await Task.Delay(TimeSpan.FromMilliseconds(2200));
+        Assert.Equal(pollsAtStop, sidecar.HealthCalls);
+        Assert.False(vm.IsDownloadVisible);
+    }
 
     [AvaloniaFact]
     public void Download_progress_shows_bytes_and_percent()

@@ -350,11 +350,11 @@ All existing functionality must be preserved:
 
 ### 4.4 Upscaling Workflow
 - ✅ Feature enhancement upscaling
-- ✅ Quality/realistic/balanced presets
+- ✅ Upscale workflows (quality/balanced/fast) — the historical “realistic” label is retired; balanced is the shipped real-world model workflow, not a separate mode.
 - ✅ Scale factors
-- ✅ Precision (float32/float16)
-- ✅ Output format (PNG/JPEG)
-- ✅ Quality/SNR sliders
+- ✅ Precision (auto/float16/float32)
+- ✅ Output format (keep/JPEG/PNG/WEBP)
+- ✅ JPEG/WEBP quality control — the historical “SNR slider” wording is retired; no SNR control existed in the shipped upscaler contract.
 - ✅ Sharpen controls
 - ✅ Overwrite options
 

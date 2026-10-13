@@ -317,6 +317,38 @@ public class WorkflowOrderTests
     /// Tagging's report shows actionable guidance before the first batch.
     /// </summary>
     [AvaloniaFact]
+    public async Task Tagging_run_with_no_matching_items_shows_actionable_guidance()
+    {
+        var emptyFolder = Directory.CreateTempSubdirectory("synapic-no-tag-images-").FullName;
+        var shell = Shell("local", emptyFolder);
+        var window = new MainWindow { DataContext = shell };
+        window.Show();
+        try
+        {
+            shell.StartTaggingRouteCommand.Execute(null);
+            Dispatcher.UIThread.RunJobs();
+            var run = shell.Operations.TagRun;
+
+            await run.StartCommand.ExecuteAsync(null);
+            Dispatcher.UIThread.RunJobs();
+
+            const string guidance = "No images matched this source and its filters — choose a folder or scope with images, then run tagging again.";
+            Assert.Contains(run.LogLines, line => line.Contains(guidance, StringComparison.Ordinal));
+            var runBar = Assert.Single(window.GetVisualDescendants().OfType<RunStateBar>());
+            Assert.Contains(runBar.GetVisualDescendants().OfType<TextBlock>(),
+                text => text.Text == "No items matched the current filters" && EffectivelyVisible(text));
+            Assert.Contains(runBar.GetVisualDescendants().OfType<TextBlock>(),
+                text => text.Text?.Contains(guidance, StringComparison.Ordinal) == true && EffectivelyVisible(text));
+            Assert.Null(shell.TagOperation.Report);
+        }
+        finally
+        {
+            window.Close();
+            Directory.Delete(emptyFolder, recursive: true);
+        }
+    }
+
+    [AvaloniaFact]
     public void Tagging_report_shows_actionable_guidance_before_first_results()
     {
         var shell = Shell("local", Path.GetTempPath());
@@ -330,6 +362,14 @@ public class WorkflowOrderTests
             var report = Assert.Single(window.GetVisualDescendants().OfType<TextBlock>(),
                 text => text.Text == "No results yet — run tagging to create a report.");
             Assert.True(report.IsVisible);
+
+            shell.StartTaggingRouteCommand.Execute(null);
+            Dispatcher.UIThread.RunJobs();
+            var reportView = Assert.Single(window.GetVisualDescendants().OfType<Step4Results>());
+            Assert.Equal("No results yet — run tagging to create a report.", shell.Operations.TagReport.Summary);
+            Assert.Empty(shell.Operations.TagReport.Results);
+            Assert.Contains(reportView.GetVisualDescendants().OfType<TextBlock>(),
+                text => text.Text == shell.Operations.TagReport.Summary && EffectivelyVisible(text));
         }
         finally
         {

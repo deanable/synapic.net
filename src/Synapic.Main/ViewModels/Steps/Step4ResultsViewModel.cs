@@ -18,13 +18,53 @@ public partial class Step4ResultsViewModel : ViewModelBase
     private readonly Session _session;
     private readonly Step1DatasourceViewModel _step1;
     private readonly Step3ProcessViewModel _step3;
+    private readonly Func<string>? _exportPathProvider;
 
-    public Step4ResultsViewModel(Session session, Step1DatasourceViewModel step1, Step3ProcessViewModel step3)
+    public Step4ResultsViewModel(
+        Session session,
+        Step1DatasourceViewModel step1,
+        Step3ProcessViewModel step3,
+        Func<string>? exportPathProvider = null)
     {
         _session = session;
         _step1 = step1;
         _step3 = step3;
+        _exportPathProvider = exportPathProvider;
     }
+
+    private static string DefaultExportPath()
+    {
+        var name = $"synapic_results_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
+        return System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), name);
+    }
+
+    internal static string BuildCsv(IEnumerable<ProcessItemResult> results)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("filename,status,tags,category,keywords,description,probabilities,scoring_tier");
+        foreach (var r in results)
+        {
+            sb.AppendLine(string.Join(',',
+                Csv(r.FileName),
+                Csv(r.Status),
+                Csv(r.Tags),
+                Csv(r.Category ?? ""),
+                Csv(string.Join("; ", r.Keywords)),
+                Csv(r.Description ?? ""),
+                Csv(string.Join("; ", (r.Probabilities ?? new Dictionary<string, double>()).Select(kv => $"{kv.Key}={kv.Value:F3}"))),
+                Csv(r.Scoring?.Tier ?? "")));
+        }
+        return sb.ToString();
+    }
+
+    private static string Csv(string value)
+    {
+        if (value.Contains('"') || value.Contains(',') || value.Contains('\n') || value.Contains('\r'))
+            return $"\"{value.Replace("\"", "\"\"")}\"";
+        return value;
+    }
+
+    private string ExportPath => _exportPathProvider?.Invoke() ?? DefaultExportPath();
 
     public ObservableCollection<ProcessItemResult> Results { get; } = new();
 
@@ -36,6 +76,22 @@ public partial class Step4ResultsViewModel : ViewModelBase
 
     [ObservableProperty]
     private bool _isBusy;
+
+    [ObservableProperty]
+    private bool _isRetrying;
+
+    [ObservableProperty]
+    private bool _isVerifying;
+
+    partial void OnIsBusyChanged(bool value)
+    {
+        RetryFailedCommand.NotifyCanExecuteChanged();
+        VerifyDaminionCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnIsRetryingChanged(bool value) => CancelRetryCommand.NotifyCanExecuteChanged();
+
+    partial void OnIsVerifyingChanged(bool value) => CancelVerificationCommand.NotifyCanExecuteChanged();
 
     /// <summary>Refresh the grid from session results (called when entering the step).</summary>
     public void Refresh()
@@ -52,34 +108,10 @@ public partial class Step4ResultsViewModel : ViewModelBase
     {
         if (Results.Count == 0) return;
 
-        var defaultName = $"synapic_results_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
-        var path = System.IO.Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), defaultName);
-
-        var sb = new StringBuilder();
-        sb.AppendLine("filename,status,tags,category,keywords,description,probabilities,scoring_tier");
-        foreach (var r in Results)
-        {
-            sb.AppendLine(string.Join(',',
-                Csv(r.FileName),
-                Csv(r.Status),
-                Csv(r.Tags),
-                Csv(r.Category ?? ""),
-                Csv(string.Join("; ", r.Keywords)),
-                Csv(r.Description ?? ""),
-                Csv(string.Join("; ", (r.Probabilities ?? new Dictionary<string, double>()).Select(kv => $"{kv.Key}={kv.Value:F3}"))),
-                Csv(r.Scoring?.Tier ?? "")));
-        }
-        await File.WriteAllTextAsync(path, sb.ToString(), Encoding.UTF8);
+        var path = ExportPath;
+        await File.WriteAllTextAsync(path, BuildCsv(Results), Encoding.UTF8);
         Summary += $" — exported to {path}";
         SynapicLog.Info(nameof(Step4ResultsViewModel), $"Exported {Results.Count} results to {path}");
-    }
-
-    private static string Csv(string value)
-    {
-        if (value.Contains('"') || value.Contains(',') || value.Contains('\n'))
-            return $"\"{value.Replace("\"", "\"\"")}\"";
-        return value;
     }
 
     // ── Retry failed items ───────────────────────────────────────────────────
@@ -96,6 +128,7 @@ public partial class Step4ResultsViewModel : ViewModelBase
         if (failedFiles.Count == 0) return;
 
         IsBusy = true;
+        IsRetrying = true;
         Summary = $"Retrying {failedFiles.Count} failed item(s)…";
         try
         {
@@ -106,30 +139,43 @@ public partial class Step4ResultsViewModel : ViewModelBase
             var items = await WorkflowRunner.FetchItemsAsync(ds, ct);
             var subset = items.Where(i => failedFiles.Contains(i.FileName)).ToList();
 
-            // Drop the old failed entries; the rerun appends fresh results.
-            var dropped = _session.Results.RemoveAll(r => failedFiles.Contains(r.FileName));
-
+            // Stage fresh results separately. A retry that is cancelled or
+            // fails must not erase the old report rows without replacement.
+            var retriedResults = new List<ProcessItemResult>();
             var progress = new Progress<ProcessProgress>(p => Summary = $"Retry {p.Processed}/{p.Total}…");
-            await orchestrator.RunItemsAsync(ds, template, subset, progress, _ => Task.CompletedTask, ct, _session.Results,
+            await orchestrator.RunItemsAsync(ds, template, subset, progress, _ => Task.CompletedTask, ct, retriedResults,
                 pause: null, tagFields: _session.Engine.ToTagFieldSelection());
 
+            var dropped = _session.Results.RemoveAll(r => failedFiles.Contains(r.FileName));
+            _session.Results.AddRange(retriedResults);
             Refresh();
             UpdateSummary($"Retried {subset.Count} item(s) after {dropped} old entries", reset: false);
         }
         catch (OperationCanceledException)
         {
             Summary = "Retry cancelled";
+            SynapicLog.Info(nameof(Step4ResultsViewModel), "Retry cancelled");
+            Refresh();
+            UpdateSummary("Retry cancelled", reset: false);
         }
         catch (Exception e)
         {
             Summary = $"Retry failed: {e.Message}";
             SynapicLog.Error(nameof(Step4ResultsViewModel), $"Retry failed: {e}");
+            Refresh();
+            UpdateSummary($"Retry failed: {e.Message}", reset: false);
         }
         finally
         {
+            IsRetrying = false;
             IsBusy = false;
         }
     }
+
+    private bool CanCancelRetry() => IsRetrying;
+
+    [RelayCommand(CanExecute = nameof(CanCancelRetry))]
+    private void CancelRetry() => RetryFailedCommand.Cancel();
 
     // ── Verify Daminion writes ───────────────────────────────────────────────
 
@@ -151,10 +197,12 @@ public partial class Step4ResultsViewModel : ViewModelBase
         }
 
         IsBusy = true;
+        IsVerifying = true;
         var verified = 0;
         var problems = new List<string>();
         try
         {
+            Summary = $"Verifying 0/{targets.Count} Daminion writes…";
             foreach (var result in targets)
             {
                 ct.ThrowIfCancellationRequested();
@@ -179,13 +227,32 @@ public partial class Step4ResultsViewModel : ViewModelBase
             foreach (var problem in problems.Take(5))
                 SynapicLog.Warning(nameof(Step4ResultsViewModel), problem);
         }
+        catch (OperationCanceledException)
+        {
+            Summary = $"Verification cancelled ({verified}/{targets.Count} verified)";
+            SynapicLog.Info(nameof(Step4ResultsViewModel), Summary);
+        }
+        catch (Exception e)
+        {
+            Summary = $"Verification failed: {e.Message}";
+            SynapicLog.Error(nameof(Step4ResultsViewModel), $"Verification failed: {e}");
+        }
         finally
         {
+            // Refresh rebuilds the grid and its baseline summary from session
+            // results; preserve this verification attempt's outcome across it.
+            var verificationSummary = Summary;
+            IsVerifying = false;
             IsBusy = false;
             Refresh();
-            UpdateSummary(Summary, reset: false);
+            UpdateSummary(verificationSummary, reset: false);
         }
     }
+
+    private bool CanCancelVerification() => IsVerifying;
+
+    [RelayCommand(CanExecute = nameof(CanCancelVerification))]
+    private void CancelVerification() => VerifyDaminionCommand.Cancel();
 
     private void ReplaceResult(ProcessItemResult updated)
     {
@@ -209,7 +276,7 @@ public partial class Step4ResultsViewModel : ViewModelBase
             ? "No results yet — run tagging to create a report."
             : string.IsNullOrEmpty(suffix)
                 ? baseLine
-            : suffix.StartsWith("Verified") || suffix.Contains("Retry") || suffix.Contains("Retried")
+            : suffix.StartsWith("Verified") || suffix.StartsWith("Verification") || suffix.Contains("Retry") || suffix.Contains("Retried")
                 ? suffix
                 : $"{baseLine} — {suffix}";
         RetryFailedCommand.NotifyCanExecuteChanged();

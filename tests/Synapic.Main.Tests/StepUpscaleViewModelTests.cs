@@ -1,6 +1,11 @@
+using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Synapic.Main.Models;
 using Synapic.Main.ViewModels.Steps;
+using Synapic.Main.Views.Operation;
+using Synapic.Main.Views.Wizard;
 using Xunit;
 
 namespace Synapic.Main.Tests;
@@ -162,6 +167,325 @@ public class StepUpscaleViewModelTests
             // Both present → start is offered.
             var ready = VmForFolder(folder, sidecar: new FakeSidecar());
             Assert.True(ready.StartCommand.CanExecute(null));
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task Start_with_missing_local_source_reports_a_failed_run_in_the_output()
+    {
+        var missing = Path.Combine(Path.GetTempPath(), $"synapic-upscale-missing-{Guid.NewGuid():N}");
+        var vm = VmForFolder(missing, new UpscaleTestSidecar());
+        var window = new Window { Content = new RunStateBar { DataContext = vm }, Width = 1000, Height = 700 };
+        window.Show();
+        try
+        {
+            await vm.StartCommand.ExecuteAsync(null);
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Equal("Failed", vm.ProgressText);
+            Assert.Contains(vm.LogLines, line => line.Contains($"Folder not found: {missing}", StringComparison.Ordinal));
+            Assert.Contains(vm.LogLines, line => line.Contains("Upscale run failed:", StringComparison.Ordinal));
+            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(),
+                text => text.Text == vm.ProgressText && text.IsVisible);
+            Assert.False(vm.IsRunning);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task Start_with_items_but_no_outputs_shows_actionable_failure_guidance()
+    {
+        var folder = Directory.CreateTempSubdirectory("synapic-upscale-failed-").FullName;
+        try
+        {
+            var sample = FindSampleImage() ?? throw new InvalidOperationException("TestData/sample.jpg not found");
+            File.Copy(sample, Path.Combine(folder, "one.jpg"));
+            var sidecar = new UpscaleTestSidecar();
+            var vm = VmForFolder(folder, sidecar);
+            var window = new Window { Content = new RunStateBar { DataContext = vm }, Width = 1000, Height = 700 };
+            window.Show();
+            try
+            {
+                await vm.StartCommand.ExecuteAsync(null);
+                Dispatcher.UIThread.RunJobs();
+
+                const string guidance = "No upscale outputs were created — check the run log for failures, then adjust the source or settings before retrying.";
+                Assert.Equal(guidance, vm.ProgressText);
+                Assert.Contains(vm.LogLines, line => line.Contains(guidance, StringComparison.Ordinal));
+                Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(),
+                    text => text.Text == guidance && text.IsVisible);
+                Assert.Equal(1, sidecar.UpscaleCalls);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task Stop_during_upscale_cancels_the_run_and_restores_idle_state()
+    {
+        var folder = Directory.CreateTempSubdirectory("synapic-upscale-cancel-").FullName;
+        try
+        {
+            var sample = FindSampleImage() ?? throw new InvalidOperationException("TestData/sample.jpg not found");
+            File.Copy(sample, Path.Combine(folder, "one.jpg"));
+            var enteredUpscale = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var sidecar = new UpscaleTestSidecar
+            {
+                CancellableUpscaleResult = async ct =>
+                {
+                    enteredUpscale.TrySetResult();
+                    await Task.Delay(Timeout.Infinite, ct);
+                    return new Synapic.Shared.Contracts.UpscaleResponse();
+                },
+            };
+            var vm = VmForFolder(folder, sidecar);
+            var window = new Window { Content = new RunStateBar { DataContext = vm }, Width = 1000, Height = 700 };
+            window.Show();
+            try
+            {
+                var run = vm.StartCommand.ExecuteAsync(null);
+                await enteredUpscale.Task.WaitAsync(TimeSpan.FromSeconds(5));
+                Assert.True(vm.IsRunning);
+                Assert.True(vm.StopCommand.CanExecute(null));
+
+                vm.StopCommand.Execute(null);
+                await run;
+                Dispatcher.UIThread.RunJobs();
+
+                Assert.Equal("Stopped", vm.ProgressText);
+                Assert.Contains(vm.LogLines, line => line.Contains("Upscale stopped by user.", StringComparison.Ordinal));
+                Assert.False(vm.IsRunning);
+                Assert.True(vm.IsIdle);
+                Assert.False(vm.StopCommand.CanExecute(null));
+                Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(),
+                    text => text.Text == "Stopped" && text.IsVisible);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task Start_with_mixed_success_and_failure_reports_partial_completion_not_empty_output()
+    {
+        var folder = Directory.CreateTempSubdirectory("synapic-upscale-partial-").FullName;
+        var window = (Window?)null;
+        try
+        {
+            var sample = FindSampleImage() ?? throw new InvalidOperationException("TestData/sample.jpg not found");
+            var goodPath = Path.Combine(folder, "good.jpg");
+            File.Copy(sample, goodPath);
+            File.Copy(sample, Path.Combine(folder, "bad.jpg"));
+            var sidecar = new UpscaleTestSidecar
+            {
+                UpscaleResult = request => request.ImagePath.EndsWith("bad.jpg", StringComparison.Ordinal)
+                    ? Task.FromResult(new Synapic.Shared.Contracts.UpscaleResponse())
+                    : CompleteFakeUpscale(request),
+            };
+            var vm = VmForFolder(folder, sidecar);
+            vm.SelectedWorkflow = 2;
+            window = new Window { Content = new RunStateBar { DataContext = vm }, Width = 1000, Height = 700 };
+            window.Show();
+
+            await vm.StartCommand.ExecuteAsync(null);
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Equal("Done. Processed 2, succeeded 1, failed 1", vm.ProgressText);
+            Assert.Contains(vm.LogLines, line => line.Contains("Batch finished: 1 ok, 1 failed, 2 total", StringComparison.Ordinal));
+            Assert.DoesNotContain(vm.LogLines, line => line.Contains("No upscale outputs were created", StringComparison.Ordinal));
+            Assert.True(File.Exists(Path.Combine(folder, "good_upscaled.jpg")));
+            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(),
+                text => text.Text == vm.ProgressText && text.IsVisible);
+        }
+        finally
+        {
+            window?.Close();
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    private static Task<Synapic.Shared.Contracts.UpscaleResponse> CompleteFakeUpscale(
+        Synapic.Shared.Contracts.UpscaleRequest request)
+    {
+        var output = Path.Combine(Path.GetDirectoryName(request.ImagePath)!,
+            $"{Path.GetFileNameWithoutExtension(request.ImagePath)}_upscaled{Path.GetExtension(request.ImagePath)}");
+        File.Copy(request.ImagePath, output, overwrite: true);
+        return Task.FromResult(new Synapic.Shared.Contracts.UpscaleResponse
+        {
+            OutputPath = output,
+            OriginalWidth = 32,
+            OriginalHeight = 24,
+            Width = 64,
+            Height = 48,
+            Workflow = "fast",
+            Factor = 2,
+        });
+    }
+
+    private static string? FindSampleImage()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        for (var i = 0; i < 6 && dir is not null; i++, dir = dir.Parent)
+        {
+            var candidate = Path.Combine(dir.FullName, "tests", "Synapic.Main.Tests", "TestData", "sample.jpg");
+            if (File.Exists(candidate)) return candidate;
+        }
+        return null;
+    }
+
+    private sealed class UpscaleTestSidecar : Synapic.Main.Services.IInferenceSidecar
+    {
+        public int UpscaleCalls { get; private set; }
+        public Func<Synapic.Shared.Contracts.UpscaleRequest, Task<Synapic.Shared.Contracts.UpscaleResponse>>? UpscaleResult { get; set; }
+        public Func<CancellationToken, Task<Synapic.Shared.Contracts.UpscaleResponse>>? CancellableUpscaleResult { get; set; }
+        public List<Synapic.Shared.Contracts.UpscaleRequest> UpscaleRequests { get; } = new();
+        public Synapic.Main.Services.SidecarStatus CurrentStatus => Synapic.Main.Services.SidecarStatus.Ready;
+        public int SidecarPort => 0;
+        public bool IsRunning => true;
+        public int ListModelsCalls { get; private set; }
+        public int DownloadCalls { get; private set; }
+        public Synapic.Shared.Contracts.ModelInfo[] Models { get; set; } = Array.Empty<Synapic.Shared.Contracts.ModelInfo>();
+#pragma warning disable CS0067
+        public event EventHandler<Synapic.Main.Services.SidecarStatusChangedEventArgs>? StatusChanged;
+        public event Action<string>? LogReceived;
+#pragma warning restore CS0067
+        public Task StartAsync(CancellationToken ct = default) => Task.CompletedTask;
+        public Task StopAsync(TimeSpan? gracefulTimeout = null) => Task.CompletedTask;
+        public Task<Synapic.Shared.Contracts.TagResponse> TagAsync(Synapic.Shared.Contracts.TagRequest request, CancellationToken ct = default)
+            => Task.FromResult(new Synapic.Shared.Contracts.TagResponse());
+        public Task<Synapic.Shared.Contracts.UpscaleResponse> UpscaleAsync(Synapic.Shared.Contracts.UpscaleRequest request, CancellationToken ct = default)
+        {
+            UpscaleCalls++;
+            UpscaleRequests.Add(request);
+            if (CancellableUpscaleResult is { } cancellable) return cancellable(ct);
+            return UpscaleResult is { } result
+                ? result(request)
+                : Task.FromResult(new Synapic.Shared.Contracts.UpscaleResponse());
+        }
+        public Task<Synapic.Shared.Contracts.ModelInfo[]> ListModelsAsync(CancellationToken ct = default)
+        {
+            ListModelsCalls++;
+            return Task.FromResult(Models);
+        }
+        public Task DownloadModelAsync(string modelId, CancellationToken ct = default)
+        {
+            DownloadCalls++;
+            return Task.CompletedTask;
+        }
+        public Task<Synapic.Shared.Contracts.HealthResponse> GetHealthAsync(CancellationToken ct = default)
+            => Task.FromResult(new Synapic.Shared.Contracts.HealthResponse());
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    [AvaloniaFact]
+    public async Task Model_picker_lists_and_downloads_through_the_sidecar()
+    {
+        var sidecar = new UpscaleTestSidecar
+        {
+            Models = [new Synapic.Shared.Contracts.ModelInfo { Id = "org/example-vlm", Task = "image-text-to-text", Downloaded = true }],
+        };
+        var session = new Session();
+        var vm = new Synapic.Main.ViewModels.Steps.Step2EngineViewModel(session, sidecar);
+        var view = new Step2Engine { DataContext = vm };
+        var window = new Window { Content = view, Width = 1000, Height = 700 };
+        window.Show();
+        try
+        {
+            await vm.RefreshModelsCommand.ExecuteAsync(null);
+            Assert.Equal(1, sidecar.ListModelsCalls);
+            var model = Assert.Single(vm.LocalModels);
+            Assert.Equal("org/example-vlm", model.Id);
+            Assert.Equal("1 local models found", vm.ModelsMessage);
+
+            vm.SelectedModel = model;
+            Assert.Equal("org/example-vlm", session.Engine.ModelId);
+            vm.ManualModelId = "org/example-vlm";
+            await vm.DownloadSelectedCommand.ExecuteAsync(null);
+            Assert.Equal(1, sidecar.DownloadCalls);
+            // The download command reloads the list after reporting the start,
+            // so the completed refresh is the stable final status.
+            Assert.Equal("1 local models found", vm.ModelsMessage);
+            Assert.Equal(2, sidecar.ListModelsCalls); // download completion refreshes the picker
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task Successful_upscale_creates_reported_output_and_preserves_the_source()
+    {
+        var folder = Directory.CreateTempSubdirectory("synapic-upscale-success-").FullName;
+        try
+        {
+            var sample = FindSampleImage() ?? throw new InvalidOperationException("TestData/sample.jpg not found");
+            var source = Path.Combine(folder, "one.jpg");
+            var output = Path.Combine(folder, "one_upscaled.jpg");
+            File.Copy(sample, source);
+            var originalBytes = await File.ReadAllBytesAsync(source);
+            var sidecar = new UpscaleTestSidecar
+            {
+                UpscaleResult = request =>
+                {
+                    Assert.Equal(source, request.ImagePath);
+                    Assert.NotNull(request.Options);
+                    Assert.Equal("fast", request.Options!.Workflow);
+                    Assert.Equal(2, request.Options.Factor);
+                    File.Copy(request.ImagePath, output);
+                    return Task.FromResult(new Synapic.Shared.Contracts.UpscaleResponse
+                    {
+                        OutputPath = output,
+                        OriginalWidth = 32,
+                        OriginalHeight = 24,
+                        Width = 64,
+                        Height = 48,
+                        Workflow = "fast",
+                        Factor = 2,
+                    });
+                },
+            };
+            var vm = VmForFolder(folder, sidecar);
+            vm.SelectedWorkflow = 2; // fast: no model inference required by this desktop test
+            var window = new Window { Content = new RunStateBar { DataContext = vm }, Width = 1000, Height = 700 };
+            window.Show();
+            try
+            {
+                await vm.StartCommand.ExecuteAsync(null);
+                Dispatcher.UIThread.RunJobs();
+
+                Assert.Equal(1, sidecar.UpscaleCalls);
+                Assert.Single(sidecar.UpscaleRequests);
+                Assert.True(File.Exists(output));
+                Assert.Equal(originalBytes, await File.ReadAllBytesAsync(source));
+                Assert.Equal("Done. Processed 1, succeeded 1, failed 0", vm.ProgressText);
+                Assert.Contains(vm.LogLines, line => line.Contains("Batch finished: 1 ok, 0 failed, 1 total", StringComparison.Ordinal));
+                Assert.DoesNotContain(vm.LogLines, line => line.Contains("No upscale outputs were created", StringComparison.Ordinal));
+            }
+            finally
+            {
+                window.Close();
+            }
         }
         finally
         {

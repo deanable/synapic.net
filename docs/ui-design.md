@@ -244,7 +244,9 @@ open findings):
 
 | Parameters | Output / Report |
 |---|---|
-| Preset (quality / realistic / balanced) · Scale factor (2× / 4×) · Precision (fp32 / fp16) · Output format (PNG / JPEG) · Quality / SNR · Sharpen · Output folder & overwrite policy | **Run upscale batch** + Stop · progress + ETA · completed/failed output list · **Open output folder** · **Retry failed** · run log · settings read-back line (`fast · 4x · precision auto · output keep · overwrite output`) |
+| Workflow (quality / balanced / fast) · Scale factor (2× / 4×) · Precision (auto / fp16 / fp32) · Output format (keep / JPEG / PNG / WEBP) · JPEG/WEBP quality · balanced-only denoise · sharpen · overwrite policy | **Run upscale batch** + Stop · progress + ETA · completed/failed output list · **Open output folder** · **Retry failed** · run log · settings read-back line (`fast · 4x · precision auto · output keep · overwrite output`) |
+
+**Accepted historical-checklist reconciliation (2026-10-13):** The superseded proposal's §4 names a distinct “realistic” preset and an SNR slider, but neither existed in the shipped upscaler contract. Preserve the actual quality/balanced/fast workflows and output-quality setting; do not invent a separate realistic mode or SNR control. The checklist evidence maps those two historical labels to the current behavior and marks them as retired wording, not missing product features.
 
 ---
 
@@ -361,7 +363,7 @@ Everything in `ui-redesign-proposal.md` §4 remains in scope; this table fixes
 | Results grid, CSV export, retry, verify Daminion | Tag → Output |
 | Hash algorithm, threshold, server-hash match, auto-select keep rule | Dedup → Parameters |
 | Duplicate group review, bulk Tag/Move/Delete, catalog removal | Dedup → Output |
-| Upscale presets, scale, precision, format, quality/SNR, sharpen, overwrite | Upscale → Parameters |
+| Upscale workflows (quality / balanced / fast), scale, precision, format, JPEG/WEBP quality, balanced denoise, sharpen, overwrite | Upscale → Parameters |
 | Upscale batch progress + output files | Upscale → Output |
 | Start/Stop/Build server, variants, health, fallback warning | Settings → Inference server (+ status in shell) |
 | Log view | Output run log per mode; full diagnostics in Settings → Logging |

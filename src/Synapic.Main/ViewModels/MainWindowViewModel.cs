@@ -48,6 +48,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private string? _detectedStale;
     private string? _lastServerErrorMessage;
     private CancellationTokenSource? _healthPollCts;
+    private CancellationTokenSource? _sidecarDownloadCts;
     private string _lastDownloadStatus = "";
     private string _lastReportedDevice = "";
 
@@ -622,6 +623,7 @@ public partial class MainWindowViewModel : ViewModelBase
             ServerDeviceText = "";
             DeviceNotice = null;
             _lastReportedDevice = "";
+            ApplyDownloadStatusCore(new HealthResponse());
         }
         // The last refusal (a stale build, or another launch failure) belongs to
         // the error state; keep it only while that state is current.
@@ -703,8 +705,21 @@ public partial class MainWindowViewModel : ViewModelBase
     private async Task DownloadVariantAsync(SidecarVariantViewModel variant, CancellationToken ct)
     {
         if (variant.IsDownloading) return;
-        await WithServerStoppedForReplacementAsync(
-            () => DownloadVariantCoreAsync(variant, ct), ct, "download");
+        using var operation = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        _sidecarDownloadCts = operation;
+        try
+        {
+            await WithServerStoppedForReplacementAsync(
+                () => DownloadVariantCoreAsync(variant, operation.Token), operation.Token, "download");
+        }
+        catch (OperationCanceledException) when (operation.IsCancellationRequested)
+        {
+            AppendLog($"[download] {variant.DisplayName} download cancelled.");
+        }
+        finally
+        {
+            if (ReferenceEquals(_sidecarDownloadCts, operation)) _sidecarDownloadCts = null;
+        }
     }
 
     /// <summary>
@@ -721,6 +736,7 @@ public partial class MainWindowViewModel : ViewModelBase
             await _sidecar.StopAsync();
         }
 
+        ct.ThrowIfCancellationRequested();
         try
         {
             await replace();
@@ -732,7 +748,7 @@ public partial class MainWindowViewModel : ViewModelBase
             if (restart && IsSidecarReady)
             {
                 AppendLog($"[{initiator}] Restarting the server on the replaced sidecar.");
-                await StartServerAsync(ct);
+                await StartServerAsync(CancellationToken.None);
             }
         }
     }
@@ -741,6 +757,7 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         if (variant.IsDownloading) return;
 
+        ct.ThrowIfCancellationRequested();
         foreach (var other in SidecarVariants)
         {
             other.CanDownload = false;
@@ -971,6 +988,7 @@ public partial class MainWindowViewModel : ViewModelBase
                 if (_sidecar.SidecarPort > 0) // idle while the port is still unknown
                 {
                     var health = await _sidecar.GetHealthAsync(ct).ConfigureAwait(false);
+                    ct.ThrowIfCancellationRequested();
                     ApplyDownloadStatus(health);
                     ApplyServerDevice(health.Device);
                 }
