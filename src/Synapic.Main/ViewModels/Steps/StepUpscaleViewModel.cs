@@ -215,12 +215,7 @@ public partial class StepUpscaleViewModel : RunStateViewModel
         if (_appSettingsStore is null || _hydratingUpscale) return;
         try
         {
-            var existing = _appSettingsStore.Load() ?? new AppSettingsState(
-                "system", "info", false, true, false,
-                "", 0, 0,
-                "PHash", 0.90, "Exact", false, false, false, false, 0, "",
-                0, 0, 0, 0, 95, 1.0, 0, true,
-                "", false, 100, false, 100, false);
+            var existing = _appSettingsStore.Load() ?? _appSettingsStore.Defaults;
             _appSettingsStore.Save(existing with
             {
                 UpscaleWorkflow = SelectedWorkflow,

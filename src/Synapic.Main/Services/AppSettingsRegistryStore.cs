@@ -21,6 +21,11 @@ public sealed record AppSettingsState(
     string LogLevel,
     bool ShowDiagnostics,
     bool AutoLaunchSidecar,
+
+    /// <summary>First-run automation: fetch the suited sidecar variant when
+    /// none exists, then start the server. Off restores ask-first.</summary>
+    bool AutoInstallSidecar,
+
     bool TelemetryEnabled,
 
     // Defaults for a new session
@@ -83,6 +88,46 @@ public sealed class AppSettingsRegistryStore
 
     private string EffectiveKeyPath => _keyPathOverride ?? KeyPath;
 
+    /// <summary>
+    /// A complete state whose values are the shipped app defaults — the same
+    /// state a first save would have produced. The load-then-modify writers
+    /// use it when the registry has nothing yet, so a step or the settings view
+    /// never has to carry its own positional copy of every default.
+    /// </summary>
+    public AppSettingsState Defaults => new AppSettingsState(
+        Theme: _typedConfig.Ui.Theme,
+        LogLevel: _typedConfig.Ui.LogLevel,
+        ShowDiagnostics: _typedConfig.Ui.ShowDiagnostics,
+        AutoLaunchSidecar: _typedConfig.Ui.AutoLaunchSidecar,
+        AutoInstallSidecar: _typedConfig.Ui.AutoInstallSidecar,
+        TelemetryEnabled: _typedConfig.Ui.TelemetryEnabled,
+        DefaultDevice: _typedConfig.Ui.DefaultDevice,
+        DefaultConfidenceThreshold: _typedConfig.Ui.DefaultConfidenceThreshold,
+        DefaultMaxItems: _typedConfig.Ui.DefaultMaxItems,
+        DedupAlgorithm: "PHash",
+        DedupThreshold: 0.90,
+        DedupServerHashMatch: "Exact",
+        DedupSelectOldest: false,
+        DedupSelectNewest: false,
+        DedupSelectSmallest: false,
+        DedupSelectLargest: false,
+        DedupSelectedAction: 0,
+        DedupMoveDestination: "",
+        UpscaleWorkflow: 0,
+        UpscaleFactor: 0,
+        UpscalePrecision: 0,
+        UpscaleOutputFormat: 0,
+        UpscaleJpegQuality: 95,
+        UpscaleDenoiseStrength: 1.0,
+        UpscaleSharpenAmount: 0,
+        UpscaleOverwriteExisting: true,
+        LocalPath: "",
+        LocalRecursive: false,
+        MaxItems: 100,
+        ProcessAll: false,
+        ResizeScale: 100,
+        UseThumbnailOverride: false);
+
     private static string V(string name) => name;
 
     /// <summary>Load the saved settings; null when nothing has been saved yet.</summary>
@@ -117,6 +162,7 @@ public sealed class AppSettingsRegistryStore
                 LogLevel: S("LogLevel") ?? _typedConfig.Ui.LogLevel,
                 ShowDiagnostics: B("ShowDiagnostics"),
                 AutoLaunchSidecar: I("AutoLaunchSidecar", 1) != 0,
+                AutoInstallSidecar: I("AutoInstallSidecar", 1) != 0,
                 TelemetryEnabled: B("TelemetryEnabled"),
                 DefaultDevice: S("DefaultDevice") ?? "",
                 DefaultConfidenceThreshold: D("DefaultConfidenceThreshold", 0),
@@ -171,6 +217,7 @@ public sealed class AppSettingsRegistryStore
             S("LogLevel", state.LogLevel);
             B("ShowDiagnostics", state.ShowDiagnostics);
             I("AutoLaunchSidecar", state.AutoLaunchSidecar ? 1 : 0);
+            I("AutoInstallSidecar", state.AutoInstallSidecar ? 1 : 0);
             B("TelemetryEnabled", state.TelemetryEnabled);
             S("DefaultDevice", state.DefaultDevice);
             D("DefaultConfidenceThreshold", state.DefaultConfidenceThreshold);
@@ -236,6 +283,7 @@ public sealed class AppSettingsRegistryStore
                 LogLevel: string.IsNullOrWhiteSpace(cfg.Ui.LogLevel) ? _typedConfig.Ui.LogLevel : cfg.Ui.LogLevel,
                 ShowDiagnostics: cfg.Ui.ShowDiagnostics,
                 AutoLaunchSidecar: cfg.Ui.AutoLaunchSidecar,
+                AutoInstallSidecar: cfg.Ui.AutoInstallSidecar,
                 TelemetryEnabled: cfg.Ui.TelemetryEnabled,
                 DefaultDevice: cfg.Ui.DefaultDevice,
                 DefaultConfidenceThreshold: cfg.Ui.DefaultConfidenceThreshold,

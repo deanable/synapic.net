@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.IO;
 using Avalonia;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -44,6 +45,8 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly Session _session;
     private readonly Func<string?> _findSidecarExecutable;
     private readonly Func<string, string?> _findSidecarVariant;
+    private readonly Func<ComputeAvailability> _computeProbe;
+    private readonly ConfigService? _config;
     private string? _detectedExe;
     private string? _detectedStale;
     private string? _lastServerErrorMessage;
@@ -51,6 +54,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private CancellationTokenSource? _sidecarDownloadCts;
     private string _lastDownloadStatus = "";
     private string _lastReportedDevice = "";
+    private bool _autoInstallAttempted;
 
     /// <param name="computeAvailabilityProbe">
     /// Overridable so a test can state what the machine can run instead of
@@ -77,6 +81,8 @@ public partial class MainWindowViewModel : ViewModelBase
         _download = download ?? new SidecarDownloadService();
         _help = help ?? new HelpService();
         _session = session;
+        _config = configService;
+        _computeProbe = computeAvailabilityProbe ?? ComputeAvailability.Detect;
         _findSidecarExecutable = sidecarExecutableLocator ?? InferenceSidecarService.FindExecutable;
         _findSidecarVariant = sidecarVariantLocator ?? InferenceSidecarService.FindExecutableForRid;
 
@@ -97,7 +103,8 @@ public partial class MainWindowViewModel : ViewModelBase
         AppSettings = new SettingsViewModel(
             _session,
             configProvider: () => configService ?? ResolveConfigService(),
-            availabilityProbe: computeAvailabilityProbe);
+            availabilityProbe: computeAvailabilityProbe,
+            appSettingsStore: appSettingsStore);
         AppSettings.Shell = this;
         AppSettings.PropertyChanged += (_, e) =>
         {
@@ -666,6 +673,27 @@ public partial class MainWindowViewModel : ViewModelBase
             : "Runs anywhere (CPU only); the safe default.";
 
     /// <summary>
+    /// The variant this machine should get when nobody chose (first-run automation):
+    /// the CUDA build when an NVIDIA driver is present, the CPU build otherwise.
+    /// Falls back to the first buildable RID when nothing matches, so the feature
+    /// degrades to the current behaviour rather than to a missing variant.
+    /// </summary>
+    public string RecommendedRid
+    {
+        get
+        {
+            var wantCuda = _computeProbe().Cuda;
+            var rids = InferenceSidecarService.BuildableRids();
+            foreach (var rid in rids)
+            {
+                var isCuda = rid.EndsWith("-cuda", StringComparison.OrdinalIgnoreCase);
+                if (isCuda == wantCuda) return rid;
+            }
+            return rids.FirstOrDefault() ?? "";
+        }
+    }
+
+    /// <summary>
     /// Rebuilds the variant list from the buildable RIDs for this machine and
     /// refreshes each row's on-disk state. Cheap enough to call on every
     /// detection (metadata only).
@@ -680,10 +708,12 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         var repoRoot = InferenceSidecarService.FindRepoRoot();
+        var recommended = RecommendedRid;
         foreach (var variant in SidecarVariants)
         {
             // A finished (or never-started) refresh re-arms the way of getting a variant.
             variant.CanDownload = true;
+            variant.IsRecommended = string.Equals(variant.Rid, recommended, StringComparison.OrdinalIgnoreCase);
             var exe = _findSidecarVariant(variant.Rid);
             variant.ApplyBuildState(exe, exe is null ? null : InferenceSidecarService.DescribeStaleness(exe, repoRoot));
         }
@@ -769,6 +799,10 @@ public partial class MainWindowViewModel : ViewModelBase
         try
         {
             var destination = InferenceSidecarService.SidecarInstallPath(variant.Rid);
+            // A first-ever download creates the per-user variant folder; the
+            // race-free CreateDirectory is a no-op once it exists.
+            var destinationDir = Path.GetDirectoryName(destination);
+            if (!string.IsNullOrEmpty(destinationDir)) Directory.CreateDirectory(destinationDir);
             // Progress<T> marshals back to this (UI) thread as it is raised.
             var progress = new Progress<SidecarDownloadProgress>(variant.ApplyProgress);
             await _download.DownloadAsync(variant.Rid, destination, progress, ct);
@@ -789,6 +823,73 @@ public partial class MainWindowViewModel : ViewModelBase
             IsBusy = false;
             // Re-detect: picks the new executable up and unlocks the wizard.
             await DetectServerAsync();
+        }
+    }
+
+    /// <summary>
+    /// First-run automation: with no sidecar on this machine, fetch the variant
+    /// that suits it (CUDA when an NVIDIA driver is present, the CPU build
+    /// otherwise) without a button press — the non-technical-user requirement
+    /// ("install, then it works"). One attempt per process: a failed download
+    /// must not become a retry loop; the user retries or switches variant by
+    /// hand in the setup panel, which stays visible and fully controls this.
+    /// Never runs without the app config (tests construct the shell none), and
+    /// <c>ui.autoInstallSidecar=false</c> restores the old ask-first behaviour.
+    /// Awaited by <see cref="DetectServerAsync"/> so the whole chain — detect,
+    /// install, start — is one deterministic sequence (App startup runs it
+    /// fire-and-forget, so this only serializes work inside the chain).
+    /// </summary>
+    private async Task AutoInstallIfAllowedAsync()
+    {
+        if (_autoInstallAttempted) return;
+        if (_config is null || !_config.Load().Ui.AutoInstallSidecar) return;
+        if (IsBusy) return;   // a download or build is already in flight
+
+        var variant = SidecarVariants.FirstOrDefault(v =>
+            string.Equals(v.Rid, RecommendedRid, StringComparison.OrdinalIgnoreCase) && !v.IsBuilt);
+        if (variant is null || variant.IsBusy) return;
+
+        _autoInstallAttempted = true;
+        AppendLog($"[setup] Downloading the recommended {variant.DisplayName} sidecar automatically " +
+                  "(pick another variant in the list to override this).");
+        SynapicLog.Info(nameof(MainWindowViewModel),
+            $"Automatic first-run sidecar install: fetching '{variant.Rid}' " +
+            "(no sidecar on this machine and ui.autoInstallSidecar=true)");
+        await AutoInstallAsync(variant);
+    }
+
+    /// <summary>
+    /// The download half of the automation, then — when it landed and the
+    /// auto-launch preference says so — an automatic first boot of the server,
+    /// which takes over the model download with its own progress. Runs through
+    /// the row's own command so the row's Cancel button cancels this download
+    /// like any hand-started one.
+    /// </summary>
+    private async Task AutoInstallAsync(SidecarVariantViewModel variant)
+    {
+        try
+        {
+            await variant.DownloadCommand.ExecuteAsync(null);
+
+            if (IsSidecarReady && _config?.Load().Ui.AutoLaunchSidecar is not false)
+            {
+                AppendLog("[setup] Sidecar ready - starting the inference server…");
+                await StartServerAsync(CancellationToken.None);
+            }
+            else if (!IsSidecarReady)
+            {
+                AppendLog("[setup] Automatic download ended without an executable " +
+                          "- the setup panel above shows what happened.");
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            AppendLog("[setup] Automatic install cancelled - choose a variant by hand when you are ready.");
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Warning(nameof(MainWindowViewModel), $"Automatic sidecar install failed: {e.Message}");
+            AppendLog($"[setup] Automatic install failed: {e.Message} - use the setup panel to retry.");
         }
     }
 
@@ -907,6 +1008,7 @@ public partial class MainWindowViewModel : ViewModelBase
             AppendLog(missing.Length > 0
                 ? $"[server] No inference server downloaded. Download one of: {missing}."
                 : "[server] Inference server not found in this installation.");
+            await AutoInstallIfAllowedAsync();
             return;
         }
 

@@ -15,7 +15,7 @@
   <StackPanel Spacing="8" help:HelpScope.Topic="first-run-sidecar.html">
     <TextBlock Text="Inference server" Classes="sectionTitle" />
     <TextBlock Classes="hint" TextWrapping="Wrap"
-               Text="The local sidecar that runs the models. Nothing can be tagged until one is ready; the rest of the application stays disabled until then." />
+               Text="The local sidecar that runs the models. Nothing can be tagged until one is ready; when none is installed yet, the first one this machine needs is downloaded automatically (mark below) and the server is started afterward. Picking another variant by hand always stays possible." />
 
     <WrapPanel>
       <Ellipse Width="12" Height="12" VerticalAlignment="Center" Margin="0,0,8,8"
@@ -39,6 +39,10 @@
                 IsChecked="{Binding AppSettings.AutoLaunchSidecar}" VerticalAlignment="Center"
                 Margin="0,0,8,8"
                 ToolTip.Tip="On: the sidecar starts with the app and stops with it. Off: Start/Stop only, by hand." />
+      <CheckBox Content="Download a missing sidecar automatically"
+                IsChecked="{Binding AppSettings.AutoInstallSidecar}" VerticalAlignment="Center"
+                Margin="0,0,8,8"
+                ToolTip.Tip="On: when this machine has no sidecar yet, the variant it needs (CUDA with an NVIDIA GPU, the CPU build otherwise) is downloaded and the server started — no button press. Off: choose a variant by hand." />
     </WrapPanel>
 
     <!-- What the server reports about the device it is really using, when it is
@@ -101,6 +105,10 @@
             </WrapPanel>
             <TextBlock Text="{Binding Detail}" Opacity="0.6" FontSize="11"
                        TextWrapping="Wrap" Margin="18,2,0,0" />
+            <TextBlock Text="{Binding RecommendedText}" IsVisible="{Binding IsRecommended}"
+                       FontWeight="SemiBold" FontSize="11" Opacity="0.85"
+                       TextWrapping="Wrap" Margin="18,2,0,0"
+                       ToolTip.Tip="This is the variant first-run automation fetches when no sidecar is installed yet: a CUDA build when an NVIDIA driver is present, the CPU build otherwise." />
             <TextBlock Text="{Binding StaleText}" IsVisible="{Binding IsStale}"
                        Foreground="{DynamicResource SynapicWarningBrush}"
                        FontSize="11" TextWrapping="Wrap" Margin="18,2,0,0" />

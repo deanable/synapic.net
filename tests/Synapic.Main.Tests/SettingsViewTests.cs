@@ -250,23 +250,30 @@ public class SettingsViewTests
     }
 
     /// <summary>
-    /// The other direction: with nothing configured, the Defaults section changes
-    /// nothing - a first run keeps the shipped engine defaults (and the panel
-    /// shows those, because they are what the app is running with).
+    /// The other direction: with nothing configured at all, Auto is what
+    /// applies — the session opens on the device this machine can run (CUDA
+    /// when an NVIDIA driver is present, CPU otherwise; the R20 fix's user
+    /// requirement), while everything else keeps the shipped values. The panel
+    /// reports the Auto choice, so file and form agree.
     /// </summary>
     [AvaloniaFact]
-    public void A_settings_file_without_defaults_leaves_the_shipped_values_alone()
+    public void A_settings_file_without_defaults_autoselects_the_appropriate_device()
     {
         using var temp = new TempConfig();
         var session = new Session();
-        var shipped = (session.Engine.Device, session.Engine.ConfidenceThreshold, session.Datasource.MaxItems);
+        var shippedRest = (session.Engine.ConfidenceThreshold, session.Datasource.MaxItems);
 
         var shell = NewShell(temp.Service, session);
 
-        Assert.Equal(shipped, (session.Engine.Device, session.Engine.ConfidenceThreshold, session.Datasource.MaxItems));
-        Assert.Equal("CPU", shell.AppSettings.DefaultDeviceText);
-        Assert.Equal(shipped.Item2, shell.AppSettings.DefaultConfidenceThreshold);
-        Assert.Equal(shipped.Item3, shell.AppSettings.DefaultMaxItems);
+        Assert.Equal(
+            ComputeAvailability.Detect().Cuda ? "cuda" : "cpu",
+            session.Engine.Device);
+        Assert.Equal("Auto (recommended)", shell.AppSettings.DefaultDeviceText);
+
+        // Everything but the device stays on the shipped values.
+        Assert.Equal(shippedRest, (session.Engine.ConfidenceThreshold, session.Datasource.MaxItems));
+        Assert.Equal(shippedRest.Item1, shell.AppSettings.DefaultConfidenceThreshold);
+        Assert.Equal(shippedRest.Item2, shell.AppSettings.DefaultMaxItems);
     }
 
     /// <summary>

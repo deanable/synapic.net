@@ -95,6 +95,14 @@ public sealed class UiSettings
     // Server lifecycle (user requirement): start with the app, stop with the
     // app. Set to false only for manual Start/Stop usage.
     public bool AutoLaunchSidecar { get; set; } = true;
+
+    /// <summary>
+    /// First-run automation: when no sidecar executable exists on this machine,
+    /// download the variant that suits it (CUDA when an NVIDIA driver is
+    /// present, the CPU build otherwise) without a button press, then start the
+    /// server. Off = the user picks a variant in the setup panel, as before.
+    /// </summary>
+    public bool AutoInstallSidecar { get; set; } = true;
     public bool TelemetryEnabled { get; set; }
 
     /// <summary>

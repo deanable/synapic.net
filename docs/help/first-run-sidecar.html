@@ -26,7 +26,21 @@ sends it one request per image, and shuts it down when the app closes.</p>
 <p>You only see it in two places: the status dot at the bottom of the sidebar,
 and the <span class="ui">Inference server</span> section in the Settings view.</p>
 
-<h2>Download one</h2>
+<h2>Download one &mdash; automatically on a first run</h2>
+
+<p>On a machine with no server yet, Synapic does the first download without a
+button press: it picks the variant that suits the machine &mdash;
+<span class="ui">CUDA (NVIDIA GPU)</span> when an NVIDIA driver is present, the
+CPU build otherwise &mdash; fetches it, and starts the server when it lands.
+That row carries a <span class="ui">Recommended for this machine</span> note.
+The whole sequence is logged in the app log, and the transfer shows its own
+progress bar and stage, so the app is never silently working.</p>
+
+<p>You keep full control: press <span class="ui">Cancel download</span> on the
+row to stop it, choose a different row, or turn the automation off with the
+<span class="ui">Download a missing sidecar automatically</span> switch in the
+<span class="ui">Inference server</span> section. With the switch off (or now after one attempt this session),
+downloading is entirely by hand, as follows.</p>
 
 <ol class="steps">
 <li>Look at the <span class="ui">Inference</span> tab in the Settings view. Each
@@ -45,9 +59,16 @@ the packages, or a source checkout.</li>
 <span class="ui">Cancel download</span> on that row to stop it. A cancelled or
 failed download leaves the row available to try again.</li>
 <li>When the row reads <span class="ui">Built</span> with a size, the server can
-start. Synapic starts it automatically; the status text moves to
+start. Synapic starts it automatically on the next app launch, or press
+<span class="ui">Start Server</span>; the status text moves to
 <span class="ui">Server running (port &hellip;)</span>.</li>
 </ol>
+
+<p>Downloaded servers are stored per variant in your own data folder &mdash;
+<span class="path">%LOCALAPPDATA%\Synapic\sidecars\<code>&lt;variant&gt;</code>\</span>
+&mdash; which Synapic can always write to, and where the two variants stay side
+by side instead of replacing each other. A server bundled with the installer
+sits next to the app and keeps working regardless.</p>
 
 <p>Synapic also checks GitHub for a newer prebuilt server every time it starts.
 When the release page carries a fresher executable than the one on disk &mdash;
@@ -73,8 +94,8 @@ first run. To replace the server by hand, drop a downloaded
 
 <table>
 <tr><th class="setting">Variant</th><th>When to choose it</th></tr>
-<tr><td><span class="ui">CPU</span></td><td>Always a safe choice. Works on every machine, needs no GPU driver, and is what to download first. Tagging takes several seconds per image.</td></tr>
-<tr><td><span class="ui">CUDA (NVIDIA GPU)</span></td><td>When the machine has an NVIDIA card with a current driver. The download is larger (about 2.5 GB), and it falls back to CPU if no usable GPU is present, so it is safe to install anywhere.</td></tr>
+<tr><td><span class="ui">CPU</span></td><td>Always a safe choice. Works on every machine, needs no GPU driver, and is what a machine without an NVIDIA driver gets automatically. Tagging takes several seconds per image.</td></tr>
+<tr><td><span class="ui">CUDA (NVIDIA GPU)</span></td><td>When the machine has an NVIDIA card with a current driver &mdash; which is exactly what Synapic recommends and fetches automatically on such a machine. The download is larger (about 2.5 GB), and it falls back to CPU if no usable GPU is present, so it is safe to install anywhere.</td></tr>
 </table>
 
 <div class="tip">
@@ -116,8 +137,12 @@ first, close Synapic, then replace the file.</p>
 
 <h2>The model itself</h2>
 
-<p>Downloading a server does not yet fetch the model. The model arrives the first
-time an image is tagged, about 860 MB, and is cached per machine under <span
+<p>Downloading a server does not yet fetch the model. Once the server starts,
+Synapic hands it the machine's model cache folder, and the server downloads the
+shipped model (about 860 MB) in the background &mdash; a boot usually completes
+before the model is finished. Progress for both appears live in the sidebar:
+<span class="ui">Downloading model: 310 / 860 MB (36%)</span>. The model is
+cached per machine under <span
 class="path">%LOCALAPPDATA%\Synapic\models</span>. Later runs, and other
 installs of Synapic on the same machine, reuse it.</p>
 
@@ -133,7 +158,7 @@ href="admin-deploy.html">Deploying to many machines</a>.</p>
 <tr><td><span class="ui">Server not detected</span> and no rows at all</td><td>There is no source checkout and the latest release has nothing for this machine's platform either. Install a release build that includes one.</td></tr>
 <tr><td>Download fails part-way</td><td>The log drawer names the release, the asset and the HTTP status, and the row keeps offering Download. A broken download is usually the network; retry after it is back.</td></tr>
 <tr><td>Download fails</td><td>The log drawer names the release, the asset and the HTTP status. The usual cause is a release without this platform's server, or no network. Retry when the release carries the platform or the network is back.</td></tr>
-<tr><td>Status stuck on <span class="ui">Server starting&hellip;</span></td><td>A cold start really can take up to two minutes &mdash; the 2.7 GB CUDA executable is unpacked by Windows before anything runs. If it exceeds that, the log says why; see <a href="troubleshooting.html#sidecar">Troubleshooting: the inference server</a>.</td></tr>
+<tr><td>Status stuck on <span class="ui">Server starting&hellip;</span></td><td>A cold start really can take several minutes &mdash; the executable is unpacked and virus-scanned by Windows before anything runs (the 2.7 GB CUDA one especially). Synapic waits patiently and keeps logging <span class="ui">Still waiting for port file</span> meanwhile; the log names the wait budget for your bundle. If it exceeds that, the log says why; see <a href="troubleshooting.html#sidecar">Troubleshooting: the inference server</a>.</td></tr>
 <tr><td><span class="ui">stale build, rebuild recommended</span>, or <span class="ui">Update available</span> on a row</td><td>Developer checkouts only: the server executable is older than the inference source it was built from. Use <span class="ui">Download</span> on that row, or hand-replace the file with a fetched release; a running server is stopped and started again on the replacement.</td></tr>
 </table>
 

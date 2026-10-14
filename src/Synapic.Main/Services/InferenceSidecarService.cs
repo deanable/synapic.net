@@ -238,7 +238,8 @@ public sealed class InferenceSidecarService : IInferenceSidecar
     /// <summary>
     /// Locates the built sidecar for one specific RID. A packaged install
     /// bundles a single executable next to the app, which satisfies whichever
-    /// RID matches this machine; dev checkouts look in artifacts/&lt;rid&gt;.
+    /// RID matches this machine; downloaded variants live per RID in the user's
+    /// writable sidecar directory; dev checkouts look in artifacts/&lt;rid&gt;.
     /// </summary>
     public static string? FindExecutableForRid(string rid)
     {
@@ -248,6 +249,12 @@ public sealed class InferenceSidecarService : IInferenceSidecar
             if (File.Exists(bundled)) return bundled;
         }
 
+        // A download the user fetched (anything an installed app picked up from
+        // the release page) lands in the per-user directory, which is writable
+        // for an ordinary user where the app folder (Program Files) is not.
+        var userPath = Path.Combine(UserSidecarRoot(), rid, ExeName);
+        if (File.Exists(userPath)) return userPath;
+
         var repoRoot = FindRepoRoot();
         if (repoRoot is null) return null;
 
@@ -256,18 +263,49 @@ public sealed class InferenceSidecarService : IInferenceSidecar
     }
 
     /// <summary>
-    /// Where a sidecar for <paramref name="rid"/> belongs, i.e. where a download
-    /// must put it for detection to find it: artifacts/&lt;rid&gt; in a dev checkout
-    /// (the folder the build button writes to), next to the app otherwise.
+    /// Root of the per-user sidecar directory: <c>%LOCALAPPDATA%\Synapic\sidecars</c>
+    /// on Windows (writable for an ordinary user, unlike the app's own folder),
+    /// <c>$XDG_DATA_HOME</c>/<c>~/.local/share</c> elsewhere. One folder per RID
+    /// beneath it, so the CPU and CUDA variants can coexist even though every
+    /// executable is named the same. <c>SYNAPIC_SIDECAR_ROOT</c> overrides the
+    /// root - the seam tests and custom installs use to relocate it.
     /// </summary>
-    public static string SidecarInstallPath(string rid)
+    /// <summary>Environment variable relocating the per-user sidecar directory
+    /// (tests and custom installs).</summary>
+    public const string UserSidecarRootEnvVar = "SYNAPIC_SIDECAR_ROOT";
+
+    public static string UserSidecarRoot()
     {
-        var repoRoot = FindRepoRoot();
-        var dir = repoRoot is null
-            ? AppContext.BaseDirectory
-            : Path.Combine(repoRoot, "artifacts", rid);
-        return Path.Combine(dir, ExeName);
+        var overrideRoot = Environment.GetEnvironmentVariable(UserSidecarRootEnvVar);
+        if (!string.IsNullOrWhiteSpace(overrideRoot)) return overrideRoot;
+
+        if (OperatingSystem.IsWindows())
+        {
+            return Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Synapic", "sidecars");
+        }
+
+        var dataHome = Environment.GetEnvironmentVariable("XDG_DATA_HOME");
+        var baseDir = string.IsNullOrEmpty(dataHome)
+            ? Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                ".local", "share")
+            : dataHome;
+        return Path.Combine(baseDir, "Synapic", "sidecars");
     }
+
+    /// <summary>
+    /// Where a <em>downloaded</em> sidecar for <paramref name="rid"/> belongs:
+    /// a per-RID folder under the user's writable sidecar directory. Always the
+    /// user directory, in a dev checkout too — the build button's artifacts
+    /// output and the bundled installer executable stay where they are, and a
+    /// download must never collide with a checkout's own build output. Per-RID
+    /// folders keep the CPU and CUDA variants from overwriting each other
+    /// (code review R11); <see cref="FindExecutableForRid"/> looks here first.
+    /// </summary>
+    public static string SidecarInstallPath(string rid) =>
+        Path.Combine(UserSidecarRoot(), rid, ExeName);
 
     /// <summary>
     /// Set while the launched exe is older than the sidecar source (dev
@@ -343,6 +381,20 @@ public sealed class InferenceSidecarService : IInferenceSidecar
     {
         var bundled = Path.Combine(AppContext.BaseDirectory, ExeName);
         if (File.Exists(bundled)) return bundled;
+
+        // Downloaded variants first (an installed app's only source of them),
+        // then the dev checkout's artifacts. Preferred RID before any other.
+        var userRoot = UserSidecarRoot();
+        var userPreferred = Path.Combine(userRoot, PreferredRid(), ExeName);
+        if (File.Exists(userPreferred)) return userPreferred;
+        if (Directory.Exists(userRoot))
+        {
+            foreach (var dir in Directory.EnumerateDirectories(userRoot))
+            {
+                var candidate = Path.Combine(dir, ExeName);
+                if (File.Exists(candidate)) return candidate;
+            }
+        }
 
         var repoRoot = FindRepoRoot();
         if (repoRoot is null) return null;
@@ -690,17 +742,20 @@ public sealed class InferenceSidecarService : IInferenceSidecar
     /// <summary>
     /// Wait budget for the port file, scaled to the size of the launched exe.
     /// PyInstaller onefile bootloaders unpack to a temp dir before the program
-    /// runs, and that unpack is the whole of a cold start: the 227 MB CPU bundle
-    /// measured ~25 s to its port file, the 2.7 GB CUDA bundle is 12x the bytes
-    /// and proportionally slower when Defender re-scans a just-downloaded exe
-    /// under app startup disk contention. Budget = 25 s base + 3 s per 100 MB,
-    /// clamped to [40 s, 10 min]; never below the flat /health budget of 120 s
-    /// for bundles small enough that 120 s was already the answer.
+    /// runs, and that unpack is the whole of a cold start. Measured here
+    /// (2026-10-14, cold cache with Defender scanning): the 226 MB CPU bundle
+    /// took ~130 s to its port file — the old 25 s base + 3 s per 100 MB
+    /// formula bottoms out at the 40 s floor for every bundle under 500 MB
+    /// and declares a healthy boot dead. Budget = 25 s base + 0.5 s per MB,
+    /// clamped to [180 s, 10 min]: a warm start still returns the moment the
+    /// file lands, so a patient budget only costs a longer wait, never a slow
+    /// boot (the UI stays on Starting with “unpacking/booting” log lines
+    /// every 2 s meanwhile).
     /// </summary>
     private static TimeSpan PortFileTimeoutFor(string sidecarPath)
     {
         var megaBytes = PortFileTimeoutExeSize(sidecarPath) / (1024.0 * 1024.0);
-        var seconds = Math.Clamp(25.0 + megaBytes * 0.03, 40.0, 600.0);
+        var seconds = Math.Clamp(25.0 + megaBytes * 0.5, 180.0, 600.0);
         return TimeSpan.FromSeconds(seconds);
     }
 

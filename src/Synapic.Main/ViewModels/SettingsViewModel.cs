@@ -47,9 +47,14 @@ public partial class SettingsViewModel : ViewModelBase
     public static readonly IReadOnlyList<string> LogLevelOptions =
         new[] { "Verbose", "Debug", "Information", "Warning", "Error" };
 
-    /// <summary>Default devices a new session may start on (§5 Defaults).</summary>
+    /// <summary>Default devices a new session may start on (§5 Defaults).
+    /// Auto is the shipped choice: the machine is probed when a new session has
+    /// no saved engine state (CUDA when an NVIDIA driver is present, CPU
+    /// otherwise). The other options are an explicit choice, which a later
+    /// seeding never overrides.</summary>
     public static readonly IReadOnlyList<SettingOption> DefaultDeviceOptions = new[]
     {
+        new SettingOption("Auto (recommended)", ""),
         new SettingOption("CPU", "cpu"),
         new SettingOption("CUDA", "cuda"),
         new SettingOption("MPS", "mps"),
@@ -59,12 +64,14 @@ public partial class SettingsViewModel : ViewModelBase
     private readonly Func<ConfigService?> _configProvider;
     private readonly Func<ComputeAvailability> _availabilityProbe;
     private readonly Action<string> _openExternal;
+    private readonly AppSettingsRegistryStore? _appSettingsStore;
 
     public SettingsViewModel(
         Session session,
         Func<ConfigService?>? configProvider = null,
         Action<string>? openExternal = null,
-        Func<ComputeAvailability>? availabilityProbe = null)
+        Func<ComputeAvailability>? availabilityProbe = null,
+        AppSettingsRegistryStore? appSettingsStore = null)
     {
         _session = session;
         _configProvider = configProvider ?? (() => null);
@@ -72,6 +79,11 @@ public partial class SettingsViewModel : ViewModelBase
         // Same overridable machine probe the engine form uses, so the CUDA
         // preference can be tested without depending on the GPU under the runner.
         _availabilityProbe = availabilityProbe ?? ComputeAvailability.Detect;
+        // When present, every save flows into the registry store as well (load,
+        // modify this view's fields, save): the app startup reads the registry
+        // when it has anything, so a toggle must be written the same place it
+        // is read from or it would not survive the next launch.
+        _appSettingsStore = appSettingsStore;
 
         // Loaded through the field initializers' defaults when there is no config
         // (a test, or an install that has never saved one): the panel then shows
@@ -207,6 +219,22 @@ public partial class SettingsViewModel : ViewModelBase
         Persist();
     }
 
+    /// <summary>
+    /// First-run automation: when this machine has no sidecar at all, fetch the
+    /// variant that suits it (CUDA with an NVIDIA driver, the CPU build
+    /// otherwise) and start the server — no button press. Off restores the old
+    /// behaviour where the user picks a variant in the setup panel.
+    /// </summary>
+    [ObservableProperty]
+    private bool _autoInstallSidecar = true;
+
+    partial void OnAutoInstallSidecarChanged(bool value)
+    {
+        SynapicLog.Info(nameof(SettingsViewModel),
+            $"Inference server: auto-install {(value ? "on" : "off")} (applies when no sidecar exists)");
+        Persist();
+    }
+
     // ── Defaults (a session with no saved engine state) ───────────────────
 
     [ObservableProperty]
@@ -250,25 +278,41 @@ public partial class SettingsViewModel : ViewModelBase
     /// calls this once, before the step view models hydrate, so the form opens
     /// on these values rather than on the shipped ones.
     ///
-    /// Device preference (user request): when the saved default is empty — the
-    /// user has never picked one — CUDA is preferred when the machine can run
-    /// it. A saved default ("cpu" on a GPU machine) is always respected: the
-    /// preference seeds a first run, it never overrides an explicit choice.
+    /// Device preference (user request): Auto — the saved default is empty —
+    /// probes the machine and prefers CUDA when it can run it, CPU otherwise.
+    /// A saved default is respected when the machine can actually run it (a
+    /// "cuda" default on a machine with no NVIDIA driver, or "mps" outside
+    /// macOS, falls back to the probe so the session never opens on a device
+    /// this machine cannot use).
     /// </summary>
     public void ApplyDefaultsToNewSession()
     {
-        var device = DefaultDeviceOption.Value;
-        if (device.Length == 0)
+        var savedDefault = string.Empty;
+        try
         {
-            // Seed order: saved default → CUDA when able → CPU.
-            device = _availabilityProbe().Cuda ? "cuda" : "cpu";
+            savedDefault = (_configProvider()?.Load()?.Ui.DefaultDevice ?? "").Trim().ToLowerInvariant();
         }
+        catch (Exception e)
+        {
+            SynapicLog.Debug(nameof(SettingsViewModel), $"Saved default device unreadable: {e.Message}");
+        }
+
+        var availability = _availabilityProbe();
+        var device = savedDefault switch
+        {
+            "cpu" => "cpu",
+            "cuda" when availability.Cuda => "cuda",
+            "mps" when availability.Mps => "mps",
+            // Auto, or a saved default this machine cannot honour.
+            _ => availability.Cuda ? "cuda" : "cpu",
+        };
+
         _session.Engine.Device = device;
         if (DefaultConfidenceThreshold > 0) _session.Engine.ConfidenceThreshold = DefaultConfidenceThreshold;
         if (DefaultMaxItems > 0) _session.Datasource.MaxItems = DefaultMaxItems;
 
         SynapicLog.Info(nameof(SettingsViewModel),
-            $"New session defaults applied: device={_session.Engine.Device}, " +
+            $"New session defaults applied: savedDefault='{savedDefault}', device={_session.Engine.Device}, " +
             $"confidence={_session.Engine.ConfidenceThreshold:0.00}, max items={_session.Datasource.MaxItems}");
     }
 
@@ -280,10 +324,12 @@ public partial class SettingsViewModel : ViewModelBase
     // ── Persistence ───────────────────────────────────────────────────────
 
     /// <summary>
-    /// Writes the app-wide settings back to config.json. It loads the document
-    /// first and mutates only the fields this view owns, so a save from here can
-    /// never revert the source or the engine parameters the session owns - the
-    /// two writers touch disjoint fields.
+    /// Writes the app-wide settings back to config.json and — when the shell
+    /// handed over the registry store — to the registry as well, load-modify-save
+    /// so the sections other steps own (dedup, upscale, source) are intact and
+    /// this save can never revert the engine parameters the session owns.
+    /// The registry matters because App startup reads it when it has anything:
+    /// a toggle written only to config.json would not survive the next launch.
     /// </summary>
     private void Persist()
     {
@@ -296,10 +342,27 @@ public partial class SettingsViewModel : ViewModelBase
             cfg.Ui.LogLevel = LogLevelText.ToLowerInvariant();
             cfg.Ui.ShowDiagnostics = ShowDiagnostics;
             cfg.Ui.AutoLaunchSidecar = AutoLaunchSidecar;
+            cfg.Ui.AutoInstallSidecar = AutoInstallSidecar;
             cfg.Ui.DefaultDevice = DefaultDeviceOption.Value;
             cfg.Ui.DefaultConfidenceThreshold = DefaultConfidenceThreshold;
             cfg.Ui.DefaultMaxItems = DefaultMaxItems;
             config.Save(cfg);
+
+            if (_appSettingsStore is not null)
+            {
+                var state = _appSettingsStore.Load() ?? _appSettingsStore.Defaults;
+                _appSettingsStore.Save(state with
+                {
+                    Theme = ThemeText.ToLowerInvariant(),
+                    LogLevel = LogLevelText.ToLowerInvariant(),
+                    ShowDiagnostics = ShowDiagnostics,
+                    AutoLaunchSidecar = AutoLaunchSidecar,
+                    AutoInstallSidecar = AutoInstallSidecar,
+                    DefaultDevice = DefaultDeviceOption.Value,
+                    DefaultConfidenceThreshold = DefaultConfidenceThreshold,
+                    DefaultMaxItems = DefaultMaxItems,
+                });
+            }
         }
         catch (Exception e)
         {

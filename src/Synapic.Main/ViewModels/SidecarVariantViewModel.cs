@@ -105,6 +105,18 @@ public partial class SidecarVariantViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// True when this is the variant first-run automation fetches for this
+    /// machine (CUDA when an NVIDIA driver is present, the CPU build
+    /// otherwise). A marker, not a constraint: any row can still be fetched by
+    /// hand.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isRecommended;
+
+    /// <summary>Row text for the recommendation; empty on the other variants.</summary>
+    public string RecommendedText => IsRecommended ? "Recommended for this machine" : "";
+
+    /// <summary>
     /// True while the variant has no executable on disk, or the one it has
     /// trails the GitHub release - exactly the states in which the panel offers
     /// the way forward (Download) and withholds Update.
@@ -185,6 +197,12 @@ public partial class SidecarVariantViewModel : ViewModelBase
     // Can-execute mirrors the button visibility exactly: a command may never
     // run in a state its button is hidden in (and vice versa).
     private bool CanDownloadNow => CanDownload && IsMissingOrOutdated && !IsBusy;
+
+    partial void OnIsRecommendedChanged(bool value)
+    {
+        OnPropertyChanged(nameof(RecommendedText));
+        NotifyCommands();
+    }
 
     partial void OnIsBuiltChanged(bool value) => NotifyCommands();
 

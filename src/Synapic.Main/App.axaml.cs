@@ -72,7 +72,8 @@ public partial class App : Application
         log.Information("Log file: {LogFilePath} (previous runs kept in {ArchivesDirectory})",
             SynapicLog.LogFilePath, SynapicLog.ArchivesDirectory);
         log.Information("Config file: {ConfigPath} (autoLaunchSidecar={AutoLaunch}, logLevel={LogLevel})",
-            configService.FilePath, config.Ui.AutoLaunchSidecar, config.Ui.LogLevel);
+            configService.FilePath, config.Ui.AutoLaunchSidecar,
+            config.Ui.AutoInstallSidecar ? "auto-install" : "ask-first", config.Ui.LogLevel);
         log.Information("Sidecar executable detected: {SidecarExe}", InferenceSidecarService.FindExecutable() ?? "<not found>");
         log.Information("Models root (HF_HOME for the sidecar): {ModelsRoot}", InferenceSidecarService.ModelsRoot());
         if (OperatingSystem.IsWindows())
@@ -112,6 +113,7 @@ public partial class App : Application
                     LogLevel = restored.LogLevel,
                     ShowDiagnostics = restored.ShowDiagnostics,
                     AutoLaunchSidecar = restored.AutoLaunchSidecar,
+                    AutoInstallSidecar = restored.AutoInstallSidecar,
                     TelemetryEnabled = restored.TelemetryEnabled,
                     DefaultDevice = restored.DefaultDevice,
                     DefaultConfidenceThreshold = restored.DefaultConfidenceThreshold,
