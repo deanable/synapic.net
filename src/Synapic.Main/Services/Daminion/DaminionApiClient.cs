@@ -251,7 +251,17 @@ public sealed class DaminionApiClient
         var api = GetApi();
         try
         {
-            return await call(api).ConfigureAwait(false);
+            var result = await call(api).ConfigureAwait(false);
+            if (result is HttpResponseMessage httpResp &&
+                (int)httpResp.StatusCode is 401 or 403)
+            {
+                httpResp.Dispose();
+                SynapicLog.Warning(nameof(DaminionApiClient),
+                    $"Daminion session expired (HTTP {(int)httpResp.StatusCode}) — re-authenticating and retrying once");
+                await ReAuthenticateAsync(ct).ConfigureAwait(false);
+                return await call(GetApi()).ConfigureAwait(false);
+            }
+            return result;
         }
         catch (ApiException e) when ((int)e.StatusCode is 401 or 403)
         {
@@ -650,9 +660,26 @@ public sealed class DaminionApiClient
             {
                 await stream.CopyToAsync(fs, ct).ConfigureAwait(false);
             }
+            var downloadedLength = new FileInfo(tempFile).Length;
+            if (downloadedLength == 0)
+            {
+                try { File.Delete(tempFile); } catch { /* best effort */ }
+                SynapicLog.Warning(nameof(DaminionApiClient),
+                    $"Empty {kind} downloaded for item {itemId} (0 bytes) — skipping");
+                return null;
+            }
             SynapicLog.Debug(nameof(DaminionApiClient),
-                $"Downloaded {kind} for item {itemId} ({new FileInfo(tempFile).Length:N0} bytes) → {tempFile}");
+                $"Downloaded {kind} for item {itemId} ({downloadedLength:N0} bytes) → {tempFile}");
             return tempFile;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            if (tempFile is not null)
+            {
+                try { File.Delete(tempFile); }
+                catch (Exception) { /* best effort */ }
+            }
+            throw;
         }
         catch (Exception e)
         {
@@ -1166,10 +1193,16 @@ public sealed class DaminionApiClient
             using var resp = await WithSessionRecoveryAsync(api =>
                 api.CheckOutItems(new DaminionVersionIdsRequest { Ids = ids }, ct), ct).ConfigureAwait(false);
             var body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            string? envelopeDetail = null;
+            var ok = resp.IsSuccessStatusCode && IsVersionControlEnvelopeAccepted(body, ids, out envelopeDetail);
             SynapicLog.Info(nameof(DaminionApiClient),
                 $"POST /api/VersionControl/CheckOut ids=[{string.Join(",", ids)}] → HTTP {(int)resp.StatusCode}" +
-                (resp.IsSuccessStatusCode ? "" : $" {TruncateText(body)}"));
-            return resp.IsSuccessStatusCode;
+                (ok ? "" : $" {(envelopeDetail ?? TruncateText(body))}"));
+            return ok;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception e)
         {
@@ -1194,10 +1227,16 @@ public sealed class DaminionApiClient
             using var resp = await WithSessionRecoveryAsync(api =>
                 api.UndoCheckOutItems(new DaminionVersionIdsRequest { Ids = ids }, ct), ct).ConfigureAwait(false);
             var body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            string? envelopeDetail = null;
+            var ok = resp.IsSuccessStatusCode && IsVersionControlEnvelopeAccepted(body, ids, out envelopeDetail);
             SynapicLog.Info(nameof(DaminionApiClient),
                 $"POST /api/VersionControl/UndoCheckOut ids=[{string.Join(",", ids)}] → HTTP {(int)resp.StatusCode}" +
-                (resp.IsSuccessStatusCode ? "" : $" {TruncateText(body)}"));
-            return resp.IsSuccessStatusCode;
+                (ok ? "" : $" {(envelopeDetail ?? TruncateText(body))}"));
+            return ok;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception e)
         {
@@ -1215,7 +1254,12 @@ public sealed class DaminionApiClient
     /// retries without it; the same fallback applies here. Returns false when
     /// the server refuses the upload — the caller then undoes the checkout.
     /// </summary>
-    public async Task<bool> CheckInItemAsync(int itemId, string filePath, string? message = null, CancellationToken ct = default)
+    public async Task<bool> CheckInItemAsync(
+        int itemId,
+        string filePath,
+        string? message = null,
+        CancellationToken ct = default,
+        string? uploadFileName = null)
     {
         if (!File.Exists(filePath))
         {
@@ -1223,36 +1267,46 @@ public sealed class DaminionApiClient
             return false;
         }
 
+        var ids = new[] { itemId };
         try
         {
             // With comment first (the informative form), then without it.
             if (!string.IsNullOrWhiteSpace(message))
             {
                 using var withComment = await WithSessionRecoveryAsync(api =>
-                    SendCheckInAsync(api, itemId, filePath, message, ct), ct).ConfigureAwait(false);
-                if (withComment.IsSuccessStatusCode)
+                    SendCheckInAsync(api, itemId, filePath, message, uploadFileName, ct), ct).ConfigureAwait(false);
+                var commentBody = await withComment.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+                string? commentDetail = null;
+                if (withComment.IsSuccessStatusCode && IsVersionControlEnvelopeAccepted(commentBody, ids, out commentDetail))
                 {
                     SynapicLog.Info(nameof(DaminionApiClient),
-                        $"CheckIn item {itemId} (with comment, {new FileInfo(filePath).Length:N0} bytes) → HTTP 200");
+                        $"CheckIn item {itemId} (with comment, {new FileInfo(filePath).Length:N0} bytes) → HTTP {(int)withComment.StatusCode}");
                     return true;
                 }
                 SynapicLog.Warning(nameof(DaminionApiClient),
-                    $"CheckIn with comment rejected for item {itemId} (HTTP {(int)withComment.StatusCode}) — retrying without comment");
+                    $"CheckIn with comment rejected for item {itemId} (HTTP {(int)withComment.StatusCode}" +
+                    (commentDetail is null ? "" : $", {commentDetail}") +
+                    ") — retrying without comment");
             }
 
             using var resp = await WithSessionRecoveryAsync(api =>
-                SendCheckInAsync(api, itemId, filePath, null, ct), ct).ConfigureAwait(false);
-            if (resp.IsSuccessStatusCode)
+                SendCheckInAsync(api, itemId, filePath, null, uploadFileName, ct), ct).ConfigureAwait(false);
+            var body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            string? detail = null;
+            if (resp.IsSuccessStatusCode && IsVersionControlEnvelopeAccepted(body, ids, out detail))
             {
                 SynapicLog.Info(nameof(DaminionApiClient),
-                    $"CheckIn item {itemId} ({new FileInfo(filePath).Length:N0} bytes) → HTTP 200");
+                    $"CheckIn item {itemId} ({new FileInfo(filePath).Length:N0} bytes) → HTTP {(int)resp.StatusCode}");
                 return true;
             }
 
-            var body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
             SynapicLog.Error(nameof(DaminionApiClient),
-                $"CheckIn refused for item {itemId} (HTTP {(int)resp.StatusCode}) {TruncateText(body)}");
+                $"CheckIn refused for item {itemId} (HTTP {(int)resp.StatusCode}) {detail ?? TruncateText(body)}");
             return false;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception e)
         {
@@ -1261,13 +1315,109 @@ public sealed class DaminionApiClient
         }
     }
 
+    /// <summary>
+    /// Inspects a Daminion version-control response body so an HTTP 200 carrying
+    /// an application-level refusal (<c>{"success":false,"error":"..."}</c>,
+    /// non-zero <c>errorCode</c>, or a per-id status of <c>-1</c>/<c>false</c>)
+    /// is treated as a refusal rather than a silent success. Empty or non-JSON
+    /// 2xx bodies are accepted for server builds that answer with a bare 200.
+    /// </summary>
+    internal static bool IsVersionControlEnvelopeAccepted(string? body, IReadOnlyCollection<int> requestedIds, out string? failureDetail)
+    {
+        failureDetail = null;
+        if (string.IsNullOrWhiteSpace(body)) return true;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            var root = doc.RootElement;
+            if (root.ValueKind is JsonValueKind.True or JsonValueKind.False)
+            {
+                if (root.ValueKind == JsonValueKind.False)
+                {
+                    failureDetail = "response=false";
+                    return false;
+                }
+                return true;
+            }
+
+            if (root.ValueKind != JsonValueKind.Object)
+                return true;
+
+            foreach (var prop in root.EnumerateObject())
+            {
+                if (prop.Name.Equals("success", StringComparison.OrdinalIgnoreCase) &&
+                    prop.Value.ValueKind == JsonValueKind.False)
+                {
+                    var err = GetString(root, "error", "Error", "message", "Message");
+                    failureDetail = string.IsNullOrWhiteSpace(err) ? "success=false" : $"success=false ({err})";
+                    return false;
+                }
+
+                if (prop.Name.Equals("errorCode", StringComparison.OrdinalIgnoreCase) &&
+                    prop.Value.ValueKind == JsonValueKind.Number &&
+                    prop.Value.TryGetInt32(out var code) && code != 0)
+                {
+                    var err = GetString(root, "error", "Error", "message", "Message");
+                    failureDetail = string.IsNullOrWhiteSpace(err) ? $"errorCode={code}" : $"errorCode={code} ({err})";
+                    return false;
+                }
+
+                if ((prop.Name.Equals("error", StringComparison.OrdinalIgnoreCase) ||
+                     prop.Name.Equals("Error", StringComparison.Ordinal)) &&
+                    prop.Value.ValueKind == JsonValueKind.String)
+                {
+                    var errText = prop.Value.GetString();
+                    if (!string.IsNullOrWhiteSpace(errText))
+                    {
+                        failureDetail = $"error={errText}";
+                        return false;
+                    }
+                }
+            }
+
+            foreach (var dataKey in new[] { "data", "Data" })
+            {
+                if (!root.TryGetProperty(dataKey, out var data)) continue;
+                if (data.ValueKind == JsonValueKind.False)
+                {
+                    failureDetail = "data=false";
+                    return false;
+                }
+                if (data.ValueKind == JsonValueKind.Object)
+                {
+                    foreach (var id in requestedIds)
+                    {
+                        if (!data.TryGetProperty(id.ToString(), out var idStatus)) continue;
+                        if (idStatus.ValueKind == JsonValueKind.False ||
+                            (idStatus.ValueKind == JsonValueKind.Number &&
+                             idStatus.TryGetInt32(out var statusNum) && statusNum < 0))
+                        {
+                            failureDetail = $"item {id} status={idStatus}";
+                            return false;
+                        }
+                    }
+                }
+            }
+
+            return true;
+        }
+        catch (JsonException)
+        {
+            return true;
+        }
+    }
+
     /// <summary>One multipart send; the file stream is opened per attempt
     /// because session recovery replays the whole lambda.</summary>
     private static async Task<HttpResponseMessage> SendCheckInAsync(
-        IDaminionApi api, int itemId, string filePath, string? comment, CancellationToken ct)
+        IDaminionApi api, int itemId, string filePath, string? comment, string? uploadFileName, CancellationToken ct)
     {
+        var partFileName = !string.IsNullOrWhiteSpace(uploadFileName)
+            ? Path.GetFileName(uploadFileName)
+            : Path.GetFileName(filePath);
         await using var stream = File.OpenRead(filePath);
-        var file = new StreamPart(stream, Path.GetFileName(filePath), "application/octet-stream");
+        var file = new StreamPart(stream, partFileName, "application/octet-stream");
         return comment is null
             ? await api.CheckInItem(itemId, file, ct).ConfigureAwait(false)
             : await api.CheckInItemWithComment(itemId, comment, file, ct).ConfigureAwait(false);

@@ -1,7 +1,10 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using Synapic.Main.Services;
 using Synapic.Main.Services.Daminion;
+using Synapic.Main.Services.Processing;
+using Synapic.Shared.Contracts;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -149,6 +152,229 @@ public class DaminionVersionControlRequestTests
         Assert.DoesNotContain(server.Snapshot(), r => r.Path == "/api/VersionControl/CheckIn");
     }
 
+    [Fact]
+    public async Task CheckOut_and_CheckIn_reject_http_200_application_error_envelopes()
+    {
+        using var server = new VersionStub
+        {
+            CheckOutBody = """{"data":null,"error":"Item is locked by another user","success":false,"errorCode":403}""",
+            CheckInBody = _ => """{"data":{"5":-1},"error":null,"success":true,"errorCode":0}""",
+        };
+        var client = new DaminionApiClient($"http://127.0.0.1:{server.Port}", "user", "pass");
+        var file = WriteTempFile("ENHANCED-PIXELS");
+        try
+        {
+            Assert.False(await client.CheckOutItemsAsync(new[] { 5 }));
+            Assert.False(await client.CheckInItemAsync(5, file, "comment"));
+        }
+        finally
+        {
+            File.Delete(file);
+        }
+    }
+
+    [Fact]
+    public async Task VersionControl_recovers_expired_session_on_401_and_replays_once()
+    {
+        var checkOutAttempt = 0;
+        using var server = new VersionStub
+        {
+            CheckOutStatusSelector = () => ++checkOutAttempt == 1 ? 401 : 200,
+        };
+        var client = new DaminionApiClient($"http://127.0.0.1:{server.Port}", "user", "pass");
+
+        Assert.True(await client.CheckOutItemsAsync(new[] { 12 }));
+        Assert.Equal(2, server.Snapshot().Count(r => r.Path == "/api/VersionControl/CheckOut"));
+        Assert.Equal(1, server.LoginCount);
+    }
+
+    [Fact]
+    public async Task Handler_completes_checkout_download_upscale_checkin_and_preserves_original_filename()
+    {
+        using var server = new VersionStub { OriginalBytes = Encoding.UTF8.GetBytes("ORIGINAL-IMAGE") };
+        var tempDir = Directory.CreateTempSubdirectory("synapic-vc-ok-").FullName;
+        var client = new DaminionApiClient($"http://127.0.0.1:{server.Port}", "user", "pass", tempDirectory: tempDir);
+        var sidecar = new StubUpscaleSidecar(req =>
+        {
+            var outPath = Path.Combine(Path.GetDirectoryName(req.ImagePath)!, "42_original_upscaled.png");
+            File.WriteAllText(outPath, "UPSCALED-IMAGE");
+            return Task.FromResult(new UpscaleResponse
+            {
+                OutputPath = outPath,
+                OriginalWidth = 100,
+                OriginalHeight = 80,
+                Width = 200,
+                Height = 160,
+                Workflow = "quality",
+                Factor = 2,
+                ModelUsed = "caidas/swin2SR-classical-sr-x2-64",
+                InferenceMs = 45,
+            });
+        });
+
+        try
+        {
+            var logs = new List<string>();
+            var handler = new UpscaleItemHandler(client, sidecar, new UpscaleOptions
+            {
+                Workflow = "quality",
+                Factor = 2,
+                OutputFormat = "PNG",
+            }, line => { logs.Add(line); return Task.CompletedTask; });
+
+            var outcome = await handler.ProcessAsync(new ProcessWorkItem
+            {
+                DaminionId = 42,
+                FileName = " alpine_lake.jpg ",
+            }, CancellationToken.None);
+
+            Assert.True(outcome.Success);
+            Assert.Equal("Upscaled to alpine_lake.png", outcome.Status);
+
+            var requests = server.Snapshot();
+            Assert.Single(requests, r => r.Path == "/api/VersionControl/CheckOut");
+            var checkIn = Assert.Single(requests, r => r.Path == "/api/VersionControl/CheckIn");
+            Assert.Contains("filename=alpine_lake.png", checkIn.Body, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("UPSCALED-IMAGE", checkIn.Body, StringComparison.Ordinal);
+            Assert.DoesNotContain(requests, r => r.Path == "/api/VersionControl/UndoCheckOut");
+            Assert.Empty(Directory.EnumerateFiles(tempDir));
+            Assert.Contains(logs, l => l.Contains("Checked in alpine_lake.jpg (#42) as alpine_lake.png", StringComparison.Ordinal));
+        }
+        finally
+        {
+            try { Directory.Delete(tempDir, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task Handler_undoes_checkout_when_download_fails()
+    {
+        using var server = new VersionStub { DownloadStatus = 404 };
+        var tempDir = Directory.CreateTempSubdirectory("synapic-vc-dlfail-").FullName;
+        var client = new DaminionApiClient($"http://127.0.0.1:{server.Port}", "user", "pass", tempDirectory: tempDir);
+        var sidecar = new StubUpscaleSidecar(_ => Task.FromResult(new UpscaleResponse()));
+
+        try
+        {
+            var handler = new UpscaleItemHandler(client, sidecar, new UpscaleOptions());
+            var outcome = await handler.ProcessAsync(new ProcessWorkItem
+            {
+                DaminionId = 17,
+                FileName = "missing.jpg",
+            }, CancellationToken.None);
+
+            Assert.False(outcome.Success);
+            Assert.Equal("download failed", outcome.Status);
+
+            var requests = server.Snapshot();
+            Assert.Single(requests, r => r.Path == "/api/VersionControl/CheckOut");
+            var undo = Assert.Single(requests, r => r.Path == "/api/VersionControl/UndoCheckOut");
+            Assert.Contains("\"Ids\":[17]", undo.Body, StringComparison.Ordinal);
+            Assert.DoesNotContain(requests, r => r.Path == "/api/VersionControl/CheckIn");
+        }
+        finally
+        {
+            try { Directory.Delete(tempDir, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task Handler_undoes_checkout_when_upscale_fails_or_throws()
+    {
+        using var server = new VersionStub { OriginalBytes = Encoding.UTF8.GetBytes("ORIGINAL-IMAGE") };
+        var tempDir = Directory.CreateTempSubdirectory("synapic-vc-upfail-").FullName;
+        var client = new DaminionApiClient($"http://127.0.0.1:{server.Port}", "user", "pass", tempDirectory: tempDir);
+        var sidecar = new StubUpscaleSidecar(_ => throw new InvalidOperationException("GPU out of memory"));
+
+        try
+        {
+            var handler = new UpscaleItemHandler(client, sidecar, new UpscaleOptions());
+            var outcome = await handler.ProcessAsync(new ProcessWorkItem
+            {
+                DaminionId = 23,
+                FileName = "broken.jpg",
+            }, CancellationToken.None);
+
+            Assert.False(outcome.Success);
+            Assert.Equal("upscale failed", outcome.Status);
+
+            var requests = server.Snapshot();
+            Assert.Single(requests, r => r.Path == "/api/VersionControl/CheckOut");
+            var undo = Assert.Single(requests, r => r.Path == "/api/VersionControl/UndoCheckOut");
+            Assert.Contains("\"Ids\":[23]", undo.Body, StringComparison.Ordinal);
+            Assert.DoesNotContain(requests, r => r.Path == "/api/VersionControl/CheckIn");
+            Assert.Empty(Directory.EnumerateFiles(tempDir));
+        }
+        finally
+        {
+            try { Directory.Delete(tempDir, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task Handler_undoes_checkout_when_cancelled_mid_item()
+    {
+        using var server = new VersionStub { OriginalBytes = Encoding.UTF8.GetBytes("ORIGINAL-IMAGE") };
+        var tempDir = Directory.CreateTempSubdirectory("synapic-vc-cancel-").FullName;
+        var client = new DaminionApiClient($"http://127.0.0.1:{server.Port}", "user", "pass", tempDirectory: tempDir);
+        using var cts = new CancellationTokenSource();
+        var sidecar = new StubUpscaleSidecar(_ =>
+        {
+            cts.Cancel();
+            cts.Token.ThrowIfCancellationRequested();
+            return Task.FromResult(new UpscaleResponse());
+        });
+
+        try
+        {
+            var handler = new UpscaleItemHandler(client, sidecar, new UpscaleOptions());
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+                handler.ProcessAsync(new ProcessWorkItem
+                {
+                    DaminionId = 31,
+                    FileName = "cancelled.jpg",
+                }, cts.Token));
+
+            var requests = server.Snapshot();
+            Assert.Single(requests, r => r.Path == "/api/VersionControl/CheckOut");
+            var undo = Assert.Single(requests, r => r.Path == "/api/VersionControl/UndoCheckOut");
+            Assert.Contains("\"Ids\":[31]", undo.Body, StringComparison.Ordinal);
+            Assert.Empty(Directory.EnumerateFiles(tempDir));
+        }
+        finally
+        {
+            try { Directory.Delete(tempDir, recursive: true); } catch { }
+        }
+    }
+
+    private sealed class StubUpscaleSidecar : IInferenceSidecar
+    {
+        private readonly Func<UpscaleRequest, Task<UpscaleResponse>> _upscale;
+
+        public StubUpscaleSidecar(Func<UpscaleRequest, Task<UpscaleResponse>> upscale) => _upscale = upscale;
+
+        public SidecarStatus CurrentStatus => SidecarStatus.Ready;
+        public int SidecarPort => 0;
+        public bool IsRunning => true;
+#pragma warning disable CS0067
+        public event EventHandler<SidecarStatusChangedEventArgs>? StatusChanged;
+        public event Action<string>? LogReceived;
+#pragma warning restore CS0067
+        public Task StartAsync(CancellationToken ct = default) => Task.CompletedTask;
+        public Task StopAsync(TimeSpan? gracefulTimeout = null) => Task.CompletedTask;
+        public Task<TagResponse> TagAsync(TagRequest request, CancellationToken ct = default)
+            => Task.FromResult(new TagResponse());
+        public Task<UpscaleResponse> UpscaleAsync(UpscaleRequest request, CancellationToken ct = default)
+            => _upscale(request);
+        public Task<ModelInfo[]> ListModelsAsync(CancellationToken ct = default)
+            => Task.FromResult(Array.Empty<ModelInfo>());
+        public Task DownloadModelAsync(string modelId, CancellationToken ct = default)
+            => Task.CompletedTask;
+        public Task<HealthResponse> GetHealthAsync(CancellationToken ct = default)
+            => Task.FromResult(new HealthResponse());
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
     private static string WriteTempFile(string content)
     {
         var path = Path.Combine(Path.GetTempPath(), $"synapic-checkin-{Guid.NewGuid():N}.jpg");
@@ -168,13 +394,21 @@ public class DaminionVersionControlRequestTests
         private readonly object _lock = new();
         private readonly List<Record> _requests = new();
         private int _checkInAttempts;
+        private int _loginCount;
 
         public int Port { get; }
+        public int LoginCount => Volatile.Read(ref _loginCount);
         public int CheckOutStatus { get; set; } = 200;
+        public Func<int>? CheckOutStatusSelector { get; set; }
+        public string CheckOutBody { get; set; } = "{}";
         public int UndoCheckOutStatus { get; set; } = 200;
+        public string UndoCheckOutBody { get; set; } = "{}";
+        public int DownloadStatus { get; set; } = 200;
+        public byte[] OriginalBytes { get; set; } = Encoding.UTF8.GetBytes("STUB-ORIGINAL");
 
         /// <summary>attempt (1-based) → HTTP status for CheckIn.</summary>
         public Func<int, int> CheckInStatus { get; set; } = _ => 200;
+        public Func<int, string> CheckInBody { get; set; } = _ => "{}";
 
         public VersionStub()
         {
@@ -211,17 +445,32 @@ public class DaminionVersionControlRequestTests
                 var path = requestLine.Split(' ')[1];
                 var contentType = HeaderValue(head, "Content-Type");
 
+                if (path.StartsWith("/api/Download/Get/", StringComparison.Ordinal))
+                {
+                    AddRequest(path, "", contentType);
+                    var dlBytes = DownloadStatus == 200 ? OriginalBytes : Array.Empty<byte>();
+                    var dlHeaders = Encoding.UTF8.GetBytes(
+                        $"HTTP/1.1 {DownloadStatus} Stub\r\n" +
+                        "Content-Type: application/octet-stream\r\n" +
+                        $"Content-Length: {dlBytes.Length}\r\nConnection: close\r\n\r\n");
+                    await stream.WriteAsync(dlHeaders.Concat(dlBytes).ToArray(), ct);
+                    await stream.FlushAsync(ct);
+                    return;
+                }
+
                 int status;
                 string responseBody = "{}";
                 if (path == "/api/VersionControl/CheckOut")
                 {
                     AddRequest(path, body, contentType);
-                    status = CheckOutStatus;
+                    status = CheckOutStatusSelector?.Invoke() ?? CheckOutStatus;
+                    responseBody = CheckOutBody;
                 }
                 else if (path == "/api/VersionControl/UndoCheckOut")
                 {
                     AddRequest(path, body, contentType);
                     status = UndoCheckOutStatus;
+                    responseBody = UndoCheckOutBody;
                 }
                 else if (path == "/api/VersionControl/CheckIn")
                 {
@@ -229,9 +478,12 @@ public class DaminionVersionControlRequestTests
                     lock (_lock) attempt = ++_checkInAttempts;
                     AddRequest(path, body, contentType);
                     status = CheckInStatus(attempt);
+                    responseBody = CheckInBody(attempt);
                 }
                 else
                 {
+                    if (path.StartsWith("/api/UserManager/Login", StringComparison.Ordinal))
+                        Interlocked.Increment(ref _loginCount);
                     // Login / GetDefaultLayout / GetTags during AuthenticateAsync.
                     status = 200;
                 }

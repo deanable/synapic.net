@@ -14,18 +14,27 @@ namespace Synapic.Main.Services.Processing;
 /// </summary>
 public sealed class UpscaleItemHandler : IWorkflowItemHandler
 {
+    private static readonly TimeSpan RollbackTimeout = TimeSpan.FromSeconds(15);
+
     private readonly DaminionApiClient? _client;
     private readonly IInferenceSidecar _sidecar;
     private readonly UpscaleOptions _options;
+    private readonly Func<string, Task> _log;
 
     /// <param name="client">Catalog client; required only for Daminion items.</param>
     /// <param name="sidecar">Runs the actual algorithm (POST /upscale).</param>
     /// <param name="options">The run's parameters — workflow, factor, precision, output settings.</param>
-    public UpscaleItemHandler(DaminionApiClient? client, IInferenceSidecar sidecar, UpscaleOptions options)
+    /// <param name="log">Optional UI run-log callback so per-item checkout/upscale/check-in progress is visible.</param>
+    public UpscaleItemHandler(
+        DaminionApiClient? client,
+        IInferenceSidecar sidecar,
+        UpscaleOptions options,
+        Func<string, Task>? log = null)
     {
         _client = client;
         _sidecar = sidecar;
         _options = options;
+        _log = log ?? (_ => Task.CompletedTask);
     }
 
     public async Task<WorkflowItemOutcome> ProcessAsync(ProcessWorkItem item, CancellationToken ct)
@@ -38,65 +47,85 @@ public sealed class UpscaleItemHandler : IWorkflowItemHandler
     private async Task<WorkflowItemOutcome> UpscaleDaminionItemAsync(ProcessWorkItem item, int id, CancellationToken ct)
     {
         var client = _client ?? throw new InvalidOperationException("Not connected to Daminion");
+        var displayName = string.IsNullOrWhiteSpace(item.FileName) ? $"Item {id}" : item.FileName.Trim();
 
         // 1. Check out: the enhanced file becomes a new checked-in version.
         if (!await client.CheckOutItemsAsync(new[] { id }, ct).ConfigureAwait(false))
+        {
+            await _log($"Skipped {displayName} (#{id}): checkout refused by server.").ConfigureAwait(false);
             return WorkflowItemOutcome.Fail("checkout failed");
+        }
 
+        var checkedIn = false;
+        string? temp = null;
+        string? output = null;
         try
         {
             ct.ThrowIfCancellationRequested();
 
             // 2. Download the original to the temp folder.
-            var temp = await client.DownloadOriginalAsync(id, ct).ConfigureAwait(false);
+            temp = await client.DownloadOriginalAsync(id, ct).ConfigureAwait(false);
             if (string.IsNullOrEmpty(temp) || !File.Exists(temp))
             {
                 SynapicLog.Warning(nameof(UpscaleItemHandler),
-                    $"Item {id} ({item.FileName}): no original downloaded — skipped");
+                    $"Item {id} ({displayName}): no original downloaded — rolling back checkout");
+                await _log($"Failed {displayName} (#{id}): could not download original.").ConfigureAwait(false);
                 return WorkflowItemOutcome.Fail("download failed");
             }
 
-            string? output;
-            try
-            {
-                // 3. Run the algorithm through the sidecar.
-                output = await RunUpscaleAsync(temp, ct).ConfigureAwait(false);
-            }
-            finally
-            {
-                TryDelete(temp);
-            }
+            // 3. Run the algorithm through the sidecar.
+            output = await RunUpscaleAsync(temp, displayName, ct).ConfigureAwait(false);
+            TryDelete(temp);
+            temp = null;
 
             if (output is null)
+            {
+                await _log($"Failed {displayName} (#{id}): upscale produced no output.").ConfigureAwait(false);
                 return WorkflowItemOutcome.Fail("upscale failed");
-
-            try
-            {
-                ct.ThrowIfCancellationRequested();
-
-                // 4. Check the enhanced file in as the new version.
-                var message = BuildCheckinSummary();
-                if (!await client.CheckInItemAsync(id, output, message, ct).ConfigureAwait(false))
-                {
-                    // The upload did not land — do not leave the item checked out.
-                    await client.UndoCheckOutItemsAsync(new[] { id }, CancellationToken.None).ConfigureAwait(false);
-                    return WorkflowItemOutcome.Fail("check-in failed");
-                }
-
-                FlushTempVariants(client, id);
-                return new WorkflowItemOutcome(true, $"Upscaled to {Path.GetFileName(output)}");
             }
-            finally
+
+            ct.ThrowIfCancellationRequested();
+
+            // 4. Check the enhanced file in as the new version, preserving the
+            // item's original filename stem + upscaled extension.
+            var message = BuildCheckinSummary();
+            var uploadFileName = BuildCheckinFileName(item.FileName, output);
+            if (!await client.CheckInItemAsync(id, output, message, ct, uploadFileName).ConfigureAwait(false))
             {
-                TryDelete(output);
+                await _log($"Failed {displayName} (#{id}): check-in refused by server.").ConfigureAwait(false);
+                return WorkflowItemOutcome.Fail("check-in failed");
             }
+
+            checkedIn = true;
+            FlushTempVariants(client, id);
+            await _log($"Checked in {displayName} (#{id}) as {uploadFileName}.").ConfigureAwait(false);
+            return new WorkflowItemOutcome(true, $"Upscaled to {uploadFileName}");
         }
-        catch (OperationCanceledException)
+        finally
         {
-            // Stopping mid-item must not strand a checked-out catalog entry.
-            try { await client.UndoCheckOutItemsAsync(new[] { id }, CancellationToken.None).ConfigureAwait(false); }
-            catch { /* best effort — logged inside the client */ }
-            throw;
+            if (temp is not null) TryDelete(temp);
+            if (output is not null) TryDelete(output);
+
+            // Guarantee checkout release on EVERY uncommitted exit: missing
+            // download, null/throwing upscale, check-in refusal, or cancellation.
+            if (!checkedIn)
+            {
+                try
+                {
+                    using var rollbackCts = new CancellationTokenSource(RollbackTimeout);
+                    var undone = await client.UndoCheckOutItemsAsync(new[] { id }, rollbackCts.Token).ConfigureAwait(false);
+                    if (!undone)
+                    {
+                        SynapicLog.Warning(nameof(UpscaleItemHandler),
+                            $"UndoCheckOut was not confirmed for item {id} ({displayName}) — item may remain checked out");
+                    }
+                }
+                catch (Exception e)
+                {
+                    SynapicLog.Warning(nameof(UpscaleItemHandler),
+                        $"UndoCheckOut failed during cleanup for item {id} ({displayName}): {e.Message}");
+                }
+            }
         }
     }
 
@@ -106,9 +135,12 @@ public sealed class UpscaleItemHandler : IWorkflowItemHandler
     {
         var path = item.LocalPath ?? throw new InvalidOperationException("Work item has no image path");
         if (!File.Exists(path))
+        {
+            await _log($"Failed {item.FileName}: file missing.").ConfigureAwait(false);
             return WorkflowItemOutcome.Fail("file missing");
+        }
 
-        var output = await RunUpscaleAsync(path, ct).ConfigureAwait(false);
+        var output = await RunUpscaleAsync(path, item.FileName, ct).ConfigureAwait(false);
         return output is null
             ? WorkflowItemOutcome.Fail("upscale failed")
             : new WorkflowItemOutcome(true, $"Upscaled to {Path.GetFileName(output)}");
@@ -116,8 +148,9 @@ public sealed class UpscaleItemHandler : IWorkflowItemHandler
 
     // ── Shared pieces ──────────────────────────────────────────────────────
 
-    private async Task<string?> RunUpscaleAsync(string imagePath, CancellationToken ct)
+    private async Task<string?> RunUpscaleAsync(string imagePath, string? displayName, CancellationToken ct)
     {
+        var label = string.IsNullOrWhiteSpace(displayName) ? Path.GetFileName(imagePath) : displayName;
         try
         {
             var response = await _sidecar.UpscaleAsync(new UpscaleRequest
@@ -133,11 +166,13 @@ public sealed class UpscaleItemHandler : IWorkflowItemHandler
                 return null;
             }
 
-            SynapicLog.Info(nameof(UpscaleItemHandler),
-                $"Upscaled {Path.GetFileName(imagePath)}: {response.OriginalWidth}×{response.OriginalHeight} → " +
+            var summary =
+                $"Upscaled {label}: {response.OriginalWidth}×{response.OriginalHeight} → " +
                 $"{response.Width}×{response.Height} via {response.Workflow} {response.Factor}x" +
                 (response.ModelUsed is null ? "" : $" ({response.ModelUsed})") +
-                $" in {response.InferenceMs:N0} ms");
+                $" in {response.InferenceMs:N0} ms";
+            SynapicLog.Info(nameof(UpscaleItemHandler), summary);
+            await _log(summary).ConfigureAwait(false);
             return response.OutputPath;
         }
         catch (OperationCanceledException)
@@ -147,8 +182,32 @@ public sealed class UpscaleItemHandler : IWorkflowItemHandler
         catch (Exception e)
         {
             SynapicLog.Error(nameof(UpscaleItemHandler), $"Upscale failed for '{imagePath}': {e.Message}");
+            await _log($"Upscale failed for {label}: {e.Message}").ConfigureAwait(false);
             return null;
         }
+    }
+
+    /// <summary>
+    /// Preserve the catalog item's original filename stem when checking in a new
+    /// version, using the upscaled file's extension so format conversions
+    /// (e.g. PNG → JPEG) carry the right suffix instead of <c>{id}_original_upscaled</c>.
+    /// </summary>
+    internal static string BuildCheckinFileName(string? catalogFileName, string outputPath)
+    {
+        var outExt = Path.GetExtension(outputPath);
+        if (!string.IsNullOrWhiteSpace(catalogFileName))
+        {
+            var safeName = Path.GetFileName(catalogFileName.Trim());
+            var stem = Path.GetFileNameWithoutExtension(safeName);
+            if (!string.IsNullOrWhiteSpace(stem) &&
+                !stem.StartsWith("Item ", StringComparison.Ordinal))
+            {
+                var origExt = Path.GetExtension(safeName);
+                var ext = !string.IsNullOrEmpty(outExt) ? outExt : origExt;
+                return $"{stem}{ext}";
+            }
+        }
+        return Path.GetFileName(outputPath);
     }
 
     /// <summary>The check-in comment the original app wrote (step_upscale._build_checkin_summary).</summary>

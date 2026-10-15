@@ -327,13 +327,14 @@ public partial class StepUpscaleViewModel : RunStateViewModel
             Description: description);
 
         var progress = new Progress<ProcessProgress>(ApplyProgress);
+        Func<string, Task> logSink = line => { AppendLog(line); return Task.CompletedTask; };
 
-        var handler = new UpscaleItemHandler(ds.DaminionClient, _sidecar, options);
+        var handler = new UpscaleItemHandler(ds.DaminionClient, _sidecar, options, logSink);
         try
         {
             var summary = await new WorkflowRunner().RunAsync(
                 workflow, ds, handler, progress,
-                line => { AppendLog(line); return Task.CompletedTask; },
+                logSink,
                 pause: null, Cts!.Token);
 
             var line = summary.Total == 0

@@ -575,7 +575,7 @@ def upscale(body: UpscaleRequestModel) -> dict:
     """
     from pathlib import Path
 
-    from PIL import Image
+    from PIL import Image, ImageOps
 
     if not body.image_path:
         raise HTTPException(status_code=422, detail="image_path is required")
@@ -598,13 +598,16 @@ def upscale(body: UpscaleRequestModel) -> dict:
     input_path = Path(body.image_path)
     try:
         with Image.open(input_path) as source:
-            original_width, original_height = source.size
+            transposed = ImageOps.exif_transpose(source)
+            original_width, original_height = transposed.size
     except Exception as e:
         raise HTTPException(
             status_code=422, detail=f"Not a readable image: {body.image_path} ({e})"
         ) from e
 
     output_target = Path(body.output_path) if body.output_path else None
+    with _config_lock:
+        session_device = _session_config.get("device")
     started = time.monotonic()
     try:
         # Serialized on purpose: the original app ran a single upscale worker
@@ -619,6 +622,7 @@ def upscale(body: UpscaleRequestModel) -> dict:
                 output_path=output_target,
                 options=resolved,
                 status_callback=lambda message: logger.info("upscale: %s", message),
+                device=session_device,
             )
     except ValueError as e:
         # Unsupported workflow / factor combination — a client bug, not a failure.

@@ -925,7 +925,11 @@ public sealed class InferenceSidecarService : IInferenceSidecar
         // to the port instead of mutating the existing one; the swap is
         // serialized with readers under _gate so a request racing the rebind
         // cannot take a half-swapped client pair.
-        var newClient = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{port}/") };
+        var newClient = new HttpClient
+        {
+            BaseAddress = new Uri($"http://127.0.0.1:{port}/"),
+            Timeout = Timeout.InfiniteTimeSpan,
+        };
         var newApi = new InferenceApiClient(newClient);
         HttpClient oldClient;
         lock (_gate)
