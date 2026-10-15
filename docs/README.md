@@ -11,6 +11,7 @@ phase plan that tracked it.
 | [`codebase-guide.md`](codebase-guide.md) | **Start here.** Repository layout, how to build/run/test, the two-process architecture, DI wiring, data flow, concurrency, persistence, and a troubleshooting index. |
 | [`architecture.md`](architecture.md) | Short component/process overview and the batch data flow. |
 | [`csharp-reference.md`](csharp-reference.md) | The Avalonia host (`src/Synapic.Main`, `src/Synapic.Shared`): every service, view model, model, and contract. |
+| [`python-inference-server.md`](python-inference-server.md) | **The Python Inference Server**: detailed architecture, module breakdown, JSON recovery engine, Swin2SR upscaling, CPU precision policy, IPC lifecycle, and build packaging. |
 | [`sidecar-reference.md`](sidecar-reference.md) | The Python sidecar (`src/Synapic.Inference`): routes, inference pipeline, scoring tiers, model loading, and prompt handling. |
 | [`sidecar-concurrency.md`](sidecar-concurrency.md) | Concurrency deep dive: what runs concurrently, what gets serialized, and where each limit lives when multiple calls hit the sidecar. |
 | [`sidecar-protocol.md`](sidecar-protocol.md) | The HTTP/JSON contract between the two processes. **Generated** from the live FastAPI schema + the C# DTOs (`python build/generate-protocol-doc.py`); CI fails if it goes stale. |
