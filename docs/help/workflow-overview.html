@@ -11,23 +11,25 @@
 
 <h1>How a run works</h1>
 
-<p class="lead">Synapic has one source and three operations that run over it.
+<p class="lead">Synapic has one source and four operations that run over it.
 Everything is configured in the Settings view; a processing view carries only the
 run and what it produced. This topic is the map between the two.</p>
 
-<h2>One source, three operations</h2>
+<h2>One source, four operations</h2>
 
 <p>The source &mdash; a folder on disk, or a Daminion catalog with its scope and
 filters &mdash; is shared. It is chosen once, in the Settings view, and every
 operation reads it from there. An operation is not a separate tool with its own
 source: picking <span class="ui">Tagging</span>,
-<span class="ui">Deduplication</span> or <span class="ui">Upscaling</span> in the
+<span class="ui">Deduplication</span>, <span class="ui">Similar images</span> or
+<span class="ui">Upscaling</span> in the
 sidebar changes what runs, not what it runs on.</p>
 
 <table>
 <tr><th class="setting">Operation</th><th>What it is for</th><th>What it writes</th></tr>
 <tr><td><span class="ui">Tagging</span></td><td>Run the model over the source and write a category, keywords and a description for each image</td><td>XMP metadata in the image file, or a metadata update in the Daminion catalog</td></tr>
 <tr><td><span class="ui">Deduplication</span></td><td>Find near-duplicate images and act on the extras</td><td>Whatever the chosen action does: tag them as duplicates, move them, or delete them</td></tr>
+<tr><td><span class="ui">Similar images</span></td><td>Group images that look alike &mdash; re-encoded, cropped or lightly edited versions of the same shot &mdash; and act on the near-matches</td><td>Whatever the chosen action does: tag them, move them, or delete them</td></tr>
 <tr><td><span class="ui">Upscaling</span></td><td>Enhance image resolution &mdash; the Daminion Feature enhancement utility &mdash; with AI (Swin2SR) or fast Lanczos</td><td>New image files in the folder you name in the upscaling settings</td></tr>
 </table>
 
@@ -39,10 +41,11 @@ processing views report the settings back read-only, so nothing runs blind.</p>
 <table>
 <tr><th class="setting">What</th><th>Where it is set</th><th>Which topics</th></tr>
 <tr><td>Folder, folder recursion, Daminion login</td><td>Settings &rsaquo; Connection</td><td><a href="step1-datasource.html">The data source</a>, <a href="step1-daminion.html">Connecting to Daminion</a></td></tr>
-<tr><td>Catalog scope, filters, record count</td><td>The processing view that runs (Tagging, Dedup or Upscale)</td><td><a href="step1-scope-filters.html">Scope and filters</a></td></tr>
+<tr><td>Catalog scope, filters, record count</td><td>The processing view that runs (Tagging, Dedup, Similar or Upscale)</td><td><a href="step1-scope-filters.html">Scope and filters</a></td></tr>
 <tr><td>How many items, and how much of each image the model sees</td><td>Settings &rsaquo; Connection &rsaquo; limits</td><td><a href="step1-limits.html">How many items, and how much of each image</a></td></tr>
 <tr><td>Model, device, tag fields, scoring, prompts</td><td>Settings &rsaquo; Tagging</td><td><a href="step2-engine.html">Inference engine</a>, <a href="step2-tag-fields.html">Tag fields</a>, <a href="step2-prompts.html">Prompts</a></td></tr>
 <tr><td>Deduplication algorithm, threshold, server-hash rule, keep-set rule</td><td>Settings &rsaquo; Dedup</td><td><a href="dedup.html">Deduplication</a></td></tr>
+<tr><td>Similarity algorithm, similarity threshold, server-hash rule, keep-set rule</td><td>Settings &rsaquo; Similar</td><td><a href="similar.html">Similar images</a>, <a href="settings-reference.html#similar">Settings reference</a></td></tr>
 <tr><td>Upscaling workflow, factor, precision, output and post-processing</td><td>Settings &rsaquo; Upscale</td><td><a href="upscale.html">Upscaling</a></td></tr>
 <tr><td>Appearance, logging, new-session defaults, about</td><td>Settings &rsaquo; App</td><td><a href="settings-reference.html">Settings reference</a></td></tr>
 </table>
@@ -124,6 +127,7 @@ large first run.</li>
 <li><a href="step1-datasource.html">The data source</a></li>
 <li><a href="step2-engine.html">Inference engine</a></li>
 <li><a href="dedup.html">Deduplication</a></li>
+<li><a href="similar.html">Similar images</a></li>
 <li><a href="upscale.html">Upscaling</a></li>
 <li><a href="metadata-written.html">What gets written to your images</a></li>
 </ul>

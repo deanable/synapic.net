@@ -6,10 +6,10 @@ using Avalonia.VisualTree;
 namespace Synapic.Main.Views.Settings;
 
 /// <summary>
-/// The Settings view as six tabs — Connection, Inference server, Tagging engine,
-/// Deduplication, Upscaling, App preferences — one concern per tab instead of one
-/// long column for all of them (ui-design §5, 2026-10-11 revision: a new user
-/// could not see where one concern ended and the next began). The search box
+/// The Settings view as seven tabs — Connection, Inference server, Tagging engine,
+/// Deduplication, Similar images, Upscaling, App preferences — one concern per tab
+/// instead of one long column for all of them (ui-design §5, 2026-10-11 revision:
+/// a new user could not see where one concern ended and the next began). The search box
 /// above the strip is the fast path: it switches to the tab the query names, and
 /// <see cref="ShowSection"/>/<see cref="ShowTab"/> are the entry points tests use
 /// to land on a tab by section or tab name.
@@ -22,7 +22,11 @@ public partial class SettingsTab : UserControl
         ("TabConnection", new[] { "Data source", "Local folder", "Daminion", "Max items", "AI image scale" }),
         ("TabServer", new[] { "Inference server", "Sidecar", "Build", "Download", "Auto-launch" }),
         ("TabEngine", new[] { "Inference engine", "Model", "Device", "Tag fields", "Scoring", "Prompts" }),
-        ("TabDedup", new[] { "Deduplication", "Algorithm", "Threshold", "Keep-set" }),
+        // The shared words (Algorithm, Threshold, Keep-set) deliberately appear on
+        // both image-matching tabs: a generic query lands on Deduplication, the
+        // first of the two, while "similar" names the similarity tab on its own.
+        ("TabDedup", new[] { "Deduplication", "Duplicate", "Duplicates", "Algorithm", "Threshold", "Keep-set" }),
+        ("TabSimilar", new[] { "Similar", "Similarity", "Near-match", "Similar threshold", "Algorithm", "Threshold", "Keep-set" }),
         ("TabUpscale", new[] { "Upscaling", "Workflow", "Factor", "Precision", "Output" }),
         ("TabApp", new[] { "Appearance", "Theme", "Logging", "Defaults", "About" }),
     };
@@ -37,6 +41,7 @@ public partial class SettingsTab : UserControl
         ("SectionInferenceServer", "TabServer"),
         ("SectionEngine", "TabEngine"),
         ("SectionDedup", "TabDedup"),
+        ("SectionSimilar", "TabSimilar"),
         ("SectionUpscale", "TabUpscale"),
         ("SectionAppearance", "TabApp"),
         ("SectionLogging", "TabApp"),

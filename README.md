@@ -213,37 +213,41 @@ Synapic.Net/
 
 │   │   │   ├── MainLayout.axaml        # header / sidebar / content / footer / log
 
+│   │   │   ├── Operation/                # the shared processing template
+
+│   │   │   │   ├── OperationLayout.axaml   # source summary + run + report slots
+
+│   │   │   │   ├── RunStateBar.axaml       # the one run bar every mode shows
+
+│   │   │   │   ├── ScopeSelectionPanel.axaml
+
+│   │   │   │   └── SourceLimitsPanel.axaml
+
 │   │   │   ├── Wizard/
 
-│   │   │   │   ├── Step1Datasource.axaml   # 1 · Source & model
+│   │   │   │   ├── DatasourceSourcePanel.axaml # folder picker + connection form
 
-│   │   │   │   ├── EngineModelPicker.axaml # compact model + device picker
+│   │   │   │   ├── SourceStatusStrip.axaml     # the two source lights
 
-│   │   │   │   ├── Step2TagSettings.axaml  # 3 · Settings (summary)
+│   │   │   │   ├── Step2Engine.axaml           # the tagging settings form
 
-│   │   │   │   ├── Step2Engine.axaml       # the tagging settings form (dialog)
+│   │   │   │   ├── Step4Results.axaml          # the tagging report
 
-│   │   │   │   ├── Step3Process.axaml      # the tagging run page
+│   │   │   │   ├── StepDedup.axaml             # both image-matching run pages
 
-│   │   │   │   ├── Step4Results.axaml      # the tagging report
-
-│   │   │   │   ├── StepDedup.axaml         # the deduplication run page
+│   │   │   │   ├── StepUpscale.axaml           # the upscaling run page
 
 │   │   │   │   ├── DedupSettingsPanel.axaml
 
-│   │   │   │   ├── StepUpscale.axaml       # the upscaling run page
+│   │   │   │   ├── SimilarSettingsPanel.axaml  # the similarity search's rules
 
 │   │   │   │   └── UpscaleSettingsPanel.axaml
 
-│   │   │   └── Settings/               # the per-operation settings dialogs
+│   │   │   └── Settings/               # the Settings view and its sections
 
-│   │   │       ├── EngineSettingsDialog.axaml
+│   │   │       ├── SettingsTab.axaml   # the seven tabs and the settings search
 
-│   │   │       ├── DedupSettingsDialog.axaml
-
-│   │   │       └── UpscaleSettingsDialog.axaml
-
-│   │   │   └── Controls/           # Reusable: ProgressRing, LogViewer, ModelPicker, etc.
+│   │   │       └── InferenceServerSection.axaml
 
 │   │   ├── Services/
 
@@ -1340,6 +1344,8 @@ jobs:
 - [x] Implement pHash/dHash in C# (NetVips or custom)
 
 - [x] Build StepDedup UI (duplicate-group cards with per-item keep checkboxes, auto-select: oldest/newest/smallest/largest, bulk actions)
+
+- [x] Similar images — the same perceptual scan under a second profile (a looser 0.85 threshold), presented as its own operation: its own sidebar row, Settings tab, help topic and registry values, so widening one search never widens the other
 
 - [x] Integrate with Daminion (source = Step 1 scope/collection, delete from catalog after confirmation)
 

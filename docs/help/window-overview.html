@@ -16,18 +16,19 @@ sidebar down the left that is the only navigation, and one view at a time to its
 right. There is no dashboard, no numbered step chain and no toolbar: the row you
 pick in the sidebar is the view you get.</p>
 
-<h2>The four views</h2>
+<h2>The five views</h2>
 
-<p>The sidebar lists four rows (Settings, Tagging, Deduplication, Upscaling), in
-this order. The lit row is the view that is
+<p>The sidebar lists five rows (Settings, Tagging, Deduplication, Similar images,
+Upscaling), in this order. The lit row is the view that is
 open; the app derives it from what is on screen rather than remembering it, so
 the two can never disagree.</p>
 
 <table>
 <tr><th class="setting">Row</th><th>What it is for</th></tr>
-<tr><td><span class="ui">Settings</span></td><td>Every configuration the app has, arranged as one concern per tab: the data source and its limits, the inference server, the tagging engine, the deduplication and upscaling rules, and the app preferences. It is the app's home &mdash; it is what you see on launch.</td></tr>
+<tr><td><span class="ui">Settings</span></td><td>Every configuration the app has, arranged as one concern per tab: the data source and its limits, the inference server, the tagging engine, the deduplication, similarity and upscaling rules, and the app preferences. It is the app's home &mdash; it is what you see on launch.</td></tr>
 <tr><td><span class="ui">Tagging</span></td><td>Run the model over the shared source and write the tags. Opens that operation's processing view.</td></tr>
 <tr><td><span class="ui">Deduplication</span></td><td>Scan the shared source for near-duplicate images and resolve the groups.</td></tr>
+<tr><td><span class="ui">Similar images</span></td><td>Group the images that merely look alike &mdash; the same shot re-encoded, cropped or lightly edited &mdash; and resolve the near-matches. It is the looser sibling of Deduplication and sits directly below it, with its own <span class="ui">Similar</span> tab of rules.</td></tr>
 <tr><td><span class="ui">Upscaling</span></td><td>Enhance the resolution of the shared source's images, with AI (Swin2SR) or Lanczos.</td></tr>
 </table>
 

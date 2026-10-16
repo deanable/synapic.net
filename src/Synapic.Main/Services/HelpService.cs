@@ -34,6 +34,12 @@ public static class HelpTopics
     public const string Upscale = "upscale.html";
 
     /// <summary>
+    /// The similarity search: the operation that groups visually alike images
+    /// at a looser threshold than deduplication does.
+    /// </summary>
+    public const string Similar = "similar.html";
+
+    /// <summary>
     /// The topic for a legacy wizard step index — the naming the compiled help
     /// still carries: 0 = Step 1, 1 = Step 2, 2 = Step 3, 3 = Step 4,
     /// 4 = Deduplication, 5 = Upscaling. The operation adapters name the entry

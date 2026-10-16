@@ -26,11 +26,12 @@ you choose where they land:</p>
 <li>into your Daminion catalog, through the Daminion API.</li>
 </ul>
 
-<p>The window has four views down the left side. <span class="ui">Settings</span>
+<p>The window has five views down the left side. <span class="ui">Settings</span>
 holds every configuration the app has &mdash; the source and its server, the
 inference server, the engine, the operation rules and the app preferences &mdash;
-and the other three, <span class="ui">Tagging</span>,
-<span class="ui">Deduplication</span> and <span class="ui">Upscaling</span>, run
+and the other four, <span class="ui">Tagging</span>,
+<span class="ui">Deduplication</span>, <span class="ui">Similar images</span>
+and <span class="ui">Upscaling</span>, run
 over the source it names. The engine itself is a second program, the <span
 class="term">inference server</span> (also called the sidecar); Synapic starts it
 for you once one is built.</p>
@@ -78,11 +79,19 @@ usually this, not a fault.</p>
 <li><span class="term">Configuration has one home.</span> The source, the server,
 the engine, the operation rules and the app preferences now sit in one scrolling
 column on the <span class="ui">Settings</span> view, with a search box over it.
-The other three views hold no configuration at all, so nothing is set up twice.
+The other views hold no configuration at all, so nothing is set up twice.
 See <a href="window-overview.html">The Synapic window</a>.</li>
+<li><span class="term">Similar images: a second cleanup search.</span>
+<span class="ui">Deduplication</span> finds copies; the new
+<span class="ui">Similar images</span> operation finds the visibly alike ones
+&mdash; the same picture re-encoded, cropped or lightly edited &mdash; so a
+catalog can be trimmed of near-matches as well as duplicates. It has its own
+row in the sidebar, directly below Deduplication, and its own
+<span class="ui">Similar</span> tab in the settings. See
+<a href="similar.html">Similar images</a>.</li>
 <li><span class="term">The sidebar replaced the dashboard and the step
-chain.</span> There is no start screen and no numbered wizard: the four rows are
-the navigation, and picking one opens that view. See
+chain.</span> There is no start screen and no numbered wizard: the sidebar rows
+are the navigation, and picking one opens that view. See
 <a href="workflow-overview.html">How a run works</a>.</li>
 <li><span class="term">One layout for every operation.</span> Each processing
 view shows a read-only <span class="ui">Working on</span> summary of the shared

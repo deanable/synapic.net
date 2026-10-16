@@ -210,6 +210,10 @@
 		<param name="Local" value="step2-engine.html">
 		</OBJECT>
 	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="near-match">
+		<param name="Local" value="similar.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
 		<param name="Name" value="password, Daminion">
 		<param name="Local" value="settings-reference.html#password">
 		</OBJECT>
@@ -300,6 +304,18 @@
 	<LI> <OBJECT type="text/sitemap">
 		<param name="Name" value="silent installation">
 		<param name="Local" value="admin-install.html#silent">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="similar images">
+		<param name="Local" value="similar.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="similarity search">
+		<param name="Local" value="similar.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="similarity threshold">
+		<param name="Local" value="similar.html">
 		</OBJECT>
 	<LI> <OBJECT type="text/sitemap">
 		<param name="Name" value="stale build">

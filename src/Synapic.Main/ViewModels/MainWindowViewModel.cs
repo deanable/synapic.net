@@ -126,16 +126,17 @@ public partial class MainWindowViewModel : ViewModelBase
                 OnPropertyChanged(nameof(SourceCountText));
         };
 
-        // The three operation adapters (phase 1) and the shell's one navigation
+        // The four operation adapters (phase 1) and the shell's one navigation
         // state (D-03/D5): the dashboard panels and the mode commands all funnel
         // through Shell.Open, so "which operation is open" has exactly one
         // answer. There is no second route machine any more — the delegate below
         // *is* the entry point, and Current is the state it writes.
         TagOperation = new TagOperationViewModel(Operations.TagRun, Operations.TagReport);
         DedupOperation = new DedupOperationViewModel(Operations.Dedup);
+        SimilarOperation = new DedupOperationViewModel(Operations.Similar);
         UpscaleOperation = new UpscaleOperationViewModel(Operations.Upscale);
         Shell = new ShellViewModel(
-            new IOperationViewModel[] { TagOperation, DedupOperation, UpscaleOperation },
+            new IOperationViewModel[] { TagOperation, DedupOperation, SimilarOperation, UpscaleOperation },
             openRoute: OpenOperation,
             goHome: GoHomeCore);
     }
@@ -210,6 +211,13 @@ public partial class MainWindowViewModel : ViewModelBase
     /// <summary>The deduplication operation as the shared template sees it (phase 1 adapter).</summary>
     public DedupOperationViewModel DedupOperation { get; }
 
+    /// <summary>
+    /// The similarity search as the shared template sees it: the same adapter
+    /// class as <see cref="DedupOperation"/>, over the step's Similar profile, so
+    /// the two routes are separate operations rather than one mode with a flag.
+    /// </summary>
+    public DedupOperationViewModel SimilarOperation { get; }
+
     /// <summary>The upscaling operation as the shared template sees it (phase 1 adapter).</summary>
     public UpscaleOperationViewModel UpscaleOperation { get; }
 
@@ -236,7 +244,7 @@ public partial class MainWindowViewModel : ViewModelBase
     // ── The mode rail (ui-design §2.2/§6.2) ───────────────────────────────
 
     /// <summary>
-    /// The operation view's mode rail: which of the three mode buttons is the one
+    /// The operation view's mode rail: which of the mode buttons is the one
     /// that is open, so the rail can show it as activated. Derived from
     /// <see cref="Shell.Current"/> like every other piece of navigation (D-03/D5)
     /// — the rail stores no selection of its own, so pressing another button
@@ -247,6 +255,9 @@ public partial class MainWindowViewModel : ViewModelBase
 
     /// <summary>See <see cref="IsTagModeActive"/>.</summary>
     public bool IsDedupModeActive => IsModeOpen(OperationShellViewModel.DedupKey);
+
+    /// <summary>See <see cref="IsTagModeActive"/>.</summary>
+    public bool IsSimilarModeActive => IsModeOpen(OperationShellViewModel.SimilarKey);
 
     /// <summary>See <see cref="IsTagModeActive"/>.</summary>
     public bool IsUpscaleModeActive => IsModeOpen(OperationShellViewModel.UpscaleKey);
@@ -291,6 +302,7 @@ public partial class MainWindowViewModel : ViewModelBase
         // answer to which mode is open.
         OnPropertyChanged(nameof(IsTagModeActive));
         OnPropertyChanged(nameof(IsDedupModeActive));
+        OnPropertyChanged(nameof(IsSimilarModeActive));
         OnPropertyChanged(nameof(IsUpscaleModeActive));
     }
 
@@ -319,6 +331,14 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         Shell.Open(OperationShellViewModel.DedupKey);
         SynapicLog.Info(nameof(MainWindowViewModel), "Mode opened: Deduplication");
+    }
+
+    /// <summary>Dashboard → the similarity search (similar images, looser than dedup).</summary>
+    [RelayCommand]
+    private void StartSimilarRoute()
+    {
+        Shell.Open(OperationShellViewModel.SimilarKey);
+        SynapicLog.Info(nameof(MainWindowViewModel), "Mode opened: Similar images");
     }
 
     /// <summary>Dashboard → the upscaling operation (Feature enhancement).</summary>

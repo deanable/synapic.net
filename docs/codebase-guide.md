@@ -12,12 +12,12 @@ results either into the image files' metadata or back into a **Daminion** DAM
 catalog.
 
 Entry point: the app opens on the **Settings view** — the first row of a
-left sidebar of four rows (**Settings**, **Tagging**, **Deduplication**,
-**Upscaling**), the open row lit (see
+left sidebar of five rows (**Settings**, **Tagging**, **Deduplication**,
+**Similar images**, **Upscaling**), the open row lit (see
 [`mock-up/Mockup.svg`](mock-up/Mockup.svg)). Settings owns the app's
 configuration — the source and its Daminion connection (folder picker, server
 URL and login), the inference server (sidecar download / build / start-stop), the
-inference engine, the operation rules and the app preferences. The other three
+inference engine, the operation rules and the app preferences. The other four
 rows open **processing** views that carry the read-only source profile, the
 **scope, filters and record count the run works on** (D10 — a scope is a run's
 choice, so it is made where the run happens), their mode-specific parts and their
@@ -25,36 +25,44 @@ output, of which the shared run bar is the one run surface. Navigation is
 `MainWindowViewModel.Shell` (`ShellViewModel`): `Shell.Current` — null means the
 Settings view, non-null names the open operation — is the only state behind it,
 and `StartTaggingRouteCommand` / `StartDedupRouteCommand` /
-`StartUpscaleRouteCommand` / `GoHomeCommand` are what the sidebar rows bind (the
-old `Route` strings, route booleans and dashboard panels are gone). All three routes run on one shared batch kernel
+`StartSimilarRouteCommand` / `StartUpscaleRouteCommand` / `GoHomeCommand` are what
+the sidebar rows bind (the
+old `Route` strings, route booleans and dashboard panels are gone). All four routes run on one shared batch kernel
 (`Services/Processing/WorkflowRunner`): fetch &rarr; bounded per-item handler &rarr;
 progress/ETA &rarr; summary &mdash; only the parameters (`TagRequest`,
 `DedupOptions`, `UpscaleOptions`) and the per-item handler change.
 
-Wizard flow (tagging route):
+The tagging route, end to end (the configuration lives on the Settings view; an
+operation view shows the source it runs on and what it produced):
 
-1. **Datasource** — the source chosen on the start screen (local folder,
-   recursive or not; or a connected Daminion server with a scope &mdash; whole
-   catalog / keyword search / shared collection / saved search &mdash; and
-   filters), shown read-only with its record count, plus the fetch limit (and an
-   optional *Process all*) and the AI image scale.
+1. **Datasource** — the shared source, configured on the Settings view's
+   Connection tab and summarized read-only on every operation view: a local
+   folder (recursive or not), or a connected Daminion server with a scope
+   &mdash; whole catalog / keyword search / shared collection / saved search
+   &mdash; and filters, with its record count, the fetch limit (and an optional
+   *Process all*) and the AI image scale.
 2. **Engine** — model id (from the local HF cache or by hand), device
    (CPU/CUDA/MPS), probability mode + candidate labels, a custom VLM system
-   prompt, and which of the three returned fields to write.
+   prompt, and which of the three returned fields to write. Settings → Tagging.
 3. **Process** — runs the batch: fetch → infer → write, with progress, ETA,
-   pause/resume/abort, and a live log.
+   pause/resume/abort, and a live log (the shared run bar).
 4. **Results** — grid of per-item outcomes, CSV export, retry of failed items,
    and verification of Daminion writes.
-5. **Deduplication** — separate tool: perceptual-hash duplicate scan with
-   Tag/Move/Delete actions. Reachable from the start screen as its own route,
-   or from this wizard's Deduplication tab once Results is reached.
-6. **Upscaling** — separate tool (the Daminion "Feature enhancement"
+5. **Deduplication** — separate tool: a perceptual-hash duplicate scan at a
+   strict threshold (0.90) with Tag/Move/Delete actions, over the shared source,
+   with its rules on Settings → Dedup.
+6. **Similar images** — the same scan at a looser threshold (0.85), presented as
+   its own operation: visibly alike images (re-encodes, crops, light edits)
+   group instead of only near-identical copies. Its own sidebar row (directly
+   below Deduplication, whose looser sibling it is), its own Settings tab
+   (Settings → Similar), help topic and registry values, so widening one search
+   never widens the other.
+7. **Upscaling** — separate tool (the Daminion "Feature enhancement"
    utility): Swin2SR (quality/balanced) or Lanczos (fast) enhancement of the
-   Step 1 source through the sidecar's `POST /upscale`, checked out →
+   shared source through the sidecar's `POST /upscale`, checked out →
    downloaded → upscaled → checked back in for catalog items, and written as
-   `name_upscaled.ext` beside local originals. Reachable from the start
-   screen as its own route, or from this wizard's Upscaling tab once Results
-   is reached.
+   `name_upscaled.ext` beside local originals, with its parameters on
+   Settings → Upscale.
 
 Cloud engines (OpenRouter/Groq) were removed from scope: the local sidecar is
 the only engine and there are no API keys to store.
@@ -260,6 +268,7 @@ implemented once, in the runner.
 | App config (wizard + engine defaults, UI prefs) | Windows `%APPDATA%\Synapic\config.json`; otherwise `$XDG_CONFIG_HOME/Synapic/config.json` or `~/.config/Synapic/config.json` |
 | Step 1 connection + scope/filter/limit settings | Windows registry `HKCU\Software\Synapic\Daminion` (password DPAPI-protected); no-op elsewhere |
 | Step 2 engine settings | Windows registry `HKCU\Software\Synapic\Engine`; no-op elsewhere |
+| App settings (`AppSettingsRegistryStore`): appearance, logging, new-session defaults, the local source, the processing limits and the dedup / similar / upscale rules | Windows registry `HKCU\Software\Synapic\AppData`, one flat value map; no-op elsewhere. The dedup and similar rule sets are independent `Dedup*` / `Similar*` values (`SimilarThresholdDefault` is `0.85`), and an old `config.json` is imported into the key once, when it is empty |
 | Log file (live file starts empty each run; previous runs in `logs/archives/`, last 10) | `logs/synapic.log` next to the executable, falling back to `%LOCALAPPDATA%\Synapic\logs` |
 | Crash reports | `logs/crashes/` (exception + session-log snapshot) |
 | Opt-in usage counters | `logs/synapic-usage.json` |
@@ -272,8 +281,9 @@ Notes:
   reaches Results, on Start Over, and at other lifecycle points. Only a
   successful Daminion login rewrites the registry connection block, so a typo
   can never clobber a working set.
-- `EngineSettingsStore`/`DaminionConnectionStore` are Windows-only by design;
-  the app remains functional (with defaults) on Linux/macOS.
+- `EngineSettingsStore`/`DaminionConnectionStore` and the app-wide
+  `AppSettingsRegistryStore` are Windows-only by design; the app remains
+  functional (with defaults) on Linux/macOS.
 - Config has a `Version` (currently 2). Unknown JSON fields are preserved on
   round-trip by `ConfigService`.
 
@@ -449,6 +459,11 @@ standalone CPU and CUDA sidecar executables — see `packaging.md`.
   no API-key fields.
 - **Deduplication, metadata writing, and DaemonThreadPoolExecutor** were
   deliberately re-implemented in C# rather than ported to the sidecar.
+- **Deduplication and Similar images are one scan under two profiles**
+  (`ImageMatchProfile` on `StepDedupViewModel`): the same hashing, grouping,
+  review and apply, differing in the starting threshold (0.90 / 0.85), the
+  wording, the operation key and which half of the settings store each reads,
+  so loosening one search cannot loosen the other.
 - **The upscaler runs in the sidecar** (`POST /upscale`, Swin2SR/Lanczos —
   `src/Synapic.Inference/upscaler.py`, a verbatim port of the original app's
   `core/upscaler.py`), keeping the algorithm next to its Python origin; only

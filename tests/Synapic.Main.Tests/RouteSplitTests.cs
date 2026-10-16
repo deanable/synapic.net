@@ -74,7 +74,7 @@ public class RouteSplitTests
 
             var settings = Assert.Single(window.GetVisualDescendants().OfType<SettingsTab>());
             Assert.True(EffectivelyVisible(settings));
-            foreach (var section in new[] { "SectionDataSource", "SectionInferenceServer", "SectionEngine", "SectionDedup", "SectionUpscale" })
+            foreach (var section in new[] { "SectionDataSource", "SectionInferenceServer", "SectionEngine", "SectionDedup", "SectionSimilar", "SectionUpscale" })
             {
                 settings.ShowSection(section);
                 Dispatcher.UIThread.RunJobs();
@@ -256,6 +256,7 @@ public class RouteSplitTests
             var settings = nav.Single(b => b.Command == vm.GoHomeCommand);
             var tag = nav.Single(b => b.Command == vm.StartTaggingRouteCommand);
             var dedup = nav.Single(b => b.Command == vm.StartDedupRouteCommand);
+            var similar = nav.Single(b => b.Command == vm.StartSimilarRouteCommand);
             var upscale = nav.Single(b => b.Command == vm.StartUpscaleRouteCommand);
             Assert.All(nav, b => Assert.True(EffectivelyVisible(b)));
 
@@ -269,6 +270,7 @@ public class RouteSplitTests
             foreach (var (mode, row, enter, run, report) in new (string, Button, Action, object, object?)[]
                      {
                          ("dedup", dedup, () => vm.StartDedupRouteCommand.Execute(null), vm.Operations.Dedup, null),
+                         ("similar", similar, () => vm.StartSimilarRouteCommand.Execute(null), vm.Operations.Similar, null),
                          ("upscale", upscale, () => vm.StartUpscaleRouteCommand.Execute(null), vm.Operations.Upscale, null),
                          ("tag", tag, () => vm.StartTaggingRouteCommand.Execute(null), vm.Operations.TagRun, vm.Operations.TagReport),
                      })

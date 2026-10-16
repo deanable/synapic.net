@@ -17,7 +17,8 @@ namespace Synapic.Main.Tests;
 
 /// <summary>
 /// The shell's structure after the sidebar redesign (docs/mock-up/Mockup.svg): a
-/// left sidebar of four rows — Settings, Tagging, Deduplication, Upscaling — and
+/// left sidebar of five rows — Settings, Tagging, Deduplication, Similar images,
+/// Upscaling — and
 /// a content panel. Settings owns every configuration; the three processing views
 /// carry only the read-only source summary and their own output. These drive the
 /// real compiled XAML, because a mistyped binding path is silent in Avalonia.
@@ -80,9 +81,9 @@ public class WorkflowOrderTests
             Assert.Empty(DeletedChrome(window));
 
             var nav = NavRows(window);
-            Assert.Equal(4, nav.Count);
+            Assert.Equal(5, nav.Count);
             Assert.Equal(
-                new[] { "Settings", "Tagging", "Deduplication", "Upscaling" },
+                new[] { "Settings", "Tagging", "Deduplication", "Similar images", "Upscaling" },
                 nav.Select(Label).ToArray());
 
             // Every processing view opens from its own row, and the chrome stays
@@ -91,6 +92,7 @@ public class WorkflowOrderTests
                      {
                          ("tag", () => shell.StartTaggingRouteCommand.Execute(null)),
                          ("dedup", () => shell.StartDedupRouteCommand.Execute(null)),
+                         ("similar", () => shell.StartSimilarRouteCommand.Execute(null)),
                          ("upscale", () => shell.StartUpscaleRouteCommand.Execute(null)),
                      })
             {
@@ -131,9 +133,9 @@ public class WorkflowOrderTests
                 b => b.Classes.Contains("outputRegion"));
             double LeftOf(Control c) => c.TranslatePoint(new Point(0, 0), window)!.Value.X;
 
-            // Four rows on screen, to the left of the content.
+            // Five rows on screen, to the left of the content.
             var nav = NavRows(window);
-            Assert.Equal(4, nav.Count);
+            Assert.Equal(5, nav.Count);
             Assert.All(nav, b => Assert.True(EffectivelyVisible(b),
                 $"{b.Content} is not on screen in an open view"));
             Assert.All(nav, b => Assert.True(LeftOf(b) < LeftOf(output),
@@ -189,6 +191,7 @@ public class WorkflowOrderTests
                      {
                          ("tag", () => shell.StartTaggingRouteCommand.Execute(null)),
                          ("dedup", () => shell.StartDedupRouteCommand.Execute(null)),
+                         ("similar", () => shell.StartSimilarRouteCommand.Execute(null)),
                          ("upscale", () => shell.StartUpscaleRouteCommand.Execute(null)),
                      })
             {

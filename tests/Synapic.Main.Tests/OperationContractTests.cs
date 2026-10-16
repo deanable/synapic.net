@@ -67,7 +67,7 @@ public class OperationContractTests
             name.Contains("SourcePath", StringComparison.Ordinal));
     }
 
-    // ── The three adapters (D-05) ──────────────────────────────────────────
+    // ── The adapters (D-05) ────────────────────────────────────────────────
 
     [Fact]
     public void Three_sealed_adapters_carry_the_dashboard_keys_and_titles()
@@ -171,6 +171,41 @@ public class OperationContractTests
 
         Assert.Contains(nameof(IOperationViewModel.ParametersSummary), raised);
         Assert.Equal(dedup.ScanSettingsSummary, adapter.ParametersSummary);
+    }
+
+    /// <summary>
+    /// The similarity search is a fourth operation, not a mode of deduplication:
+    /// its own key, title, help topic and description, over the same adapter class
+    /// and the same scan implementation under the other profile. Sharing the class
+    /// is what keeps the two from drifting; sharing the identity would have made
+    /// them one operation with a flag.
+    /// </summary>
+    [Fact]
+    public void The_similarity_search_is_its_own_operation_over_the_same_adapter()
+    {
+        var dedupStep = new StepDedupViewModel();
+        var similarStep = new StepDedupViewModel(profile: ImageMatchProfile.Similar);
+        var dedup = new DedupOperationViewModel(dedupStep);
+        var similar = new DedupOperationViewModel(similarStep);
+
+        Assert.Equal("dedup", dedup.Key);
+        Assert.Equal("similar", similar.Key);
+        Assert.Equal("Deduplication", dedup.Title);
+        Assert.Equal("Similar images", similar.Title);
+        Assert.NotEqual(dedup.Description, similar.Description);
+
+        // Each names its own topic, and the similarity one is a topic the app
+        // really ships - HelpServiceTests checks HelpTopics against docs/help.
+        Assert.Equal(HelpTopics.ForStepIndex(4), dedup.HelpTopic);
+        Assert.Equal(HelpTopics.Similar, similar.HelpTopic);
+
+        // Both hand out the same shape of run: the step's own scan command.
+        Assert.Same(similarStep.ScanCommand, similar.Run);
+
+        // And they start at their own thresholds, so the loose search never
+        // inherited the strict one.
+        Assert.Equal(0.90, dedupStep.Threshold, 6);
+        Assert.Equal(AppSettingsRegistryStore.SimilarThresholdDefault, similarStep.Threshold, 6);
     }
 
     // ── Delegated read-backs ────────────────────────────────────────────────

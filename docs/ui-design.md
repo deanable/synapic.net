@@ -15,27 +15,35 @@
 > ## Update — sidebar navigation (current)
 >
 > The mockup [`mock-up/Mockup.svg`](mock-up/Mockup.svg) supersedes the two-screen
-> dashboard described below. The app now has a **left sidebar of four rows** —
-> **Settings**, **Tagging**, **Deduplication**, **Upscaling** — and one content
-> panel to its right, with the open row lit:
+> dashboard described below. The app now has a **left sidebar of five rows** —
+> **Settings**, **Tagging**, **Deduplication**, **Similar images**,
+> **Upscaling** — and one content panel to its right, with the open row lit:
 >
 > ```
 > ┌───────────────┬─────────────────────────────────────────────┐
 > │ ⚙ Settings    │                                             │
 > │ 🏷 Tagging     │                                             │
 > │ 🧹 Dedup       │   the open view (Settings / a processing    │
-> │ ✨ Upscaling   │   operation)                                │
+> │ 🔍 Similar     │   operation)                                │
+> │ ✨ Upscaling   │                                             │
 > │   · server ·  │                                             │
 > └───────────────┴─────────────────────────────────────────────┘
 > ```
 >
 > - **Settings** (the first row, and the app's home) owns the app's
->   configuration, organised as **six tabs** (2026-10-11 revision, see §5): the
+>   configuration, organised as **seven tabs** (2026-10-11 revision plus the
+>   similarity search, see §5): the
 >   source and its Daminion connection (folder, server URL and login), the
 >   inference server (sidecar download / build / start-stop), the
 >   inference engine (model, device, tagging behaviour), the deduplication and
->   upscaling rules, and the app preferences (appearance, logging, defaults,
->   about).
+>   similarity rules, the upscaling rules, and the app preferences (appearance,
+>   logging, defaults, about).
+> - **Deduplication** and **Similar images** are one mechanism under two profiles
+>   (`ImageMatchProfile` on `StepDedupViewModel`): the same perceptual-hash scan,
+>   review and apply, with their own threshold (0.90 for copies, 0.85 for the
+>   visibly alike), their own route, settings tab and help topic. Similar images
+>   is the row directly below Deduplication because it is that search's looser
+>   sibling — not a mode of it.
 > - What a run works on is chosen where the run happens (**D10**): each
 >   **processing** view carries the shared source's read-only profile, the catalog
 >   scope, its filters and the record count, plus its mode-specific parts and its

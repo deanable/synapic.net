@@ -145,9 +145,12 @@ a processing view or the sidecar section:
 
 - Labels live in `src/Synapic.Main/Views/*.axaml`; match them exactly,
   including punctuation in a heading like "Tag fields: what gets written".
-- Persisted values live in `EngineSettingsStore` /
-  `DaminionConnectionStore`; `admin-settings-files.html` lists those names and
-  registry paths, so update it with them.
+- Persisted values live in `EngineSettingsStore`,
+  `DaminionConnectionStore` and `AppSettingsRegistryStore` (the app preferences,
+  the local source and limits, and the dedup / similar / upscale rules under
+  `HKCU\Software\Synapic\AppData`); `admin-settings-files.html` lists those
+  names and registry paths, so update it with them. A new persisted setting is
+  two edits, not one.
 - Paths and files (logs, crashes, model cache, `config.json`,
   `system-prompts.json`) are in `docs/codebase-guide.md` section 7; keep the
   administrator topics and that table in step.

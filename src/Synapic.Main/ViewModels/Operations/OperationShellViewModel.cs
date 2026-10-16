@@ -8,8 +8,8 @@ using Synapic.Main.ViewModels.Steps;
 namespace Synapic.Main.ViewModels.Operations;
 
 /// <summary>
-/// The operation host (docs/ui-design.md §3/§6, decision D5): it owns the six
-/// view models the shared operation template renders, and nothing else.
+/// The operation host (docs/ui-design.md §3/§6, decision D5): it owns the view
+/// models the shared operation template renders, and nothing else.
 ///
 /// There is no step chain here any more — no current step, no Next/Back, no
 /// mutual-exclusion route flags. Which mode is open is
@@ -19,8 +19,8 @@ namespace Synapic.Main.ViewModels.Operations;
 ///
 /// <code>
 ///   Region A  Source        shared by every mode        → Source
-///   Region B  Parameters    the mode's own tunables     → TagParameters | Dedup | Upscale
-///   Region C  Run · Report  progress, output, results   → TagRun + TagReport | Dedup | Upscale
+///   Region B  Parameters    the mode's own tunables     → TagParameters | Dedup | Similar | Upscale
+///   Region C  Run · Report  progress, output, results   → TagRun + TagReport | Dedup | Similar | Upscale
 /// </code>
 ///
 /// It also keeps the cross-cutting wiring the step view models relied on the
@@ -34,6 +34,15 @@ public partial class OperationShellViewModel : ViewModelBase
     /// <summary>The tagging operation's key, as <see cref="IOperationViewModel.Key"/> spells it.</summary>
     public const string TagKey = "tag";
     public const string DedupKey = "dedup";
+
+    /// <summary>
+    /// The similarity search's key. It is a separate operation from
+    /// <see cref="DedupKey"/> even though one view model class serves both: the
+    /// two have their own rules, their own settings tab and their own place in
+    /// the sidebar, so they navigate and persist apart.
+    /// </summary>
+    public const string SimilarKey = "similar";
+
     public const string UpscaleKey = "upscale";
 
     /// <param name="computeAvailabilityProbe">
@@ -57,6 +66,10 @@ public partial class OperationShellViewModel : ViewModelBase
         TagRun = new Step3ProcessViewModel(session, sidecar, Source);
         TagReport = new Step4ResultsViewModel(session, Source, TagRun);
         Dedup = new StepDedupViewModel(step1: Source, appSettingsStore: appSettingsStore);
+        Similar = new StepDedupViewModel(
+            step1: Source,
+            appSettingsStore: appSettingsStore,
+            profile: ImageMatchProfile.Similar);
         Upscale = new StepUpscaleViewModel(step1: Source, sidecar: sidecar, appSettingsStore: appSettingsStore);
 
         // The tag-field checkboxes gate the tagging run. The wizard used to own
@@ -82,6 +95,13 @@ public partial class OperationShellViewModel : ViewModelBase
     /// <summary>Deduplication's Parameters region and its run content (scan + apply).</summary>
     public StepDedupViewModel Dedup { get; }
 
+    /// <summary>
+    /// The similarity search's Parameters region and its run content. The same
+    /// class as <see cref="Dedup"/> under the other profile: identical scanning,
+    /// review and apply, its own similarity threshold and its own saved rules.
+    /// </summary>
+    public StepDedupViewModel Similar { get; }
+
     /// <summary>Upscaling's Parameters region and its run content.</summary>
     public StepUpscaleViewModel Upscale { get; }
 
@@ -100,6 +120,7 @@ public partial class OperationShellViewModel : ViewModelBase
     {
         TagKey => TagParameters,
         DedupKey => Dedup,
+        SimilarKey => Similar,
         UpscaleKey => Upscale,
         _ => null,
     };
@@ -109,14 +130,16 @@ public partial class OperationShellViewModel : ViewModelBase
     {
         TagKey => TagRun,
         DedupKey => Dedup,
+        SimilarKey => Similar,
         UpscaleKey => Upscale,
         _ => null,
     };
 
     /// <summary>
     /// The mode's report content (Region C), or null when the mode has none:
-    /// deduplication reviews its groups inside its own page, and upscaling
-    /// reports through its progress, so only tagging has a separate grid.
+    /// deduplication and the similarity search review their groups inside their
+    /// own page, and upscaling reports through its progress, so only tagging has
+    /// a separate grid.
     /// </summary>
     public object? ReportFor(string key) => key switch
     {

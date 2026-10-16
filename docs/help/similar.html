@@ -1,0 +1,181 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>Similar images</title>
+<link rel="stylesheet" type="text/css" href="help.css">
+</head>
+<body>
+
+<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; The operations &rsaquo; Similar images</p>
+
+<h1>Similar images</h1>
+
+<p class="lead">The looser half of the catalog cleanup, and a separate operation
+from <a href="dedup.html">Deduplication</a>: it scans a source for images that
+<em>look alike</em> rather than images that are the same, groups the candidates
+into a vertical list, and lets you decide which one to keep before acting on the
+rest. Use it when a folder or a catalog holds the same shot twice over &mdash;
+re-encoded, cropped, resaved or lightly edited &mdash; and you want one of each.</p>
+
+<div class="note">
+<p class="first">It has its own route and its own settings tab.</p>
+<p>The sidebar offers <span class="ui">Similar images</span> directly below
+<span class="ui">Deduplication</span>, with <span class="ui">Tagging</span> and
+<span class="ui">Upscaling</span> further down. Its rules live on the
+<span class="ui">Similar</span> tab of the Settings view, not on the
+<span class="ui">Dedup</span> tab: widening one search never widens the other.
+See <a href="workflow-overview.html">How a run works</a>.</p>
+</div>
+
+<h2>What makes two images similar</h2>
+
+<p>Both searches reduce an image to a 64-bit <span class="term">perceptual
+hash</span> &mdash; a fingerprint of what the picture looks like rather than of
+its bytes &mdash; and compare fingerprints by how many bits differ. The two
+operations differ in one number: the <span class="term">threshold</span>.</p>
+
+<table>
+<tr><th class="setting">Threshold</th><th>Operation</th><th>What it means</th></tr>
+<tr><td>0.90 (Deduplication default)</td><td>Deduplication</td><td>At most six of the 64 bits may differ. Copies, resizes and re-encodes group; anything edited enough to change the picture does not.</td></tr>
+<tr><td>0.85 (Similar images default)</td><td>Similar images</td><td>At most ten bits may differ. Re-encodes, crops and light edits land in the same group as the original, along with more of the images you would call merely alike.</td></tr>
+</table>
+
+<p>Lower the threshold further and the search gets looser still: at 0.80 or
+below it starts bridging quite different pictures that happen to share a
+composition or a palette, and the groups grow. It is a slider for how much you
+are willing to review, not a measure of quality.</p>
+
+<div class="note">
+<p class="first">Groups can chain.</p>
+<p>Candidates are joined into groups transitively: if A matches B at the
+threshold and B matches C, all three are reported as one group even when A and
+C are further apart than the threshold allows. That is usually what you want for
+a burst of near-identical shots, and it is the reason a loose threshold can
+produce a big group out of images that are not all alike. Scan a small scope
+first if the numbers matter to you.</p>
+</div>
+
+<h2>The algorithms</h2>
+
+<p>Every algorithm produces a different fingerprint of the same picture. The
+choice trades robustness against sensitivity.</p>
+
+<table>
+<tr><th class="setting">Algorithm</th><th>Good at</th></tr>
+<tr><td>PHash</td><td>The general-purpose default for both searches. Tolerates re-encoding, resizing and mild retouching, and is the least likely to confuse two unrelated photos.</td></tr>
+<tr><td>DHash</td><td>Small images and subtle brightness differences; often picks up matches PHash misses in low-contrast sets.</td></tr>
+<tr><td>AHash</td><td>The simplest and fastest. Adequate for exact copies and resizes, and the most sensitive to brightness changes.</td></tr>
+<tr><td>ColorMoment</td><td>Colour and tone, ignoring structure. Useful for finding graded versions of the same shot, and the one most likely to group images that merely share a palette.</td></tr>
+</table>
+
+<h2>The source it scans</h2>
+
+<p>The source is the shared one configured in <span class="ui">Settings &rsaquo; Connection</span>:
+the folder on disk, or the Daminion catalog scope (entire catalog, keyword
+search, shared collection or saved search), chosen on the processing view that
+runs. For a local source the scan covers <span class="path">.jpg</span>,
+<span class="path">.jpeg</span>, <span class="path">.png</span>,
+<span class="path">.tif</span> and <span class="path">.tiff</span>, subfolders
+included. For the catalog source, items the catalog has already hashed are
+compared without downloading them; the rest are downloaded to a temporary file,
+hashed and deleted again &mdash; one at a time, so a big collection never lands
+on disk whole.</p>
+
+<h2>Running the search</h2>
+
+<ol class="steps">
+<li>Set the <span class="ui">Algorithm</span> and the
+<span class="ui">Similarity threshold</span> on
+<span class="ui">Settings &rsaquo; Similar</span>. For a catalog source the
+<span class="ui">Server hash</span> rule decides how Daminion's own content
+hashes are compared: <span class="ui">Exact</span> (the default) trusts only
+identical values, <span class="ui">Hamming</span> compares them at the
+threshold like the algorithmic hashes.</li>
+<li>Press <span class="ui">Search</span>. Progress is reported as files are
+hashed: <span class="ui">Hashed 240/1500&hellip;</span> &mdash; or as items are
+grouped from the catalog's own hashes or downloaded for hashing.</li>
+<li>Read the summary: <span class="ui">1500 files scanned &mdash; 9 groups, 21
+similar images</span>, or the guidance line that says nothing matched and points
+at the threshold.</li>
+</ol>
+
+<h2>Reviewing the groups</h2>
+
+<p>Groups appear as cards in a vertical list. Each card shows how many images it
+holds and lists them as rows &mdash; a small preview thumbnail, name, capture
+date and file size &mdash; every row with its own checkbox. Previews are scaled
+down in memory as the list loads; nothing is saved to disk. <strong>A checked
+item is kept</strong>; the action applies to the unchecked ones.</p>
+
+<p>Instead of ticking rows by hand, use the <span class="ui">Keep-set rules</span>
+on <span class="ui">Settings &rsaquo; Similar</span>:
+<span class="ui">Oldest</span>, <span class="ui">Newest</span>,
+<span class="ui">Smallest</span> and <span class="ui">Largest</span>. Each active
+switch ticks the item it names in every group; several switches tick the union of
+their picks. Ties go to the earlier item in the group, items with no date or size
+are never picked, and toggling a switch recomputes the whole selection &mdash;
+hand tweaks after that stick until you toggle a switch again. With no switch
+active, the first item of each group is kept.</p>
+
+<div class="warning">
+<p class="first">Read the group list before applying anything.</p>
+<p>Similar groups are bigger and more arguable than duplicate groups, and the
+default keep-set is the first file the scan found, not the best one. Work
+through a couple of groups by eye before you apply a bulk action, and prefer
+<span class="ui">Move to folder&hellip;</span> over a delete while you are
+learning what the threshold does.</p>
+</div>
+
+<table>
+<tr><th class="setting">Action</th><th>What it actually does</th></tr>
+<tr><td><span class="ui">Delete from disk</span> (local source)</td><td>Deletes the unchecked files permanently. This is a real delete, not a move to the Recycle Bin, and there is no undo &mdash; so a confirmation prompt appears first, counting the files and saying so.</td></tr>
+<tr><td><span class="ui">Move to folder&hellip;</span> (local source)</td><td>Moves the unchecked files into the folder you pick &mdash; a destination box appears beside the action when this is selected. Nothing is destroyed, duplicates of the same name get a numbered suffix instead of overwriting, and the destination folder is remembered for next time. It must not be inside the scanned folder.</td></tr>
+<tr><td><span class="ui">Tag</span> (local source)</td><td>Not implemented in this version. It records the intent in the log and changes nothing.</td></tr>
+<tr><td><span class="ui">Delete from catalog</span> (Daminion source)</td><td>Removes the unchecked items from the Daminion catalog. The original files on the server are not touched, but the catalog entries are: a confirmation prompt appears first, and after that there is no undo. The scan itself changes nothing &mdash; only <span class="ui">Apply</span> does.</td></tr>
+</table>
+
+<h2>When a search does not do what you expected</h2>
+
+<p>Every stage writes to <span class="path">logs\synapic.log</span> beside the
+executable:</p>
+
+<ul>
+<li><span class="term">One line at the start</span> names the source, the
+algorithm, the threshold, the maximum dimension and (for the catalog source) the
+server-hash rule.</li>
+<li><span class="term">One line per skipped item</span>: an original that would
+not download, or a file whose hash could not be computed, is listed with the item
+id, the file name and the reason &mdash; items are never dropped silently.</li>
+<li><span class="term">One line when hashing finishes</span> with how many items
+were hashed, how many were skipped, and how many groups were found.</li>
+<li><span class="term">One line per action</span>: what is about to happen, then
+the result, then what the follow-up read confirmed.</li>
+</ul>
+
+<h2>What this tool is not</h2>
+
+<ul>
+<li>It does not find images by content or subject &mdash; a cat is not similar
+to another cat. It compares fingerprints, so two photographs of the same scene
+from different angles will usually stay apart.</li>
+<li>It is not a replacement for <a href="dedup.html">Deduplication</a>: exact
+copies are what that search is for, it is stricter about them, and it is the
+cheaper pass. Resolve the duplicates first, then use this search for what is
+left.</li>
+<li>It does not remember a search between sessions, and it does not watch a
+folder. Each search is a fresh pass.</li>
+</ul>
+
+<div class="seealso">
+<h2>See also</h2>
+<ul>
+<li><a href="dedup.html">Deduplication</a> &mdash; the strict search for exact copies</li>
+<li><a href="settings-reference.html#similar">Similar settings</a> &mdash; every setting on the Similar tab, with its default</li>
+<li><a href="step1-limits.html">How many items, and how much of each image</a></li>
+<li><a href="upscale.html">Upscaling</a> &mdash; the other catalog utility</li>
+</ul>
+</div>
+
+</body>
+</html>

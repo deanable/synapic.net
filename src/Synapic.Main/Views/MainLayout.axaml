@@ -8,11 +8,13 @@
              x:Class="Synapic.Main.Views.MainLayout"
              x:DataType="vm:MainWindowViewModel">
 
-  <!-- The shell (docs/mock-up/Mockup.svg): a left sidebar of four navigation
+  <!-- The shell (docs/mock-up/Mockup.svg): a left sidebar of five navigation
        rows and one content panel to its right. The rows are Settings, Tagging,
-       Deduplication and Upscaling — Settings is where every configuration lives
-       (source/connection, inference server and engine, app preferences) and the
-       other three are the processing views that run over the shared source.
+       Deduplication, Similar images and Upscaling — Settings is where every
+       configuration lives (source/connection, inference server and engine, app
+       preferences) and the other four are the processing views that run over
+       the shared source. Similar images sits directly below Deduplication
+       because it is that search's looser sibling.
 
        There is no dashboard and no numbered step chain: the sidebar is the only
        navigation, Shell.Current is the only state behind it (null = the Settings
@@ -38,7 +40,7 @@
           <TextBlock Classes="hint sidebarWide" Text="AI image workflows" />
         </StackPanel>
 
-        <!-- The four views, in the mock-up's order. Each row carries the same
+        <!-- The five views, in the mock-up's order. Each row carries the same
              route command the rest of the app carries (there is no second entry
              point per view) and its active flag is computed from Shell.Current.
              They are locked while a batch runs (§6.3), so a run is not navigated
@@ -69,6 +71,15 @@
             <StackPanel Orientation="Horizontal" Spacing="10">
               <TextBlock Text="🧹" VerticalAlignment="Center" />
               <TextBlock Text="Deduplication" Classes="navLabel" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Button Classes="navItem" Classes.active="{Binding IsSimilarModeActive}"
+                  Command="{Binding StartSimilarRouteCommand}"
+                  IsEnabled="{Binding !IsNavigationLocked}"
+                  ToolTip.Tip="Group visually similar images in the shared source — the looser sibling of the duplicate scan — and keep one of each.">
+            <StackPanel Orientation="Horizontal" Spacing="10">
+              <TextBlock Text="🔍" VerticalAlignment="Center" />
+              <TextBlock Text="Similar images" Classes="navLabel" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
           <Button Classes="navItem" Classes.active="{Binding IsUpscaleModeActive}"

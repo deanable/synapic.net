@@ -18,9 +18,9 @@ namespace Synapic.Main.Tests;
 
 /// <summary>
 /// The shell after the sidebar redesign (docs/mock-up/Mockup.svg): a left sidebar
-/// of four navigation rows — Settings, Tagging, Deduplication, Upscaling — and one
-/// content panel to its right. Settings is where every configuration lives; the
-/// other three are processing views. The old dashboard, the numbered sidebar and
+/// of five navigation rows — Settings, Tagging, Deduplication, Similar images,
+/// Upscaling — and one content panel to its right. Settings is where every
+/// configuration lives; the other four are processing views. The old dashboard, the numbered sidebar and
 /// the Back/Next/StartOver action bar are gone, and their absence is what this
 /// asserts. These drive the real compiled MainWindow — a mistyped binding path
 /// fails silently in Avalonia, so the wired state is what is asserted.
@@ -36,7 +36,7 @@ public class MainLayoutShellTests
         control.IsVisible &&
         control.GetVisualAncestors().OfType<Control>().All(ancestor => ancestor.IsVisible);
 
-    /// <summary>The sidebar's four navigation rows, in the mock-up's order.</summary>
+    /// <summary>The sidebar's five navigation rows, in the mock-up's order.</summary>
     private static System.Collections.Generic.List<Button> NavRows(Window window) =>
         window.GetVisualDescendants().OfType<Button>()
             .Where(b => b.Classes.Contains("navItem")).ToList();
@@ -69,13 +69,16 @@ public class MainLayoutShellTests
             // it is clicked).
             var nav = NavRows(window);
             Assert.Equal(
-                new[] { "Settings", "Tagging", "Deduplication", "Upscaling" },
+                new[] { "Settings", "Tagging", "Deduplication", "Similar images", "Upscaling" },
                 nav.Select(Label).ToArray());
             Assert.All(nav, b => Assert.True(EffectivelyVisible(b), $"{b.Content} is not on screen"));
             Assert.Equal(vm.GoHomeCommand, nav[0].Command);
             Assert.Equal(vm.StartTaggingRouteCommand, nav[1].Command);
             Assert.Equal(vm.StartDedupRouteCommand, nav[2].Command);
-            Assert.Equal(vm.StartUpscaleRouteCommand, nav[3].Command);
+            // Similar images is the duplicate scan's looser sibling, so its row sits
+            // directly under Deduplication rather than at the end of the list.
+            Assert.Equal(vm.StartSimilarRouteCommand, nav[3].Command);
+            Assert.Equal(vm.StartUpscaleRouteCommand, nav[4].Command);
 
             // The app opens on Settings: its row is the lit one and nothing else is.
             Assert.True(vm.IsSettingsVisible);
@@ -184,6 +187,16 @@ public class MainLayoutShellTests
             lit = Assert.Single(NavRows(window), b => b.Classes.Contains("active"));
             Assert.Same(dedupRow, lit);
 
+            // The row below it is a separate operation, not a mode of dedup: the
+            // similarity search opens its own adapter and lights only its own row.
+            var similarRow = NavRows(window).Single(b => b.Command == vm.StartSimilarRouteCommand);
+            similarRow.Command!.Execute(null);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Same(vm.SimilarOperation, vm.Shell.Current);
+            Assert.NotSame(vm.DedupOperation, vm.Shell.Current);
+            lit = Assert.Single(NavRows(window), b => b.Classes.Contains("active"));
+            Assert.Same(similarRow, lit);
+
             // The Settings row clears the open operation and comes back to the
             // configuration view rather than picking some other operation.
             var settingsRow = NavRows(window).Single(b => b.Command == vm.GoHomeCommand);
@@ -245,7 +258,7 @@ public class MainLayoutShellTests
 
             // Every row still carries its icon and its command; only the label is gone.
             var nav = NavRows(narrow);
-            Assert.Equal(4, nav.Count);
+            Assert.Equal(5, nav.Count);
             Assert.All(nav, row =>
             {
                 var icon = Assert.Single(row.GetVisualDescendants().OfType<TextBlock>(),
@@ -332,6 +345,7 @@ public class MainLayoutShellTests
                 ("settings", () => { }),
                 ("tag", () => vm.StartTaggingRouteCommand.Execute(null)),
                 ("dedup", () => vm.StartDedupRouteCommand.Execute(null)),
+                ("similar", () => vm.StartSimilarRouteCommand.Execute(null)),
                 ("upscale", () => vm.StartUpscaleRouteCommand.Execute(null)),
             };
 

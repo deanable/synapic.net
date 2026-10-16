@@ -94,6 +94,9 @@ the way Synapic means them.</p>
 <tr><td><span class="term">Perceptual hash</span></td><td>A 64-bit fingerprint of what an image looks like, so two copies compare as equal even after re-encoding or resizing.</td></tr>
 <tr><td><span class="term">pHash / dHash / aHash / ColorMoment</span></td><td>The four fingerprinting algorithms the deduplication tool offers, from the most robust (pHash) to the most colour-oriented (ColorMoment).</td></tr>
 <tr><td><span class="term">Threshold</span></td><td>How different two fingerprints may be and still count as duplicates. 0.90 by default; higher is stricter.</td></tr>
+<tr><td><span class="term">Similarity search</span></td><td>The other image-matching operation: the same perceptual fingerprints at a looser threshold, so visually alike images group instead of only near-identical ones. It has its own sidebar row and its own settings tab, the <span class="ui">Similar</span> tab.</td></tr>
+<tr><td><span class="term">Similarity threshold</span></td><td>How many of the 64 fingerprint bits may differ and still count as the same image. 0.90 for duplicates, 0.85 for similar images; lower is looser, and looser produces bigger groups.</td></tr>
+<tr><td><span class="term">Chained group</span></td><td>A group joined transitively: if image A matches B at the threshold and B matches C, all three are reported together even when A and C are further apart than the threshold allows. It is why a loose threshold can produce a large, arguable group.</td></tr>
 <tr><td><span class="term">Keep item</span></td><td>The one file in a duplicate group that is left alone; the chosen action applies to the others.</td></tr>
 <tr><td><span class="term">Algorithmic hash</span></td><td>A fingerprint Synapic computes itself, from an image it has downloaded or read from disk. This is what <span class="term">pHash</span> and friends produce.</td></tr>
 <tr><td><span class="term">Server hash</span></td><td>The content hash Daminion already stores for an item (<code>hashCode</code>). Items the catalog has hashed do not need downloading to be compared, which is what makes a catalog scan cheap.</td></tr>
@@ -117,6 +120,7 @@ the way Synapic means them.</p>
 <ul>
 <li><a href="getting-started.html">Getting started with Synapic</a></li>
 <li><a href="workflow-overview.html">How a run works</a></li>
+<li><a href="similar.html">Similar images</a></li>
 <li><a href="metadata-written.html">What gets written to your images</a></li>
 <li><a href="faq.html">Frequently asked questions</a></li>
 </ul>

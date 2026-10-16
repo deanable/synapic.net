@@ -9,7 +9,7 @@
              x:Class="Synapic.Main.Views.Settings.SettingsTab"
              x:DataType="vm:MainWindowViewModel">
 
-  <!-- The Settings view as six tabs (ui-design §5, 2026-10-11 revision): the
+  <!-- The Settings view as seven tabs (ui-design §5, 2026-10-11 revision): the
        long single column is now one concern per tab, because a new user could
        not see where one concern ended and the next began —
 
@@ -19,7 +19,8 @@
          · Inference    — the sidecar: status, Start/Stop/Download.
          · Tagging      — the model, device, tagging behaviour and run limits
                           (max items / per-image scale).
-         · Dedup        — the scan and keep-set rules.
+         · Dedup        — the duplicate scan and keep-set rules.
+         · Similar      — the similarity search's threshold and keep-set rules.
          · Upscale      — the workflow, factor and output.
          · App          — appearance, logging, defaults and about.
 
@@ -114,6 +115,22 @@
                 <TextBlock Classes="hint" TextWrapping="Wrap"
                            Text="How the deduplication view decides what counts as a duplicate: the algorithm, the threshold and the keep-set rule." />
                 <steps:DedupSettingsPanel DataContext="{Binding Operations.Dedup}" />
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <TabItem x:Name="TabSimilar" Header="Similar">
+        <ScrollViewer>
+          <StackPanel Spacing="12" Margin="0,8,0,0">
+            <Border Classes="card settingsCard" x:Name="SectionSimilar"
+                    Padding="16" help:HelpScope.Topic="similar.html">
+              <StackPanel Spacing="8">
+                <TextBlock Text="Similar images" Classes="sectionTitle" />
+                <TextBlock Classes="hint" TextWrapping="Wrap"
+                           Text="How the Similar images view decides what counts as a near-match: the algorithm, the similarity threshold and the keep-set rule. Looser than the Dedup tab — widening this search leaves the duplicate scan strict." />
+                <steps:SimilarSettingsPanel DataContext="{Binding Operations.Similar}" />
               </StackPanel>
             </Border>
           </StackPanel>

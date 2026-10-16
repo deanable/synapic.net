@@ -1,0 +1,66 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Synapic.Main.ViewModels.Steps"
+             xmlns:help="using:Synapic.Main.Services"
+             x:Class="Synapic.Main.Views.Wizard.SimilarSettingsPanel"
+             x:DataType="vm:StepDedupViewModel">
+
+  <!-- The similarity search's rules, on the Settings view's Similar tab: how the
+       search compares images, and which rule drives the keep-set. They are the
+       same settings the deduplication section offers, over the Similar profile's
+       own stored values — the algorithms and the threshold conversion are shared,
+       the numbers are not, so widening this search leaves the duplicate scan
+       strict. The run page keeps the search, the review and the apply. -->
+  <StackPanel Spacing="12">
+
+    <Border Classes="card settingsCard" Padding="16"
+            help:HelpScope.Topic="settings-reference.html#similar-algorithm">
+      <StackPanel Spacing="8">
+        <TextBlock Classes="sectionTitle" Text="Similarity" />
+
+        <WrapPanel>
+          <TextBlock Classes="fieldLabel" Text="Algorithm:" Margin="0,0,8,8" />
+          <ComboBox SelectedIndex="{Binding SelectedAlgorithm}" ItemsSource="{Binding Algorithms}"
+                    MinWidth="140" Margin="0,0,16,8" />
+          <TextBlock Classes="fieldLabel" Text="Similarity threshold:" Margin="0,0,8,8" />
+          <NumericUpDown Value="{Binding Threshold}" Minimum="0.5" Maximum="1"
+                         Increment="0.01" Width="110" Margin="0,0,16,8"
+                         help:HelpScope.Topic="settings-reference.html#similar-threshold"
+                         ToolTip.Tip="{Binding ThresholdHint}" />
+        </WrapPanel>
+
+        <TextBlock Classes="hint"
+                   Text="Lower is looser: 0.85 groups re-encodes, crops and light edits, 0.90 and above narrows toward exact copies. Similar pairs chain — A-B and B-C group all three even when A and C are further apart — so a low threshold can build large groups." />
+
+        <WrapPanel>
+          <TextBlock Classes="fieldLabel" Text="Server hash:" Margin="0,0,8,8"
+                     IsVisible="{Binding IsDaminion}"
+                     help:HelpScope.Topic="settings-reference.html#similar-server-hash" />
+          <ComboBox SelectedIndex="{Binding SelectedServerHashMatch, Mode=TwoWay}"
+                    ItemsSource="{Binding ServerHashMatches}" MinWidth="140"
+                    Margin="0,0,16,8"
+                    IsVisible="{Binding IsDaminion}"
+                    help:HelpScope.Topic="settings-reference.html#similar-server-hash" />
+        </WrapPanel>
+
+        <TextBlock Classes="hint" Text="{Binding ServerHashMatchHint}" IsVisible="{Binding IsDaminion}" />
+      </StackPanel>
+    </Border>
+
+    <Border Classes="card settingsCard" Padding="16"
+            help:HelpScope.Topic="settings-reference.html#similar-autoselect">
+      <StackPanel Spacing="8">
+        <TextBlock Classes="sectionTitle" Text="Keep-set rules" />
+        <TextBlock Classes="hint" Text="{Binding KeepSetHint}" />
+
+        <!-- Auto-select rules: tick these to drive every group's keep checkboxes. -->
+        <WrapPanel>
+          <CheckBox Content="Oldest" IsChecked="{Binding SelectOldest}" Margin="0,0,16,8" />
+          <CheckBox Content="Newest" IsChecked="{Binding SelectNewest}" Margin="0,0,16,8" />
+          <CheckBox Content="Smallest" IsChecked="{Binding SelectSmallest}" Margin="0,0,16,8" />
+          <CheckBox Content="Largest" IsChecked="{Binding SelectLargest}" Margin="0,0,16,8" />
+        </WrapPanel>
+      </StackPanel>
+    </Border>
+  </StackPanel>
+</UserControl>

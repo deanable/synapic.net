@@ -50,9 +50,9 @@ preserved when the app rewrites it, so a hand-added key survives.</p>
 
 <h2 id="registry">Registry keys</h2>
 
-<p>Both stores are under <code>HKEY_CURRENT_USER</code>, so they are per user and
-need no administrator rights. They exist on Windows only: on Linux and macOS the
-app runs with defaults and forgets these settings between runs.</p>
+<p>All three stores are under <code>HKEY_CURRENT_USER</code>, so they are per user
+and need no administrator rights. They exist on Windows only: on Linux and macOS
+the app runs with defaults and forgets these settings between runs.</p>
 
 <h3>Inference engine &mdash; <code>HKCU\Software\Synapic\Engine</code></h3>
 
@@ -99,10 +99,43 @@ keywords" report.</p>
 password can never overwrite a working configuration. Deleting the key resets
 the data source to defaults.</p>
 
+<h3>App settings &mdash; <code>HKCU\Software\Synapic\AppData</code></h3>
+
+<p>Everything else the app remembers: appearance and logging, what a new session
+starts from, the local folder the source kept, the processing limits, and the
+rules of the three processing operations &mdash;
+<a href="dedup.html">Deduplication</a>,
+<a href="similar.html">Similar images</a> and
+<a href="upscale.html">Upscaling</a>. It is a flat list of values with no secrets
+in it, so nothing here is encrypted. Numbers are stored as strings and the
+switches as <code>0</code> or <code>1</code>. On the first launch after an update
+from an older build, an existing
+<span class="path">%APPDATA%\Synapic\config.json</span> is imported into this
+key once, when the key is still empty, and the file is kept as a backup; from
+then on the registry is what the forms read and write.</p>
+
+<table>
+<tr><th class="setting">Values</th><th>Meaning</th></tr>
+<tr><td><code>Theme</code>, <code>LogLevel</code>, <code>ShowDiagnostics</code>, <code>TelemetryEnabled</code>, <code>AutoLaunchSidecar</code>, <code>AutoInstallSidecar</code></td><td>Appearance, logging and first-run behaviour, from the <span class="ui">App</span> tab.</td></tr>
+<tr><td><code>DefaultDevice</code>, <code>DefaultConfidenceThreshold</code>, <code>DefaultMaxItems</code></td><td>What a new session starts from.</td></tr>
+<tr><td><code>LocalPath</code>, <code>LocalRecursive</code></td><td>The local folder the source remembers. The Daminion half of the source is the key above.</td></tr>
+<tr><td><code>MaxItems</code>, <code>ProcessAll</code>, <code>ResizeScale</code>, <code>UseThumbnailOverride</code></td><td>The processing limits on the <span class="ui">Connection</span> tab.</td></tr>
+<tr><td><code>DedupAlgorithm</code>, <code>DedupThreshold</code>, <code>DedupServerHashMatch</code>, <code>DedupSelectOldest</code>, <code>DedupSelectNewest</code>, <code>DedupSelectSmallest</code>, <code>DedupSelectLargest</code>, <code>DedupSelectedAction</code>, <code>DedupMoveDestination</code></td><td>The <span class="ui">Dedup</span> tab: the algorithm, the threshold (<code>0.90</code> by default), the server-hash rule, the four keep-set switches, the selected action and the move destination.</td></tr>
+<tr><td><code>SimilarAlgorithm</code>, <code>SimilarThreshold</code>, <code>SimilarServerHashMatch</code>, <code>SimilarSelectOldest</code>, <code>SimilarSelectNewest</code>, <code>SimilarSelectSmallest</code>, <code>SimilarSelectLargest</code>, <code>SimilarSelectedAction</code>, <code>SimilarMoveDestination</code></td><td>The <span class="ui">Similar</span> tab: the same nine settings for the similarity search, with its own threshold (<code>0.85</code> by default). They are separate values on purpose &mdash; widening one search never widens the other. See <a href="similar.html">Similar images</a>.</td></tr>
+<tr><td><code>UpscaleWorkflow</code>, <code>UpscaleFactor</code>, <code>UpscalePrecision</code>, <code>UpscaleOutputFormat</code>, <code>UpscaleJpegQuality</code>, <code>UpscaleDenoiseStrength</code>, <code>UpscaleSharpenAmount</code>, <code>UpscaleOverwriteExisting</code></td><td>The <span class="ui">Upscale</span> tab.</td></tr>
+</table>
+
+<p>Deleting a value returns that one setting to its default; deleting the key
+returns every setting here to its default, and the app recreates it on the next
+save. The <span class="ui">Connection</span>, <span class="ui">Dedup</span>,
+<span class="ui">Similar</span> and <span class="ui">Upscale</span> settings are
+written as they are changed in the app, so a rollout can seed them before a
+user's first launch instead of walking every user through the forms.</p>
+
 <h2>Backing up a user's configuration</h2>
 
 <ol class="steps">
-<li>Export both registry keys above with <span class="ui">Registry Editor</span>,
+<li>Export the three registry keys above with <span class="ui">Registry Editor</span>,
 or copy the values with a script.</li>
 <li>Copy <span class="path">%APPDATA%\Synapic\config.json</span> and, if the user
 cares about the prompt history,

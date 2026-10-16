@@ -473,6 +473,7 @@ public class HelpServiceTests : IDisposable
             (() => { }, HelpTopics.Home),
             (() => vm.StartTaggingRouteCommand.Execute(null), "step3-process.html"),
             (() => vm.StartDedupRouteCommand.Execute(null), "dedup.html"),
+            (() => vm.StartSimilarRouteCommand.Execute(null), HelpTopics.Similar),
             (() => vm.StartUpscaleRouteCommand.Execute(null), HelpTopics.Upscale),
         };
 
@@ -557,6 +558,9 @@ public class HelpServiceTests : IDisposable
         yield return HelpTopics.SetupGuide;
         yield return HelpTopics.SettingsReference;
         yield return HelpTopics.Tips;
+        // The similarity search is its own topic: it is not a wizard step index,
+        // so it would fall through ForStepIndex and go unchecked here.
+        yield return HelpTopics.Similar;
         for (var step = 0; step <= 5; step++) yield return HelpTopics.ForStepIndex(step);
     }
 

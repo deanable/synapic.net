@@ -44,6 +44,19 @@ public sealed record AppSettingsState(
     int DedupSelectedAction,
     string DedupMoveDestination,
 
+    // Similar-image search scan + keep-set + action destination. A second,
+    // independent set: the similarity search is its own operation with its own
+    // tab, so widening one search must never widen the other.
+    string SimilarAlgorithm,        // algorithm name ("PHash"…)
+    double SimilarThreshold,
+    string SimilarServerHashMatch,  // "Exact" | "Hamming"
+    bool SimilarSelectOldest,
+    bool SimilarSelectNewest,
+    bool SimilarSelectSmallest,
+    bool SimilarSelectLargest,
+    int SimilarSelectedAction,
+    string SimilarMoveDestination,
+
     // Upscaling parameters
     int UpscaleWorkflow,            // dropdown index
     int UpscaleFactor,              // dropdown index
@@ -76,6 +89,14 @@ public sealed class AppSettingsRegistryStore
 {
     private const string KeyPath = @"Software\Synapic\AppData";
     private const string MigratedValue = "_MigratedFromJson";
+
+    /// <summary>
+    /// The similarity search starts looser than the duplicate scan: 0.85 lets
+    /// roughly ten of the 64 hash bits differ, which is the band a re-encode, a
+    /// crop or a light edit lands in, where 0.90 would still call them different
+    /// pictures. Public so the settings panel and its tests name one default.
+    /// </summary>
+    public const double SimilarThresholdDefault = 0.85;
 
     private readonly string? _keyPathOverride;
     private readonly AppConfig _typedConfig; // shape + defaults for the import
@@ -113,6 +134,15 @@ public sealed class AppSettingsRegistryStore
         DedupSelectLargest: false,
         DedupSelectedAction: 0,
         DedupMoveDestination: "",
+        SimilarAlgorithm: "PHash",
+        SimilarThreshold: SimilarThresholdDefault,
+        SimilarServerHashMatch: "Exact",
+        SimilarSelectOldest: false,
+        SimilarSelectNewest: false,
+        SimilarSelectSmallest: false,
+        SimilarSelectLargest: false,
+        SimilarSelectedAction: 0,
+        SimilarMoveDestination: "",
         UpscaleWorkflow: 0,
         UpscaleFactor: 0,
         UpscalePrecision: 0,
@@ -176,6 +206,15 @@ public sealed class AppSettingsRegistryStore
                 DedupSelectLargest: B("DedupSelectLargest"),
                 DedupSelectedAction: I("DedupSelectedAction", 0),
                 DedupMoveDestination: S("DedupMoveDestination") ?? "",
+                SimilarAlgorithm: S("SimilarAlgorithm") ?? "PHash",
+                SimilarThreshold: D("SimilarThreshold", SimilarThresholdDefault),
+                SimilarServerHashMatch: S("SimilarServerHashMatch") ?? "Exact",
+                SimilarSelectOldest: B("SimilarSelectOldest"),
+                SimilarSelectNewest: B("SimilarSelectNewest"),
+                SimilarSelectSmallest: B("SimilarSelectSmallest"),
+                SimilarSelectLargest: B("SimilarSelectLargest"),
+                SimilarSelectedAction: I("SimilarSelectedAction", 0),
+                SimilarMoveDestination: S("SimilarMoveDestination") ?? "",
                 UpscaleWorkflow: I("UpscaleWorkflow", 0),
                 UpscaleFactor: I("UpscaleFactor", 0),
                 UpscalePrecision: I("UpscalePrecision", 0),
@@ -231,6 +270,15 @@ public sealed class AppSettingsRegistryStore
             B("DedupSelectLargest", state.DedupSelectLargest);
             I("DedupSelectedAction", state.DedupSelectedAction);
             S("DedupMoveDestination", state.DedupMoveDestination);
+            S("SimilarAlgorithm", state.SimilarAlgorithm);
+            D("SimilarThreshold", state.SimilarThreshold);
+            S("SimilarServerHashMatch", state.SimilarServerHashMatch);
+            B("SimilarSelectOldest", state.SimilarSelectOldest);
+            B("SimilarSelectNewest", state.SimilarSelectNewest);
+            B("SimilarSelectSmallest", state.SimilarSelectSmallest);
+            B("SimilarSelectLargest", state.SimilarSelectLargest);
+            I("SimilarSelectedAction", state.SimilarSelectedAction);
+            S("SimilarMoveDestination", state.SimilarMoveDestination);
             I("UpscaleWorkflow", state.UpscaleWorkflow);
             I("UpscaleFactor", state.UpscaleFactor);
             I("UpscalePrecision", state.UpscalePrecision);
@@ -297,6 +345,15 @@ public sealed class AppSettingsRegistryStore
                 DedupSelectLargest: false,
                 DedupSelectedAction: 0,
                 DedupMoveDestination: "",
+                SimilarAlgorithm: "PHash",
+                SimilarThreshold: SimilarThresholdDefault,
+                SimilarServerHashMatch: "Exact",
+                SimilarSelectOldest: false,
+                SimilarSelectNewest: false,
+                SimilarSelectSmallest: false,
+                SimilarSelectLargest: false,
+                SimilarSelectedAction: 0,
+                SimilarMoveDestination: "",
                 UpscaleWorkflow: 0,
                 UpscaleFactor: 0,
                 UpscalePrecision: 0,

@@ -25,7 +25,7 @@
           <NumericUpDown Value="{Binding Threshold}" Minimum="0.5" Maximum="1"
                          Increment="0.01" Width="110" Margin="0,0,16,8"
                          help:HelpScope.Topic="settings-reference.html#dedup-threshold"
-                         ToolTip.Tip="How close two images have to be to count as duplicates (0.90 = near-identical)." />
+                         ToolTip.Tip="{Binding ThresholdHint}" />
         </WrapPanel>
 
         <WrapPanel>
@@ -47,8 +47,7 @@
             help:HelpScope.Topic="settings-reference.html#dedup-autoselect">
       <StackPanel Spacing="8">
         <TextBlock Classes="sectionTitle" Text="Keep-set rules" />
-        <TextBlock Classes="hint"
-                   Text="Ticking a rule drives every group's keep checkboxes: checked items are kept, the unchecked duplicates get the action." />
+        <TextBlock Classes="hint" Text="{Binding KeepSetHint}" />
 
         <!-- Auto-select rules: tick these to drive every group's keep checkboxes. -->
         <WrapPanel>

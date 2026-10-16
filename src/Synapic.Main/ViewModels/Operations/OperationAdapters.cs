@@ -107,8 +107,15 @@ public sealed class TagOperationViewModel : IOperationViewModel
 }
 
 /// <summary>
-/// Thin adapter: exposes the deduplication route through <see cref="IOperationViewModel"/>
-/// (CONTEXT D-05 — the run is the scan; Apply stays dedup-specific).
+/// Thin adapter: exposes an image-matching search — the deduplication route or
+/// the similarity route — through <see cref="IOperationViewModel"/> (CONTEXT
+/// D-05 — the run is the scan; Apply stays on the step itself).
+///
+/// Both routes are the same scan under the two <see cref="ImageMatchProfile"/>s,
+/// so the identity members read themselves off the wrapped step
+/// (<see cref="StepDedupViewModel.OperationKey"/> and friends) rather than being
+/// copied in here: two adapters over two instances then differ in exactly the
+/// way the two operations do.
 /// </summary>
 public sealed class DedupOperationViewModel : IOperationViewModel
 {
@@ -123,16 +130,21 @@ public sealed class DedupOperationViewModel : IOperationViewModel
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    public string Key => "dedup";
+    /// <summary>"dedup" or "similar", as the wrapped step's own profile spells it.</summary>
+    public string Key => _scan.OperationKey;
 
-    public string Title => "Deduplication";
+    /// <summary>"Deduplication" or "Similar images".</summary>
+    public string Title => _scan.OperationTitle;
 
     /// <summary>The chooser card's copy, reused so the dashboard says what the start screen said.</summary>
-    public string Description =>
-        "Find duplicate images in a local folder or in the Daminion catalog scope, review the groups, " +
-        "then tag, move or delete the extras.";
+    public string Description => _scan.IsSimilar
+        ? "Group visually similar images in a local folder or in the Daminion catalog scope, review the " +
+          "groups, then keep one of each and act on the rest."
+        : "Find duplicate images in a local folder or in the Daminion catalog scope, review the groups, " +
+          "then tag, move or delete the extras.";
 
-    public string HelpTopic => HelpTopics.ForStepIndex(4);
+    /// <summary>The operation's own topic: the similarity search has one of its own.</summary>
+    public string HelpTopic => _scan.IsSimilar ? HelpTopics.Similar : HelpTopics.ForStepIndex(4);
 
     /// <summary>The scan rules read-back the review page already shows.</summary>
     public string ParametersSummary => _scan.ScanSettingsSummary;
@@ -156,7 +168,7 @@ public sealed class DedupOperationViewModel : IOperationViewModel
         }
     }
 
-    /// <summary>The reviewed duplicate groups, or null before the first scan.</summary>
+    /// <summary>The reviewed groups, or null before the first scan.</summary>
     public object? Report => _scan.Groups.Count > 0 ? _scan.Groups : null;
 }
 

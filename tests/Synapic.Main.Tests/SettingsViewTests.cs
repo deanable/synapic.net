@@ -343,7 +343,7 @@ public class SettingsViewTests
             Assert.Same(SettingsTab.SearchSuggestions, box.ItemsSource);
 
             var tabs = settings.GetVisualDescendants().OfType<TabItem>().ToList();
-            Assert.Equal(6, tabs.Count);
+            Assert.Equal(7, tabs.Count);
             var selected = () => tabs.Single(t => t.IsSelected).Name!;
             // The Connection tab is where the app opens.
             Assert.Equal("TabConnection", selected());

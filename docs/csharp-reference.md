@@ -23,21 +23,44 @@ install crash reporting → runtime check → telemetry → build DI → create 
 window → detect/auto-launch the sidecar → stop it on shutdown. See the
 [startup sequence](codebase-guide.md#4-startup-sequence-apponframeworkinitializationcompleted).
 
-### `Views/MainWindow.axaml(.cs)`
-Shell layout: toolbar (server indicator, Start/Stop Server,
-download progress), a **start screen** with the **source panel**
-(`DatasourceSourcePanel` — folder picker, Daminion connect, scope, filters and the
-record count — bound to `Wizard.Step1`, the same view model every route runs on)
-and three route cards (`Tagging` / `Deduplication` / `Upscaling`, bound to
-`StartTaggingRouteCommand` / `StartDedupRouteCommand` / `StartUpscaleRouteCommand`,
-visible while `IsHomeVisible` and gated on **`CanStartRoute`** = the source panel
-has a usable source: `Step1.HasUsableSource` — a folder that exists, or a live
-Daminion session), a navigation bar whose tabs follow the active
-route (`Wizard.ShowTaggingTabs`, `Wizard.ShowDatasourceTab`, route title, `⌂
-Home` button), a scrollable content area hosting the current wizard step
-via `ContentControl` data templates, and a live **Log** list.
-The code-behind attaches the view model's sidecar log stream and
-auto-scrolls the log list to the newest entry on every collection change.
+### `Views/MainWindow.axaml(.cs)` and `Views/MainLayout.axaml(.cs)`
+`MainWindow` carries window-level behaviour only — F1's help resolution,
+Alt+Home, Ctrl+S and log teardown — and hosts the shell, `MainLayout`: a left
+**sidebar of five navigation rows** and one content panel to its right, the open
+row lit.
+
+| Row | Command | Opens |
+|-----|---------|-------|
+| **Settings** | `GoHomeCommand` | the Settings view (`SettingsTab`) — also what `Shell.Current == null` means |
+| **Tagging** | `StartTaggingRouteCommand` | the tagging operation |
+| **Deduplication** | `StartDedupRouteCommand` | the duplicate scan |
+| **Similar images** | `StartSimilarRouteCommand` | the similarity search; the row sits directly below Deduplication because it is that search's looser sibling |
+| **Upscaling** | `StartUpscaleRouteCommand` | the upscaling operation |
+
+Each row's `Classes.active` flag is computed from `Shell.Current`
+(`IsSettingsVisible`, `IsTagModeActive`, `IsDedupModeActive`,
+`IsSimilarModeActive`, `IsUpscaleModeActive`), so the lit row is derived rather
+than remembered by the sidebar; every row is disabled while
+`IsNavigationLocked` (`Operations.IsRunning`), so a batch is not navigated away
+from mid-flight. The server indicator, the download read-out, the device notice
+and the **Help** button are pinned to the bottom of the sidebar, so they are on
+screen in every view.
+
+The content panel shows exactly one thing: the Settings view when nothing is
+open, otherwise the open operation's processing view (`OperationLayout`), whose
+region content is handed over in code-behind — a binding written on that element
+would resolve against its own `DataContext`, not the shell. Above it the sidecar
+banner appears while no usable variant exists or the built one is stale, and the
+workspace stays inert until a sidecar is ready. The diagnostics **Log** list at
+the bottom is in the tree only while the Logging setting says so (there is no
+always-visible log strip; an operation's run log lives in its processing view).
+The code-behind attaches the view model's sidecar log stream and auto-scrolls the
+log list to the newest entry on every collection change.
+
+Below ~1000 px of shell width the sidebar collapses to an icon-only rail
+(`MainLayout.ApplyCompact` — Avalonia has no XAML breakpoint): each row keeps its
+glyph and drops its label, the title and the wide status lines go with it, and
+Help shortens to `?`.
 
 ### `Views/CrashDialogWindow.axaml(.cs)`
 Non-terminal crash dialog with a copy-diagnostics action. Static `Show(report)`
@@ -51,23 +74,29 @@ browser, copy it, or continue. Static `Show(result)` is posted on the UI thread
 by `App`'s `RuntimeUnavailable` subscription; a refused browser launch is
 logged, never thrown.
 
-### `Views/Wizard/*.axaml(.cs)`
-One user control per step. Code-behind is intentionally thin:
+### `Views/Wizard/*.axaml(.cs)`, `Views/Operation/*` and `Views/Settings/*`
+The user controls the shell renders. Code-behind is intentionally thin:
 
 | View | Code-behind behaviour |
 |------|-----------------------|
-| `Step1Datasource.axaml.cs` | bare `InitializeComponent`; step 1 — Source & model: the source summary (`SourceStatusStrip`), the model picker and the processing limits |
 | `DatasourceSourcePanel.axaml.cs` | `OnBrowseFolder` — OS folder picker writes `vm.LocalPath`; hosts `SourceStatusStrip` |
-| `SourceStatusStrip.axaml.cs` | the two source lights (Daminion / folder), shared by the header, the start screen and Step 1 |
-| `EngineModelPicker.axaml.cs` | the compact model + device picker (step 1 and the start screen), over the engine view model |
-| `Step2TagSettings.axaml.cs` | bare `InitializeComponent`; 3 — Settings as a summary, with the tag-field gates |
-| `Step2Engine.axaml.cs` | the full tagging settings form, hosted by `EngineSettingsDialog`; prompt-preset Delete handling |
-| `DedupSettingsPanel.axaml.cs` | the dedup scan rules, hosted by `DedupSettingsDialog` |
-| `UpscaleSettingsPanel.axaml.cs` | the upscale parameters, hosted by `UpscaleSettingsDialog` |
-| `Step3Process.axaml.cs` | auto-scrolls the log list to the last line |
+| `SourceStatusStrip.axaml.cs` | the two source lights (Daminion / folder), shared by the Settings data-source form and the processing views' *Working on* region |
+| `Step2Engine.axaml.cs` | the full tagging settings form, hosted by the Settings view's Tagging tab; prompt-preset Delete handling |
+| `DedupSettingsPanel.axaml.cs` | the dedup scan rules, hosted by the Settings view's Dedup tab |
+| `SimilarSettingsPanel.axaml.cs` | the similarity search's rules, hosted by the Settings view's Similar tab; it renders the shell's `ImageMatchProfile.Similar` instance, so the threshold set here is never the duplicate scan's |
+| `UpscaleSettingsPanel.axaml.cs` | the upscale parameters, hosted by the Settings view's Upscale tab |
 | `Step4Results.axaml.cs` | `Refresh` button + auto-scrolls the results grid to the newest row |
-| `StepDedup.axaml.cs` | `OnBrowseFolder` — folder picker writes `vm.FolderPath`; wires `vm.ConfirmAction` to `ConfirmDialogWindow.ShowAsync` for the catalog delete |
+| `StepDedup.axaml.cs` | the run page of **both** image-matching operations (one `StepDedupViewModel` template serves dedup and the similarity search): `OnBrowseMoveFolder` writes `vm.MoveDestinationFolder`, and `DataContextChanged` wires `vm.ConfirmAction` to `ConfirmDialogWindow.ShowAsync`, so a destructive apply fails closed when no dialog can answer |
 | `StepUpscale.axaml.cs` | auto-scrolls the run log list to the last line |
+
+| View | Code-behind behaviour |
+|------|-----------------------|
+| `Operation/OperationLayout.axaml.cs` | the shared processing template. `SharedSource`, `Run` and `Report` are Avalonia (`Styled`) properties, so writing `Shell.Current` really re-renders the regions — a plain CLR property would be read once and could keep showing the previous operation's run. The `Run` slot renders `RunStateBar` plus the operation's own page (`StepDedup` for both image-matching operations, `StepUpscale`), and the report slot renders `Step4Results` for tagging |
+| `Operation/RunStateBar.axaml.cs` | the one run bar every mode inherits from `RunStateViewModel`; it owns the run log's auto-scroll (guarded so a line arriving during teardown cannot arrange a detached list) |
+| `Operation/ScopeSelectionPanel.axaml.cs` | the catalog scope, its filters and the record count, bound to the one shared source view model the Settings view binds too; carries no commands of its own |
+| `Operation/SourceLimitsPanel.axaml.cs` | Region A's limits row (max items, process all, image scale), bound to the same shell-owned `Step1DatasourceViewModel` |
+| `Settings/SettingsTab.axaml.cs` | the Settings view as seven tabs — Connection, Inference server, Tagging engine, Deduplication, Similar images, Upscaling, App preferences — plus the search box: `TabSuggestions` maps each tab to the queries that name it (`Similar`/`Similarity`/`Near-match` for the Similar tab), `ApplyFilter` switches to the matching tab and reports what it did, and `ShowSection` / `ShowTab` are what the tests land on |
+| `Settings/InferenceServerSection.axaml.cs` | the Inference server section: status, Start/Stop/Build, auto-launch, download progress and the per-variant rows, all bound to the shell |
 
 ---
 
@@ -81,15 +110,17 @@ Empty base class (`ObservableObject`).
 ### `MainWindowViewModel` (singleton)
 The shell. Owns:
 
-- **Routes** — `Route` (`HomeRoute` / `TaggingRoute` / `DedupRoute` /
-  `UpscaleRoute`) with
-  `IsHomeVisible`, `IsWizardVisible`, `IsTaggingRoute`, `IsDedupRoute`,
-  `IsUpscaleRoute`,
-  `RouteTitle`, and the four commands `StartTaggingRouteCommand`,
-  `StartDedupRouteCommand`, `StartUpscaleRouteCommand`, `GoHomeCommand`. The app
-  opens on `HomeRoute` (the chooser); entering a route delegates to
-  `Wizard.EnterTaggingRoute()` /
-  `EnterDedupRoute()` / `EnterUpscaleRoute()` and logs the choice.
+- **Navigation** — `Shell` (`ShellViewModel`): `Shell.Current` is null on the
+  Settings view and names the one open operation otherwise, and it is the only
+  navigation state in the app (the route strings, the `Is*Route` booleans and the
+  wizard's current step are gone). The sidebar's five rows bind the commands
+  `GoHomeCommand`, `StartTaggingRouteCommand`, `StartDedupRouteCommand`,
+  `StartSimilarRouteCommand` and `StartUpscaleRouteCommand`; each calls
+  `Shell.Open(<key>)` (`OperationShellViewModel.TagKey` / `DedupKey` /
+  `SimilarKey` / `UpscaleKey`) or `Shell.Home()`, logs the move, and the route
+  machine reports back through `Shell.SetCurrent`. Everything the chrome needs is
+  derived from that one value: `IsSettingsVisible`, `IsOperationVisible`,
+  `OperationTitle`, the four `Is*ModeActive` flags and `ContextHelpTopic`.
 - `ServerState` (`ServerUiState`: `Detecting`, `NotDetected`, `Building`,
   `Stopped`, `Starting`, `Running`, `Error`) and `ServerBrush` for the status
   dot; `StatusText` is derived from the state.
@@ -120,16 +151,24 @@ The shell. Owns:
   is cleared once the variant is built or downloaded. Advisory by
   design: failures log and return, nothing blocks startup, and only the real
   desktop launch reaches it (headless test sessions never do).
-- `OpenSettingsCommand` — **3 · Settings**: opens the dialog that owns the
-  settings of the operation on screen (tagging's engine dialog, or the dedup /
-  upscale one) over that operation's own view model. `CreateSettingsDialog()` is
-  the public factory behind it, so the choice is testable without a desktop
-  lifetime. The header, the sidebar entry and the action bar all run this one
-  command.
-- Help: `OpenHelpCommand` (the toolbar **Help** button) opens
+- **The operations as the template sees them** — `TagOperation`,
+  `DedupOperation`, `SimilarOperation` and `UpscaleOperation` (the Phase 1
+  adapters), handed to `ShellViewModel` as its operation list.
+  `SimilarOperation` is a `DedupOperationViewModel` over the
+  `ImageMatchProfile.Similar` view model: the same adapter class as
+  `DedupOperation`, so the two are separate operations rather than one mode with
+  a flag, and each reads its identity off the step it wraps.
+- `SettingsCommand` — the Settings shortcut (`Shell.Home()`, the same move the
+  sidebar's first row makes through `GoHomeCommand`). Every configuration lives
+  on the Settings view now, so this is navigation, never a window.
+- Help: `OpenHelpCommand` (the sidebar's **Help** button) opens
   `HelpTopics.Home`; `OpenContextHelpCommand` (<kbd>F1</kbd>, bound in
   `MainWindow.axaml`) opens `ContextHelpTopic` — the sidecar topic while
-  `IsSidecarRequired`, otherwise the topic for `Wizard.CurrentStepIndex`.
+  `IsSidecarRequired`, otherwise the open operation's own `HelpTopic`
+  (`HelpTopics.Similar` for the similarity search, `ForStepIndex(4)` for the
+  duplicate scan and upscaling), and the help home on the Settings view.
+  `HelpScope` is consulted first, so focus inside an annotated section or setting
+  opens that scope's topic instead.
 - `PollHealthAsync` — 2-second background poll while Starting/Running; feeds
   the download panel.
 
@@ -137,37 +176,33 @@ Constructed with optional locator delegates (`sidecarExecutableLocator`,
 `sidecarVariantLocator`) and an optional `IHelpService` so tests can inject fake
 filesystem state.
 
-### `WizardViewModel`
-Linear navigation with validation gates. Holds the six step view models;
-`CurrentStep` drives `ContentControl`; `CurrentStepIndex`,
-`CurrentStepTitle`, `NextButtonText`, and tab-enablement properties are derived.
-`IsNavigationLocked` mirrors `Step3.IsRunning || Upscale.IsRunning`.
+### `ShellViewModel` and `OperationShellViewModel`
+The operation host (`ViewModels/Operations/OperationShellViewModel`) owns the
+view models the shared template renders and nothing else: `Source` (Region A — the
+one shared `Step1DatasourceViewModel` every mode reads), `TagParameters` /
+`TagRun` / `TagReport`, `Dedup` and `Similar` (one `StepDedupViewModel` class
+under the two `ImageMatchProfile`s), and `Upscale`. `ParametersFor(key)` /
+`RunFor(key)` / `ReportFor(key)` hand each mode its regions; `ReportFor` is null
+for dedup and the similarity search, which review and apply inside their own run
+content, so the similarity search is a region of its own over its own instance
+rather than a second view of dedup. `IsRunning`
+(`TagRun.IsRunning || Upscale.IsRunning`) is what the sidebar's run lock reads,
+and `NavigationLockChanged` tells the shell to re-read it — the wiring that keeps
+a running batch from being navigated away from.
 
-**The workflow as a sequence**: step 1 is *Source & model* (source summary,
-model picker, limits), the settings page is *3 · Settings* (a summary; the form
-is the operation's dialog), and the run steps follow — *4 · Process*, *5 ·
-Results* for tagging, `4` for the dedup and upscale operations. Step `2 ·
-Operation type` is the start screen, which the shell owns, so the wizard skips
-that number. `Wizard.Step1.Engine` carries the engine view model so the model
-picker on step 1 edits the same state as the settings dialog.
+`ShellViewModel.Current` is the navigation state described above. `Open(key)` and
+`Home()` forward through the route machine (`MainWindowViewModel`'s `Start*Route`
+and `GoHome`), which reports back through `SetCurrent`; nothing binds `Open` /
+`Home` directly, because the sidebar rows and the operation layout's mode rail
+themselves use the route commands, so a second navigation model cannot grow.
 
-**Route split**: `IsDedupRoute` / `IsUpscaleRoute` flip the wizard between the
-tagging flow and the two shorter ones. In the dedup/upscale routes
-`ShowTaggingTabs` hides Engine/Process/Results, `ShowDatasourceTab` keeps step 1
-on screen, `Next` from step 1 validates the datasource and lands on `Dedup`
-(after `PrefillDedupSource()` copies the Step 1 folder/scope onto the dedup
-step) or on `Upscale` (which reads its source straight off Step 1), and
-`GoToDedupCommand` / `GoToUpscaleCommand` apply the same gate — so both tools
-are reachable from the onset instead of being the last tab of a wizard.
-`ShowDedupTab`/`ShowUpscaleTab` hide each other's tab while a route owns the
-wizard (both stay visible in the tagging route, where `CanGoToDedupTab` /
-`CanGoToUpscaleTab` only open at Results).
-
-Gates: `Session.ValidateForStep2()` (datasource usable) and
-`Session.ValidateForStep3(daminionConnected)` (model chosen, ≥1 tag field,
-Daminion connected when applicable). Step-entry side effects: Step 2 refreshes
-the model list, Step 4 calls `Refresh()`, and reaching Results persists config.
-Step 2 settings are persisted when leaving the engine step.
+The step view models in `ViewModels/Steps/` are still what each mode runs on, but
+they no longer carry navigation: no current step, no Next/Back, no
+mutual-exclusion route flags, no `PrefillDedupSource`. Each mode declares its own
+ready-to-run gate as `IOperationViewModel.IsRunEnabled` with a
+`RunDisabledReason`, `Session.ValidateForStep2/3` stay the underlying source and
+engine checks, and the shared run bar in `OperationLayout` is the one run surface
+for all four operations.
 
 ### `SidecarVariantViewModel`
 One buildable variant row (CPU / CUDA): `Rid`, `DisplayName`, `Detail`,
@@ -210,7 +245,8 @@ operation runs (one progress bar is shared by both).
   Keywords/Categories/Description (+ "Select all untagged").
 - Processing limits: `MaxItems`, **`ProcessAll`** (ignore the ceiling and page
   until the server returns nothing), `ResizeScale`, `UseThumbnailOverride`.
-- Source readiness (the start screen's gate): `LocalFolderExists`,
+- Source readiness (the gate every operation's `RunDisabledReason` reads):
+  `LocalFolderExists`,
   `HasUsableSource`, `DaminionSourceBrush` / `LocalSourceBrush` and
   `DaminionSourceText` / `LocalSourceText` — the two source lights.
 - Record count (automatic): `RefreshCountAsync` counts `WorkflowRunner`'s
@@ -222,8 +258,8 @@ operation runs (one progress bar is shared by both).
   source is Daminion (`ConnectCoreAsync`, shared with the Connect button), then
   count once.
 - `ApplyStoredSource` (on `DatasourceState`) restores the folder/type from
-  `config.json` at startup, so the start screen has a source before the user
-  touches anything.
+  `config.json` at startup, so the processing views have a source before the
+  user touches anything.
 - `ToSelectionForProcessing(client)` builds the orchestrator's
   `DatasourceSelection` (sharing the authenticated client).
 
@@ -278,6 +314,20 @@ through the UI dispatcher).
   `VerifyItemMetadataAsync`, marking rows `Verified` and logging mismatches.
 
 ### `Steps/StepDedupViewModel`
+One class, two operations. The constructor takes an `ImageMatchProfile`
+(`Duplicates` or `Similar`) and the instance serves either the **Deduplication**
+operation or the **Similar images** one: the scan, the review and the apply are
+the same code, and the profile picks only what has to differ — the starting
+threshold (`DefaultThresholdFor`: `0.90` for duplicates, the store's
+`SimilarThresholdDefault` of `0.85` for the similarity search), the wording
+(`OperationTitle`, `MatchNoun` / `MatchNounPlural`, `ScanCardTitle`,
+`ApplyCardTitle`, the hint lines), the operation identity (`OperationKey` —
+`dedup` or `similar`, the key it is opened, hosted and persisted under), and
+which half of the settings store it reads and writes (`Dedup*` versus
+`Similar*`), so widening one search never widens the other. The two profiles are
+two operations end to end: separate keys, sidebar rows, settings tabs, help
+topics and registry values.
+
 Algorithm (PHash/DHash/AHash/ColorMoment) + threshold over two sources — the
 same radio pattern as Step 1: `IsLocalSelected`/`IsDaminionSelected` pick a
 local `FolderPath` or the Step 1 Daminion scope (`DaminionScopeSummary`, fed by
@@ -645,6 +695,16 @@ Reads XMP (including TIFF sidecars) plus IPTC/EXIF fallbacks.
   throws.
 - **`EngineSettingsStore`** — registry persistence for Step 2
   (`HKCU\Software\Synapic\Engine`), no-op off Windows.
+- **`AppSettingsRegistryStore`** — the general settings as one flat value map
+  under `HKCU\Software\Synapic\AppData` (no-op off Windows): appearance and
+  logging, the new-session defaults, the local source and the processing limits,
+  and the rules of the three processing operations. The dedup and similar rules
+  are two independent sets of nine values (`Dedup*` / `Similar*`), which is what
+  keeps the two searches' algorithms, thresholds, keep-sets, actions and move
+  destinations apart (`SimilarThresholdDefault` is `0.85`). `Load()` returns
+  `null` when nothing has been saved yet, `Defaults` is the shipped state the
+  load-then-modify writers start from, and a one-time import maps an old
+  `%APPDATA%\Synapic\config.json` into the key while it is still empty.
 - **`SystemPromptPresetStore`** — the system-prompt history as plain JSON
   (`%APPDATA%/Synapic/system-prompts.json`, shape `SystemPromptPresetFile`,
   newest first, capped at `MaxPresets`). History only: the live prompt stays in
@@ -675,9 +735,10 @@ Reads XMP (including TIFF sidecars) plus IPTC/EXIF fallbacks.
   missing or unusable — a payload that cannot be checked is not opened.
 - **`HelpTopics`** — the only place topic file names exist (`Home`,
   `FirstRunSidecar`, `Troubleshooting`, `SetupGuide`, `SettingsReference`,
-  `Tips`, `ForStepIndex(stepIndex)`). `NormalizeTopic` maps anything that is
-  not a plain `.html` name with an optional `#anchor` to the home page, so a bad
-  value cannot reach outside the help.
+  `Tips`, `Upscale`, `Similar`, `ForStepIndex(stepIndex)` — index 4 is the
+  duplicate scan, 5 upscaling). `NormalizeTopic` maps anything that is not a
+  plain `.html` name with an optional `#anchor` to the home page, so a bad value
+  cannot reach outside the help.
 - Payload: `Synapic.Main.csproj` embeds `docs/help/Synapic.chm` and
   `help-payload.json` as `Synapic.Help.*` resources (when they exist — both are
   artifacts of `docs/help/build-chm.ps1`), and copies `docs/help/*.html` and

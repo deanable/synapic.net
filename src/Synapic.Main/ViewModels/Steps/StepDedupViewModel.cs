@@ -149,15 +149,52 @@ public partial class DuplicateGroupViewModel : ObservableObject
 }
 
 /// <summary>
+/// Which image-matching search a <see cref="StepDedupViewModel"/> runs. The two
+/// are the same mechanism — a 64-bit perceptual fingerprint compared at a
+/// hamming threshold, grouped by union-find, reviewed as keep/unchecked rows and
+/// acted on in bulk — and differ only in what they mean by "the same":
+/// duplicates are near-identical copies, similar images are the visibly alike
+/// ones a duplicate scan deliberately keeps apart. Each profile is its own
+/// operation with its own route, settings tab, help topic and registry keys, so
+/// loosening one search never loosens the other.
+/// </summary>
+public enum ImageMatchProfile
+{
+    /// <summary>Near-identical copies — the Deduplication operation.</summary>
+    Duplicates,
+
+    /// <summary>Visibly alike images — the Similar images operation.</summary>
+    Similar,
+}
+
+/// <summary>
 /// Dedup wizard step (port of step_dedup.py): pick algorithm + threshold, choose
 /// a source — a local folder or the Step 1 Daminion scope (exactly like tagging
 /// does) — scan for duplicate groups, review them as a vertical list of group
 /// cards with per-item keep checkboxes, drive those checkboxes from the
 /// oldest/newest/smallest/largest auto-select set, and apply a bulk action to
 /// the unchecked duplicates.
+///
+/// One implementation serves both <see cref="ImageMatchProfile"/>s: the scan,
+/// the review and the apply are identical, and only the threshold the profile
+/// starts at, the wording, the persisted keys and the operation identity
+/// (key/title/help topic) are chosen per profile. A second copy of the scan
+/// would have had to re-derive the catalog server-hash shortcut, the temp-file
+/// lifecycle, the preview loading and the fail-closed confirmation gates — the
+/// parts worth having exactly one of.
 /// </summary>
 public partial class StepDedupViewModel : RunStateViewModel
 {
+    /// <summary>
+    /// The threshold a profile starts at before anything is restored from the
+    /// registry. Duplicates ship strict (0.90: at most six of the 64 hash bits
+    /// differ); the similarity search ships loose enough to catch re-encodes,
+    /// crops and light edits (0.85: at most ten bits).
+    /// </summary>
+    public static double DefaultThresholdFor(ImageMatchProfile profile) => profile == ImageMatchProfile.Similar
+        ? AppSettingsRegistryStore.SimilarThresholdDefault
+        : 0.90;
+
     private readonly IDedupService _dedup;
     private readonly Step1DatasourceViewModel? _step1;
     private readonly AppSettingsRegistryStore? _appSettingsStore;
@@ -170,16 +207,24 @@ public partial class StepDedupViewModel : RunStateViewModel
     /// <param name="appSettingsStore">Registry-backed general settings; when
     /// given, the scan rules, keep-set checkboxes, selected action and the move
     /// destination are restored from it and persisted to it on change.</param>
+    /// <param name="profile">Which search this instance runs (Deduplication or
+    /// Similar images). It selects the registry keys, the starting threshold and
+    /// the wording; the scanning itself is the same code either way.</param>
     public StepDedupViewModel(
         IDedupService? dedup = null,
         Step1DatasourceViewModel? step1 = null,
         Func<string, Task<bool>>? confirm = null,
-        AppSettingsRegistryStore? appSettingsStore = null)
+        AppSettingsRegistryStore? appSettingsStore = null,
+        ImageMatchProfile profile = ImageMatchProfile.Duplicates)
     {
         _dedup = dedup ?? new DedupService();
         _step1 = step1;
         _appSettingsStore = appSettingsStore;
+        Profile = profile;
         ConfirmAction = confirm;
+        // Straight to the backing field: the generated setter persists, and a
+        // default must not be written back before the saved one is read.
+        _threshold = DefaultThresholdFor(profile);
         LoadPersistedState();
 
         // Step 1 owns the source while the shell hosts both: anything that moves
@@ -209,6 +254,63 @@ public partial class StepDedupViewModel : RunStateViewModel
         OnPropertyChanged(nameof(DaminionScopeSummary));
     }
 
+    // ── Which search this is (profile identity) ─────────────────────────────
+
+    /// <summary>Which search this instance runs.</summary>
+    public ImageMatchProfile Profile { get; }
+
+    /// <summary>True for the Similar images operation, false for Deduplication.</summary>
+    public bool IsSimilar => Profile == ImageMatchProfile.Similar;
+
+    /// <summary>The shell's operation key this instance is opened and persisted under.</summary>
+    public string OperationKey =>
+        IsSimilar ? OperationShellViewModel.SimilarKey : OperationShellViewModel.DedupKey;
+
+    /// <summary>The operation's display name, as its route title and nav row read it.</summary>
+    public string OperationTitle => IsSimilar ? "Similar images" : "Deduplication";
+
+    /// <summary>What a group holds, in this profile's words ("3 duplicate groups").</summary>
+    public string MatchNoun => IsSimilar ? "similar" : "duplicate";
+
+    /// <summary>The plural of <see cref="MatchNoun"/> for the summary lines.</summary>
+    public string MatchNounPlural => IsSimilar ? "similar images" : "duplicates";
+
+    /// <summary>
+    /// The heading of the scan card on this mode's run page, so the Similar
+    /// images view never reads as the deduplication view with the same form.
+    /// </summary>
+    public string ScanCardTitle => IsSimilar ? "Search for similar images" : "Scan for duplicates";
+
+    /// <summary>The run page's rule-line hint for this profile.</summary>
+    public string RunPageHint => IsSimilar
+        ? "The similarity settings and the keep-set rule live in the Settings view's Similar tab; the search, the review and the apply happen here."
+        : "The scan rules and the keep-set rule live in the Settings view's Dedup section; the scan, the review and the apply happen here.";
+
+    /// <summary>The apply card's heading for this profile.</summary>
+    public string ApplyCardTitle => IsSimilar
+        ? "Apply to the unchecked near-matches"
+        : "Apply to the unchecked duplicates";
+
+    /// <summary>The caveat under the apply controls, in this profile's words.</summary>
+    public string ApplyHint => IsSimilar
+        ? "Checked items are kept; the action runs on every unchecked near-match across all groups — each destructive action asks first."
+        : "Checked items are kept; the action runs on every unchecked duplicate across all groups — each destructive action asks first.";
+
+    /// <summary>The progress line shown while a destructive call is in flight.</summary>
+    public string ApplyingHint => IsSimilar
+        ? "Applying to the unchecked near-matches — Stop cancels the rest of the batch."
+        : "Applying to the unchecked duplicates — Stop cancels the rest of the batch.";
+
+    /// <summary>What this profile's threshold means, shown beside the picker.</summary>
+    public string ThresholdHint => IsSimilar
+        ? "How close two images have to be to count as similar (0.85 = clearly alike; lower groups more loosely)."
+        : "How close two images have to be to count as duplicates (0.90 = near-identical).";
+
+    /// <summary>The keep-set explanation under the rule checkboxes, in this profile's words.</summary>
+    public string KeepSetHint => IsSimilar
+        ? "Ticking a rule drives every group's keep checkboxes: checked items are kept, the unchecked near-matches get the action."
+        : "Ticking a rule drives every group's keep checkboxes: checked items are kept, the unchecked duplicates get the action.";
+
     /// <summary>Modal confirmation hook (message → confirmed?). Set by the view;
     /// null cancels every destructive action (Daminion catalog delete and local
     /// file delete alike) — fail closed.</summary>
@@ -219,7 +321,9 @@ public partial class StepDedupViewModel : RunStateViewModel
     /// <summary>
     /// Restore what this form remembers: algorithm, threshold, server-hash
     /// match, keep-set rules, selected action and the move destination. Best
-    /// effort — a bad registry read falls back to the shipped defaults.
+    /// effort — a bad registry read falls back to the shipped defaults. The
+    /// profile decides which half of the store is read, so the two searches
+    /// never inherit each other's rules.
     /// </summary>
     private void LoadPersistedState()
     {
@@ -227,16 +331,20 @@ public partial class StepDedupViewModel : RunStateViewModel
         _hydratingDedup = true;
         try
         {
-            var algoIndex = Array.IndexOf(Algorithms, s.DedupAlgorithm);
+            var algorithm = IsSimilar ? s.SimilarAlgorithm : s.DedupAlgorithm;
+            var threshold = IsSimilar ? s.SimilarThreshold : s.DedupThreshold;
+            var serverHash = IsSimilar ? s.SimilarServerHashMatch : s.DedupServerHashMatch;
+
+            var algoIndex = Array.IndexOf(Algorithms, algorithm);
             SelectedAlgorithm = algoIndex >= 0 ? algoIndex : 0;
-            Threshold = s.DedupThreshold is > 0.5 and <= 1 ? s.DedupThreshold : 0.90;
-            var matchIndex = Array.IndexOf(ServerHashMatches, s.DedupServerHashMatch);
+            Threshold = threshold is > 0.5 and <= 1 ? threshold : DefaultThresholdFor(Profile);
+            var matchIndex = Array.IndexOf(ServerHashMatches, serverHash);
             SelectedServerHashMatch = matchIndex >= 0 ? matchIndex : 0;
-            SelectOldest = s.DedupSelectOldest;
-            SelectNewest = s.DedupSelectNewest;
-            SelectSmallest = s.DedupSelectSmallest;
-            SelectLargest = s.DedupSelectLargest;
-            MoveDestinationFolder = s.DedupMoveDestination;
+            SelectOldest = IsSimilar ? s.SimilarSelectOldest : s.DedupSelectOldest;
+            SelectNewest = IsSimilar ? s.SimilarSelectNewest : s.DedupSelectNewest;
+            SelectSmallest = IsSimilar ? s.SimilarSelectSmallest : s.DedupSelectSmallest;
+            SelectLargest = IsSimilar ? s.SimilarSelectLargest : s.DedupSelectLargest;
+            MoveDestinationFolder = IsSimilar ? s.SimilarMoveDestination : s.DedupMoveDestination;
         }
         finally
         {
@@ -254,22 +362,42 @@ public partial class StepDedupViewModel : RunStateViewModel
         try
         {
             var existing = _appSettingsStore.Load() ?? _appSettingsStore.Defaults;
-            _appSettingsStore.Save(existing with
-            {
-                DedupAlgorithm = Algorithms[Math.Clamp(SelectedAlgorithm, 0, Algorithms.Length - 1)],
-                DedupThreshold = Threshold,
-                DedupServerHashMatch = ServerHashMatches[Math.Clamp(SelectedServerHashMatch, 0, ServerHashMatches.Length - 1)],
-                DedupSelectOldest = SelectOldest,
-                DedupSelectNewest = SelectNewest,
-                DedupSelectSmallest = SelectSmallest,
-                DedupSelectLargest = SelectLargest,
-                DedupSelectedAction = Math.Clamp(SelectedAction, 0, Math.Max(Actions.Length - 1, 0)),
-                DedupMoveDestination = MoveDestinationFolder,
-            });
+            var algorithm = Algorithms[Math.Clamp(SelectedAlgorithm, 0, Algorithms.Length - 1)];
+            var serverHash = ServerHashMatches[Math.Clamp(SelectedServerHashMatch, 0, ServerHashMatches.Length - 1)];
+            var action = Math.Clamp(SelectedAction, 0, Math.Max(Actions.Length - 1, 0));
+
+            // The profile picks the half of the state this form owns: writing the
+            // other half too would let the similar search overwrite the duplicate
+            // rules (and the reverse) every time either form was touched.
+            _appSettingsStore.Save(IsSimilar
+                ? existing with
+                {
+                    SimilarAlgorithm = algorithm,
+                    SimilarThreshold = Threshold,
+                    SimilarServerHashMatch = serverHash,
+                    SimilarSelectOldest = SelectOldest,
+                    SimilarSelectNewest = SelectNewest,
+                    SimilarSelectSmallest = SelectSmallest,
+                    SimilarSelectLargest = SelectLargest,
+                    SimilarSelectedAction = action,
+                    SimilarMoveDestination = MoveDestinationFolder,
+                }
+                : existing with
+                {
+                    DedupAlgorithm = algorithm,
+                    DedupThreshold = Threshold,
+                    DedupServerHashMatch = serverHash,
+                    DedupSelectOldest = SelectOldest,
+                    DedupSelectNewest = SelectNewest,
+                    DedupSelectSmallest = SelectSmallest,
+                    DedupSelectLargest = SelectLargest,
+                    DedupSelectedAction = action,
+                    DedupMoveDestination = MoveDestinationFolder,
+                });
         }
         catch (Exception e)
         {
-            SynapicLog.Warning(nameof(StepDedupViewModel), $"Failed to persist dedup settings: {e.Message}");
+            SynapicLog.Warning(nameof(StepDedupViewModel), $"Failed to persist {OperationKey} settings: {e.Message}");
         }
     }
 
@@ -371,8 +499,14 @@ public partial class StepDedupViewModel : RunStateViewModel
     [ObservableProperty]
     private int _selectedAlgorithm; // index into Algorithms
 
+    /// <summary>
+    /// How close two fingerprints must be to count as the same image. The
+    /// starting value comes from the profile (see
+    /// <see cref="DefaultThresholdFor"/>); the saved value, when there is one,
+    /// replaces it in <see cref="LoadPersistedState"/>.
+    /// </summary>
     [ObservableProperty]
-    private double _threshold = 0.90;
+    private double _threshold;
 
     /// <summary>
     /// Scan-in-progress flag the dedup view binds. The state itself lives on the
@@ -497,7 +631,7 @@ public partial class StepDedupViewModel : RunStateViewModel
     /// <summary>Header count text above the group list.</summary>
     public string SelectionSummary => Groups.Count == 0
         ? ""
-        : $"{Groups.Count} duplicate group(s) — {SelectedForActionCount} selected for the action";
+        : $"{Groups.Count} {MatchNoun} group(s) — {SelectedForActionCount} selected for the action";
 
     // ── Auto-select rule checkboxes (oldest / newest / smallest / largest) ──
 
@@ -658,7 +792,7 @@ public partial class StepDedupViewModel : RunStateViewModel
                 : await ScanLocalAsync(opts, ct);
 
             SynapicLog.Info(nameof(StepDedupViewModel),
-                $"Hashing finished — {result.TotalFiles} file(s) hashed, {result.Groups.Count} duplicate group(s) at threshold {result.Threshold:0.###}");
+                $"Hashing finished — {result.TotalFiles} file(s) hashed, {result.Groups.Count} {MatchNoun} group(s) at threshold {result.Threshold:0.###}");
 
             // Nothing is cached, so this should read 0 files / 0 bytes after
             // every scan; anything else is a leak worth seeing in the log.
@@ -675,8 +809,8 @@ public partial class StepDedupViewModel : RunStateViewModel
             ScanSummary = Groups.Count == 0
                 ? result.TotalFiles == 0
                     ? "No images found in this source — choose a folder or scope with images, then scan again."
-                    : $"No duplicates found among {result.TotalFiles} images — try a lower threshold or another algorithm."
-                : $"{result.TotalFiles} files scanned — {Groups.Count} groups, {dupCount} duplicates";
+                    : $"No {MatchNounPlural} found among {result.TotalFiles} images — try a lower threshold or another algorithm."
+                : $"{result.TotalFiles} files scanned — {Groups.Count} groups, {dupCount} {MatchNounPlural}";
             SynapicLog.Info(nameof(StepDedupViewModel), ScanSummary);
             TelemetryService.Shared.RecordDedup(dupCount);
 
@@ -757,7 +891,7 @@ public partial class StepDedupViewModel : RunStateViewModel
         var items = await WorkflowRunner.FetchItemsAsync(ds, ct);
         var serverHashCount = items.Count(i => i.ServerHashCode != 0);
         SynapicLog.Info(nameof(StepDedupViewModel),
-            $"Dedup fetch: {items.Count} item(s) in scope ({ScopeIdForLog()}) — " +
+            $"{OperationTitle} fetch: {items.Count} item(s) in scope ({ScopeIdForLog()}) — " +
             (serverHashCount > 0
                 ? $"{serverHashCount} carry a server hash (grouped without download), " +
                   $"{items.Count - serverHashCount} need a download to hash"
@@ -765,8 +899,8 @@ public partial class StepDedupViewModel : RunStateViewModel
 
         var handler = new DedupScanHandler(client, opts, _dedup);
         var workflow = new WorkflowDefinition(
-            Key: "dedup",
-            Title: "Duplicate scan",
+            Key: OperationKey,
+            Title: IsSimilar ? "Similarity scan" : "Duplicate scan",
             MaxDegreeOfParallelism: 1, // one item at a time: a large scope never lands on disk whole
             Description: serverHashCount > 0
                 ? $"grouping {serverHashCount} item(s) from server hash, {opts.Algorithm} at threshold {opts.Threshold:0.###} for the rest"
@@ -783,7 +917,7 @@ public partial class StepDedupViewModel : RunStateViewModel
         await new WorkflowRunner().RunItemsAsync(workflow, items, handler, progress, log: null, pause: null, ct);
 
         SynapicLog.Info(nameof(StepDedupViewModel),
-            $"Dedup scan done: {handler.ExactHashes.Count + handler.PerceptualHashes.Count} of {items.Count} item(s) hashed " +
+            $"{OperationTitle} scan done: {handler.ExactHashes.Count + handler.PerceptualHashes.Count} of {items.Count} item(s) hashed " +
             $"({handler.ServerHashGrouped} from server hash, " +
             $"{handler.DownloadFailures} download failure(s), {handler.HashFailures} unhashable file(s))");
 
@@ -1049,9 +1183,9 @@ public partial class StepDedupViewModel : RunStateViewModel
         // the summary line after Apply only reports what the call claimed.
         SynapicLog.Info(nameof(StepDedupViewModel),
             IsDaminion
-                ? $"Apply requested — remove {targets.Count} item(s) from the catalog: " +
-                  $"ids [{string.Join(", ", targets.Where(t => t.DaminionId is not null).Select(t => t.DaminionId))}]"
-                : $"Apply requested — {SelectedActionLabel()} on {targets.Count} duplicate file(s)");
+                ? $"Apply requested — remove {targets.Count} item(s) from the catalog: "
+                  + $"ids [{string.Join(", ", targets.Where(t => t.DaminionId is not null).Select(t => t.DaminionId))}]"
+                : $"Apply requested — {SelectedActionLabel()} on {targets.Count} {MatchNoun} file(s)");
 
         var client = IsDaminion ? _step1?.ConnectedClient : null;
         if (IsDaminion && client is null) return;

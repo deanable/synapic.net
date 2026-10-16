@@ -5,13 +5,17 @@
              x:Class="Synapic.Main.Views.Wizard.StepDedup"
              x:DataType="vm:StepDedupViewModel">
 
-  <!-- The deduplication run page: what the scan works on, the scan itself, the review of
-       the groups and the apply. The rule settings (algorithm, threshold, server
-       hashing, keep-set rules) live in the Settings view's Deduplication section, and
-       the page reports them back on the rule line so the scan is never started blind. -->
+  <!-- The image-matching run page — one view for both the Deduplication and the
+       Similar images operations, whose view models are the same class under two
+       profiles. What the scan works on, the scan itself, the review of the groups
+       and the apply: the rule settings (algorithm, threshold, server hashing,
+       keep-set rules) live in the operation's Settings tab (Dedup or Similar), and
+       the page reports them back on the rule line so a scan is never started
+       blind. The headings and the hints that name the search come from the view
+       model (ScanCardTitle, RunPageHint, ApplyCardTitle, ApplyHint), so the
+       similar view never reads as the duplicate view. -->
   <StackPanel Spacing="12">
-    <TextBlock Classes="hint"
-               Text="The scan rules and the keep-set rule live in the Settings view's Deduplication section; the scan, the review and the apply happen here." />
+    <TextBlock Classes="hint" Text="{Binding RunPageHint}" />
 
     <!-- The source the scan runs on comes from the shared data-source strip
          (Region A): one source, configured once, shown identically in every
@@ -24,7 +28,7 @@
          point and one Stop instead of two of each. -->
     <Border Classes="card settingsCard" Padding="16">
       <StackPanel Spacing="8">
-        <TextBlock Classes="sectionTitle" Text="Scan for duplicates"
+        <TextBlock Classes="sectionTitle" Text="{Binding ScanCardTitle}"
                    TextTrimming="CharacterEllipsis" />
 
         <TextBlock Classes="hint" Text="{Binding ScanSettingsSummary}" />
@@ -38,7 +42,7 @@
     <TextBlock Text="{Binding SelectionSummary}" FontWeight="SemiBold" TextWrapping="Wrap"
                IsVisible="{Binding SelectionSummary}" />
 
-    <!-- Vertical list of duplicate group cards, each item row with a checkbox. -->
+    <!-- Vertical list of match group cards, each item row with a checkbox. -->
     <ListBox ItemsSource="{Binding Groups}" MaxHeight="380">
       <ListBox.ItemTemplate>
         <DataTemplate x:DataType="vm:DuplicateGroupViewModel">
@@ -79,7 +83,7 @@
     <!-- Action + apply (un-checked items across all groups). -->
     <Border Classes="card settingsCard" Padding="16">
       <StackPanel Spacing="8">
-        <TextBlock Classes="sectionTitle" Text="Apply to the unchecked duplicates" />
+        <TextBlock Classes="sectionTitle" Text="{Binding ApplyCardTitle}" />
         <WrapPanel>
           <TextBlock Classes="fieldLabel" Text="Action:" Margin="0,0,8,8"
                      help:HelpScope.Topic="settings-reference.html#dedup-action" />
@@ -106,10 +110,8 @@
                   ToolTip.Tip="Cancel the apply in progress; what it already changed stays changed." />
         </WrapPanel>
         <ProgressBar IsIndeterminate="True" Height="6" IsVisible="{Binding IsApplying}" />
-        <TextBlock Classes="hint" IsVisible="{Binding IsApplying}"
-                   Text="Applying to the unchecked duplicates — Stop cancels the rest of the batch." />
-        <TextBlock Classes="hint"
-                   Text="Checked items are kept; the action runs on every unchecked duplicate across all groups — each destructive action asks first." />
+        <TextBlock Classes="hint" IsVisible="{Binding IsApplying}" Text="{Binding ApplyingHint}" />
+        <TextBlock Classes="hint" Text="{Binding ApplyHint}" />
       </StackPanel>
     </Border>
   </StackPanel>

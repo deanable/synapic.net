@@ -56,23 +56,24 @@ most common "why are my keywords there but my description missing?" question. Se
 
 <h2>What you see when it opens</h2>
 
-<p>Synapic is one window with a sidebar of four rows down the left and one view
+<p>Synapic is one window with a sidebar of five rows down the left and one view
 beside it. There is no dashboard and no numbered step chain: the row you pick is
 the view you get, and
 <a href="window-overview.html">The Synapic window</a> describes each part.</p>
 
 <table>
 <tr><th class="setting">Row</th><th>What it is</th></tr>
-<tr><td><span class="ui">Settings</span></td><td>Every configuration the app has, arranged as one concern per tab: the data source and its limits, the inference server, the inference engine, the deduplication and upscaling rules, and the app preferences. It is what you see on launch, and where you start.</td></tr>
+<tr><td><span class="ui">Settings</span></td><td>Every configuration the app has, arranged as one concern per tab: the data source and its limits, the inference server, the inference engine, the deduplication, similarity and upscaling rules, and the app preferences. It is what you see on launch, and where you start.</td></tr>
 <tr><td><span class="ui">Tagging</span></td><td>Run the model over the shared source and write the tags.</td></tr>
 <tr><td><span class="ui">Deduplication</span></td><td>Find near-duplicate images and resolve the groups.</td></tr>
+<tr><td><span class="ui">Similar images</span></td><td>Group the images that look alike rather than identical, and resolve the near-matches.</td></tr>
 <tr><td><span class="ui">Upscaling</span></td><td>Raise image resolution, with AI (Swin2SR) or fast Lanczos resampling, over the same source.</td></tr>
 </table>
 
 <p>Three of the Settings tabs matter before your first run:
 <span class="ui">Connection</span> (what to work on),
 <span class="ui">Inference</span> (the local engine) and
-<span class="ui">Tagging</span> (how it tags). The rest &mdash; the dedup and
+<span class="ui">Tagging</span> (how it tags). The rest &mdash; the dedup, similarity and
 upscale rules, and the app preferences &mdash; can wait. Not sure which tab a
 setting lives on? The search box at the top of the Settings view takes you
 directly to it: type what you are looking for, and the tab opens. See

@@ -30,7 +30,7 @@ that so each concern has visible edges.</p>
 <table>
 <tr><th class="setting">Layer</th><th>What it holds</th><th>When it is written</th></tr>
 <tr><td>The settings forms</td><td>The live values a run uses, held in memory for the session.</td><td>Continuously as you type; pushed to the session when you move away from the section.</td></tr>
-<tr><td><code>HKCU\Software\Synapic</code> (Windows only)</td><td>What the forms restore from next launch: <code>\Engine</code> for the inference engine, <code>\Daminion</code> for the data source. Per user, no admin rights.</td><td>When the configuration is saved; the Daminion key only after a successful login. On macOS and Linux these stores do not exist &mdash; the forms start from defaults every run.</td></tr>
+<tr><td><code>HKCU\Software\Synapic</code> (Windows only)</td><td>What the forms restore from next launch: <code>\Engine</code> for the inference engine, <code>\Daminion</code> for the data source, and <code>\AppData</code> for the app preferences and the operation rules &mdash; the Dedup, Similar and Upscale tabs. Per user, no admin rights.</td><td>When the configuration is saved; the Daminion key only after a successful login. On macOS and Linux these stores do not exist &mdash; the forms start from defaults every run.</td></tr>
 <tr><td><span class="path">%APPDATA%\Synapic\config.json</span></td><td>App preferences (<code>ui.*</code>, read at startup) plus a snapshot of the last working set (<code>datasource.*</code>, <code>engine.*</code>, <code>processing.*</code>). Unknown keys survive saves.</td><td>When the configuration is saved, and never mid-keystroke.</td></tr>
 </table>
 
@@ -176,10 +176,13 @@ place to stage a known-good working set for a colleague &mdash; and the reason
 a hand edit there looks like it "does nothing" on the same machine.</p>
 </div>
 
-<h2 id="dedup">Deduplication &mdash; Dedup tab (not persisted)</h2>
+<h2 id="dedup">Deduplication &mdash; Dedup tab</h2>
 
 <p>The deduplication settings live on the <span class="ui">Dedup</span> tab and
-in the session only: every launch starts over. Narrative: <a href="dedup.html">Deduplication</a>.</p>
+are remembered in the per-user registry
+(<span class="path">HKCU\Software\Synapic\AppData</span>) like every other
+general setting, so they survive a restart and are shared by every run.
+Narrative: <a href="dedup.html">Deduplication</a>.</p>
 
 <table>
 <tr><th class="setting">Setting</th><th>What it does</th><th>Default</th></tr>
@@ -190,6 +193,25 @@ in the session only: every launch starts over. Narrative: <a href="dedup.html">D
 <tr><td><a name="dedup-server-hash"></a><span class="ui">Server hash</span></td><td>How the Daminion catalog's own content hashes are compared, shown for the catalog source. <code>Exact</code> (the default) groups only items whose <code>hashCode</code> is identical &mdash; the safe choice while it is unconfirmed whether the server hash is byte-exact or perceptual. <code>Hamming</code> compares those values by distance at the threshold, like the algorithmic hashes. Either way server hashes are only compared with each other, never with the algorithmic hashes of downloaded items.</td><td>Exact</td></tr>
 <tr><td><a name="dedup-autoselect"></a><span class="ui">Auto-select keep-set: Oldest / Newest / Smallest / Largest</span></td><td>Four switches that drive every group's per-item checkboxes at once. Each active switch ticks the item it names in every group (oldest/newest by capture date, smallest/largest by file size); several switches tick the union of their picks. A checked item is <em>kept</em> &mdash; the action applies to the unchecked ones. With no switch active, the first item of each group is kept. Toggling a switch recomputes the selection and overwrites manual tweaks.</td><td>all off</td></tr>
 <tr><td><a name="dedup-action"></a><span class="ui">Action for unchecked duplicates</span></td><td>What <span class="ui">Apply</span> does to every unchecked item across all groups: <code>Tag</code> the images as duplicates, <code>Move to folder&hellip;</code> the extras into a folder you choose (a destination box appears when it is selected; the folder is remembered), or <code>Delete from disk</code> them (local source &mdash; delete asks for confirmation first, because it cannot be undone). With the Daminion source the only action is <code>Delete from catalog</code>, which also asks for confirmation before removing the items from the catalog.</td><td>Tag</td></tr>
+</table>
+
+<h2 id="similar">Similar images &mdash; Similar tab</h2>
+
+<p>The similarity search is the looser sibling of deduplication: the same
+fingerprints, the same review and the same actions, with a threshold that lets
+visibly alike images group instead of only near-identical ones. Its settings
+live on the <span class="ui">Similar</span> tab and are remembered in the
+per-user registry (<span class="path">HKCU\Software\Synapic\AppData</span>)
+separately from the Dedup tab's &mdash; so widening one search never widens the
+other. Narrative: <a href="similar.html">Similar images</a>.</p>
+
+<table>
+<tr><th class="setting">Setting</th><th>What it does</th><th>Default</th></tr>
+<tr><td><a name="similar-algorithm"></a><span class="ui">Algorithm</span></td><td>How similarity is computed: <code>PHash</code> (perceptual hash, the general choice), <code>DHash</code>, <code>AHash</code> (both gradient/average variants, cheaper) or <code>ColorMoment</code> (colour statistics, slower, forgiving of crop-less edits). The two operations keep their own selection even though the algorithms are the same.</td><td>PHash</td></tr>
+<tr><td><a name="similar-threshold"></a><span class="ui">Similarity threshold</span></td><td>How similar counts as similar: from 0.5 to 1.0. Lower is looser, and looser means bigger groups: 0.85 lets ten of the 64 fingerprint bits differ (a re-encode, a crop or a light edit), where deduplication's 0.90 allows six. Below about 0.80 unrelated images that share a composition or a palette start to group, and because groups chain &mdash; A matches B, B matches C, so all three are reported together &mdash; the cards grow quickly.</td><td>0.85</td></tr>
+<tr><td><a name="similar-server-hash"></a><span class="ui">Server hash</span></td><td>How the Daminion catalog's own content hashes are compared, shown for the catalog source. <code>Exact</code> (the default) groups only items whose <code>hashCode</code> is identical; <code>Hamming</code> compares those values by distance at the threshold, like the algorithmic hashes. Either way server hashes are only compared with each other, never with the algorithmic hashes of downloaded items.</td><td>Exact</td></tr>
+<tr><td><a name="similar-autoselect"></a><span class="ui">Auto-select keep-set: Oldest / Newest / Smallest / Largest</span></td><td>The same four switches as the Dedup tab, driving every group's per-item checkboxes at once. Each active switch ticks the item it names in every group (oldest/newest by capture date, smallest/largest by file size); several switches tick the union of their picks. A checked item is <em>kept</em> &mdash; the action applies to the unchecked ones. With no switch active, the first item of each group is kept. Its own selection, independent of the Dedup tab's.</td><td>all off</td></tr>
+<tr><td><a name="similar-action"></a><span class="ui">Action for unchecked near-matches</span></td><td>What <span class="ui">Apply</span> does to every unchecked item across all groups: <code>Tag</code>, <code>Move to folder&hellip;</code> (a destination box appears when it is selected, the folder is remembered, and it must not be inside the scanned folder) or <code>Delete from disk</code> (local source &mdash; a confirmation prompt comes first, because it cannot be undone). With the Daminion source the only action is <code>Delete from catalog</code>, which also asks for confirmation. Prefer moving over deleting while you are still learning what the threshold does.</td><td>Tag</td></tr>
 </table>
 
 <h2>Changing settings by hand</h2>

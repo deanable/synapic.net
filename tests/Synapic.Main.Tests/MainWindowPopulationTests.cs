@@ -79,5 +79,12 @@ public class MainWindowPopulationTests
         Assert.Same(host.Dedup, host.ParametersFor(OperationShellViewModel.DedupKey));
         Assert.Same(host.Dedup, host.RunFor(OperationShellViewModel.DedupKey));
         Assert.Null(host.ReportFor(OperationShellViewModel.DedupKey));
+
+        // The similarity search is a region of its own over its own instance: the
+        // two image-matching operations must never hand out the same view model.
+        Assert.Same(host.Similar, host.ParametersFor(OperationShellViewModel.SimilarKey));
+        Assert.Same(host.Similar, host.RunFor(OperationShellViewModel.SimilarKey));
+        Assert.Null(host.ReportFor(OperationShellViewModel.SimilarKey));
+        Assert.NotSame(host.Dedup, host.Similar);
     }
 }
