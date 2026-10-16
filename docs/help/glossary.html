@@ -92,7 +92,7 @@ the way Synapic means them.</p>
 <table>
 <tr><th class="setting">Term</th><th>Meaning</th></tr>
 <tr><td><span class="term">Perceptual hash</span></td><td>A 64-bit fingerprint of what an image looks like, so two copies compare as equal even after re-encoding or resizing.</td></tr>
-<tr><td><span class="term">pHash / dHash / aHash / ColorMoment</span></td><td>The four fingerprinting algorithms the deduplication tool offers, from the most robust (pHash) to the most colour-oriented (ColorMoment).</td></tr>
+<tr><td><span class="term">pHash / dHash / aHash</span></td><td>The three fingerprinting algorithms the deduplication tool offers. pHash is the most robust; aHash the simplest.</td></tr>
 <tr><td><span class="term">Threshold</span></td><td>How different two fingerprints may be and still count as duplicates. 0.90 by default; higher is stricter.</td></tr>
 <tr><td><span class="term">Similarity search</span></td><td>The other image-matching operation: the same perceptual fingerprints at a looser threshold, so visually alike images group instead of only near-identical ones. It has its own sidebar row and its own settings tab, the <span class="ui">Similar</span> tab.</td></tr>
 <tr><td><span class="term">Similarity threshold</span></td><td>How many of the 64 fingerprint bits may differ and still count as the same image. 0.90 for duplicates, 0.85 for similar images; lower is looser, and looser produces bigger groups.</td></tr>

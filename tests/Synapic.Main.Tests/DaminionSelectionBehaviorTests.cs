@@ -225,6 +225,72 @@ public sealed class DaminionSelectionBehaviorTests
         Assert.Equal(new[] { 0, 1 }, server.GetIndexes);
     }
 
+    /// <summary>
+    /// A collection page is filtered on this side, so it can contribute fewer
+    /// eligible items than the raw records it returned. The cursor must advance
+    /// by the raw page, and a page that filtered out every record must not end
+    /// the walk — otherwise a match that only appears on a later raw page is
+    /// never returned. Regression for the review's "IDs 1 and 4" reproduction:
+    /// the old loop advanced by the eligible count (0 and 1) and stopped on the
+    /// filtered-empty page, returning only ID 1.
+    /// </summary>
+    [Fact]
+    public async Task Collection_paging_advances_by_the_raw_page_and_keeps_later_matches()
+    {
+        using var server = new CatalogServer(index => Page(index, 500), collectionItems: RawPagedItems);
+        var client = await Connect(server);
+
+        var items = await WorkflowRunner.FetchItemsAsync(new DatasourceSelection
+        {
+            IsDaminion = true,
+            DaminionClient = client,
+            Scope = "collection",
+            CollectionId = 5,
+            StatusFilter = "approved",
+            ProcessAll = true,
+        }, CancellationToken.None);
+
+        Assert.Equal(new[] { 1, 4 }, items.Select(item => item.DaminionId!.Value).ToArray());
+        // Raw pages of two records: offset 0, the second record's page at 2, then
+        // the empty page at 4 that ends the walk.
+        Assert.Equal(new[] { 0, 2, 4 }, server.GetIndexes);
+    }
+
+    /// <summary>
+    /// The saved-search scope filters on this side too, so it exercises the same
+    /// raw-cursor contract as a collection. A match on the second raw page must
+    /// survive the first page's client-side filtering.
+    /// </summary>
+    [Fact]
+    public async Task Saved_search_paging_keeps_matches_on_later_raw_pages()
+    {
+        using var server = new CatalogServer(RawPagedItems);
+        var client = await Connect(server);
+
+        var items = await WorkflowRunner.FetchItemsAsync(new DatasourceSelection
+        {
+            IsDaminion = true,
+            DaminionClient = client,
+            Scope = "saved_search",
+            SavedSearchId = 3,
+            StatusFilter = "approved",
+            ProcessAll = true,
+        }, CancellationToken.None);
+
+        Assert.Equal(new[] { 1, 4 }, items.Select(item => item.DaminionId!.Value).ToArray());
+        Assert.Equal(new[] { 0, 2, 4 }, server.GetIndexes);
+    }
+
+    /// <summary>Raw pages of two records, ids 1..4, with only the ends approved.</summary>
+    private static string RawPagedItems(int index) => JsonSerializer.Serialize(new
+    {
+        items = Enumerable.Range(index + 1, 2)
+            .Where(id => id <= 4)
+            .Select(id => new { id, fileName = $"c-{id}.jpg", flag = id is 1 or 4 ? 1 : 2 })
+            .ToArray(),
+        totalCount = 4,
+    });
+
     private static string Page(int start, int count) => JsonSerializer.Serialize(new
     {
         items = Enumerable.Range(start + 1, count).Select(id => new { id, fileName = $"item-{id}.jpg" }),
@@ -237,6 +303,7 @@ public sealed class DaminionSelectionBehaviorTests
         private readonly TcpListener _listener = new(IPAddress.Loopback, 0);
         private readonly CancellationTokenSource _stop = new();
         private readonly Func<int, string> _items;
+        private readonly Func<int, string>? _collectionItems;
         private readonly ConcurrentQueue<int> _indexes = new();
         private readonly ConcurrentQueue<string> _routes = new();
         private readonly Action<int>? _thumbnailOverride;
@@ -244,10 +311,12 @@ public sealed class DaminionSelectionBehaviorTests
         public string BaseUrl { get; }
         public int[] GetIndexes => _indexes.ToArray();
 
-        public CatalogServer(Func<int, string> items, Action<int>? thumbnailOverride = null)
+        public CatalogServer(Func<int, string> items, Action<int>? thumbnailOverride = null,
+            Func<int, string>? collectionItems = null)
         {
             _items = items;
             _thumbnailOverride = thumbnailOverride;
+            _collectionItems = collectionItems;
             _listener.Start();
             BaseUrl = $"http://127.0.0.1:{((IPEndPoint)_listener.LocalEndpoint).Port}";
             _ = Task.Run(AcceptAsync);
@@ -291,10 +360,15 @@ public sealed class DaminionSelectionBehaviorTests
                 }
                 if (route == "/api/MediaItems/Get")
                 {
-                    var index = int.Parse(path.Split('&').Select(part => part.Split('='))
-                        .First(part => part[0].EndsWith("index", StringComparison.Ordinal))[1]);
+                    var index = ParseIndex(path);
                     _indexes.Enqueue(index);
                     body = _items(index);
+                }
+                else if (route == "/api/SharedCollection/GetItems")
+                {
+                    var index = ParseIndex(path);
+                    _indexes.Enqueue(index);
+                    body = _collectionItems is null ? "{}" : _collectionItems(index);
                 }
                 else if (route == "/api/Settings/GetCatalogGuid")
                 {
@@ -321,6 +395,10 @@ public sealed class DaminionSelectionBehaviorTests
                 await stream.WriteAsync(header.Concat(payload).ToArray(), _stop.Token);
             }
         }
+
+        private static int ParseIndex(string path) => int.Parse(path.Split('&')
+            .Select(part => part.Split('='))
+            .First(part => part[0].EndsWith("index", StringComparison.Ordinal))[1]);
 
         public void Dispose()
         {

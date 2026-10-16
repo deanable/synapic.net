@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Synapic.Main.Services.Daminion;
 
 namespace Synapic.Main.Services.Processing;
 
@@ -109,6 +110,15 @@ public sealed class WorkflowRunner
     /// ProcessingOrchestrator so every workflow resolves its work items the
     /// same way.
     /// </summary>
+    /// <remarks>
+    /// The Daminion API caps a single response at <see cref="DaminionApiClient.PageSize"/>
+    /// (500) items, so a larger result set is walked page by page. The cursor
+    /// advances by the <em>raw</em> page the server returned, not by the eligible
+    /// items kept: collection and saved-search scopes are filtered on this side,
+    /// and advancing by the smaller filtered count would overlap the raw records
+    /// it skipped. A page whose records were all filtered out is likewise not the
+    /// end of the result set — only a completely empty raw page is.
+    /// </remarks>
     public static async Task<IReadOnlyList<ProcessWorkItem>> FetchItemsAsync(DatasourceSelection ds, CancellationToken ct)
     {
         var items = new List<ProcessWorkItem>();
@@ -131,31 +141,42 @@ public sealed class WorkflowRunner
         var client = ds.DaminionClient ?? throw new InvalidOperationException("Daminion client not connected");
         var startIndex = 0;
         // "Process all" (or a zero/negative max) lifts the ceiling entirely: the
-        // only stopping condition is an empty batch from the server.
+        // only stopping condition is an empty page from the server.
         var processAll = ds.ProcessAll || ds.MaxItems <= 0;
         var limit = processAll ? int.MaxValue : ds.MaxItems;
         var lastPageIds = new HashSet<int>();
+        // Catalog ids already queued. Collection and saved-search pages are
+        // filtered on this side and the cursor advances by the raw page, so a
+        // retried or overlapping page can resurface an id; the set keeps one
+        // work item per catalog record.
+        var seenIds = new HashSet<int>();
 
         while (items.Count < limit)
         {
             ct.ThrowIfCancellationRequested();
-            var batch = await client.GetItemsFilteredAsync(
+            var page = await client.GetItemsPageAsync(
                 scope: ds.Scope,
                 savedSearchId: ds.SavedSearchId,
                 collectionId: ds.CollectionId,
                 searchTerm: ds.SearchTerm,
                 untaggedFields: ds.UntaggedFields,
                 statusFilter: ds.StatusFilter,
-                maxItems: Math.Min(500, limit - items.Count),
+                // Ask for a full server page even near the ceiling: the eligible
+                // count is capped below, and a page shorter than the requested
+                // size is what signals the catalog ended.
+                maxItems: DaminionApiClient.PageSize,
                 startIndex: startIndex,
                 ct: ct).ConfigureAwait(false);
 
-            if (batch.Length == 0) break;
+            // Only a completely empty raw page is the end of the result set. A
+            // page whose records were all filtered out is not: later raw pages can
+            // still hold eligible items, so keep advancing past it.
+            if (page.RawCount == 0) break;
 
             // Infinite-loop guard (processing.py parity): if the server returns
-            // the same ids for every offset (e.g. the untagged filter is not
+            // the same raw ids for every offset (e.g. the untagged filter is not
             // applied server-side), stop instead of looping forever.
-            var pageIds = batch.Select(i => i.Id).ToHashSet();
+            var pageIds = page.RawItems.Select(i => i.Id).ToHashSet();
             if (pageIds.Count > 0 && pageIds.SetEquals(lastPageIds))
             {
                 SynapicLog.Warning(nameof(WorkflowRunner),
@@ -164,8 +185,10 @@ public sealed class WorkflowRunner
             }
             lastPageIds = pageIds;
 
-            foreach (var item in batch)
+            foreach (var item in page.Items)
             {
+                if (items.Count >= limit) break;
+                if (!seenIds.Add(item.Id)) continue;
                 items.Add(new ProcessWorkItem
                 {
                     DaminionId = item.Id,
@@ -175,12 +198,15 @@ public sealed class WorkflowRunner
                 });
             }
 
-            startIndex += batch.Length;
+            // Advance by the raw page the server returned, not by the eligible
+            // subset we kept: advancing by the smaller filtered count would skip
+            // the raw records the filter dropped and overlap the next page.
+            startIndex += page.RawCount;
 
             // Process-all never treats a partial page as the end: some endpoints
             // cap a single response, so keep requesting until a page is empty.
             if (processAll) continue;
-            if (!ds.AutoPaginate || batch.Length < 500) break;
+            if (!ds.AutoPaginate || page.RawCount < DaminionApiClient.PageSize) break;
         }
 
         SynapicLog.Info(nameof(WorkflowRunner), $"Fetched {items.Count} Daminion items (scope={ds.Scope})");

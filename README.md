@@ -1021,7 +1021,7 @@ public interface IDedupService
 
 public record DedupOptions(
 
-    HashAlgorithm Algorithm = HashAlgorithm.PHash,  // PHash, DHash, AHash, ColorMoment
+    HashAlgorithm Algorithm = HashAlgorithm.PHash,  // PHash, DHash, AHash
 
     double Threshold = 0.90,                        // Similarity threshold
 
@@ -1031,7 +1031,7 @@ public record DedupOptions(
 
 
 
-public enum HashAlgorithm { PHash, DHash, AHash, ColorMoment }
+public enum HashAlgorithm { PHash, DHash, AHash }
 
 public enum DedupAction { Tag, Move, Delete }
 

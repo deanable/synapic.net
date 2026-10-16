@@ -328,7 +328,7 @@ which half of the settings store it reads and writes (`Dedup*` versus
 two operations end to end: separate keys, sidebar rows, settings tabs, help
 topics and registry values.
 
-Algorithm (PHash/DHash/AHash/ColorMoment) + threshold over two sources — the
+Algorithm (PHash/DHash/AHash) + threshold over two sources — the
 same radio pattern as Step 1: `IsLocalSelected`/`IsDaminionSelected` pick a
 local `FolderPath` or the Step 1 Daminion scope (`DaminionScopeSummary`, fed by
 the injected `Step1DatasourceViewModel` + sidecar). `ScanCommand` enumerates
@@ -469,10 +469,14 @@ parameter set (documented on the interface).
   `ExtractLayoutTagPairs`, layout parsing), and `ExtractCatalogGuid` — accepts
   a bare GUID string, a well-known object key, or the Daminion 11 envelope
   `{"data":"<guid>",…}` that used to warn "no usable value" on every connect.
-- `GetItemsFilteredAsync(scope, savedSearchId, collectionId, searchTerm,
+- `GetItemsPageAsync(scope, savedSearchId, collectionId, searchTerm,
   untaggedFields, statusFilter, maxItems, startIndex)` — returns **at most one
-  batch** (≤ `PageSize` = 500) per call; callers paginate. Collection and
-  saved-search scopes apply client-side filters after the fetch.
+  batch** (≤ `PageSize` = 500) per call; callers paginate. Returns a
+  `DaminionItemPage`: `Items` (the eligible subset) plus `RawItems`/`RawCount`
+  (the full server page). Collection and saved-search scopes apply client-side
+  filters after the fetch, so `RawCount` — never the eligible count — is the
+  cursor advance. `GetItemsFilteredAsync` is the `Items`-only convenience
+  wrapper.
 - `GetFilteredItemCountAsync` — with the whole-catalog sanity fallback and the
   keyword-value-id fallback described in code comments; returns `-1` on
   failure.
@@ -547,12 +551,14 @@ fetching, throttling, pause/cancel, progress with ETA, error isolation and the
 `WorkflowRunSummary(Total, Processed, Succeeded, Failed)`:
 - `FetchItemsAsync(ds, ct)` (static):
   - Local: recursive/shallow extension scan (`.jpg .jpeg .png .tif .tiff`).
-  - Daminion: one batch per call via `GetItemsFilteredAsync`, advancing
-    `startIndex`; stops on an empty batch, when `AutoPaginate` is off, or on a
-    partial (<500) page — **except** when `ProcessAll` is set, which ignores
-    both the `MaxItems` ceiling and partial pages and keeps requesting until the
-    server returns nothing, guarded by an identical-page-id infinite-loop
-    check.
+  - Daminion: one batch per call via `GetItemsPageAsync`, advancing
+    `startIndex` by the raw page (`DaminionItemPage.RawCount`) so a page the
+    client-side status/untagged filter empties does not end the walk; work items
+    are deduped by catalog id; stops on a completely empty raw page, when
+    `AutoPaginate` is off, or on a partial (<500) page — **except** when
+    `ProcessAll` is set, which ignores both the `MaxItems` ceiling and partial
+    pages and keeps requesting until the server returns nothing, guarded by an
+    identical-raw-page-id infinite-loop check.
 - `RunAsync(workflow, ds, handler, progress, log, pause, ct)` — fetch, report
   the fetched total immediately (a cold model must not leave an empty bar),
   then `RunItemsAsync`.
@@ -613,7 +619,7 @@ beside the original as `{name}_upscaled{ext}`.
 items wait; cancellation wins.
 
 **`DedupService`** (`IDedupService`) — NetVips-backed perceptual hashing
-(pHash via a 32×32 DCT, dHash, aHash; ColorMoment currently approximates aHash),
+(pHash via a 32×32 DCT, dHash, aHash),
 Union-Find grouping with a hamming-distance threshold, and
 `ApplyToPathsAsync` (also behind `ApplyActionsAsync`) for Delete / Move (into a
 `duplicates/` subfolder) / Tag. `ComputeHash` is public static (instance member

@@ -263,10 +263,11 @@ public class StepDedupViewModelTests
             HashAlgorithm.PHash,
             HashAlgorithm.DHash,
             HashAlgorithm.AHash,
-            HashAlgorithm.ColorMoment,
         };
 
-        Assert.Equal(new[] { "PHash", "DHash", "AHash", "ColorMoment" }, vm.Algorithms);
+        // Only real fingerprints are offered: the picker used to list a
+        // "ColorMoment" choice that silently dispatched to AHash.
+        Assert.Equal(new[] { "PHash", "DHash", "AHash" }, vm.Algorithms);
         for (var index = 0; index < expected.Length; index++)
         {
             vm.SelectedAlgorithm = index;
@@ -279,7 +280,7 @@ public class StepDedupViewModelTests
     {
         var vm = new StepDedupViewModel { SelectedAlgorithm = 99 };
 
-        Assert.Equal(HashAlgorithm.ColorMoment, vm.BuildOptions().Algorithm);
+        Assert.Equal(HashAlgorithm.AHash, vm.BuildOptions().Algorithm);
     }
 
     // ── Auto-select rules ───────────────────────────────────────────────────

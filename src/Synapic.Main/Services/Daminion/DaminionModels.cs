@@ -23,6 +23,24 @@ public sealed class DaminionItemsResponse
         MediaItems ?? Items ?? Data ?? Array.Empty<DaminionItem>();
 }
 
+/// <summary>
+/// One server page of catalog items plus the raw page it was derived from.
+/// <see cref="RawItems"/> is exactly what the server returned for the requested
+/// offset (up to <see cref="DaminionApiClient.PageSize"/> records);
+/// <see cref="Items"/> is the eligible subset after Synapic's client-side
+/// status/untagged filtering. Callers must advance their cursor by
+/// <see cref="RawCount"/> — never by the eligible <see cref="Items"/> count —
+/// because a page that filtered records out shrinks the offset and the next
+/// request then overlaps the raw records it should have skipped.
+/// </summary>
+public sealed record DaminionItemPage(DaminionItem[] Items, DaminionItem[] RawItems)
+{
+    public static DaminionItemPage Empty { get; } = new(Array.Empty<DaminionItem>(), Array.Empty<DaminionItem>());
+
+    /// <summary>How many records the server returned for this page.</summary>
+    public int RawCount => RawItems.Length;
+}
+
 public sealed class DaminionCountResponse
 {
     [JsonPropertyName("count")]

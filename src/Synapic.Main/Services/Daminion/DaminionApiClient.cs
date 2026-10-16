@@ -450,14 +450,38 @@ public sealed class DaminionApiClient
 
     /// <summary>
     /// Retrieve one batch (≤ <see cref="PageSize"/>) of filtered items.
-    /// Contract mirrors the original: at most one batch per call; callers
-    /// advance <paramref name="startIndex"/> by the returned count until an
-    /// empty or partial batch signals the end. Session-expiry recovery (one
-    /// re-auth + replay on 401/403) lives on the public path — the fetch is
-    /// the longest call in a batch, so a session that dies mid-run would
-    /// otherwise fail every remaining item.
+    /// Convenience wrapper over <see cref="GetItemsPageAsync"/> for callers that
+    /// only need the eligible items: an empty or partial batch signals the end
+    /// <em>only</em> when no client-side filter is in play. Callers that page
+    /// through a scope whose records Synapic filters locally (collections and
+    /// saved searches) must use <see cref="GetItemsPageAsync"/> and advance by
+    /// <see cref="DaminionItemPage.RawCount"/> — advancing by the eligible count
+    /// skips the raw records a filter dropped.
     /// </summary>
     public async Task<DaminionItem[]> GetItemsFilteredAsync(
+        string scope = "all",
+        int? savedSearchId = null,
+        int? collectionId = null,
+        string? searchTerm = null,
+        string[]? untaggedFields = null,
+        string statusFilter = "all",
+        int maxItems = 500,
+        int startIndex = 0,
+        CancellationToken ct = default)
+        => (await GetItemsPageAsync(
+            scope, savedSearchId, collectionId, searchTerm,
+            untaggedFields, statusFilter, maxItems, startIndex, ct).ConfigureAwait(false)).Items;
+
+    /// <summary>
+    /// Retrieve one batch (≤ <see cref="PageSize"/>) along with the raw page the
+    /// server returned. At most one batch per call; callers advance
+    /// <paramref name="startIndex"/> by <see cref="DaminionItemPage.RawCount"/>
+    /// until a page comes back completely empty. Session-expiry recovery (one
+    /// re-auth + replay on 401/403) lives here — the fetch is the longest call
+    /// in a batch, so a session that dies mid-run would otherwise fail every
+    /// remaining item.
+    /// </summary>
+    public async Task<DaminionItemPage> GetItemsPageAsync(
         string scope = "all",
         int? savedSearchId = null,
         int? collectionId = null,
@@ -473,8 +497,8 @@ public sealed class DaminionApiClient
             untaggedFields, statusFilter, maxItems, startIndex, ct),
             ct).ConfigureAwait(false);
 
-    /// <summary>Core fetch; issue calls through GetItemsFilteredAsync for 401/403 recovery.</summary>
-    private async Task<DaminionItem[]> GetItemsFilteredCoreAsync(
+    /// <summary>Core fetch; issue calls through <see cref="GetItemsPageAsync"/> for 401/403 recovery.</summary>
+    private async Task<DaminionItemPage> GetItemsFilteredCoreAsync(
         IDaminionApi api,
         string scope = "all",
         int? savedSearchId = null,
@@ -490,7 +514,12 @@ public sealed class DaminionApiClient
         {
             var filters = BuildFilterClauses(statusFilter, untaggedFields);
             var batch = maxItems > 0 && maxItems < PageSize ? maxItems : PageSize;
-            DaminionItem[] items;
+            DaminionItem[] rawPage;
+            // The server applies the filters to the "all" and "search" queries, so
+            // their raw page is already eligible. Collection and saved-search pages
+            // come back raw, and Synapic applies the status/untagged filters itself
+            // — the eligible subset can therefore be smaller than the server page.
+            var filtersLocally = false;
 
             switch (scope)
             {
@@ -498,13 +527,13 @@ public sealed class DaminionApiClient
                 {
                     var query = QuoteSearchTerm(searchTerm!);
                     if (filters.Length > 0) query += " " + string.Join(" ", filters);
-                    items = (await api.GetItems(startIndex, batch, f: null, search: query, maxItemsCount: 100000, ct: ct).ConfigureAwait(false)).EffectiveItems;
+                    rawPage = (await api.GetItems(startIndex, batch, f: null, search: query, maxItemsCount: 100000, ct: ct).ConfigureAwait(false)).EffectiveItems;
                     break;
                 }
                 case "all":
                 {
                     var query = filters.Length > 0 ? string.Join(" ", filters) : "*";
-                    items = (await api.GetItems(startIndex, batch, f: null, search: query, maxItemsCount: 100000, ct: ct).ConfigureAwait(false)).EffectiveItems;
+                    rawPage = (await api.GetItems(startIndex, batch, f: null, search: query, maxItemsCount: 100000, ct: ct).ConfigureAwait(false)).EffectiveItems;
                     break;
                 }
                 case "collection" when collectionId is not null:
@@ -512,9 +541,8 @@ public sealed class DaminionApiClient
                     // Python parity: /api/SharedCollection/GetItems?id=… —
                     // the /api/Collections/GetItems/{id} variant 404s on
                     // server 11.0.0.3906 (damserver.local).
-                    items = (await api.GetSharedCollectionItems(collectionId.Value, startIndex, batch, ct).ConfigureAwait(false)).EffectiveItems;
-                    if (statusFilter != "all" || (untaggedFields?.Length ?? 0) > 0)
-                        items = items.Where(i => PassesFilters(i, statusFilter, untaggedFields)).ToArray();
+                    rawPage = (await api.GetSharedCollectionItems(collectionId.Value, startIndex, batch, ct).ConfigureAwait(false)).EffectiveItems;
+                    filtersLocally = true;
                     break;
                 }
                 case "saved_search" when savedSearchId is not null:
@@ -523,16 +551,22 @@ public sealed class DaminionApiClient
                     // mirroring the original saved-search lookup ("Saved Searches" tag).
                     var tagId = await GetTagIdAsync("saved searches", fallback: SavedSearchesTagFallbackId, ct).ConfigureAwait(false);
                     var f = new[] { $"{tagId},any" };
-                    items = (await api.GetItems(startIndex, batch, f: f, queryLine: $"{tagId},{savedSearchId}", maxItemsCount: 100000, ct: ct).ConfigureAwait(false)).EffectiveItems;
-                    if (statusFilter != "all" || (untaggedFields?.Length ?? 0) > 0)
-                        items = items.Where(i => PassesFilters(i, statusFilter, untaggedFields)).ToArray();
+                    rawPage = (await api.GetItems(startIndex, batch, f: f, queryLine: $"{tagId},{savedSearchId}", maxItemsCount: 100000, ct: ct).ConfigureAwait(false)).EffectiveItems;
+                    filtersLocally = true;
                     break;
                 }
                 default:
                     throw new DaminionNetworkException($"Unsupported scope '{scope}' or missing scope id");
             }
 
-            return maxItems > 0 ? items.Take(maxItems).ToArray() : items;
+            var eligible = filtersLocally && (statusFilter != "all" || (untaggedFields?.Length ?? 0) > 0)
+                ? rawPage.Where(i => PassesFilters(i, statusFilter, untaggedFields)).ToArray()
+                : rawPage;
+
+            // maxItems caps the eligible subset this call returns, never the page
+            // the server was asked for: the caller still advances by RawCount.
+            var items = maxItems > 0 ? eligible.Take(maxItems).ToArray() : eligible;
+            return new DaminionItemPage(items, rawPage);
         }
         catch (DaminionException)
         {

@@ -6,13 +6,19 @@ using NetVips;
 
 namespace Synapic.Main.Services.Processing;
 
-/// <summary>Hash algorithms (spec §5.3 DedupService).</summary>
+/// <summary>
+/// Hash algorithms (spec §5.3 DedupService). Every option is a real 64-bit
+/// perceptual fingerprint that the hamming-distance grouping can score:
+/// pHash (32×32 DCT), dHash (horizontal gradient), aHash (mean). A
+/// colour-moment option was removed rather than shipped — it was silently
+/// dispatching to aHash, and colour statistics are not a hamming-comparable
+/// fingerprint anyway, so it could only ever duplicate aHash or lie.
+/// </summary>
 public enum HashAlgorithm
 {
     PHash,
     DHash,
     AHash,
-    ColorMoment,
 }
 
 public enum DedupAction
@@ -294,7 +300,6 @@ public sealed class DedupService : IDedupService
                 HashAlgorithm.PHash => ComputePHash(gray),
                 HashAlgorithm.DHash => ComputeDHash(gray),
                 HashAlgorithm.AHash => ComputeAHash(gray),
-                HashAlgorithm.ColorMoment => ComputeAHash(gray), // approximation; exact color moments deferred
                 _ => ComputePHash(gray),
             };
         }

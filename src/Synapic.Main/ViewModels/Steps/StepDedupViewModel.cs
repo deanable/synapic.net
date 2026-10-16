@@ -522,7 +522,11 @@ public partial class StepDedupViewModel : RunStateViewModel
     [ObservableProperty]
     private string _scanSummary = "";
 
-    public string[] Algorithms { get; } = { "PHash", "DHash", "AHash", "ColorMoment" };
+    /// <summary>
+    /// The selectable fingerprints. Each maps to a real engine algorithm; a
+    /// removed "ColorMoment" entry used to sit here while dispatching to AHash.
+    /// </summary>
+    public string[] Algorithms { get; } = { "PHash", "DHash", "AHash" };
 
     /// <summary>
     /// How the Daminion server's own content hashes are compared, in dropdown
