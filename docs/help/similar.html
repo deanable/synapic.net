@@ -37,12 +37,18 @@ operations differ in one number: the <span class="term">threshold</span>.</p>
 
 <table>
 <tr><th class="setting">Threshold</th><th>Operation</th><th>What it means</th></tr>
-<tr><td>0.90 (Deduplication default)</td><td>Deduplication</td><td>At most six of the 64 bits may differ. Copies, resizes and re-encodes group; anything edited enough to change the picture does not.</td></tr>
-<tr><td>0.85 (Similar images default)</td><td>Similar images</td><td>At most ten bits may differ. Re-encodes, crops and light edits land in the same group as the original, along with more of the images you would call merely alike.</td></tr>
+<tr><td>0.90 (Deduplication, PHash)</td><td>Deduplication</td><td>At most six of the 64 bits may differ. Copies, resizes and re-encodes group; anything edited enough to change the picture does not.</td></tr>
+<tr><td>0.85 (Similar images, PHash)</td><td>Similar images</td><td>At most ten bits may differ. Re-encodes, crops and light edits land in the same group as the original, along with more of the images you would call merely alike.</td></tr>
 </table>
 
-<p>Lower the threshold further and the search gets looser still: at 0.80 or
-below it starts bridging quite different pictures that happen to share a
+<p>Those two numbers assume PHash, the default fingerprint. DHash and AHash are
+coarser &mdash; they place two different pictures much closer together &mdash;
+so each carries a tighter starting threshold of its own: DHash 0.97 for
+duplicates and 0.91 for similar images, AHash 0.99 and 0.94. Changing the
+algorithm moves a threshold you have not touched to that algorithm's default.</p>
+
+<p>Lower the threshold further and the search gets looser still: below about
+0.85 it starts bridging quite different pictures that happen to share a
 composition or a palette, and the groups grow. It is a slider for how much you
 are willing to review, not a measure of quality.</p>
 
@@ -91,9 +97,17 @@ on disk whole.</p>
 hashes are compared: <span class="ui">Exact</span> (the default) trusts only
 identical values, <span class="ui">Hamming</span> compares them at the
 threshold like the algorithmic hashes.</li>
-<li>Press <span class="ui">Search</span>. Progress is reported as files are
-hashed: <span class="ui">Hashed 240/1500&hellip;</span> &mdash; or as items are
-grouped from the catalog's own hashes or downloaded for hashing.</li>
+<li>Press <span class="ui">Search</span>. On a catalog source the search first
+gathers <em>every</em> item in the scope, 500 records per request, showing
+<span class="ui">Fetching items from Daminion: 1,500 of 47,851&hellip;</span> on a
+large catalog &mdash; the <span class="ui">Max items</span> ceiling does not
+apply here, because a similar image outside the fetched prefix would be
+reported as unique. The shared <span class="ui">Run</span> bar tracks that walk
+as well: records fetched of the scope total, the page it is on, and an estimate
+of the time left, then it switches to hashing progress. Progress is reported as
+files are hashed:
+<span class="ui">Hashed 240/1500&hellip;</span> &mdash; or as items are grouped
+from the catalog's own hashes or downloaded for hashing.</li>
 <li>Read the summary: <span class="ui">1500 files scanned &mdash; 9 groups, 21
 similar images</span>, or the guidance line that says nothing matched and points
 at the threshold.</li>
@@ -104,8 +118,47 @@ at the threshold.</li>
 <p>Groups appear as cards in a vertical list. Each card shows how many images it
 holds and lists them as rows &mdash; a small preview thumbnail, name, capture
 date and file size &mdash; every row with its own checkbox. Previews are scaled
-down in memory as the list loads; nothing is saved to disk. <strong>A checked
-item is kept</strong>; the action applies to the unchecked ones.</p>
+down in memory as the list loads; the preview itself is never written to disk
+(the search's fingerprints and row details are — see <em>Coming back to a
+search</em> below). <strong>A checked item is kept</strong>; the action applies
+to the unchecked ones.</p>
+
+<h2>Adjusting the sensitivity after a search</h2>
+
+<p>The <span class="ui">Threshold</span> slider on the search card re-filters
+the results already on screen. It appears once a search has produced
+fingerprints; moving it re-groups those fingerprints without hashing or
+re-reading an original, so an ordinary library updates almost instantly. (A
+preview is fetched only for an item that newly enters a group.) The value settles about a third of a second after you stop moving,
+which is what keeps one drag from starting dozens of recalculations; a very
+large catalog (tens of thousands of images) can take up to a second, and the
+card shows a progress line while it does.</p>
+
+<p>The keep checkboxes you set survive a re-filter: an item you unchecked stays
+unchecked while it is still in a group, and an item that only appears at the
+new threshold starts out kept, as it would after a search. The slider writes
+the same setting as <span class="ui">Settings &rsaquo; Similar</span>, so the
+value you settle on is the one the next search starts with. Changing the
+<span class="ui">Algorithm</span> needs a fresh search &mdash; the stored
+fingerprints belong to the algorithm that produced them. After
+<span class="ui">Apply</span> the slider steps aside too, because the files it
+would re-group have changed.</p>
+
+<h2>Coming back to a search</h2>
+
+<p>The last search of a source is remembered when you close the app. Its
+fingerprints and the row details (name, date, size) are stored under
+<span class="path">%LOCALAPPDATA%\Synapic\fingerprints</span> &mdash; one file
+per operation and source, the newest eight per operation kept, no image copies
+&mdash; so reopening the app with the same folder or catalog scope shows the
+same results, and the <span class="ui">Threshold</span> slider is live at once:
+no hashing and no catalog walk. Nothing is restored under a different
+algorithm, and pointing the source somewhere else shows nothing until that
+source is searched. <span class="ui">Scan</span> still re-reads the source and
+replaces the saved copy, and <span class="ui">Apply</span> discards it, because
+the files it described have changed. Deleting the
+<span class="path">fingerprints</span> folder is safe: the next search simply
+rebuilds it.</p>
 
 <p>Instead of ticking rows by hand, use the <span class="ui">Keep-set rules</span>
 on <span class="ui">Settings &rsaquo; Similar</span>:

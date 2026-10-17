@@ -283,6 +283,63 @@ public class StepDedupViewModelTests
         Assert.Equal(HashAlgorithm.AHash, vm.BuildOptions().Algorithm);
     }
 
+    // ── Shared run bar ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The catalog walk is the longest part of a scoped dedup scan, so it owns
+    /// the shared bar while it runs: raw records walked of the scope total, the
+    /// page just fetched, and an ETA from the average cost of a page.
+    /// </summary>
+    [Fact]
+    public void Catalog_fetch_progress_fills_the_run_bar_with_a_page_eta()
+    {
+        var vm = new StepDedupViewModel();
+
+        vm.ApplyCatalogFetchProgress(
+            new CatalogFetchProgress(Kept: 980, Scanned: 1000, Pages: 2, Total: 2123),
+            TimeSpan.FromSeconds(10));
+
+        Assert.Equal(100.0 * 1000 / 2123, vm.ProgressPercent, 3);
+        Assert.Equal($"Fetching catalog: {1000:N0}/{2123:N0} items", vm.ProgressText);
+        Assert.Contains("~0m 15s remaining", vm.EtaText);
+        Assert.Contains("~0m 5s per page", vm.EtaText);
+        Assert.Equal("catalog page 2", vm.CurrentFile);
+    }
+
+    /// <summary>
+    /// Without a scope total the bar still shows movement, but invents no finish
+    /// time — the server simply did not say how much is left.
+    /// </summary>
+    [Fact]
+    public void Catalog_fetch_without_a_scope_total_shows_a_count_but_no_eta()
+    {
+        var vm = new StepDedupViewModel();
+
+        vm.ApplyCatalogFetchProgress(
+            new CatalogFetchProgress(Kept: 500, Scanned: 500, Pages: 1, Total: null),
+            TimeSpan.FromSeconds(2));
+
+        Assert.Equal(0, vm.ProgressPercent);
+        Assert.Equal($"Fetching catalog: {500:N0} items so far", vm.ProgressText);
+        Assert.Equal("", vm.EtaText);
+    }
+
+    /// <summary>A local scan drives the same bar, so it never reads "Idle" mid-run.</summary>
+    [Fact]
+    public void Local_hash_progress_reports_files_and_an_eta()
+    {
+        var vm = new StepDedupViewModel();
+
+        vm.ApplyDedupProgress(
+            new DedupProgress(FilesHashed: 2, TotalFiles: 10, GroupsFound: 0),
+            TimeSpan.FromSeconds(4));
+
+        Assert.Equal(20, vm.ProgressPercent, 3);
+        Assert.Equal("2/10 hashed", vm.ProgressText);
+        Assert.Contains("~0m 16s remaining", vm.EtaText);
+        Assert.Contains("~0m 2s per image", vm.EtaText);
+    }
+
     // ── Auto-select rules ───────────────────────────────────────────────────
 
     [Fact]
@@ -785,5 +842,229 @@ public class StepDedupViewModelTests
         {
             window.Close();
         }
+    }
+
+    // ── Live threshold retune ───────────────────────────────────────────────
+
+    /// <summary>Two copies of the committed sample image in a temp folder.</summary>
+    private static (string Folder, string A, string B) TwoSampleImages()
+    {
+        var sample = FindSampleImage() ?? throw new InvalidOperationException("TestData/sample.jpg not found");
+        var folder = Directory.CreateTempSubdirectory("synapic-retune-").FullName;
+        var a = Path.Combine(folder, "a.jpg");
+        var b = Path.Combine(folder, "b.jpg");
+        File.Copy(sample, a);
+        File.Copy(sample, b);
+        return (folder, a, b);
+    }
+
+    /// <summary>
+    /// Moving the threshold after a scan re-groups the fingerprints already on
+    /// hand: no second scan, no re-hash. The pair here is three bits apart
+    /// (similarity ~0.953), so a 0.99 budget sees nothing and 0.95 sees a group.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Moving_the_threshold_regroups_the_last_scan_without_rescanning()
+    {
+        var (folder, a, b) = TwoSampleImages();
+        try
+        {
+            var fake = new FakeDedup();
+            fake.Hashes[a] = 0UL;
+            fake.Hashes[b] = 0b111UL;
+
+            var vm = new StepDedupViewModel(dedup: fake) { FolderPath = folder, Threshold = 0.99 };
+            await vm.ScanCommand.ExecuteAsync(null);
+
+            Assert.Empty(vm.Groups);            // 1-bit budget: three bits is too far
+            Assert.True(vm.CanRetune);
+            Assert.Equal(1, fake.Scans);
+
+            vm.Threshold = 0.95;                 // 3-bit budget
+            await vm.RetuneCompletion;
+
+            Assert.Equal(1, fake.Scans);         // no second scan
+            Assert.Equal(1, fake.Regroups);
+            var group = Assert.Single(vm.Groups);
+            Assert.Equal(2, group.Items.Count);
+            Assert.Equal(0.95, group.Threshold, 6);
+            Assert.Contains(0.95.ToString("0.###"), vm.ScanSummary);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// Re-filtering must not silently re-check the file the user chose to act
+    /// on: the keep-set is carried over by item key, and only items new to the
+    /// result set get the rule's default.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Retuning_keeps_the_users_keep_set()
+    {
+        var (folder, a, b) = TwoSampleImages();
+        try
+        {
+            var fake = new FakeDedup();
+            fake.Hashes[a] = 0UL;
+            fake.Hashes[b] = 0b111UL;
+
+            var vm = new StepDedupViewModel(dedup: fake) { FolderPath = folder, Threshold = 0.95 };
+            await vm.ScanCommand.ExecuteAsync(null);
+
+            var group = Assert.Single(vm.Groups);
+            var first = group.Items[0];
+            var second = group.Items[1];
+            first.IsChecked = false;   // the user decided the first copy goes
+            second.IsChecked = true;
+            Assert.NotNull(first.Thumb);
+            var previewBefore = first.Thumb;
+
+            vm.Threshold = 0.94;       // still groups the pair
+            await vm.RetuneCompletion;
+
+            var again = Assert.Single(vm.Groups);
+            Assert.False(again.Items.Single(i => i.Key == first.Key).IsChecked);
+            Assert.True(again.Items.Single(i => i.Key == second.Key).IsChecked);
+            // The row cache kept the decoded preview: a retune never re-renders one.
+            Assert.Same(previewBefore, again.Items.Single(i => i.Key == first.Key).Thumb);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Threshold_changes_before_a_scan_do_not_recalculate()
+    {
+        var fake = new FakeDedup();
+        var vm = new StepDedupViewModel(dedup: fake) { Threshold = 0.80 };
+
+        Assert.False(vm.CanRetune);
+        Assert.Equal(0, fake.Regroups);
+    }
+
+    /// <summary>Three slider values in one burst must cost one regrouping, not three.</summary>
+    [AvaloniaFact]
+    public async Task Rapid_threshold_changes_coalesce_into_one_recalculation()
+    {
+        var (folder, a, b) = TwoSampleImages();
+        try
+        {
+            var fake = new FakeDedup();
+            fake.Hashes[a] = 0UL;
+            fake.Hashes[b] = 0b111UL;
+
+            var vm = new StepDedupViewModel(dedup: fake) { FolderPath = folder, Threshold = 0.99 };
+            await vm.ScanCommand.ExecuteAsync(null);
+
+            vm.Threshold = 0.96;
+            vm.Threshold = 0.94;
+            vm.Threshold = 0.92;
+            await vm.RetuneCompletion;
+
+            Assert.Equal(1, fake.Regroups);
+            Assert.Single(vm.Groups);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// The slider through the real compiled view: it appears once a scan has
+    /// fingerprints, its two-way binding writes the view model, and that write
+    /// is what schedules the recalculation. A mistyped binding would silently
+    /// render a slider that changes nothing.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task The_results_slider_is_bound_and_drives_the_recalculation()
+    {
+        var (folder, a, b) = TwoSampleImages();
+        try
+        {
+            var fake = new FakeDedup();
+            fake.Hashes[a] = 0UL;
+            fake.Hashes[b] = 0b111UL;
+
+            var vm = new StepDedupViewModel(dedup: fake) { FolderPath = folder, Threshold = 0.99 };
+            var view = new StepDedup { DataContext = vm };
+            var window = new Window { Content = view, Width = 1000, Height = 800 };
+            window.Show();
+            try
+            {
+                await vm.ScanCommand.ExecuteAsync(null);
+                Dispatcher.UIThread.RunJobs();
+
+                var slider = view.GetVisualDescendants().OfType<Slider>()
+                    .Single(s => s.Name == "RetuneThresholdSlider");
+                Assert.True(slider.IsVisible);
+
+                slider.Value = 0.95;
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(0.95, vm.Threshold, 6);
+
+                await vm.RetuneCompletion;
+                Assert.Single(vm.Groups);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// A dedup engine with canned fingerprints that counts the calls the live
+    /// slider must (and must not) make. Grouping delegates to the shipped
+    /// <see cref="DedupService"/>, so the test exercises the real rule over the
+    /// retained hashes rather than a mirrored copy of it.
+    /// </summary>
+    private sealed class FakeDedup : IDedupService
+    {
+        private readonly DedupService _grouping = new();
+
+        public Dictionary<string, ulong> Hashes { get; } = new();
+        public int Scans { get; private set; }
+        public int Regroups { get; private set; }
+
+        public Task<DedupResult> FindDuplicatesAsync(
+            IEnumerable<string> imagePaths,
+            DedupOptions opts,
+            IProgress<DedupProgress>? progress = null,
+            CancellationToken ct = default)
+        {
+            Scans++;
+            var grouped = _grouping.GroupFromHashes(
+                Hashes, new Dictionary<string, ulong>(), opts);
+            return Task.FromResult(grouped);
+        }
+
+        public ulong? ComputeHash(string path, DedupOptions opts) => null;
+
+        public DedupResult GroupFromHashes(
+            IReadOnlyDictionary<string, ulong> perceptualHashes,
+            IReadOnlyDictionary<string, ulong> exactHashes,
+            DedupOptions opts)
+        {
+            Regroups++;
+            return _grouping.GroupFromHashes(perceptualHashes, exactHashes, opts);
+        }
+
+        public Task<bool> ApplyToPathsAsync(
+            IEnumerable<string> paths, DedupAction action,
+            string? moveDestination = null, CancellationToken ct = default) => Task.FromResult(true);
+
+        public Task<bool> ApplyActionsAsync(
+            DedupResult result, DedupAction action,
+            string? moveDestination = null, CancellationToken ct = default) => Task.FromResult(true);
     }
 }

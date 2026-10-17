@@ -70,7 +70,15 @@ reports what it still holds &mdash; which should read zero files.</p>
 content hashes are compared: <span class="ui">Exact</span> (the default) trusts
 only identical values, <span class="ui">Hamming</span> compares them by
 similarity at the threshold.</li>
-<li>Press <span class="ui">Scan</span>. Progress is reported as files are hashed:
+<li>Press <span class="ui">Scan</span>. On a catalog source the scan first
+gathers <em>every</em> item in the scope, 500 records per request, showing
+<span class="ui">Fetching items from Daminion: 1,500 of 47,851&hellip;</span> on a
+large catalog &mdash; the <span class="ui">Max items</span> ceiling does not
+apply here, because a duplicate outside the fetched prefix would be reported
+as unique. The shared <span class="ui">Run</span> bar tracks that walk as well:
+records fetched of the scope total, the page it is on, and an estimate of the
+time left, then it switches to hashing progress. Progress is reported as files
+are hashed:
 <span class="ui">Hashed 240/1500&hellip;</span> &mdash; or as items are grouped
 from the catalog's own hashes or downloaded for hashing.</li>
 <li>Read the summary: <span class="ui">1500 files scanned &mdash; 12 groups,
@@ -81,7 +89,11 @@ from the catalog's own hashes or downloaded for hashing.</li>
 
 <p>Every algorithm reduces an image to a 64-bit perceptual fingerprint. Two
 images are "the same" when their fingerprints differ by no more than the
-threshold allows.</p>
+threshold allows. Each fingerprint has its own starting threshold, because they
+are not on one scale: PHash starts at 0.90, DHash at 0.97 and AHash at 0.99.
+DHash and AHash put two different pictures far closer together, so they need
+the tighter budget &mdash; and because they do, changing the algorithm moves a
+threshold you have not touched to that algorithm's own default.</p>
 
 <table>
 <tr><th class="setting">Algorithm</th><th>Good at</th></tr>
@@ -92,7 +104,7 @@ threshold allows.</p>
 
 <table>
 <tr><th class="setting">Threshold</th><th>Effect</th></tr>
-<tr><td>0.90 (default)</td><td>Close matches only. Start here: it finds copies and re-encodes with few false groups.</td></tr>
+<tr><td>0.90 (PHash default)</td><td>Close matches only. Start here: it finds copies and re-encodes with few false groups.</td></tr>
 <tr><td>0.95 or higher</td><td>Near-identical. Good when you are hunting exact duplicates and want no noise at all.</td></tr>
 <tr><td>0.80 or lower</td><td>Loose: catches cropped or heavily edited versions, and starts grouping visually similar but different images. Expect to review the groups carefully.</td></tr>
 </table>
@@ -109,9 +121,47 @@ scan itself changes nothing: it reads files and hashes them.</p>
 it holds and lists them as rows &mdash; a small preview thumbnail, name, capture
 date and file size &mdash; every row with its own checkbox. Previews are scaled
 down in memory as the list loads (for the catalog source they come straight
-from the server's thumbnail endpoint); nothing is saved to disk. A row whose
+from the server's thumbnail endpoint); the preview itself is never written to
+disk (the scan's fingerprints and row details are — see <em>Coming back to a
+scan</em> below). A row whose
 image cannot be decoded simply shows no thumbnail. <strong>A checked item is
 kept</strong>; the action applies to the unchecked ones.</p>
+
+<h2>Adjusting the sensitivity after a scan</h2>
+
+<p>The <span class="ui">Threshold</span> slider on the scan card re-filters the
+duplicates already on screen. It appears once a scan has produced fingerprints;
+moving it re-groups those fingerprints without hashing or re-reading an
+original, so an ordinary library updates almost instantly. (A preview is
+fetched only for an item that newly enters a group.) The value settles about
+a third of a second after you stop moving, which keeps one drag from starting
+dozens of recalculations; a very large catalog can take up to a second, and the
+card shows a progress line while it does.</p>
+
+<p>The keep checkboxes you set survive a re-filter: an item you unchecked stays
+unchecked while it is still in a group, and an item that only appears at the
+new threshold starts out kept. The slider writes the same setting as
+<span class="ui">Settings &rsaquo; Dedup</span>, so the value you settle on is
+the one the next scan starts with. Changing the <span class="ui">Algorithm</span>
+needs a fresh scan &mdash; the stored fingerprints belong to the algorithm that
+produced them. After <span class="ui">Apply</span> the slider steps aside too,
+because the files it would re-group have changed.</p>
+
+<h2>Coming back to a scan</h2>
+
+<p>The last scan of a source is remembered when you close the app. Its
+fingerprints and the row details (name, date, size) are stored under
+<span class="path">%LOCALAPPDATA%\Synapic\fingerprints</span> &mdash; one file
+per operation and source, the newest eight per operation kept, no image copies
+&mdash; so reopening the app with the same folder or catalog scope shows the
+same review list, and its <span class="ui">Threshold</span> slider works at
+once: no hashing, no catalog walk, no download. Nothing is restored under a
+different algorithm, and pointing the source somewhere else shows nothing
+until that source is scanned. <span class="ui">Scan</span> still re-reads the
+source and replaces the saved copy, and <span class="ui">Apply</span> discards
+it, because the files it described have changed. Deleting the
+<span class="path">fingerprints</span> folder is safe: the next scan simply
+rebuilds it.</p>
 
 <p>Instead of ticking rows by hand, use the <span class="ui">Keep-set
 rules</span> in <span class="ui">Settings &rsaquo; Dedup</span>: <span class="ui">Oldest</span>,

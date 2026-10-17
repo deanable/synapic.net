@@ -20,8 +20,8 @@ which folder, or which catalog scope &mdash; is chosen in the section above; see
 
 <table>
 <tr><th class="setting">Control</th><th>What it does</th></tr>
-<tr><td><span class="ui">Max items</span></td><td>The ceiling for this run: 100 by default, raised in steps of 50. The batch stops when it has taken that many items. Setting it to 0 removes the ceiling, exactly as <span class="ui">Process all</span> does.</td></tr>
-<tr><td><span class="ui">Process all (page until empty)</span></td><td>Ignores the ceiling and keeps requesting pages of results until the server returns none. This is the switch for a catalog larger than a single API response &mdash; without it, a big catalog can look like it was fully processed when only the first page was.</td></tr>
+<tr><td><span class="ui">Max items</span></td><td>The ceiling for this run: 100 by default, raised in steps of 50. The batch stops when it has taken that many items. Setting it to 0 removes the ceiling, exactly as <span class="ui">Process all</span> does. Deduplication and Similar images ignore it: those searches always compare the whole scope, because a duplicate outside a prefix would be reported as unique.</td></tr>
+<tr><td><span class="ui">Process all (page until empty)</span></td><td>Ignores the ceiling and keeps requesting pages of results until the server returns none. This is the switch for a catalog larger than a single API response &mdash; without it, a big catalog can look like it was fully processed when only the first page was. Deduplication and Similar images always page this way, whatever this switch says.</td></tr>
 <tr><td><span class="ui">Recount</span></td><td>Lives beside the source controls above, not in the limits row: it reports how many items the scope and filters select. The count refreshes by itself, so this button is only a re-ask. See <a href="step1-scope-filters.html">Scope and filters</a>.</td></tr>
 <tr><td><span class="ui">Cancel count</span></td><td>Appears while a count is running. Stops the current folder scan or Daminion count request; it does not stop a tagging batch. A later source, scope or filter change starts a fresh count as usual.</td></tr>
 </table>

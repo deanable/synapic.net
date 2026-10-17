@@ -49,14 +49,18 @@ operation view shows the source it runs on and what it produced):
 4. **Results** — grid of per-item outcomes, CSV export, retry of failed items,
    and verification of Daminion writes.
 5. **Deduplication** — separate tool: a perceptual-hash duplicate scan at a
-   strict threshold (0.90) with Tag/Move/Delete actions, over the shared source,
-   with its rules on Settings → Dedup.
-6. **Similar images** — the same scan at a looser threshold (0.85), presented as
+   strict threshold (0.90 under the default PHash) with Tag/Move/Delete actions, over the shared source,
+   with its rules on Settings → Dedup. A catalog source is fetched whole (every
+   500-record page until empty), never truncated by the tagging limit.
+6. **Similar images** — the same scan at a looser threshold (0.85 under PHash), presented as
    its own operation: visibly alike images (re-encodes, crops, light edits)
    group instead of only near-identical copies. Its own sidebar row (directly
    below Deduplication, whose looser sibling it is), its own Settings tab
    (Settings → Similar), help topic and registry values, so widening one search
-   never widens the other.
+   never widens the other. Both result sets carry a live threshold slider: the
+   scan retains its fingerprints on `DedupResult`, so moving the slider re-groups
+   them (debounced 300 ms, off the UI thread) instead of rescanning — no hash,
+   read or download is repeated, and the keep-set survives by item key.
 7. **Upscaling** — separate tool (the Daminion "Feature enhancement"
    utility): Swin2SR (quality/balanced) or Lanczos (fast) enhancement of the
    shared source through the sidecar's `POST /upscale`, checked out →
@@ -238,7 +242,12 @@ implemented once, in the runner.
   `SemaphoreSlim` in `ProcessingOrchestrator` — Step 3 hard-codes
   `maxDegreeOfParallelism: 4` (Step 4's retry uses the constructor default,
   also 4). Fetching itself is a single sequential paging loop that completes
-  before processing begins.
+  before processing begins. Deduplication and Similar images walk that loop
+  with `FetchEntireScopeAsync`, which ignores Step 1's `MaxItems` ceiling: the
+  catalog API caps a response at 500 records, so those scans request every page
+  until the server returns an empty one — a prefix would hide a duplicate
+  rather than merely shorten a batch — and report each page boundary as
+  `Fetching items from Daminion: N of total…`.
 - **The sidecar** is a single uvicorn process (no `workers=`). `/tag` is a
   **sync** FastAPI endpoint, so Starlette runs each request on its AnyIO
   worker threadpool (default 40 threads). There is no server-side queue or
@@ -268,7 +277,7 @@ implemented once, in the runner.
 | App config (wizard + engine defaults, UI prefs) | Windows `%APPDATA%\Synapic\config.json`; otherwise `$XDG_CONFIG_HOME/Synapic/config.json` or `~/.config/Synapic/config.json` |
 | Step 1 connection + scope/filter/limit settings | Windows registry `HKCU\Software\Synapic\Daminion` (password DPAPI-protected); no-op elsewhere |
 | Step 2 engine settings | Windows registry `HKCU\Software\Synapic\Engine`; no-op elsewhere |
-| App settings (`AppSettingsRegistryStore`): appearance, logging, new-session defaults, the local source, the processing limits and the dedup / similar / upscale rules | Windows registry `HKCU\Software\Synapic\AppData`, one flat value map; no-op elsewhere. The dedup and similar rule sets are independent `Dedup*` / `Similar*` values (`SimilarThresholdDefault` is `0.85`), and an old `config.json` is imported into the key once, when it is empty |
+| App settings (`AppSettingsRegistryStore`): appearance, logging, new-session defaults, the local source, the processing limits and the dedup / similar / upscale rules | Windows registry `HKCU\Software\Synapic\AppData`, one flat value map; no-op elsewhere. The dedup and similar rule sets are independent `Dedup*` / `Similar*` values (`SimilarThresholdDefault` is `0.85` for pHash, with `DedupThresholdDefaultFor` / `SimilarThresholdDefaultFor` resolving the per-fingerprint defaults when no threshold was stored), and an old `config.json` is imported into the key once, when it is empty |
 | Log file (live file starts empty each run; previous runs in `logs/archives/`, last 10) | `logs/synapic.log` next to the executable, falling back to `%LOCALAPPDATA%\Synapic\logs` |
 | Crash reports | `logs/crashes/` (exception + session-log snapshot) |
 | Opt-in usage counters | `logs/synapic-usage.json` |
@@ -461,7 +470,8 @@ standalone CPU and CUDA sidecar executables — see `packaging.md`.
   deliberately re-implemented in C# rather than ported to the sidecar.
 - **Deduplication and Similar images are one scan under two profiles**
   (`ImageMatchProfile` on `StepDedupViewModel`): the same hashing, grouping,
-  review and apply, differing in the starting threshold (0.90 / 0.85), the
+  review and apply, differing in the starting threshold (0.90 / 0.85 under the
+  default PHash — the other fingerprints carry their own tighter defaults), the
   wording, the operation key and which half of the settings store each reads,
   so loosening one search cannot loosen the other.
 - **The upscaler runs in the sidecar** (`POST /upscale`, Swin2SR/Lanczos —

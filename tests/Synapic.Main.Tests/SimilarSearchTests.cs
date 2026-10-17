@@ -152,6 +152,78 @@ public class SimilarSearchTests : IDisposable
         Assert.Equal(1.0 - 18.0 / 64.0, group.SimilarityScores[2], 6);
     }
 
+    // ── The default threshold belongs to the fingerprint ───────────────────
+
+    [Fact]
+    public void Each_fingerprint_carries_its_own_default_threshold()
+    {
+        // pHash is the only algorithm the shipped thresholds were ever measured
+        // for. The other two put *different* pictures far closer together, so at
+        // pHash's numbers they merge genuinely different photos into duplicate
+        // groups — and duplicates are moved or deleted.
+        Assert.Equal(AppSettingsRegistryStore.DedupThresholdDefault,
+            StepDedupViewModel.DefaultThresholdFor(ImageMatchProfile.Duplicates, "PHash"), 6);
+        Assert.Equal(0.97, StepDedupViewModel.DefaultThresholdFor(ImageMatchProfile.Duplicates, "DHash"), 6);
+        Assert.Equal(0.99, StepDedupViewModel.DefaultThresholdFor(ImageMatchProfile.Duplicates, "AHash"), 6);
+
+        Assert.Equal(AppSettingsRegistryStore.SimilarThresholdDefault,
+            StepDedupViewModel.DefaultThresholdFor(ImageMatchProfile.Similar, "PHash"), 6);
+        Assert.Equal(0.91, StepDedupViewModel.DefaultThresholdFor(ImageMatchProfile.Similar, "DHash"), 6);
+        Assert.Equal(0.94, StepDedupViewModel.DefaultThresholdFor(ImageMatchProfile.Similar, "AHash"), 6);
+
+        // An algorithm this build does not know resolves to pHash's default
+        // rather than to one of the stricter ones.
+        Assert.Equal(AppSettingsRegistryStore.DedupThresholdDefault,
+            StepDedupViewModel.DefaultThresholdFor(ImageMatchProfile.Duplicates, "NoSuchAlgorithm"), 6);
+
+        // The calibration unit is the hamming budget, so that is what these
+        // numbers have to mean: 2 bits for dHash, 1 for aHash, where pHash gets
+        // 6. Coarser fingerprints get tighter budgets, never looser ones.
+        Assert.Equal(2, DedupService.MaxHammingDistance(0.97));
+        Assert.Equal(1, DedupService.MaxHammingDistance(0.99));
+        Assert.Equal(6, DedupService.MaxHammingDistance(0.91));
+        Assert.Equal(4, DedupService.MaxHammingDistance(0.94));
+    }
+
+    [Fact]
+    public void An_untuned_threshold_follows_the_algorithm_and_a_tuned_one_does_not()
+    {
+        var vm = new StepDedupViewModel();
+        Assert.Equal(0.90, vm.Threshold, 6);
+
+        // Still on a shipped default: it follows the fingerprint. Leaving dHash
+        // at pHash's 0.90 is the configuration this exists to prevent.
+        vm.SelectedAlgorithm = 1; // DHash
+        Assert.Equal(0.97, vm.Threshold, 6);
+        vm.SelectedAlgorithm = 2; // AHash
+        Assert.Equal(0.99, vm.Threshold, 6);
+        Assert.Equal(1, DedupService.MaxHammingDistance(vm.BuildOptions().Threshold));
+
+        // Once the number has been moved it is the user's, and switching
+        // algorithms must not quietly overwrite the choice.
+        vm.Threshold = 0.93;
+        vm.SelectedAlgorithm = 0; // PHash
+        Assert.Equal(0.93, vm.Threshold, 6);
+        vm.SelectedAlgorithm = 1; // back to DHash
+        Assert.Equal(0.93, vm.Threshold, 6);
+    }
+
+    [Fact]
+    public void The_similarity_search_follows_its_own_per_algorithm_defaults()
+    {
+        var vm = new StepDedupViewModel(profile: ImageMatchProfile.Similar);
+        Assert.Equal(AppSettingsRegistryStore.SimilarThresholdDefault, vm.Threshold, 6);
+
+        vm.SelectedAlgorithm = 1; // DHash
+        Assert.Equal(0.91, vm.Threshold, 6);
+        vm.SelectedAlgorithm = 2; // AHash
+        Assert.Equal(0.94, vm.Threshold, 6);
+        // The two profiles keep their own numbers for the same algorithm.
+        Assert.NotEqual(
+            StepDedupViewModel.DefaultThresholdFor(ImageMatchProfile.Duplicates, "AHash"),
+            vm.Threshold);
+    }
+
     // ── Stored rules: the two searches cannot overwrite each other ──────────
 
     [Fact]
@@ -214,6 +286,29 @@ public class SimilarSearchTests : IDisposable
 
         Assert.Equal(0.80, reloadedSimilar.Threshold, 6);
         Assert.True(reloadedSimilar.SelectNewest);
+    }
+
+    [Fact]
+    public void A_store_without_a_saved_threshold_uses_the_saved_algorithms_default()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+
+        // A registry that names dHash and aHash but carries no threshold — what
+        // an older build, or a hand-edited key, leaves behind. The fallback has
+        // to be the saved algorithm's own default; falling back to pHash's 0.90
+        // would put the duplicate scan four bits looser than dHash supports.
+        _store.Save(_store.Defaults with { DedupAlgorithm = "DHash", SimilarAlgorithm = "AHash" });
+        using (var key = Registry.CurrentUser.OpenSubKey(_keyPath, writable: true))
+        {
+            key!.DeleteValue("DedupThreshold");
+            key.DeleteValue("SimilarThreshold");
+        }
+
+        var loaded = _store.Load();
+
+        Assert.NotNull(loaded);
+        Assert.Equal(0.97, loaded!.DedupThreshold, 6);
+        Assert.Equal(0.94, loaded.SimilarThreshold, 6);
     }
 
     // ── The scan the similarity view actually runs ────────────────────────

@@ -66,6 +66,19 @@ public sealed record WorkflowRunSummary(int Total, int Processed, int Succeeded,
 }
 
 /// <summary>
+/// How far a paged catalog walk has got. Reported after every page, so a long
+/// whole-scope fetch shows movement, a count and a time estimate.
+/// </summary>
+/// <param name="Kept">Eligible items collected so far (unique catalog ids).</param>
+/// <param name="Scanned">Raw records walked so far — the cursor's position,
+/// including records the client-side status/untagged filter dropped. This is
+/// what progress is measured against, because <paramref name="Total"/> is the
+/// server's raw scope total.</param>
+/// <param name="Pages">Pages completed so far (one page = ≤500 records).</param>
+/// <param name="Total">The scope's total as reported by the server, when known.</param>
+public readonly record struct CatalogFetchProgress(int Kept, int Scanned, int Pages, int? Total);
+
+/// <summary>
 /// The shared batch kernel behind every route of the app. Tagging,
 /// deduplication and upscaling differ only in their
 /// <see cref="WorkflowDefinition"/> and <see cref="IWorkflowItemHandler"/>;
@@ -118,8 +131,40 @@ public sealed class WorkflowRunner
     /// and advancing by the smaller filtered count would overlap the raw records
     /// it skipped. A page whose records were all filtered out is likewise not the
     /// end of the result set — only a completely empty raw page is.
+    ///
+    /// This entry point honours the Step 1 ceiling (<see cref="DatasourceSelection.MaxItems"/>,
+    /// <see cref="DatasourceSelection.ProcessAll"/> and <see cref="DatasourceSelection.AutoPaginate"/>)
+    /// because it serves tagging and upscaling. A whole-set operation must use
+    /// <see cref="FetchEntireScopeAsync"/> instead.
     /// </remarks>
     public static async Task<IReadOnlyList<ProcessWorkItem>> FetchItemsAsync(DatasourceSelection ds, CancellationToken ct)
+        => await FetchItemsCoreAsync(ds, entireScope: false, progress: null, ct).ConfigureAwait(false);
+
+    /// <summary>
+    /// Fetch <em>every</em> item in the scope, walking the catalog 500 records at
+    /// a time until the server returns an empty page.
+    /// </summary>
+    /// <remarks>
+    /// Deduplication and the similarity search compare each item against every
+    /// other, so a truncated set silently hides groups: an item whose copy sits
+    /// past the cut looks unique, and the user deletes the wrong file. Those
+    /// scans therefore ignore the Step 1 "max items" ceiling, the per-run
+    /// process-all switch and auto-paginate — that ceiling belongs to tagging,
+    /// where a partial batch is meaningful. The walk is long on a large catalog,
+    /// which is what <paramref name="progress"/> is for: it reports the running
+    /// item count (and the server's total when it reports one) after every page.
+    /// </remarks>
+    public static async Task<IReadOnlyList<ProcessWorkItem>> FetchEntireScopeAsync(
+        DatasourceSelection ds,
+        IProgress<CatalogFetchProgress>? progress = null,
+        CancellationToken ct = default)
+        => await FetchItemsCoreAsync(ds, entireScope: true, progress, ct).ConfigureAwait(false);
+
+    private static async Task<IReadOnlyList<ProcessWorkItem>> FetchItemsCoreAsync(
+        DatasourceSelection ds,
+        bool entireScope,
+        IProgress<CatalogFetchProgress>? progress,
+        CancellationToken ct)
     {
         var items = new List<ProcessWorkItem>();
 
@@ -141,8 +186,9 @@ public sealed class WorkflowRunner
         var client = ds.DaminionClient ?? throw new InvalidOperationException("Daminion client not connected");
         var startIndex = 0;
         // "Process all" (or a zero/negative max) lifts the ceiling entirely: the
-        // only stopping condition is an empty page from the server.
-        var processAll = ds.ProcessAll || ds.MaxItems <= 0;
+        // only stopping condition is an empty page from the server. A whole-scope
+        // fetch (dedup/similar) always lifts it, whatever Step 1 holds.
+        var processAll = entireScope || ds.ProcessAll || ds.MaxItems <= 0;
         var limit = processAll ? int.MaxValue : ds.MaxItems;
         var lastPageIds = new HashSet<int>();
         // Catalog ids already queued. Collection and saved-search pages are
@@ -150,6 +196,7 @@ public sealed class WorkflowRunner
         // retried or overlapping page can resurface an id; the set keeps one
         // work item per catalog record.
         var seenIds = new HashSet<int>();
+        var pagesWalked = 0;
 
         while (items.Count < limit)
         {
@@ -197,6 +244,18 @@ public sealed class WorkflowRunner
                     SizeBytes = item.FileSize ?? 0,
                 });
             }
+
+            // Every page boundary is a progress point: on a large catalog the
+            // walk itself can take a while, and a scan that shows no movement
+            // looks hung. A filtered page keeps the same kept count, so it is
+            // reported too — the raw cursor is what advanced. `Scanned` is taken
+            // before the cursor moves so it names the position just reached.
+            pagesWalked++;
+            progress?.Report(new CatalogFetchProgress(
+                items.Count, startIndex + page.RawCount, pagesWalked, page.TotalCount));
+            SynapicLog.Info(nameof(WorkflowRunner),
+                $"Daminion page at {startIndex}: {page.RawCount} record(s), {items.Count} kept so far" +
+                (page.TotalCount is { } scopeTotal ? $" of {scopeTotal} in scope" : ""));
 
             // Advance by the raw page the server returned, not by the eligible
             // subset we kept: advancing by the smaller filtered count would skip
@@ -339,4 +398,25 @@ public sealed class WorkflowRunner
 
     private static (TimeSpan? Eta, TimeSpan? PerItem) Estimate(Stopwatch stopwatch, int processed, int total)
         => EstimateProgress(stopwatch.Elapsed, processed, total);
+
+    /// <summary>
+    /// Time-based ETA for a paged catalog walk: the average cost of a page so
+    /// far × the pages the scope total still implies.
+    /// </summary>
+    /// <remarks>
+    /// Pages are the natural unit here — one request/response per `PageSize`
+    /// (500) records — so a long walk gets an estimate after its first page
+    /// rather than after its first 500 hashes. A server that reports no scope
+    /// total (or a cursor already past it) yields a per-page figure but no ETA;
+    /// the caller then shows the running count without inventing a finish time.
+    /// </remarks>
+    public static (TimeSpan? Eta, TimeSpan? PerPage) EstimateCatalogFetchProgress(
+        TimeSpan elapsed, int pages, int scanned, int? total)
+    {
+        if (pages <= 0) return (null, null);
+        var perPage = TimeSpan.FromMilliseconds(elapsed.TotalMilliseconds / pages);
+        if (total is not { } scopeTotal || scopeTotal <= scanned) return (null, perPage);
+        var remainingPages = (int)Math.Ceiling((scopeTotal - scanned) / (double)DaminionApiClient.PageSize);
+        return (perPage * remainingPages, perPage);
+    }
 }

@@ -318,8 +318,12 @@ One class, two operations. The constructor takes an `ImageMatchProfile`
 (`Duplicates` or `Similar`) and the instance serves either the **Deduplication**
 operation or the **Similar images** one: the scan, the review and the apply are
 the same code, and the profile picks only what has to differ — the starting
-threshold (`DefaultThresholdFor`: `0.90` for duplicates, the store's
-`SimilarThresholdDefault` of `0.85` for the similarity search), the wording
+threshold (`DefaultThresholdFor(profile, algorithm)`: `0.90` for duplicates and
+`0.85` for the similarity search under pHash — the other two fingerprints put
+different pictures far closer together and carry their own tighter numbers in
+`AppSettingsRegistryStore.DedupThresholdDefaultFor` / `SimilarThresholdDefaultFor`;
+the store resolves that same default from a *saved* algorithm when no threshold
+was ever stored), the wording
 (`OperationTitle`, `MatchNoun` / `MatchNounPlural`, `ScanCardTitle`,
 `ApplyCardTitle`, the hint lines), the operation identity (`OperationKey` —
 `dedup` or `similar`, the key it is opened, hosted and persisted under), and
@@ -332,9 +336,14 @@ Algorithm (PHash/DHash/AHash) + threshold over two sources — the
 same radio pattern as Step 1: `IsLocalSelected`/`IsDaminionSelected` pick a
 local `FolderPath` or the Step 1 Daminion scope (`DaminionScopeSummary`, fed by
 the injected `Step1DatasourceViewModel` + sidecar). `ScanCommand` enumerates
-supported extensions (local) or fetches Daminion items and groups them: items 
-with a server `HashCode` are grouped without download; items without fall back 
-to downloading each original, hashing it, and deleting the temp file. The Server
+supported extensions (local) or fetches Daminion items and groups them: the
+catalog is walked whole through `FetchEntireScopeAsync`, and items with a server
+`HashCode` are grouped without download; items without fall back to downloading
+each original, hashing it, and deleting the temp file. Both phases drive the
+shared `RunStateViewModel` bar — `ApplyCatalogFetchProgress` for the walk
+(records/page/ETA) and `ApplyProgress` for hashing — so a dedup run no longer
+leaves the bar idle while it works, and a cancelled scan clears the estimate.
+The Server
 hash picker (Daminion only) decides how those server hashes are compared —
 Exact (identical values only, the default) or Hamming at the threshold. Produces 
 `Groups` — a vertical list of
@@ -343,6 +352,44 @@ Exact (identical values only, the default) or Hamming at the threshold. Produces
 `SelectOldest`/`SelectNewest`/`SelectSmallest`/`SelectLargest` auto-select
 switches recompute every group's checkboxes as the union of their picks
 (keep-first when none is active; unknown dates/sizes are never picked).
+
+After a scan the results card carries a **live threshold slider**
+(`RetuneThresholdSlider`, visible through `CanRetune`). It edits the same
+`Threshold` the settings tab writes, and a change schedules `RetuneAsync`
+through a 300 ms debounce (`RetuneCompletion` is the awaitable tests use): the
+retained `DedupResult.PerceptualHashes` / `ExactHashes` are re-grouped with
+`IDedupService.GroupFromHashes` on the thread pool — no image is hashed or
+re-read — and the cards are rebuilt with `preserveSelection` so the user's
+keep checkboxes survive by item key. Item view models are cached across
+regroups (`_localItems` / `_pendingDaminionItems`), so a preview is rendered or
+downloaded once per scan and only items that newly enter a group are fetched.
+The slider hides while scanning or applying, after an Apply (the source changed,
+so `_lastScan` is dropped), and when the selected algorithm no longer matches
+the one that produced the fingerprints — hashes are not comparable across
+algorithms. Measured release-build grouping cost: ~0.4 ms for 1,000 items,
+~22 ms for 10,000, ~90 ms for 20,000 and ~0.5–1.0 s for 50,000 (O(n²)
+comparisons), which is what makes the slider feel live up to a large personal
+library and still usable, with a busy line, on a huge catalog.
+A completed scan is also **saved for the next launch**. `DedupFingerprintCache`
+(gzipped JSON, one file per operation and source under
+`%LOCALAPPDATA%\Synapic\fingerprints`, the newest eight per operation kept)
+stores `CachedDedupScan` — version, source key, algorithm, threshold, the
+per-item row metadata and both hash dictionaries — and `StepDedupViewModel`
+restores it from the constructor (`RestoreCompletion` is the awaitable tests
+use) and whenever the configured source changes. The source key is
+`local|<full path>` or `daminion|<url>|<scope>|<ids>`, so a cache is never
+borrowed by another folder, scope or operation. Restore re-groups those hashes
+with the current settings (`GroupFromHashes`), rebuilds the rows (catalog rows
+keep their ids, so Apply works after reconnecting) and sets `ScanSummary` to
+say the results are from the last scan. It is skipped when the saved algorithm
+no longer matches the selected one, when a scan/apply has already rebuilt the
+list, and after the source moves again mid-load; a corrupt, truncated or
+other-version file is logged and ignored, never repaired. `Apply` deletes the
+source's file (its fingerprints describe files that have changed), a rescan
+replaces it, and a scan larger than `MaxItems` (250,000) is not cached.
+Writes are atomic (temp file then move), so a crash mid-save cannot leave a
+partially readable cache.
+
 After grouping, `LoadThumbsAsync` decodes a preview bitmap per grouped item
 (local files via `DedupService.CreateThumbnail`, Daminion items via
 `DownloadThumbnailAsync` with the temp file deleted after reading — in-memory
@@ -472,11 +519,12 @@ parameter set (documented on the interface).
 - `GetItemsPageAsync(scope, savedSearchId, collectionId, searchTerm,
   untaggedFields, statusFilter, maxItems, startIndex)` — returns **at most one
   batch** (≤ `PageSize` = 500) per call; callers paginate. Returns a
-  `DaminionItemPage`: `Items` (the eligible subset) plus `RawItems`/`RawCount`
-  (the full server page). Collection and saved-search scopes apply client-side
-  filters after the fetch, so `RawCount` — never the eligible count — is the
-  cursor advance. `GetItemsFilteredAsync` is the `Items`-only convenience
-  wrapper.
+  `DaminionItemPage`: `Items` (the eligible subset), `RawItems`/`RawCount`
+  (the full server page) and `TotalCount` (the scope total the endpoint
+  reported, when it reports one). Collection and saved-search scopes apply
+  client-side filters after the fetch, so `RawCount` — never the eligible
+  count — is the cursor advance. `GetItemsFilteredAsync` is the `Items`-only
+  convenience wrapper.
 - `GetFilteredItemCountAsync` — with the whole-catalog sanity fallback and the
   keyword-value-id fallback described in code comments; returns `-1` on
   failure.
@@ -559,6 +607,20 @@ fetching, throttling, pause/cancel, progress with ETA, error isolation and the
     `ProcessAll` is set, which ignores both the `MaxItems` ceiling and partial
     pages and keeps requesting until the server returns nothing, guarded by an
     identical-raw-page-id infinite-loop check.
+- `FetchEntireScopeAsync(ds, progress, ct)` (static) — the same walk with the
+  ceiling and the paginate switch forced off, for operations that are only
+  correct over the complete set. Deduplication and Similar images must use
+  this: Step 1's `MaxItems` ceiling defaults to 100 and the catalog API answers
+  at most 500 records per call, so inheriting the tagging ceiling silently
+  compared the first 100 items. Reports `CatalogFetchProgress(Kept, Scanned,
+  Pages, Total)` after every page — `Scanned` is the raw cursor (the metric the
+  server's total is comparable with), `Kept` the eligible subset, `Pages` the
+  completed 500-record pages — and logs each boundary. The scan renders the
+  walk on the shared run bar as `Fetching catalog: 1,500/47,851 items` plus
+  `ETA … per page`, using `EstimateCatalogFetchProgress(elapsed, pages, scanned,
+  total)`: average page cost so far × pages the scope total still implies, with
+  no ETA when the endpoint reports no total. Tagging and upscaling keep
+  `FetchItemsAsync`, where a partial batch is meaningful.
 - `RunAsync(workflow, ds, handler, progress, log, pause, ct)` — fetch, report
   the fetched total immediately (a cold model must not leave an empty bar),
   then `RunItemsAsync`.
@@ -623,11 +685,31 @@ items wait; cancellation wins.
 Union-Find grouping with a hamming-distance threshold, and
 `ApplyToPathsAsync` (also behind `ApplyActionsAsync`) for Delete / Move (into a
 `duplicates/` subfolder) / Tag. `ComputeHash` is public static (instance member
-on the interface too) and returns `null` for unreadable images;
+on the interface too) and returns `null` for unreadable images. Before anything
+is measured it normalises the pixel layout, because the fingerprint has to
+describe the picture a person sees: EXIF orientation is applied (a phone
+portrait is stored sideways, and hashing the raw buffer scored the same shot
+~0.5 similarity), transparency is composited onto white (libvips keeps the
+alpha band through `Colourspace(Bw)`, and the single-band readers then sampled
+an interleaved grey/alpha buffer — the same picture scored 31–32 bits apart,
+and pHash produced no hash at all), and the working copy is capped at
+`DedupOptions.MaxDimension` (the documented "resize before hash"; pictures
+already inside the cap are never upscaled). Each algorithm then scales down to
+its own 8×8 / 32×32 grid;
 `GroupFromHashes(perceptualHashes, exactHashes, opts)` groups already-computed
 hashes — the Daminion scan's
 incremental path; server hashes are compared only with each other, by
 `DedupOptions.ServerHashMatch` (exact equality by default, hamming on request).
+Both it and `FindDuplicatesAsync` put the dictionaries they grouped on the
+returned `DedupResult` (`PerceptualHashes` / `ExactHashes`), which is what lets
+the results page re-group at another threshold without reading, hashing or
+downloading anything again.
+`DedupFingerprintCache` (`Services/Processing/DedupFingerprintCache.cs`)
+persists a `CachedDedupScan` per operation and source — see
+`StepDedupViewModel` above for the restore rules — with
+`SaveAsync`/`LoadAsync`/`Delete` and pruning to the newest eight files per
+operation.
+
 `CreateThumbnail(path, maxSize = 128)` scales an image into
 an in-memory JPEG buffer for review previews (null for unreadable images,
 alpha flattened for JPEG). `ReadImageDateUtc(path)` reads the EXIF capture date
@@ -707,7 +789,10 @@ Reads XMP (including TIFF sidecars) plus IPTC/EXIF fallbacks.
   and the rules of the three processing operations. The dedup and similar rules
   are two independent sets of nine values (`Dedup*` / `Similar*`), which is what
   keeps the two searches' algorithms, thresholds, keep-sets, actions and move
-  destinations apart (`SimilarThresholdDefault` is `0.85`). `Load()` returns
+  destinations apart, with starting thresholds that belong to the fingerprint
+  rather than to the profile (`SimilarThresholdDefault` is `0.85` for pHash,
+  `0.91` for dHash and `0.94` for aHash; the duplicate scan's equivalents are
+  `0.90`, `0.97` and `0.99`). `Load()` returns
   `null` when nothing has been saved yet, `Defaults` is the shipped state the
   load-then-modify writers start from, and a one-time import maps an old
   `%APPDATA%\Synapic\config.json` into the key while it is still empty.

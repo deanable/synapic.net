@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Synapic.Main.Models;
 using Synapic.Main.Services;
+using Synapic.Main.Services.Processing;
 using Synapic.Main.ViewModels.Operations;
 using Synapic.Main.ViewModels.Steps;
 using Synapic.Shared.Contracts;
@@ -75,7 +76,8 @@ public partial class MainWindowViewModel : ViewModelBase
         IHelpService? help = null,
         ConfigService? configService = null,
         AppSettingsRegistryStore? appSettingsStore = null,
-        Func<ComputeAvailability>? computeAvailabilityProbe = null)
+        Func<ComputeAvailability>? computeAvailabilityProbe = null,
+        DedupFingerprintCache? dedupFingerprintCache = null)
     {
         _sidecar = sidecar;
         _download = download ?? new SidecarDownloadService();
@@ -114,7 +116,8 @@ public partial class MainWindowViewModel : ViewModelBase
         if (engineStore?.Load() is null) AppSettings.ApplyDefaultsToNewSession();
 
         Operations = new OperationShellViewModel(
-            _session, _sidecar, connectionStore, engineStore, presetStore, computeAvailabilityProbe, appSettingsStore);
+            _session, _sidecar, connectionStore, engineStore, presetStore, computeAvailabilityProbe, appSettingsStore,
+            dedupFingerprintCache);
         Operations.NavigationLockChanged += (_, _) => OnPropertyChanged(nameof(IsNavigationLocked));
 
         // The shared source is the dashboard panels' status line and the header

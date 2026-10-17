@@ -98,6 +98,44 @@ public sealed class AppSettingsRegistryStore
     /// </summary>
     public const double SimilarThresholdDefault = 0.85;
 
+    /// <summary>The duplicate scan's starting threshold for pHash (0.90: at most
+    /// six of the 64 bits differ).</summary>
+    public const double DedupThresholdDefault = 0.90;
+
+    // The thresholds are not one scale. The three fingerprints differ hugely in
+    // how far apart they put two *different* pictures: measured on 22 real
+    // photographs (Windows wallpapers), scored over 220 same-photo pairs
+    // (re-encode, resize, brightness, crop) and 462 different-photo pairs, the
+    // nearest pair of different pictures sat 10 bits apart under pHash, 3 under
+    // dHash and 1 under aHash. A threshold that is safe for pHash therefore is
+    // not safe for the others: dHash at pHash's 0.90 merges 0.87% of different
+    // pairs into duplicate groups, aHash 1.73%, and aHash reached zero false
+    // merges at no budget below 1.0 at all. Each number below is the loosest
+    // setting that measured no false merges, or — for aHash, whose measured
+    // zero-error budget was 0 bits — the tightest useful one.
+
+    /// <summary>The starting threshold for <paramref name="algorithm"/>, which is
+    /// the one the duplicate scan should use when the profile has no saved
+    /// value: it depends on the fingerprint, so a store that knows only the
+    /// selected algorithm still resolves the right default.</summary>
+    public static double DedupThresholdDefaultFor(string? algorithm) => algorithm switch
+    {
+        "DHash" => 0.97, //  2 bits:  0% of different pairs merged, 78.2% caught
+        "AHash" => 0.99, //  1 bit:   tightest useful; first false merge at 4 bits
+        _ => DedupThresholdDefault,
+    };
+
+    /// <summary>The similarity search's starting threshold for
+    /// <paramref name="algorithm"/>. Its own numbers are looser than the duplicate
+    /// scan's throughout — a false group is a browsing annoyance there, not a
+    /// moved or deleted file.</summary>
+    public static double SimilarThresholdDefaultFor(string? algorithm) => algorithm switch
+    {
+        "DHash" => 0.91, //  6 bits: 0.87% of different pairs merged, 91.8% caught
+        "AHash" => 0.94, //  4 bits: 1.30% merged, 96.8% caught
+        _ => SimilarThresholdDefault,
+    };
+
     private readonly string? _keyPathOverride;
     private readonly AppConfig _typedConfig; // shape + defaults for the import
 
@@ -126,7 +164,7 @@ public sealed class AppSettingsRegistryStore
         DefaultConfidenceThreshold: _typedConfig.Ui.DefaultConfidenceThreshold,
         DefaultMaxItems: _typedConfig.Ui.DefaultMaxItems,
         DedupAlgorithm: "PHash",
-        DedupThreshold: 0.90,
+        DedupThreshold: DedupThresholdDefault,
         DedupServerHashMatch: "Exact",
         DedupSelectOldest: false,
         DedupSelectNewest: false,
@@ -198,7 +236,10 @@ public sealed class AppSettingsRegistryStore
                 DefaultConfidenceThreshold: D("DefaultConfidenceThreshold", 0),
                 DefaultMaxItems: I("DefaultMaxItems", 0),
                 DedupAlgorithm: S("DedupAlgorithm") ?? "PHash",
-                DedupThreshold: D("DedupThreshold", 0.90),
+                // An absent threshold takes the default of the *saved* algorithm,
+                // not pHash's: this fallback fires for a profile that was never
+                // touched, and the fingerprints are not on a common scale.
+                DedupThreshold: D("DedupThreshold", DedupThresholdDefaultFor(S("DedupAlgorithm"))),
                 DedupServerHashMatch: S("DedupServerHashMatch") ?? "Exact",
                 DedupSelectOldest: B("DedupSelectOldest"),
                 DedupSelectNewest: B("DedupSelectNewest"),
@@ -207,7 +248,7 @@ public sealed class AppSettingsRegistryStore
                 DedupSelectedAction: I("DedupSelectedAction", 0),
                 DedupMoveDestination: S("DedupMoveDestination") ?? "",
                 SimilarAlgorithm: S("SimilarAlgorithm") ?? "PHash",
-                SimilarThreshold: D("SimilarThreshold", SimilarThresholdDefault),
+                SimilarThreshold: D("SimilarThreshold", SimilarThresholdDefaultFor(S("SimilarAlgorithm"))),
                 SimilarServerHashMatch: S("SimilarServerHashMatch") ?? "Exact",
                 SimilarSelectOldest: B("SimilarSelectOldest"),
                 SimilarSelectNewest: B("SimilarSelectNewest"),
@@ -337,7 +378,7 @@ public sealed class AppSettingsRegistryStore
                 DefaultConfidenceThreshold: cfg.Ui.DefaultConfidenceThreshold,
                 DefaultMaxItems: cfg.Ui.DefaultMaxItems,
                 DedupAlgorithm: "PHash",
-                DedupThreshold: 0.90,
+                DedupThreshold: DedupThresholdDefault,
                 DedupServerHashMatch: "Exact",
                 DedupSelectOldest: false,
                 DedupSelectNewest: false,

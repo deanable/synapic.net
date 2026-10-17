@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -186,18 +187,24 @@ public enum ImageMatchProfile
 public partial class StepDedupViewModel : RunStateViewModel
 {
     /// <summary>
-    /// The threshold a profile starts at before anything is restored from the
-    /// registry. Duplicates ship strict (0.90: at most six of the 64 hash bits
-    /// differ); the similarity search ships loose enough to catch re-encodes,
-    /// crops and light edits (0.85: at most ten bits).
+    /// The threshold a profile starts at for the given fingerprint, before
+    /// anything is restored from the registry. pHash — the default algorithm —
+    /// ships strict for duplicates (0.90: at most six of the 64 hash bits differ)
+    /// and loose enough for the similarity search to catch re-encodes, crops and
+    /// light edits (0.85: at most ten bits). The other two fingerprints carry
+    /// their own numbers, because the scale is not shared; see
+    /// <see cref="AppSettingsRegistryStore.DedupThresholdDefaultFor"/> for the
+    /// measurements behind them. An absent algorithm resolves to pHash's.
     /// </summary>
-    public static double DefaultThresholdFor(ImageMatchProfile profile) => profile == ImageMatchProfile.Similar
-        ? AppSettingsRegistryStore.SimilarThresholdDefault
-        : 0.90;
+    public static double DefaultThresholdFor(ImageMatchProfile profile, string? algorithm = null) =>
+        profile == ImageMatchProfile.Similar
+            ? AppSettingsRegistryStore.SimilarThresholdDefaultFor(algorithm)
+            : AppSettingsRegistryStore.DedupThresholdDefaultFor(algorithm);
 
     private readonly IDedupService _dedup;
     private readonly Step1DatasourceViewModel? _step1;
     private readonly AppSettingsRegistryStore? _appSettingsStore;
+    private readonly DedupFingerprintCache? _fingerprintCache;
 
     /// <param name="dedup">Injectable dedup engine (tests).</param>
     /// <param name="step1">Step 1 provides the Daminion source (connection +
@@ -210,16 +217,23 @@ public partial class StepDedupViewModel : RunStateViewModel
     /// <param name="profile">Which search this instance runs (Deduplication or
     /// Similar images). It selects the registry keys, the starting threshold and
     /// the wording; the scanning itself is the same code either way.</param>
+    /// <param name="fingerprintCache">On-disk store for the last scan per source.
+    /// When given, a scan saves its fingerprints and row metadata under this
+    /// operation and source, and a new instance restores them so the review list
+    /// and its threshold slider are live before anything is hashed again. Null =
+    /// memory only (the standalone/test host). The shell passes the real store.</param>
     public StepDedupViewModel(
         IDedupService? dedup = null,
         Step1DatasourceViewModel? step1 = null,
         Func<string, Task<bool>>? confirm = null,
         AppSettingsRegistryStore? appSettingsStore = null,
-        ImageMatchProfile profile = ImageMatchProfile.Duplicates)
+        ImageMatchProfile profile = ImageMatchProfile.Duplicates,
+        DedupFingerprintCache? fingerprintCache = null)
     {
         _dedup = dedup ?? new DedupService();
         _step1 = step1;
         _appSettingsStore = appSettingsStore;
+        _fingerprintCache = fingerprintCache;
         Profile = profile;
         ConfirmAction = confirm;
         // Straight to the backing field: the generated setter persists, and a
@@ -232,6 +246,11 @@ public partial class StepDedupViewModel : RunStateViewModel
         // read-backs too.
         if (_step1 is not null)
             _step1.PropertyChanged += (_, e) => OnSharedSourceChanged(e.PropertyName);
+
+        // A restart should land on the last scan's results, not an empty review
+        // list: the fingerprints and rows were saved for exactly this source, and
+        // re-grouping them arms the threshold slider without hashing anything.
+        ScheduleRestore();
     }
 
     /// <summary>
@@ -252,6 +271,11 @@ public partial class StepDedupViewModel : RunStateViewModel
         ScanCommand.NotifyCanExecuteChanged();
         ApplyCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(DaminionScopeSummary));
+        // Retained fingerprints describe the source they came from: a folder or
+        // scope change leaves the old groups on screen but takes the slider away.
+        OnPropertyChanged(nameof(CanRetune));
+        // …and the newly configured source may have a saved scan of its own.
+        ScheduleRestore();
     }
 
     // ── Which search this is (profile identity) ─────────────────────────────
@@ -337,7 +361,12 @@ public partial class StepDedupViewModel : RunStateViewModel
 
             var algoIndex = Array.IndexOf(Algorithms, algorithm);
             SelectedAlgorithm = algoIndex >= 0 ? algoIndex : 0;
-            Threshold = threshold is > 0.5 and <= 1 ? threshold : DefaultThresholdFor(Profile);
+            // The restored algorithm decides the fallback: a store that has no
+            // threshold for this profile still knows which fingerprint is
+            // selected, and the default belongs to that algorithm, not to pHash.
+            Threshold = threshold is > 0.5 and <= 1
+                ? threshold
+                : DefaultThresholdFor(Profile, algorithm);
             var matchIndex = Array.IndexOf(ServerHashMatches, serverHash);
             SelectedServerHashMatch = matchIndex >= 0 ? matchIndex : 0;
             SelectOldest = IsSimilar ? s.SimilarSelectOldest : s.DedupSelectOldest;
@@ -464,6 +493,8 @@ public partial class StepDedupViewModel : RunStateViewModel
         OnPropertyChanged(nameof(ScanSettingsSummary));
         ScanCommand.NotifyCanExecuteChanged();
         ApplyCommand.NotifyCanExecuteChanged();
+        // The other source may have a saved scan of its own.
+        ScheduleRestore();
     }
 
     /// <summary>Which Step 1 scope collection feeds the Daminion scan (read-only mirror).</summary>
@@ -492,7 +523,9 @@ public partial class StepDedupViewModel : RunStateViewModel
             if (_folderPath == value) return;
             _folderPath = value;
             OnPropertyChanged(nameof(FolderPath));
+            OnPropertyChanged(nameof(CanRetune));
             ScanCommand.NotifyCanExecuteChanged();
+            ScheduleRestore();
         }
     }
 
@@ -543,6 +576,35 @@ public partial class StepDedupViewModel : RunStateViewModel
     private ServerHashMatchMode ServerHashMatch =>
         (ServerHashMatchMode)Math.Clamp(SelectedServerHashMatch, 0, ServerHashMatches.Length - 1);
 
+    partial void OnSelectedAlgorithmChanged(int value)
+    {
+        // A threshold that is still sitting on a shipped default follows the
+        // algorithm. It has to: the fingerprints are not on a common scale, so
+        // leaving dHash at pHash's 0.90 would let different pictures merge into
+        // duplicate groups — and duplicates are moved or deleted. A threshold
+        // the user tuned away from every default is left exactly as it is.
+        var algorithm = Algorithms[Math.Clamp(value, 0, Algorithms.Length - 1)];
+        var algorithmDefault = DefaultThresholdFor(Profile, algorithm);
+        if (!_hydratingDedup && IsADefaultThreshold(Threshold) && Math.Abs(Threshold - algorithmDefault) > 1e-9)
+            Threshold = algorithmDefault; // its own hook notifies the summary and persists
+
+        OnPropertyChanged(nameof(ScanSettingsSummary));
+        // The retained fingerprints belong to the algorithm that produced them:
+        // switching algorithms makes them unretunable until the next scan.
+        OnPropertyChanged(nameof(CanRetune));
+        PersistState();
+    }
+
+    /// <summary>
+    /// True while <paramref name="threshold"/> is one of this profile's shipped
+    /// defaults for some algorithm. The registry cannot say whether a stored
+    /// number was chosen or inherited (its loader always supplies a value), so
+    /// "still on a default" is the only honest signal that a threshold was
+    /// never tuned — and it is what lets the default follow the algorithm.
+    /// </summary>
+    private bool IsADefaultThreshold(double threshold) =>
+        Algorithms.Any(a => Math.Abs(threshold - DefaultThresholdFor(Profile, a)) < 1e-9);
+
     /// <summary>One-line explanation of the selected rule, shown beside the picker.</summary>
     public string ServerHashMatchHint => ServerHashMatch == ServerHashMatchMode.Exact
         ? "Same hashCode value only — groups byte-identical catalog items."
@@ -555,16 +617,24 @@ public partial class StepDedupViewModel : RunStateViewModel
         PersistState();
     }
 
-    partial void OnSelectedAlgorithmChanged(int value)
-    {
-        OnPropertyChanged(nameof(ScanSettingsSummary));
-        PersistState();
-    }
-
     partial void OnThresholdChanged(double value)
     {
         OnPropertyChanged(nameof(ScanSettingsSummary));
-        PersistState();
+        // Live sensitivity: once a scan has fingerprints, moving the threshold
+        // re-groups them instead of asking for a rescan. Debounced in
+        // ScheduleRetune so dragging the slider does not start a regroup per pixel.
+        if (CanRetune)
+        {
+            // The settle point persists instead of every pixel: PersistState
+            // rewrites nine registry values, which is not something to do 60
+            // times a second during a drag. A scan start also persists, so the
+            // value cannot be lost by moving the slider and starting a scan.
+            ScheduleRetune();
+        }
+        else
+        {
+            PersistState();
+        }
     }
 
     /// <summary>
@@ -763,14 +833,238 @@ public partial class StepDedupViewModel : RunStateViewModel
 
     private bool CanScan() => !IsScanning && (IsLocal ? !string.IsNullOrWhiteSpace(FolderPath) : DaminionReady);
 
+    // ── Persisted scan (fingerprint cache) ──────────────────────────────────
+
+    /// <summary>The source the displayed fingerprints came from; null when no
+    /// source is configured. Both halves are part of it, because the same folder
+    /// and the same catalog scope produce different hashes.</summary>
+    private string? CurrentSourceKey()
+    {
+        if (IsDaminion)
+        {
+            if (_step1 is null) return null;
+            return $"daminion|{(_step1.DaminionUrl ?? "").Trim()}|{_step1.Scope}|{_step1.SavedSearchId}|"
+                   + $"{_step1.CollectionId}|{(_step1.SearchTerm ?? "").Trim()}";
+        }
+
+        var folder = FolderPath?.Trim();
+        if (string.IsNullOrEmpty(folder)) return null;
+        try { folder = System.IO.Path.GetFullPath(folder); }
+        catch { /* keep the text as typed — it still names one source */ }
+        return "local|" + folder;
+    }
+
+    /// <summary>The selected fingerprint, lowercase — the same spelling
+    /// <see cref="DedupResult.Algorithm"/> and the cache file use.</summary>
+    private string SelectedAlgorithmName() =>
+        Algorithms[Math.Clamp(SelectedAlgorithm, 0, Algorithms.Length - 1)].ToLowerInvariant();
+
+    /// <summary>Completes when the startup restore has finished (or decided there
+    /// was nothing to restore). Tests await it instead of sleeping.</summary>
+    internal Task RestoreCompletion => _restoreCompletion;
+
+    private Task _restoreCompletion = Task.CompletedTask;
+    private bool _restoreInFlight;
+
+    /// <summary>
+    /// Offer the saved scan for the source now configured, unless this instance
+    /// already has results (a scan won, or a restore already ran). Called at
+    /// construction and whenever the source moves, so a folder or scope that is
+    /// picked after construction — the tests' object initializer, or a source
+    /// switch in the form — still gets its saved results.
+    /// </summary>
+    private void ScheduleRestore()
+    {
+        if (_fingerprintCache is null || _restoreInFlight) return;
+        if (IsScanning || IsApplying || _lastScan is not null || Groups.Count > 0) return;
+        if (CurrentSourceKey() is null) return;
+        // A folder typed one character at a time is not a source yet; only a real
+        // directory is worth a cache read.
+        if (IsLocal && !System.IO.Directory.Exists(FolderPath)) return;
+        _restoreCompletion = RestoreCachedScanAsync();
+    }
+
+    /// <summary>The source key the current results (or restored ones) belong to.
+    /// Null while nothing has been scanned here.</summary>
+    private string? _scanSourceKey;
+
+    /// <summary>
+    /// Load this operation's saved scan for the current source and render it, so
+    /// a restart opens on the same review list and a live slider. Everything is
+    /// checked before use: a cache for another source, another fingerprint, a
+    /// newer format or a scan that has since happened is ignored rather than
+    /// merged. Restored rows are the ones the groups need; local metadata is read
+    /// from the files then, and catalog rows carry their ids so Apply still works
+    /// after reconnecting.
+    /// </summary>
+    private async Task RestoreCachedScanAsync()
+    {
+        if (_fingerprintCache is null) return;
+        var sourceKey = CurrentSourceKey();
+        if (sourceKey is null) return;
+        _restoreInFlight = true;
+        try
+        {
+            await RestoreCoreAsync(sourceKey);
+        }
+        finally
+        {
+            _restoreInFlight = false;
+            // The source moved while this read was in flight and the new one was
+            // turned away by the in-flight guard: give it its own read now.
+            if (_lastScan is null && Groups.Count == 0 && !IsScanning && !IsApplying &&
+                !string.Equals(CurrentSourceKey(), sourceKey, StringComparison.Ordinal))
+                ScheduleRestore();
+        }
+    }
+
+    private async Task RestoreCoreAsync(string sourceKey)
+    {
+        if (_fingerprintCache is null) return;
+        CachedDedupScan? cached;
+        try
+        {
+            cached = await _fingerprintCache.LoadAsync(OperationKey, sourceKey);
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Warning(nameof(StepDedupViewModel),
+                $"Could not restore the last {OperationTitle} scan: {e.Message}");
+            return;
+        }
+
+        if (cached is null || cached.Items.Length == 0) return;
+
+        // Hashes of one fingerprint are meaningless to another. The cache is per
+        // source, not per algorithm, so an algorithm changed between runs drops
+        // the restore and the next scan replaces the file.
+        var algorithm = SelectedAlgorithmName();
+        if (!string.Equals(cached.Algorithm, algorithm, StringComparison.OrdinalIgnoreCase))
+        {
+            SynapicLog.Info(nameof(StepDedupViewModel),
+                $"Saved {OperationTitle} scan skipped: it used {cached.Algorithm}, the current fingerprint is {algorithm}");
+            return;
+        }
+
+        // The load is asynchronous: by now the user may have scanned, applied, or
+        // pointed the source somewhere else. A restore must never overwrite work
+        // that happened while it was reading.
+        if (IsScanning || IsApplying || _lastScan is not null || Groups.Count > 0) return;
+        if (!string.Equals(CurrentSourceKey(), sourceKey, StringComparison.Ordinal)) return;
+
+        if (IsDaminion)
+        {
+            // Every saved catalog row, id or not: a key without a row would fall
+            // back to a FileInfo read on "daminion:{id}" if a retune showed it.
+            _pendingDaminionItems = cached.Items
+                .ToDictionary(i => i.Key, i => new DedupItemViewModel(i.Key, i.FileName)
+                {
+                    SizeBytes = i.SizeBytes > 0 ? i.SizeBytes : null,
+                    DateTaken = i.DateTakenUtc,
+                    DaminionId = i.DaminionId,
+                });
+        }
+
+        var opts = BuildOptions();
+        var result = await Task.Run(
+            () => _dedup.GroupFromHashes(cached.PerceptualHashes, cached.ExactHashes, opts));
+
+        // Previews are best effort and in-memory, exactly as after a scan: a
+        // catalog that is not reconnected yet simply restores rows without images.
+        var thumbs = await LoadThumbsAsync(result, CancellationToken.None);
+
+        // A scan can start while the previews load; its rows own the list from
+        // then on, and the bitmaps built here are dropped.
+        if (IsScanning || IsApplying || _lastScan is not null || Groups.Count > 0)
+        {
+            foreach (var bitmap in thumbs.Values) bitmap.Dispose();
+            return;
+        }
+        // The source may have moved during the read as well.
+        if (!string.Equals(CurrentSourceKey(), sourceKey, StringComparison.Ordinal))
+        {
+            foreach (var bitmap in thumbs.Values) bitmap.Dispose();
+            return;
+        }
+        _scanSourceKey = sourceKey;
+        AttachGroups(result, thumbs);
+        ApplyAutoSelection();
+
+        var dupCount = Groups.Sum(g => g.Items.Count - 1);
+        ScanSummary = Groups.Count == 0
+            ? $"{result.TotalFiles} files from the last scan — no {MatchNounPlural} at {opts.Threshold:0.###}. Rescan to refresh."
+            : $"{result.TotalFiles} files from the last scan — {Groups.Count} groups, {dupCount} {MatchNounPlural} "
+              + $"at {opts.Threshold:0.###}. Rescan to refresh.";
+        SynapicLog.Info(nameof(StepDedupViewModel),
+            $"Restored the last {OperationTitle} scan for this source: {result.TotalFiles} item(s), "
+            + $"{Groups.Count} group(s) at {opts.Threshold:0.###} (no hashing)");
+    }
+
+    /// <summary>Save the completed scan's fingerprints and row metadata for this
+    /// source. Best effort: a failure only costs the next launch a rescan.</summary>
+    private async Task SaveCachedScanAsync(DedupResult result, CancellationToken ct)
+    {
+        if (_fingerprintCache is null || _scanSourceKey is null) return;
+        var keys = result.PerceptualHashes.Keys.Concat(result.ExactHashes.Keys).Distinct().ToArray();
+        if (keys.Length == 0) return;
+        if (keys.Length > DedupFingerprintCache.MaxItems)
+        {
+            SynapicLog.Info(nameof(StepDedupViewModel),
+                $"Not caching this scan: {keys.Length:N0} items exceeds the {DedupFingerprintCache.MaxItems:N0}-item limit");
+            return;
+        }
+
+        var items = new CachedDedupItem[keys.Length];
+        for (var index = 0; index < keys.Length; index++)
+        {
+            var key = keys[index];
+            var row = CachedItem(key);
+            items[index] = new CachedDedupItem(
+                key,
+                row?.DisplayName ?? System.IO.Path.GetFileName(key),
+                row?.SizeBytes ?? 0,
+                row?.DateTaken,
+                row?.DaminionId);
+        }
+
+        try
+        {
+            await _fingerprintCache.SaveAsync(OperationKey, new CachedDedupScan(
+                DedupFingerprintCache.CurrentVersion,
+                _scanSourceKey,
+                result.Algorithm,
+                result.Threshold,
+                result.TotalFiles,
+                items,
+                new Dictionary<string, ulong>(result.PerceptualHashes),
+                new Dictionary<string, ulong>(result.ExactHashes)), ct).ConfigureAwait(false);
+            SynapicLog.Info(nameof(StepDedupViewModel),
+                $"Cached {items.Length:N0} fingerprint(s) for the next launch ({_fingerprintCache.DirectoryPath})");
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Warning(nameof(StepDedupViewModel),
+                $"Could not cache this scan ({e.Message}); the next launch will rescan");
+        }
+    }
+
     [RelayCommand(CanExecute = nameof(CanScan))]
     private async Task ScanAsync(CancellationToken ct)
     {
         IsScanning = true;
-        // Old previews are native bitmaps: detach them from their rows (so no
-        // control keeps a disposed source) and free them before the rescan.
-        foreach (var group in Groups) group.DisposeThumbs();
-        Groups.Clear();
+        // A threshold moved while results were on screen is persisted by the
+        // recalculation it scheduled; if a scan supersedes that, save it here.
+        PersistState();
+        // Remember which source these fingerprints will describe, before the
+        // rows are dropped — the cache is keyed by it and Apply invalidates it.
+        _scanSourceKey = CurrentSourceKey();
+        ClearScanResults();
+        // A rescan starts from zero on the shared run bar: the previous scan's
+        // percentage, file name and ETA would otherwise describe work already done.
+        ProgressPercent = 0;
+        ProgressText = IsDaminion ? "Fetching items from Daminion…" : "Scanning…";
+        CurrentFile = "";
+        EtaText = "";
         ScanSummary = IsDaminion ? "Fetching items from Daminion…" : "Scanning…";
         try
         {
@@ -820,6 +1114,11 @@ public partial class StepDedupViewModel : RunStateViewModel
 
             // Re-apply any active auto-select rules to the fresh groups.
             ApplyAutoSelection();
+
+            // Persist for the next launch. CancellationToken.None: the hashing is
+            // done, and a Stop pressed during the save must not turn a finished
+            // scan into "Scan cancelled" (the write itself is atomic).
+            await SaveCachedScanAsync(result, CancellationToken.None);
         }
         catch (OperationCanceledException)
         {
@@ -833,9 +1132,96 @@ public partial class StepDedupViewModel : RunStateViewModel
         finally
         {
             IsScanning = false;
+            // A cancelled or failed scan must not leave an estimate running on
+            // the bar — it would promise work that is no longer happening.
+            EtaText = "";
+            // The threshold may have moved while the scan ran (the settings tab
+            // is reachable during a long fetch). Those results were grouped at
+            // the value captured when the scan started, so bring them in line
+            // with the slider now that a retune is allowed again.
+            if (_lastScan is { } scanned && HasRetunableScan &&
+                Math.Abs(scanned.Threshold - Threshold) > 1e-9)
+                ScheduleRetune();
             ScanCommand.NotifyCanExecuteChanged();
             ApplyCommand.NotifyCanExecuteChanged();
             UpdateSummary();
+        }
+    }
+
+    /// <summary>
+    /// Drop the previous scan's rows, previews and retained fingerprints. Item
+    /// view models outlive a re-group (the retune slider reuses their previews),
+    /// so the caches have to be emptied explicitly — disposing only the rows in
+    /// <see cref="Groups"/> would leak the ones a strict threshold filtered out.
+    /// </summary>
+    private void ClearScanResults()
+    {
+        _retuneCts?.Cancel();
+        _retuneVersion++;
+        IsRetuning = false;
+        foreach (var item in AllScannedItems()) item.DisposeThumb();
+        Groups.Clear();
+        _localItems.Clear();
+        _pendingDaminionItems = null;
+        _lastScan = null;
+        OnPropertyChanged(nameof(CanRetune));
+    }
+
+    private IEnumerable<DedupItemViewModel> AllScannedItems() =>
+        Groups.SelectMany(g => g.Items)
+            .Concat(_localItems.Values)
+            .Concat(_pendingDaminionItems?.Values ?? Enumerable.Empty<DedupItemViewModel>())
+            .Distinct();
+
+    /// <summary>
+    /// Put a catalog page boundary on the shared run bar: raw records walked of
+    /// the scope total, the page just fetched, and an ETA from the average page
+    /// cost. Raw records — not the eligible subset — because the server's total
+    /// counts records, and a filtered page still advanced the cursor. Internal
+    /// so the bar's wording and its estimate can be tested through the view model
+    /// the bar binds.
+    /// </summary>
+    internal void ApplyCatalogFetchProgress(CatalogFetchProgress p, TimeSpan elapsed)
+    {
+        var (eta, perPage) = WorkflowRunner.EstimateCatalogFetchProgress(elapsed, p.Pages, p.Scanned, p.Total);
+        ProgressPercent = p.Total is { } total && total > 0
+            ? Math.Clamp(100.0 * p.Scanned / total, 0, 100)
+            : 0;
+        ProgressText = p.Total is { } scopeTotal
+            ? $"Fetching catalog: {p.Scanned:N0}/{scopeTotal:N0} items"
+            : $"Fetching catalog: {p.Scanned:N0} items so far";
+        CurrentFile = $"catalog page {p.Pages}";
+        EtaText = eta is { } remaining && remaining > TimeSpan.Zero
+            ? $"ETA {ProcessProgress.FormatDuration(remaining)} remaining — " +
+              $"{ProcessProgress.FormatDuration(perPage)} per page"
+            : "";
+    }
+
+    /// <summary>
+    /// Local hashing on the same bar: files hashed of the folder's images, with
+    /// an estimate derived from completed hashes (one hash at a time, so the
+    /// average is honest).
+    /// </summary>
+    internal void ApplyDedupProgress(DedupProgress p, TimeSpan elapsed)
+    {
+        ProgressPercent = p.TotalFiles > 0
+            ? Math.Clamp(100.0 * p.FilesHashed / p.TotalFiles, 0, 100)
+            : 0;
+        ProgressText = p.TotalFiles > 0
+            ? $"{p.FilesHashed}/{p.TotalFiles} hashed"
+            : "No images to hash";
+        CurrentFile = "";
+        if (p.FilesHashed > 0 && p.FilesHashed < p.TotalFiles)
+        {
+            var (eta, perItem) = WorkflowRunner.EstimateProgress(elapsed, p.FilesHashed, p.TotalFiles);
+            EtaText = eta is { } remaining && remaining > TimeSpan.Zero
+                ? $"ETA {ProcessProgress.FormatDuration(remaining)} remaining — " +
+                  $"{ProcessProgress.FormatDuration(perItem)} per image"
+                : "";
+        }
+        else
+        {
+            EtaText = "";
         }
     }
 
@@ -860,8 +1246,14 @@ public partial class StepDedupViewModel : RunStateViewModel
                 ? $"No .jpg/.jpeg/.png/.tif/.tiff files found under '{FolderPath}' (recursive) — nothing to compare"
                 : $"Enumerated {files.Length} image file(s) under '{FolderPath}' (recursive)");
 
+        // Local hashing drives the same run bar as the catalog walk: a scan of a
+        // folder used to leave the bar reading "Idle" for its whole duration.
+        var started = Stopwatch.StartNew();
         var progress = new Progress<DedupProgress>(p =>
-            ScanSummary = $"Hashed {p.FilesHashed}/{p.TotalFiles}…");
+        {
+            ApplyDedupProgress(p, started.Elapsed);
+            ScanSummary = $"Hashed {p.FilesHashed}/{p.TotalFiles}…";
+        });
 
         return await _dedup.FindDuplicatesAsync(files, opts, progress, ct);
     }
@@ -892,7 +1284,31 @@ public partial class StepDedupViewModel : RunStateViewModel
         var client = step1.ConnectedClient ?? throw new InvalidOperationException("Not connected to Daminion");
 
         var ds = step1.ToSelectionForProcessing(client);
-        var items = await WorkflowRunner.FetchItemsAsync(ds, ct);
+
+        // Whole scope, always: a duplicate/similarity group is only correct over
+        // the complete result set. Step 1's "max items" ceiling exists for
+        // tagging (a partial batch is meaningful there), and the catalog API
+        // returns at most 500 records per call — so this walks every page until
+        // the server returns an empty one, reporting each boundary so a large
+        // catalog visibly makes progress instead of looking hung.
+        var fetchStarted = Stopwatch.StartNew();
+        var fetchProgress = new Progress<CatalogFetchProgress>(p =>
+        {
+            ApplyCatalogFetchProgress(p, fetchStarted.Elapsed);
+            ScanSummary = p.Total is { } total
+                ? $"Fetching items from Daminion: {p.Scanned:N0} of {total:N0}…"
+                : $"Fetching items from Daminion: {p.Scanned:N0} so far…";
+        });
+        var items = await WorkflowRunner.FetchEntireScopeAsync(ds, fetchProgress, ct);
+
+        // The walk is over; hashing owns the bar from here. Drop the fetch ETA —
+        // it names the wrong phase, and its last value would otherwise sit there
+        // until the first item completed and reported an estimate of its own.
+        fetchStarted.Stop();
+        ProgressPercent = 0;
+        ProgressText = $"Scanning {items.Count:N0} item(s)…";
+        CurrentFile = "";
+        EtaText = "";
         var serverHashCount = items.Count(i => i.ServerHashCode != 0);
         SynapicLog.Info(nameof(StepDedupViewModel),
             $"{OperationTitle} fetch: {items.Count} item(s) in scope ({ScopeIdForLog()}) — " +
@@ -914,9 +1330,12 @@ public partial class StepDedupViewModel : RunStateViewModel
         // item it is grouped without a download, so the progress line says
         // "grouping" rather than "downloading" for those.
         var progress = new Progress<ProcessProgress>(p =>
+        {
+            ApplyProgress(p);
             ScanSummary = serverHashCount > 0
                 ? $"Grouping {Math.Min(p.Processed + 1, Math.Max(p.Total, 1))}/{p.Total}: {p.CurrentFile}"
-                : $"Downloading {Math.Min(p.Processed + 1, Math.Max(p.Total, 1))}/{p.Total}: {p.CurrentFile}");
+                : $"Downloading {Math.Min(p.Processed + 1, Math.Max(p.Total, 1))}/{p.Total}: {p.CurrentFile}";
+        });
 
         await new WorkflowRunner().RunItemsAsync(workflow, items, handler, progress, log: null, pause: null, ct);
 
@@ -946,6 +1365,130 @@ public partial class StepDedupViewModel : RunStateViewModel
         return _dedup.GroupFromHashes(handler.PerceptualHashes, handler.ExactHashes, opts);
     }
 
+    // ── Live retune (the results page's threshold slider) ───────────────────
+
+    /// <summary>How long the slider must rest before a recalculation starts.
+    /// Dragging fires a value change per pixel; each one would otherwise pay the
+    /// O(n²) grouping cost. 300 ms is below the threshold of "feels immediate".</summary>
+    internal const int RetuneDebounceMs = 300;
+
+    /// <summary>The debounce + regroup currently scheduled or running — tests
+    /// await this instead of sleeping, and a new slider move supersedes it.</summary>
+    internal Task RetuneCompletion => _retuneCompletion;
+
+    /// <summary>
+    /// True when the current results can be re-filtered in place: a scan has
+    /// produced fingerprints, that scan used the algorithm still selected (the
+    /// hashes of one algorithm are meaningless to another), and no other run is
+    /// touching the source. The results page's slider binds its visibility.
+    /// </summary>
+    public bool CanRetune => !IsScanning && !IsApplying && HasRetunableScan;
+
+    private bool HasRetunableScan => _lastScan is { } last &&
+        string.Equals(last.Algorithm, SelectedAlgorithmName(), StringComparison.Ordinal) &&
+        // The fingerprints describe one source; a folder/scope change leaves the
+        // old groups on screen but must not re-filter them as if they were new.
+        string.Equals(_scanSourceKey, CurrentSourceKey(), StringComparison.Ordinal);
+
+    /// <summary>The line under the slider: what moving it costs, and what it does.</summary>
+    public string RetuneHint => IsSimilar
+        ? "Sensitivity of this result set: lower catches more edits and more false matches. Groups rebuild from the fingerprints already computed — no image is hashed again; only an item that newly enters a group needs a preview."
+        : "Sensitivity of this result set: lower groups more loosely. Groups rebuild from the fingerprints already computed — no image is hashed again; only an item that newly enters a group needs a preview.";
+
+    private DedupResult? _lastScan;
+    private readonly Dictionary<string, DedupItemViewModel> _localItems = new();
+    private CancellationTokenSource? _retuneCts;
+    private Task _retuneCompletion = Task.CompletedTask;
+    private int _retuneVersion;
+
+    [ObservableProperty]
+    private bool _isRetuning;
+
+    partial void OnIsRetuningChanged(bool value) => ApplyCommand.NotifyCanExecuteChanged();
+
+    private void ScheduleRetune()
+    {
+        if (_hydratingDedup || IsScanning || IsApplying || !HasRetunableScan) return;
+
+        _retuneCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _retuneCts = cts;
+        var version = ++_retuneVersion;
+        _retuneCompletion = DebounceAndRetuneAsync(cts, version);
+    }
+
+    private async Task DebounceAndRetuneAsync(CancellationTokenSource cts, int version)
+    {
+        try
+        {
+            await Task.Delay(RetuneDebounceMs, cts.Token);
+            if (version != _retuneVersion || IsScanning || IsApplying) return;
+            await RetuneAsync(cts.Token, version);
+        }
+        catch (OperationCanceledException)
+        {
+            // Superseded by a newer slider value or by a new scan.
+        }
+        catch (Exception e)
+        {
+            ScanSummary = $"Recalculation failed: {e.Message}";
+            SynapicLog.Error(nameof(StepDedupViewModel), ScanSummary);
+        }
+        finally
+        {
+            if (ReferenceEquals(_retuneCts, cts)) _retuneCts = null;
+            cts.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Re-group the fingerprints retained by the last scan at the current
+    /// threshold — no hashing, no downloads, no file reads. Internal so the
+    /// recalculation can be driven directly by tests; the view goes through
+    /// <see cref="ScheduleRetune"/> and its debounce.
+    /// </summary>
+    /// <remarks>
+    /// Grouping compares every fingerprint with every other, which is why this
+    /// runs on the thread pool: measured release-build costs are ~22 ms for
+    /// 10,000 items, ~90 ms for 20,000 and ~0.6 s for 50,000. The UI stays live
+    /// and shows the busy line; a newer slider value supersedes this run.
+    /// </remarks>
+    internal async Task RetuneAsync(CancellationToken ct, int version)
+    {
+        if (_lastScan is not { } last || IsScanning) return;
+
+        var opts = BuildOptions();
+        IsRetuning = true;
+        ScanSummary = $"Re-grouping {last.TotalFiles:N0} item(s) at {opts.Threshold:0.###}…";
+        try
+        {
+            var result = await Task.Run(
+                () => _dedup.GroupFromHashes(last.PerceptualHashes, last.ExactHashes, opts), ct);
+            ct.ThrowIfCancellationRequested();
+            if (version != _retuneVersion) return;
+
+            // Only items that just entered a group lack a preview; the ones that
+            // were already visible keep the bitmap their row cache holds.
+            var thumbs = await LoadThumbsAsync(result, ct);
+            if (version != _retuneVersion)
+            {
+                foreach (var bitmap in thumbs.Values) bitmap.Dispose();
+                return;
+            }
+
+            AttachGroups(result, thumbs, preserveSelection: true);
+            PersistState();
+            var dupCount = Groups.Sum(g => g.Items.Count - 1);
+            ScanSummary = Groups.Count == 0
+                ? $"{result.TotalFiles} files at {opts.Threshold:0.###} — no {MatchNounPlural} found"
+                : $"{result.TotalFiles} files at {opts.Threshold:0.###} — {Groups.Count} groups, {dupCount} {MatchNounPlural}";
+        }
+        finally
+        {
+            if (version == _retuneVersion) IsRetuning = false;
+        }
+    }
+
     /// <summary>Daminion item metadata keyed by "daminion:{id}" for the current scan.</summary>
     private Dictionary<string, DedupItemViewModel>? _pendingDaminionItems;
 
@@ -957,7 +1500,11 @@ public partial class StepDedupViewModel : RunStateViewModel
     /// row without its image; only cancellation propagates.</summary>
     private async Task<Dictionary<string, Bitmap>> LoadThumbsAsync(DedupResult result, CancellationToken ct)
     {
-        var keys = result.Groups.SelectMany(g => g.Items).Distinct().ToArray();
+        // A retune only renders the items that just entered a group; anything a
+        // previous grouping already showed still holds its bitmap in the row cache.
+        var keys = result.Groups.SelectMany(g => g.Items).Distinct()
+            .Where(key => CachedItem(key)?.Thumb is null)
+            .ToArray();
         var thumbs = new Dictionary<string, Bitmap>(keys.Length);
         if (keys.Length == 0) return thumbs;
 
@@ -1064,36 +1611,76 @@ public partial class StepDedupViewModel : RunStateViewModel
     /// row box so they stay sharp on high-DPI displays.</summary>
     private const int ThumbSize = 128;
 
-    private void AttachGroups(DedupResult result, IReadOnlyDictionary<string, Bitmap> thumbs)
+    /// <summary>
+    /// Build the group cards from a grouping result. On a fresh scan the keep-set
+    /// falls back to the rules (keep-first); on a retune the checkboxes the user
+    /// already set are carried over by item key, because re-filtering must not
+    /// silently re-check the file they chose to act on.
+    /// </summary>
+    private void AttachGroups(
+        DedupResult result,
+        IReadOnlyDictionary<string, Bitmap> thumbs,
+        bool preserveSelection = false)
     {
+        var priorChecked = preserveSelection
+            ? Groups.SelectMany(g => g.Items).ToDictionary(i => i.Key, i => i.IsChecked)
+            : null;
+
+        Groups.Clear();
         foreach (var g in result.Groups)
         {
-            var items = g.Items.Select(key =>
-            {
-                thumbs.TryGetValue(key, out var thumb);
-
-                if (_pendingDaminionItems is not null && _pendingDaminionItems.TryGetValue(key, out var vm))
-                {
-                    vm.Thumb = thumb;
-                    return vm;
-                }
-
-                var info = new System.IO.FileInfo(key);
-                return new DedupItemViewModel(key, System.IO.Path.GetFileName(key))
-                {
-                    SizeBytes = info.Exists ? info.Length : null,
-                    DateTaken = info.Exists ? DedupService.ReadImageDateUtc(key) ?? info.CreationTimeUtc : null,
-                    Thumb = thumb,
-                };
-            });
+            var items = g.Items.Select(key => GetOrCreateItem(key, thumbs)).ToArray();
 
             var group = new DuplicateGroupViewModel(items, g.HashType, result.Threshold);
-            SetDefaultSelection(group); // keep-first baseline
+            for (var index = 0; index < group.Items.Count; index++)
+            {
+                var item = group.Items[index];
+                var keep = priorChecked is null
+                    ? index == 0                                   // keep-first baseline
+                    : priorChecked.TryGetValue(item.Key, out var was) ? was : index == 0;
+                item.SetCheckedByRule(keep);
+            }
             group.SelectionChanged += OnGroupSelectionChanged;
             Groups.Add(group);
         }
-        _pendingDaminionItems = null;
+
+        // The slider's offer is only honest while the fingerprints on hand are
+        // the ones for the current results.
+        _lastScan = result;
+        OnPropertyChanged(nameof(CanRetune));
+        UpdateSummary();
     }
+
+    /// <summary>One row per scanned item, reused across retunes so a preview is
+    /// decoded or downloaded once per scan rather than once per slider move.</summary>
+    private DedupItemViewModel GetOrCreateItem(string key, IReadOnlyDictionary<string, Bitmap> thumbs)
+    {
+        if (_pendingDaminionItems is not null && _pendingDaminionItems.TryGetValue(key, out var catalog))
+        {
+            if (thumbs.TryGetValue(key, out var catalogThumb)) catalog.Thumb = catalogThumb;
+            return catalog;
+        }
+        if (_localItems.TryGetValue(key, out var cached))
+        {
+            if (thumbs.TryGetValue(key, out var cachedThumb)) cached.Thumb = cachedThumb;
+            return cached;
+        }
+
+        var info = new System.IO.FileInfo(key);
+        var created = new DedupItemViewModel(key, System.IO.Path.GetFileName(key))
+        {
+            SizeBytes = info.Exists ? info.Length : null,
+            DateTaken = info.Exists ? DedupService.ReadImageDateUtc(key) ?? info.CreationTimeUtc : null,
+        };
+        if (thumbs.TryGetValue(key, out var thumb)) created.Thumb = thumb;
+        _localItems[key] = created;
+        return created;
+    }
+
+    /// <summary>The row already cached for a key, if any (used to skip previews
+    /// that a previous grouping already rendered).</summary>
+    private DedupItemViewModel? CachedItem(string key) =>
+        _pendingDaminionItems?.GetValueOrDefault(key) ?? _localItems.GetValueOrDefault(key);
 
     private void OnGroupSelectionChanged() => UpdateSummary();
 
@@ -1121,11 +1708,15 @@ public partial class StepDedupViewModel : RunStateViewModel
     {
         ApplyCommand.NotifyCanExecuteChanged();
         StopApplyCommand.NotifyCanExecuteChanged();
+        // Retuning while an Apply is deleting/moving files would re-group rows
+        // whose files are disappearing under it.
+        OnPropertyChanged(nameof(CanRetune));
     }
 
     private bool CanApply() =>
         !IsApplying &&
         !IsScanning &&
+        !IsRetuning &&
         Groups.Count > 0 &&
         SelectedForActionCount > 0 &&
         (IsDaminion ? DaminionReady : IsMoveActionUsable);
@@ -1228,6 +1819,13 @@ public partial class StepDedupViewModel : RunStateViewModel
         bool ok;
         string summary;
 
+        // An Apply and a recalculation must not overlap: one is acting on the
+        // rows the other is rebuilding. CanApply already excludes IsRetuning;
+        // this cancels a recalculation that slipped in before the click.
+        _retuneCts?.Cancel();
+        _retuneVersion++;
+        IsRetuning = false;
+
         IsApplying = true;
         try
         {
@@ -1277,6 +1875,14 @@ public partial class StepDedupViewModel : RunStateViewModel
                 Groups.Remove(group);
                 group.DisposeThumbs();
             }
+
+            // The acted-on files are gone or moved, so the retained fingerprints
+            // no longer describe the source: the slider must not re-group what is
+            // no longer there. The next scan re-arms it — and the saved copy is
+            // dropped too, or a restart would offer to re-group deleted files.
+            _lastScan = null;
+            if (_scanSourceKey is not null) _fingerprintCache?.Delete(OperationKey, _scanSourceKey);
+            OnPropertyChanged(nameof(CanRetune));
         }
         UpdateSummary();
     }
@@ -1292,6 +1898,7 @@ public partial class StepDedupViewModel : RunStateViewModel
     protected override void NotifyRunCommandsCanExecuteChanged()
     {
         OnPropertyChanged(nameof(IsScanning));
+        OnPropertyChanged(nameof(CanRetune));
         StartCommand.NotifyCanExecuteChanged();
         ScanCommand.NotifyCanExecuteChanged();
         StopScanCommand.NotifyCanExecuteChanged();

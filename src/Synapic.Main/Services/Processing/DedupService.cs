@@ -74,6 +74,24 @@ public sealed class DedupResult
     public int TotalFiles { get; init; }
     public string Algorithm { get; init; } = "";
     public double Threshold { get; init; }
+
+    /// <summary>
+    /// The algorithmic fingerprints this result was grouped from, kept so the
+    /// result can be re-grouped at another threshold without reading or
+    /// downloading anything again (the results page's live sensitivity slider).
+    /// Empty only for results built by hand.<br/>
+    /// Retention is the price of the slider: a 50,000-item catalog keeps its
+    /// 64-bit hashes (a few MB) until the next scan replaces them.
+    /// </summary>
+    public IReadOnlyDictionary<string, ulong> PerceptualHashes { get; init; } = EmptyHashes;
+
+    /// <summary>The server content hashes the result was grouped from, same
+    /// retention rule as <see cref="PerceptualHashes"/>. These are never
+    /// compared with algorithmic hashes.</summary>
+    public IReadOnlyDictionary<string, ulong> ExactHashes { get; init; } = EmptyHashes;
+
+    private static readonly IReadOnlyDictionary<string, ulong> EmptyHashes =
+        new Dictionary<string, ulong>();
 }
 
 /// <summary>
@@ -157,7 +175,15 @@ public sealed class DedupService : IDedupService
         await new WorkflowRunner().RunItemsAsync(
             workflow, items, new LocalHashHandler(opts, hashes), runnerProgress, log: null, pause: null, ct).ConfigureAwait(false);
 
-        var result = new DedupResult { TotalFiles = paths.Length, Algorithm = algo, Threshold = opts.Threshold };
+        var result = new DedupResult
+        {
+            TotalFiles = paths.Length,
+            Algorithm = algo,
+            Threshold = opts.Threshold,
+            // Kept after grouping so the results page can re-group at another
+            // threshold without re-reading a single file.
+            PerceptualHashes = hashes,
+        };
         GroupDuplicates(hashes, opts, result.Groups);
 
         progress?.Report(new DedupProgress(paths.Length, paths.Length, result.Groups.Count));
@@ -204,6 +230,8 @@ public sealed class DedupService : IDedupService
             TotalFiles = perceptualHashes.Count + exactHashes.Count,
             Algorithm = opts.Algorithm.ToString().ToLowerInvariant(),
             Threshold = opts.Threshold,
+            PerceptualHashes = perceptualHashes,
+            ExactHashes = exactHashes,
         };
         GroupDuplicates(perceptualHashes, opts, result.Groups);
         if (opts.ServerHashMatch == ServerHashMatchMode.Hamming)
@@ -285,22 +313,54 @@ public sealed class DedupService : IDedupService
     // ── Hash computation (imagehash-compatible) ─────────────────────────────
 
     /// <summary>Compute a 64-bit perceptual hash with libvips acceleration.</summary>
+    /// <remarks>
+    /// The fingerprint has to describe the picture a person sees, so the pixel
+    /// layout is normalised before anything is measured:
+    /// <list type="bullet">
+    /// <item><b>Orientation.</b> EXIF orientation is applied. Without it every
+    /// phone portrait photo is fingerprinted from its sideways sensor buffer, so
+    /// a copy whose pixels were baked upright (an export, or the same shot
+    /// imported twice) scores ~0.5 similarity — indistinguishable from an
+    /// unrelated image — even though the two files look identical.</item>
+    /// <item><b>Alpha.</b> Transparency is composited onto white. libvips keeps
+    /// the alpha band through <c>Colourspace(Bw)</c> (a 4-band PNG becomes 2
+    /// bands), and the readers below index the buffer as one byte per pixel:
+    /// they sampled an interleaved grey/alpha buffer, scoring the same picture
+    /// 32 bits apart, and pHash ran off the end of its 32×32 buffer and returned
+    /// no hash at all. Transparency is not visual content, and hidden pixels
+    /// under a transparent area are often garbage, so compositing is both
+    /// faithful and stable.</item>
+    /// <item><b>Size.</b> The working copy is capped at
+    /// <see cref="DedupOptions.MaxDimension"/> — the documented "resize before
+    /// hash" — and each algorithm then scales down to its own 8×8 / 32×32 grid.
+    /// An image already inside the cap is left alone rather than upscaled.</item>
+    /// </list>
+    /// </remarks>
     public static ulong? ComputeHash(string path, DedupOptions opts)
     {
         try
         {
             using var image = Image.NewFromFile(path, access: Enums.Access.Sequential);
-            var size = opts.MaxDimension < 64 ? 64 : Math.Min(opts.MaxDimension, 512);
+            using var oriented = image.Autorot();
+            using var opaque = oriented.HasAlpha()
+                ? oriented.Flatten(background: new double[] { 255 })
+                : oriented;
 
-            using var gray = image.Colourspace(Enums.Interpretation.Bw)
-                .Resize((double)8 * 8 / Math.Max(image.Width, image.Height));
+            // Even after flattening, take the luminance band explicitly: a
+            // greyscale conversion can still leave more than one band, and the
+            // readers below assume one byte per pixel.
+            using var gray = opaque.Colourspace(Enums.Interpretation.Bw).ExtractBand(0);
+
+            var cap = Math.Clamp(opts.MaxDimension, 64, 512);
+            var longest = Math.Max(gray.Width, gray.Height);
+            using var working = longest > cap ? gray.Resize(cap / (double)longest) : gray;
 
             return opts.Algorithm switch
             {
-                HashAlgorithm.PHash => ComputePHash(gray),
-                HashAlgorithm.DHash => ComputeDHash(gray),
-                HashAlgorithm.AHash => ComputeAHash(gray),
-                _ => ComputePHash(gray),
+                HashAlgorithm.PHash => ComputePHash(working),
+                HashAlgorithm.DHash => ComputeDHash(working),
+                HashAlgorithm.AHash => ComputeAHash(working),
+                _ => ComputePHash(working),
             };
         }
         catch (Exception e)

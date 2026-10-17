@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Synapic.Main.Models;
 using Synapic.Main.Services;
 using Synapic.Main.Services.Daminion;
+using Synapic.Main.Services.Processing;
 using Synapic.Main.ViewModels;
 using Synapic.Main.Views;
 
@@ -152,6 +153,10 @@ public partial class App : Application
         services.AddSingleton(new DaminionConnectionStore());
         services.AddSingleton(new EngineSettingsStore());
         services.AddSingleton(new SystemPromptPresetStore());
+        // Deduplication and the similarity search keep the last scan's
+        // fingerprints on disk, so a restart reopens its review list and its
+        // threshold slider without hashing anything again.
+        services.AddSingleton(new DedupFingerprintCache());
         services.AddSingleton<IInferenceSidecar, InferenceSidecarService>();
         services.AddSingleton<ISidecarDownloadService, SidecarDownloadService>();
         // Factory rather than the type: HelpService's constructor arguments are

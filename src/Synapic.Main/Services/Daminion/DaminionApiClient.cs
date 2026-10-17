@@ -515,6 +515,9 @@ public sealed class DaminionApiClient
             var filters = BuildFilterClauses(statusFilter, untaggedFields);
             var batch = maxItems > 0 && maxItems < PageSize ? maxItems : PageSize;
             DaminionItem[] rawPage;
+            // The endpoint's own total for the scope; surfaced on the page so a
+            // caller walking a large catalog can say "1,500 of 47,851".
+            int? totalCount = null;
             // The server applies the filters to the "all" and "search" queries, so
             // their raw page is already eligible. Collection and saved-search pages
             // come back raw, and Synapic applies the status/untagged filters itself
@@ -527,13 +530,17 @@ public sealed class DaminionApiClient
                 {
                     var query = QuoteSearchTerm(searchTerm!);
                     if (filters.Length > 0) query += " " + string.Join(" ", filters);
-                    rawPage = (await api.GetItems(startIndex, batch, f: null, search: query, maxItemsCount: 100000, ct: ct).ConfigureAwait(false)).EffectiveItems;
+                    var response = await api.GetItems(startIndex, batch, f: null, search: query, maxItemsCount: 100000, ct: ct).ConfigureAwait(false);
+                    rawPage = response.EffectiveItems;
+                    totalCount = response.TotalCount;
                     break;
                 }
                 case "all":
                 {
                     var query = filters.Length > 0 ? string.Join(" ", filters) : "*";
-                    rawPage = (await api.GetItems(startIndex, batch, f: null, search: query, maxItemsCount: 100000, ct: ct).ConfigureAwait(false)).EffectiveItems;
+                    var response = await api.GetItems(startIndex, batch, f: null, search: query, maxItemsCount: 100000, ct: ct).ConfigureAwait(false);
+                    rawPage = response.EffectiveItems;
+                    totalCount = response.TotalCount;
                     break;
                 }
                 case "collection" when collectionId is not null:
@@ -541,7 +548,9 @@ public sealed class DaminionApiClient
                     // Python parity: /api/SharedCollection/GetItems?id=… —
                     // the /api/Collections/GetItems/{id} variant 404s on
                     // server 11.0.0.3906 (damserver.local).
-                    rawPage = (await api.GetSharedCollectionItems(collectionId.Value, startIndex, batch, ct).ConfigureAwait(false)).EffectiveItems;
+                    var response = await api.GetSharedCollectionItems(collectionId.Value, startIndex, batch, ct).ConfigureAwait(false);
+                    rawPage = response.EffectiveItems;
+                    totalCount = response.TotalCount;
                     filtersLocally = true;
                     break;
                 }
@@ -551,7 +560,9 @@ public sealed class DaminionApiClient
                     // mirroring the original saved-search lookup ("Saved Searches" tag).
                     var tagId = await GetTagIdAsync("saved searches", fallback: SavedSearchesTagFallbackId, ct).ConfigureAwait(false);
                     var f = new[] { $"{tagId},any" };
-                    rawPage = (await api.GetItems(startIndex, batch, f: f, queryLine: $"{tagId},{savedSearchId}", maxItemsCount: 100000, ct: ct).ConfigureAwait(false)).EffectiveItems;
+                    var response = await api.GetItems(startIndex, batch, f: f, queryLine: $"{tagId},{savedSearchId}", maxItemsCount: 100000, ct: ct).ConfigureAwait(false);
+                    rawPage = response.EffectiveItems;
+                    totalCount = response.TotalCount;
                     filtersLocally = true;
                     break;
                 }
@@ -566,7 +577,7 @@ public sealed class DaminionApiClient
             // maxItems caps the eligible subset this call returns, never the page
             // the server was asked for: the caller still advances by RawCount.
             var items = maxItems > 0 ? eligible.Take(maxItems).ToArray() : eligible;
-            return new DaminionItemPage(items, rawPage);
+            return new DaminionItemPage(items, rawPage, totalCount);
         }
         catch (DaminionException)
         {

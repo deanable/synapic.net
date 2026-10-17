@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Threading.Tasks;
 using Synapic.Main.Models;
 using Synapic.Main.Services;
+using Synapic.Main.Services.Processing;
 using Synapic.Main.ViewModels.Steps;
 
 namespace Synapic.Main.ViewModels.Operations;
@@ -58,18 +59,24 @@ public partial class OperationShellViewModel : ViewModelBase
         EngineSettingsStore? engineStore = null,
         SystemPromptPresetStore? presetStore = null,
         Func<ComputeAvailability>? computeAvailabilityProbe = null,
-        AppSettingsRegistryStore? appSettingsStore = null)
+        AppSettingsRegistryStore? appSettingsStore = null,
+        DedupFingerprintCache? dedupFingerprintCache = null)
     {
         Source = new Step1DatasourceViewModel(session, connectionStore);
         TagParameters = new Step2EngineViewModel(
             session, sidecar, engineStore, presetStore, computeAvailabilityProbe);
         TagRun = new Step3ProcessViewModel(session, sidecar, Source);
         TagReport = new Step4ResultsViewModel(session, Source, TagRun);
-        Dedup = new StepDedupViewModel(step1: Source, appSettingsStore: appSettingsStore);
+        // Both searches keep their last scan on disk (per operation and per
+        // source), so a restart reopens its review list without hashing the
+        // folder or the catalog again.
+        Dedup = new StepDedupViewModel(
+            step1: Source, appSettingsStore: appSettingsStore, fingerprintCache: dedupFingerprintCache);
         Similar = new StepDedupViewModel(
             step1: Source,
             appSettingsStore: appSettingsStore,
-            profile: ImageMatchProfile.Similar);
+            profile: ImageMatchProfile.Similar,
+            fingerprintCache: dedupFingerprintCache);
         Upscale = new StepUpscaleViewModel(step1: Source, sidecar: sidecar, appSettingsStore: appSettingsStore);
 
         // The tag-field checkboxes gate the tagging run. The wizard used to own

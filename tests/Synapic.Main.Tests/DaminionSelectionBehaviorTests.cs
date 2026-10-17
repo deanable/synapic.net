@@ -131,6 +131,65 @@ public sealed class DaminionSelectionBehaviorTests
         }
     }
 
+    /// <summary>
+    /// A dedup/similar scan must see the whole scope, not a prefix: the catalog
+    /// API answers at most 500 records per call, and Step 1's "max items"
+    /// ceiling (100 by default) belongs to tagging. This walks 1,500 records in
+    /// three pages with the ceiling at 100 and auto-pagination switched off, and
+    /// expects every one of them.
+    /// </summary>
+    [Fact]
+    public async Task Whole_scope_fetch_walks_every_page_past_the_source_ceiling()
+    {
+        using var server = new CatalogServer(index => Page(index, index < 1500 ? 500 : 0));
+        var client = await Connect(server);
+        var reports = new List<CatalogFetchProgress>();
+
+        var items = await WorkflowRunner.FetchEntireScopeAsync(new DatasourceSelection
+        {
+            IsDaminion = true,
+            DaminionClient = client,
+            MaxItems = 100,
+            AutoPaginate = false,
+        }, new RecordingProgress<CatalogFetchProgress>(reports.Add), CancellationToken.None);
+
+        Assert.Equal(1500, items.Count);
+        Assert.Equal(new[] { 0, 500, 1000, 1500 }, server.GetIndexes);
+        Assert.Equal(1, items[0].DaminionId);
+        Assert.Equal(1500, items[^1].DaminionId);
+
+        // Each page boundary is reported, and the final report carries the
+        // server's total for the scope, so a long walk can show "1,500 of
+        // 1,500". (The stub derives its total from each page; what matters here
+        // is that the count the UI sees tracks the walk.)
+        Assert.Equal(3, reports.Count);
+        Assert.Equal(new[] { 500, 1000, 1500 }, reports.Select(r => r.Scanned).ToArray());
+        Assert.Equal(new[] { 1, 2, 3 }, reports.Select(r => r.Pages).ToArray());
+        Assert.All(reports, r => Assert.NotNull(r.Total));
+        Assert.Equal(1500, reports[^1].Total);
+    }
+
+    /// <summary>
+    /// The reverse guarantee: a tagging run still honours its ceiling and its
+    /// auto-paginate switch. Whole-scope fetching is for dedup/similar only.
+    /// </summary>
+    [Fact]
+    public async Task Scoped_fetch_still_respects_the_step_one_ceiling()
+    {
+        using var server = new CatalogServer(index => Page(index, index < 1500 ? 500 : 0));
+        var client = await Connect(server);
+
+        var items = await WorkflowRunner.FetchItemsAsync(new DatasourceSelection
+        {
+            IsDaminion = true,
+            DaminionClient = client,
+            MaxItems = 100,
+        }, CancellationToken.None);
+
+        Assert.Equal(100, items.Count);
+        Assert.Equal(new[] { 0 }, server.GetIndexes);
+    }
+
     [Fact]
     public async Task Fetch_respects_max_items_across_full_and_partial_pages()
     {
@@ -176,6 +235,172 @@ public sealed class DaminionSelectionBehaviorTests
 
         Assert.Equal(new[] { 0, 3 }, server.GetIndexes);
         Assert.Equal(new[] { 1, 2, 3 }, items.Select(item => item.DaminionId!.Value).ToArray());
+    }
+
+    /// <summary>
+    /// End-to-end through the dedup screen: a duplicate pair that only appears on
+    /// the second catalog page must still be grouped. Step 1 is left at its
+    /// shipped ceiling (100 items), so a scan that inherited that limit would
+    /// never see id 700 and would report no duplicates at all.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Dedup_scan_groups_duplicates_found_past_the_first_page()
+    {
+        using var server = new CatalogServer(index => JsonSerializer.Serialize(new
+        {
+            items = Enumerable.Range(index + 1, Math.Clamp(1000 - index, 0, 500))
+                .Select(id => new
+                {
+                    id,
+                    fileName = $"item-{id}.jpg",
+                    // ids 501 and 700 share a hash: only visible once the walk
+                    // leaves the first 500-record page.
+                    hashCode = id is 501 or 700 ? 777L : 100_000L + id,
+                    fileSize = 10,
+                })
+                .ToArray(),
+            totalCount = 1000,
+        }));
+        var session = new Session();
+        session.Datasource.Type = "daminion";
+        var source = new Step1DatasourceViewModel(session)
+        {
+            DaminionUrl = server.BaseUrl,
+            DaminionUser = "test",
+            DaminionPass = "test",
+        };
+        await source.ConnectCommand.ExecuteAsync(null);
+        Assert.True(source.IsDaminionConnected, source.ConnectionMessage);
+        Assert.Equal(100, source.MaxItems); // the shipped tagging ceiling is in play
+
+        var vm = new StepDedupViewModel(step1: source);
+        var view = new StepDedup { DataContext = vm };
+        var window = new Window { Content = view, Width = 1000, Height = 700 };
+        window.Show();
+        try
+        {
+            await vm.ScanCommand.ExecuteAsync(null);
+            Dispatcher.UIThread.RunJobs();
+
+            var group = Assert.Single(vm.Groups);
+            Assert.Equal(new int?[] { 501, 700 }, group.Items.Select(item => item.DaminionId));
+            Assert.Equal(new[] { 0, 500, 1000 }, server.GetIndexes);
+
+            // The shared run bar reports the hashing phase it ended in — the
+            // catalog walk set it up, then the per-item progress took over and
+            // cleared the walk's estimate.
+            Assert.Equal("1000/1000 (0 failed)", vm.ProgressText);
+            Assert.Equal(100, vm.ProgressPercent);
+            Assert.Equal("", vm.EtaText);
+            Assert.Contains(view.GetVisualDescendants().OfType<TextBlock>(), text =>
+                text.Text?.Contains("1000 files scanned — 1 groups, 1 duplicates", StringComparison.Ordinal) == true && text.IsVisible);
+        }
+        finally
+        {
+            window.Close();
+            source.DisconnectCommand.Execute(null);
+        }
+    }
+
+    /// <summary>
+    /// The walk has to be visible while it runs, not only once it ends. This
+    /// holds the second page's HTTP response open, then reads the shared run bar
+    /// the user is looking at — count, current page and a per-page ETA — before
+    /// letting the scan finish. A bar left at "Idle" for a 47,000-item walk is
+    /// exactly the complaint this covers.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Catalog_walk_reports_pages_and_an_eta_on_the_run_bar_while_it_runs()
+    {
+        var secondPageRequested = new ManualResetEventSlim(false);
+        var releaseSecondPage = new ManualResetEventSlim(false);
+        using var server = new CatalogServer(index =>
+        {
+            if (index == 500)
+            {
+                secondPageRequested.Set();
+                releaseSecondPage.Wait(TimeSpan.FromSeconds(20));
+            }
+            return JsonSerializer.Serialize(new
+            {
+                items = Enumerable.Range(index + 1, Math.Clamp(1000 - index, 0, 500))
+                    .Select(id => new
+                    {
+                        id,
+                        fileName = $"item-{id}.jpg",
+                        // A server hash keeps the later grouping phase from
+                        // downloading 1,000 originals over the stub.
+                        hashCode = 100_000L + id,
+                        fileSize = 10,
+                    })
+                    .ToArray(),
+                totalCount = 1000,
+            });
+        });
+        var session = new Session();
+        session.Datasource.Type = "daminion";
+        var source = new Step1DatasourceViewModel(session)
+        {
+            DaminionUrl = server.BaseUrl,
+            DaminionUser = "test",
+            DaminionPass = "test",
+        };
+        await source.ConnectCommand.ExecuteAsync(null);
+        Assert.True(source.IsDaminionConnected, source.ConnectionMessage);
+
+        var vm = new StepDedupViewModel(step1: source);
+        var view = new StepDedup { DataContext = vm };
+        var window = new Window { Content = view, Width = 1000, Height = 700 };
+        window.Show();
+        Task? scan = null;
+        try
+        {
+            scan = vm.ScanCommand.ExecuteAsync(null);
+
+            // Wait for the walk to be parked on page 2. The page-1 progress was
+            // posted to the dispatcher from a worker thread, so pump it in.
+            var deadline = DateTime.UtcNow.AddSeconds(20);
+            while ((!secondPageRequested.IsSet ||
+                    !vm.ProgressText.StartsWith("Fetching catalog:", StringComparison.Ordinal)) &&
+                   DateTime.UtcNow < deadline)
+            {
+                Dispatcher.UIThread.RunJobs();
+                Thread.Sleep(10);
+            }
+
+            Assert.True(secondPageRequested.IsSet, "the scan never requested the second page");
+            Assert.StartsWith("Fetching catalog:", vm.ProgressText);
+            Assert.Contains("500", vm.ProgressText);
+            Assert.Equal("catalog page 1", vm.CurrentFile);
+            Assert.StartsWith("ETA", vm.EtaText);
+            Assert.Contains("per page", vm.EtaText);
+
+            releaseSecondPage.Set();
+            await scan;
+            Dispatcher.UIThread.RunJobs();
+
+            // The fetch ETA is replaced by the hashing phase, and cleared when it
+            // completes — the walk's estimate must not outlive the walk.
+            Assert.Equal("1000/1000 (0 failed)", vm.ProgressText);
+            Assert.Equal("", vm.EtaText);
+        }
+        finally
+        {
+            releaseSecondPage.Set();
+            if (scan is { IsCompleted: false })
+            {
+                try { await scan; } catch { /* the assertion above is the failure */ }
+            }
+            window.Close();
+            source.DisconnectCommand.Execute(null);
+        }
+    }
+
+    /// <summary>Records progress synchronously (Progress&lt;T&gt; would post to a
+    /// sync context and make the assertions timing-dependent).</summary>
+    private sealed class RecordingProgress<T>(Action<T> record) : IProgress<T>
+    {
+        public void Report(T value) => record(value);
     }
 
     private sealed class ThumbnailRecordingSidecar(Func<string, Task>? onTag = null) : IInferenceSidecar

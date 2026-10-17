@@ -33,6 +33,24 @@
 
         <TextBlock Classes="hint" Text="{Binding ScanSettingsSummary}" />
 
+        <!-- Live sensitivity: the last scan's fingerprints are retained, so this
+             re-groups the current results instead of asking for a rescan. It
+             appears only once there is something to re-filter, and the 300 ms
+             debounce on the value is what makes a drag one recalculation rather
+             than one per pixel. -->
+        <StackPanel Spacing="2" IsVisible="{Binding CanRetune}">
+          <WrapPanel>
+            <TextBlock Text="Threshold:" VerticalAlignment="Center" Margin="0,0,8,0" />
+            <Slider x:Name="RetuneThresholdSlider" Width="280" Minimum="0.5" Maximum="1"
+                    TickFrequency="0.005" VerticalAlignment="Center"
+                    Value="{Binding Threshold, Mode=TwoWay}" />
+            <TextBlock Text="{Binding Threshold, StringFormat='{}{0:0.###}'}"
+                       VerticalAlignment="Center" Margin="8,0,0,0" FontWeight="SemiBold" />
+          </WrapPanel>
+          <TextBlock Classes="hint" Text="{Binding RetuneHint}" TextWrapping="Wrap" />
+        </StackPanel>
+        <ProgressBar IsIndeterminate="True" Height="4" IsVisible="{Binding IsRetuning}" />
+
         <ProgressBar IsIndeterminate="True" Height="6" IsVisible="{Binding IsScanning}" />
         <TextBlock Text="{Binding ScanSummary}" Opacity="0.8" TextWrapping="Wrap"
                    IsVisible="{Binding ScanSummary}" />

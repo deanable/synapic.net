@@ -33,7 +33,7 @@ public sealed class DaminionItemsResponse
 /// because a page that filtered records out shrinks the offset and the next
 /// request then overlaps the raw records it should have skipped.
 /// </summary>
-public sealed record DaminionItemPage(DaminionItem[] Items, DaminionItem[] RawItems)
+public sealed record DaminionItemPage(DaminionItem[] Items, DaminionItem[] RawItems, int? TotalCount = null)
 {
     public static DaminionItemPage Empty { get; } = new(Array.Empty<DaminionItem>(), Array.Empty<DaminionItem>());
 
