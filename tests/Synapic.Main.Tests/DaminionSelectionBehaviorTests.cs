@@ -83,6 +83,15 @@ public sealed class DaminionSelectionBehaviorTests
             Assert.Equal(new int?[] { 11, 12 }, group.Items.Select(item => item.DaminionId));
             Assert.Contains(view.GetVisualDescendants().OfType<TextBlock>(), text =>
                 text.Text?.Contains("2 files scanned — 1 groups, 1 duplicates", StringComparison.Ordinal) == true && text.IsVisible);
+
+            // The walk's retrieval numbers reach the view model (and therefore
+            // the read-only diagnostics block) even though the count stub has no
+            // count body: the page's own total is still reported.
+            var retrieval = Assert.IsType<CatalogRetrievalDiagnostics>(vm.LastRetrieval);
+            Assert.Equal(2, retrieval.PageTotal);
+            Assert.Equal(1, retrieval.Pages);
+            Assert.Equal(2, retrieval.Kept);
+            Assert.True(vm.HasRetrievalDiagnostics);
         }
         finally
         {
@@ -167,6 +176,211 @@ public sealed class DaminionSelectionBehaviorTests
         Assert.Equal(new[] { 1, 2, 3 }, reports.Select(r => r.Pages).ToArray());
         Assert.All(reports, r => Assert.NotNull(r.Total));
         Assert.Equal(1500, reports[^1].Total);
+    }
+
+    /// <summary>
+    /// The count shown for a scope and the pages walked for it must come from
+    /// the same query. A status filter used to be counted as a structured
+    /// flag-tag clause but fetched as a text clause, so the two could never
+    /// agree; both now send the documented text value.
+    /// </summary>
+    [Fact]
+    public async Task Status_count_and_status_pages_ask_the_same_question()
+    {
+        using var server = new CatalogServer(_ => "{}");
+        var client = await Connect(server);
+
+        await client.GetFilteredItemCountAsync(scope: "all", statusFilter: "approved");
+        await client.GetItemsFilteredAsync(scope: "all", statusFilter: "approved", maxItems: 10);
+
+        var routes = server.Routes.Select(Uri.UnescapeDataString).ToArray();
+        var countRoute = Assert.Single(routes, r => r.StartsWith("/api/MediaItems/GetCount", StringComparison.Ordinal));
+        var pageRoute = Assert.Single(routes, r => r.StartsWith("/api/MediaItems/Get?", StringComparison.Ordinal));
+
+        Assert.Contains("search=flag:approved", countRoute, StringComparison.Ordinal);
+        Assert.Contains("search=flag:approved", pageRoute, StringComparison.Ordinal);
+        Assert.DoesNotContain("flag:flagged", pageRoute, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// An unfiltered whole-catalog request must ask for every item, not search
+    /// for a literal '*'. The page's totalCount then describes the same set the
+    /// count does.
+    /// </summary>
+    [Fact]
+    public async Task Unfiltered_all_scope_sends_no_search_wildcard()
+    {
+        using var server = new CatalogServer(_ => "{}");
+        var client = await Connect(server);
+
+        await client.GetItemsFilteredAsync(scope: "all", maxItems: 10);
+
+        var routes = server.Routes.Select(Uri.UnescapeDataString).ToArray();
+        var pageRoute = Assert.Single(routes, r => r.StartsWith("/api/MediaItems/Get?", StringComparison.Ordinal));
+        Assert.DoesNotContain("search=", pageRoute, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The dedup/similar walk's denominator is the scope count, not the page's
+    /// totalCount: a server that reports the whole catalog there made a 1,500-item
+    /// scope read "500 of 47,851" and left the bar at a few percent forever.
+    /// </summary>
+    [Fact]
+    public async Task Whole_scope_walk_takes_its_total_from_the_scope_count()
+    {
+        using var server = new CatalogServer(
+            index => JsonSerializer.Serialize(new
+            {
+                items = Enumerable.Range(index + 1, Math.Clamp(1500 - index, 0, 500))
+                    .Select(id => new { id, fileName = $"item-{id}.jpg" })
+                    .ToArray(),
+                // Every page claims the full catalog; the count says 1,500.
+                totalCount = 47_851,
+            }),
+            countBody: _ => "{\"count\":1500}");
+        var client = await Connect(server);
+        var reports = new List<CatalogFetchProgress>();
+
+        var items = await WorkflowRunner.FetchEntireScopeAsync(new DatasourceSelection
+        {
+            IsDaminion = true,
+            DaminionClient = client,
+        }, new RecordingProgress<CatalogFetchProgress>(reports.Add), CancellationToken.None);
+
+        Assert.Equal(1500, items.Count);
+        Assert.Equal(new[] { 0, 500, 1000, 1500 }, server.GetIndexes);
+        Assert.All(reports, r => Assert.Equal(1500, r.Total));
+        Assert.Equal(new[] { 500, 1000, 1500 }, reports.Select(r => r.Scanned).ToArray());
+    }
+
+    /// <summary>
+    /// The read-only diagnostics view needs all three numbers together: the
+    /// count the source panel shows, the total the pages reported and what was
+    /// actually kept. A server whose pages claim the catalog size is exactly the
+    /// case where reading them side by side explains the progress bar.
+    /// </summary>
+    [Fact]
+    public async Task Whole_scope_walk_reports_count_page_total_scanned_and_kept_together()
+    {
+        using var server = new CatalogServer(
+            index => JsonSerializer.Serialize(new
+            {
+                items = Enumerable.Range(index + 1, Math.Clamp(1000 - index, 0, 500))
+                    .Select(id => new { id, fileName = $"item-{id}.jpg" })
+                    .ToArray(),
+                totalCount = 47_851,
+            }),
+            countBody: _ => "{\"count\":1000}");
+        var client = await Connect(server);
+        var diagnostics = new List<CatalogRetrievalDiagnostics>();
+
+        var items = await WorkflowRunner.FetchEntireScopeAsync(new DatasourceSelection
+        {
+            IsDaminion = true,
+            DaminionClient = client,
+        }, diagnostics: new RecordingProgress<CatalogRetrievalDiagnostics>(diagnostics.Add));
+
+        Assert.Equal(1000, items.Count);
+        var report = Assert.Single(diagnostics);
+        Assert.Equal("all", report.Scope);
+        Assert.Equal(1000, report.ScopeCount); // the count that steered the walk
+        Assert.Equal(47_851, report.PageTotal); // what the pages themselves claimed
+        Assert.Equal(new[] { 0, 500, 1000 }, server.GetIndexes);
+        Assert.Equal(2, report.Pages);
+        Assert.Equal(1000, report.Scanned);
+        Assert.Equal(1000, report.Kept);
+        Assert.True(report.CountDrivesTotal);
+        Assert.True(report.ReportedUtc > DateTime.UtcNow.AddMinutes(-1));
+    }
+
+    /// <summary>
+    /// The diagnostic re-walk ignores the count as the denominator — the pages'
+    /// total steers the bar — but still asks for the count so the report can keep
+    /// showing the disagreement that prompted the re-walk.
+    /// </summary>
+    [Fact]
+    public async Task Page_total_rewalk_ignores_the_count_as_the_denominator_but_still_reports_it()
+    {
+        using var server = new CatalogServer(
+            index => JsonSerializer.Serialize(new
+            {
+                items = Enumerable.Range(index + 1, Math.Clamp(1000 - index, 0, 500))
+                    .Select(id => new { id, fileName = $"item-{id}.jpg" })
+                    .ToArray(),
+                totalCount = 47_851,
+            }),
+            countBody: _ => "{\"count\":1000}");
+        var client = await Connect(server);
+        var progress = new List<CatalogFetchProgress>();
+        var diagnostics = new List<CatalogRetrievalDiagnostics>();
+
+        var items = await WorkflowRunner.FetchEntireScopeAsync(new DatasourceSelection
+        {
+            IsDaminion = true,
+            DaminionClient = client,
+        },
+            new RecordingProgress<CatalogFetchProgress>(progress.Add),
+            diagnostics: new RecordingProgress<CatalogRetrievalDiagnostics>(diagnostics.Add),
+            ignoreScopeCount: true);
+
+        Assert.Equal(1000, items.Count);
+        Assert.All(progress, p => Assert.Equal(47_851, p.Total));
+        var report = Assert.Single(diagnostics);
+        Assert.Equal(1000, report.ScopeCount);
+        Assert.Equal(1000, report.Kept);
+        Assert.False(report.CountDrivesTotal);
+    }
+
+    /// <summary>
+    /// An empty scope produces no page progress at all, so the diagnostics report
+    /// is the only place its retrieval numbers appear: one report with zero pages
+    /// and zero kept, not a missing block.
+    /// </summary>
+    [Fact]
+    public async Task Empty_scope_still_reports_zeroed_retrieval_diagnostics()
+    {
+        using var server = new CatalogServer(_ => "{}");
+        var client = await Connect(server);
+        var diagnostics = new List<CatalogRetrievalDiagnostics>();
+
+        var items = await WorkflowRunner.FetchEntireScopeAsync(new DatasourceSelection
+        {
+            IsDaminion = true,
+            DaminionClient = client,
+        }, diagnostics: new RecordingProgress<CatalogRetrievalDiagnostics>(diagnostics.Add));
+
+        Assert.Empty(items);
+        var report = Assert.Single(diagnostics);
+        Assert.Equal(0, report.Pages);
+        Assert.Equal(0, report.Scanned);
+        Assert.Equal(0, report.Kept);
+        Assert.Null(report.PageTotal);
+        Assert.False(report.CountDrivesTotal);
+    }
+
+    /// <summary>
+    /// A keyword scope with an empty box counts the whole filtered catalog, so
+    /// the walk must read that same set instead of throwing "unsupported scope".
+    /// </summary>
+    [Fact]
+    public async Task Empty_keyword_scope_walks_the_filtered_catalog_instead_of_failing()
+    {
+        using var server = new CatalogServer(_ => "{}");
+        var client = await Connect(server);
+
+        var items = await WorkflowRunner.FetchItemsAsync(new DatasourceSelection
+        {
+            IsDaminion = true,
+            DaminionClient = client,
+            Scope = "search",
+            SearchTerm = "",
+            ProcessAll = true,
+        }, CancellationToken.None);
+
+        Assert.Empty(items); // the stub holds nothing; the request itself must succeed
+        var routes = server.Routes.Select(Uri.UnescapeDataString).ToArray();
+        var pageRoute = Assert.Single(routes, r => r.StartsWith("/api/MediaItems/Get?", StringComparison.Ordinal));
+        Assert.DoesNotContain("search=", pageRoute, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -294,6 +508,73 @@ public sealed class DaminionSelectionBehaviorTests
             Assert.Equal("", vm.EtaText);
             Assert.Contains(view.GetVisualDescendants().OfType<TextBlock>(), text =>
                 text.Text?.Contains("1000 files scanned — 1 groups, 1 duplicates", StringComparison.Ordinal) == true && text.IsVisible);
+        }
+        finally
+        {
+            window.Close();
+            source.DisconnectCommand.Execute(null);
+        }
+    }
+
+    /// <summary>
+    /// The diagnostics block's re-walk action on a real catalog scan: when the
+    /// count claims more than the pages kept, the action runs the walk again (so
+    /// the transient short read gets a second chance) and the new report records
+    /// that page totals, not the count, steered it.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Dedup_reWalk_action_reruns_the_walk_with_page_totals()
+    {
+        using var server = new CatalogServer(index => index == 0
+            ? JsonSerializer.Serialize(new
+            {
+                items = new[]
+                {
+                    new { id = 11, fileName = "copy-a.jpg", hashCode = 4242, fileSize = 1024 },
+                    new { id = 12, fileName = "copy-b.jpg", hashCode = 4242, fileSize = 2048 },
+                },
+                totalCount = 2,
+            })
+            : "{}", countBody: _ => "{\"count\":5}");
+        var session = new Session();
+        session.Datasource.Type = "daminion";
+        var source = new Step1DatasourceViewModel(session)
+        {
+            DaminionUrl = server.BaseUrl,
+            DaminionUser = "test",
+            DaminionPass = "test",
+        };
+        await source.ConnectCommand.ExecuteAsync(null);
+        Assert.True(source.IsDaminionConnected, source.ConnectionMessage);
+
+        var vm = new StepDedupViewModel(step1: source);
+        var window = new Window { Content = new StepDedup { DataContext = vm }, Width = 1000, Height = 900 };
+        window.Show();
+        try
+        {
+            await vm.ScanCommand.ExecuteAsync(null);
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Equal(2, server.GetIndexes.Length); // page 0 and the empty page after it
+            Assert.True(vm.HasRetrievalMismatch);
+            Assert.Equal(5, vm.LastRetrieval!.ScopeCount);
+            Assert.Equal(2, vm.LastRetrieval.Kept);
+            Assert.True(vm.ReWalkUsingPageTotalsCommand.CanExecute(null));
+
+            await vm.ReWalkUsingPageTotalsCommand.ExecuteAsync(null);
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Equal(4, server.GetIndexes.Length); // the walk ran a second time
+            var report = Assert.IsType<CatalogRetrievalDiagnostics>(vm.LastRetrieval);
+            Assert.False(report.CountDrivesTotal);
+            Assert.Equal(5, report.ScopeCount); // the count is still reported for comparison
+            Assert.Equal(2, report.Kept);
+            Assert.Contains("followed the pages' total", vm.RetrievalComparisonText);
+
+            // The page-total mode is one-shot: a normal scan is back to the count.
+            await vm.ScanCommand.ExecuteAsync(null);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(vm.LastRetrieval!.CountDrivesTotal);
         }
         finally
         {
@@ -523,12 +804,13 @@ public sealed class DaminionSelectionBehaviorTests
     });
 
     /// <summary>A loopback catalog stub; selection results and page boundaries are deterministic.</summary>
-    private sealed class CatalogServer : IDisposable
+    internal sealed class CatalogServer : IDisposable
     {
         private readonly TcpListener _listener = new(IPAddress.Loopback, 0);
         private readonly CancellationTokenSource _stop = new();
         private readonly Func<int, string> _items;
         private readonly Func<int, string>? _collectionItems;
+        private readonly Func<string, string>? _countBody;
         private readonly ConcurrentQueue<int> _indexes = new();
         private readonly ConcurrentQueue<string> _routes = new();
         private readonly Action<int>? _thumbnailOverride;
@@ -537,11 +819,12 @@ public sealed class DaminionSelectionBehaviorTests
         public int[] GetIndexes => _indexes.ToArray();
 
         public CatalogServer(Func<int, string> items, Action<int>? thumbnailOverride = null,
-            Func<int, string>? collectionItems = null)
+            Func<int, string>? collectionItems = null, Func<string, string>? countBody = null)
         {
             _items = items;
             _thumbnailOverride = thumbnailOverride;
             _collectionItems = collectionItems;
+            _countBody = countBody;
             _listener.Start();
             BaseUrl = $"http://127.0.0.1:{((IPEndPoint)_listener.LocalEndpoint).Port}";
             _ = Task.Run(AcceptAsync);
@@ -588,6 +871,10 @@ public sealed class DaminionSelectionBehaviorTests
                     var index = ParseIndex(path);
                     _indexes.Enqueue(index);
                     body = _items(index);
+                }
+                else if (route == "/api/MediaItems/GetCount")
+                {
+                    body = _countBody?.Invoke(path) ?? "{}";
                 }
                 else if (route == "/api/SharedCollection/GetItems")
                 {

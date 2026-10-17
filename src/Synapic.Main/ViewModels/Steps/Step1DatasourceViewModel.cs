@@ -19,15 +19,23 @@ public partial class Step1DatasourceViewModel : ViewModelBase
 {
     private readonly Session _session;
     private readonly DaminionConnectionStore? _connectionStore;
+    private readonly AppSettingsRegistryStore? _appSettingsStore;
     private readonly Func<string, bool, CancellationToken, Task<int>> _countLocalImages;
 
+    /// <param name="appSettingsStore">
+    /// The registry store launch reads from. When given, every change that moves
+    /// the active source (tab, folder, subfolders) is written back, so the next
+    /// launch opens on the tab the user was actually working on.
+    /// </param>
     public Step1DatasourceViewModel(
         Session session,
         DaminionConnectionStore? connectionStore = null,
-        Func<string, bool, CancellationToken, Task<int>>? countLocalImages = null)
+        Func<string, bool, CancellationToken, Task<int>>? countLocalImages = null,
+        AppSettingsRegistryStore? appSettingsStore = null)
     {
         _session = session;
         _connectionStore = connectionStore;
+        _appSettingsStore = appSettingsStore;
         _countLocalImages = countLocalImages ?? ((folder, recursive, ct) =>
             Task.Run(() => WorkflowRunner.CountLocalImages(folder, recursive, ct), ct));
         // Hydration fills the form field by field; none of that may fire a
@@ -169,6 +177,9 @@ public partial class Step1DatasourceViewModel : ViewModelBase
         _session.Datasource.LocalPath = value;
         NotifySourceChanged();
         ScheduleCountRefresh();
+        // A partly typed path is not a stored source: save once it resolves (or
+        // when the box is cleared), so the next launch never reopens a typo.
+        if (string.IsNullOrWhiteSpace(value) || LocalFolderExists) SaveStoredSource();
     }
 
     partial void OnLocalRecursiveChanged(bool value)
@@ -176,6 +187,7 @@ public partial class Step1DatasourceViewModel : ViewModelBase
         _session.Datasource.LocalRecursive = value;
         NotifySourceChanged();
         ScheduleCountRefresh();
+        SaveStoredSource();
     }
 
     // ── Daminion connection ─────────────────────────────────────────────────
@@ -213,6 +225,7 @@ public partial class Step1DatasourceViewModel : ViewModelBase
     partial void OnDatasourceTypeChanged(string value)
     {
         _session.Datasource.Type = value;
+        SaveStoredSource();
         OnPropertyChanged(nameof(IsLocal));
         OnPropertyChanged(nameof(IsDaminion));
         OnPropertyChanged(nameof(IsLocalSelected));
@@ -240,6 +253,45 @@ public partial class Step1DatasourceViewModel : ViewModelBase
     {
         get => IsDaminion;
         set { if (value) DatasourceType = "daminion"; }
+    }
+
+    /// <summary>
+    /// Keep the active source in the registry store as it changes. Launch reads
+    /// the source from there (config.json is only a backup now), so a tab kept
+    /// only in the session would not survive a restart: a user who was connected
+    /// to a catalog would come back on the folder tab, and vice versa.
+    /// Redundant writes (hydration, or a set to the value already stored) are
+    /// skipped by the comparison, so opening the app writes nothing.
+    /// </summary>
+    private void SaveStoredSource()
+    {
+        if (_appSettingsStore is null) return;
+        try
+        {
+            var ds = _session.Datasource;
+            var state = _appSettingsStore.Load() ?? _appSettingsStore.Defaults;
+            if (state.DatasourceType == ds.Type
+                && state.LocalPath == ds.LocalPath
+                && state.LocalRecursive == ds.LocalRecursive)
+            {
+                return;
+            }
+
+            _appSettingsStore.Save(state with
+            {
+                DatasourceType = ds.Type,
+                LocalPath = ds.LocalPath,
+                LocalRecursive = ds.LocalRecursive,
+            });
+            SynapicLog.Info(nameof(Step1DatasourceViewModel),
+                $"Stored the active source ({ds.Type}" +
+                (string.IsNullOrWhiteSpace(ds.LocalPath) ? ")" : $": {ds.LocalPath})"));
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Warning(nameof(Step1DatasourceViewModel),
+                $"Failed to persist the active source: {e.Message}");
+        }
     }
 
     public DaminionApiClient? ConnectedClient { get; private set; }

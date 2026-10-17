@@ -83,6 +83,18 @@ are hashed:
 from the catalog's own hashes or downloaded for hashing.</li>
 <li>Read the summary: <span class="ui">1500 files scanned &mdash; 12 groups,
 18 duplicates</span>.</li>
+<li>On a catalog source the scan card also shows the walk's read-only retrieval
+numbers under the summary: <span class="ui">Counted</span> (the scope count),
+<span class="ui">Page total</span> (what the pages themselves said),
+<span class="ui">Pages</span>, <span class="ui">Raw scanned</span> and
+<span class="ui">Kept</span>. A count that disagrees with what was kept is
+called out there, so a short read is visible without opening the log; the
+page-level detail stays in <span class="path">logs\synapic.log</span>. On such
+a disagreement <span class="ui">Re-walk using page totals</span> runs the walk
+again with each page's own total steering the bar instead of the scope count
+&mdash; a second pass can clear a transient short read &mdash; and
+<span class="ui">Export report</span> writes these numbers and the comparison
+to a text file in Documents. Neither changes the catalog.</li>
 </ol>
 
 <h2>Algorithms and the threshold</h2>

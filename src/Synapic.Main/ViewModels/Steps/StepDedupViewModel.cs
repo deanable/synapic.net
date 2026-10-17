@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Text;
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -205,6 +206,7 @@ public partial class StepDedupViewModel : RunStateViewModel
     private readonly Step1DatasourceViewModel? _step1;
     private readonly AppSettingsRegistryStore? _appSettingsStore;
     private readonly DedupFingerprintCache? _fingerprintCache;
+    private readonly Func<string>? _retrievalReportPathProvider;
 
     /// <param name="dedup">Injectable dedup engine (tests).</param>
     /// <param name="step1">Step 1 provides the Daminion source (connection +
@@ -222,18 +224,23 @@ public partial class StepDedupViewModel : RunStateViewModel
     /// operation and source, and a new instance restores them so the review list
     /// and its threshold slider are live before anything is hashed again. Null =
     /// memory only (the standalone/test host). The shell passes the real store.</param>
+    /// <param name="retrievalReportPathProvider">Where "Export report" writes the
+    /// last walk's numbers. Null = a timestamped text file in Documents (tests
+    /// inject a temp path).</param>
     public StepDedupViewModel(
         IDedupService? dedup = null,
         Step1DatasourceViewModel? step1 = null,
         Func<string, Task<bool>>? confirm = null,
         AppSettingsRegistryStore? appSettingsStore = null,
         ImageMatchProfile profile = ImageMatchProfile.Duplicates,
-        DedupFingerprintCache? fingerprintCache = null)
+        DedupFingerprintCache? fingerprintCache = null,
+        Func<string>? retrievalReportPathProvider = null)
     {
         _dedup = dedup ?? new DedupService();
         _step1 = step1;
         _appSettingsStore = appSettingsStore;
         _fingerprintCache = fingerprintCache;
+        _retrievalReportPathProvider = retrievalReportPathProvider;
         Profile = profile;
         ConfirmAction = confirm;
         // Straight to the backing field: the generated setter persists, and a
@@ -491,6 +498,12 @@ public partial class StepDedupViewModel : RunStateViewModel
         OnPropertyChanged(nameof(Actions));
         OnPropertyChanged(nameof(DaminionScopeSummary));
         OnPropertyChanged(nameof(ScanSettingsSummary));
+        // The retrieval numbers are catalog-only: switching to a local source
+        // hides the block without discarding the last catalog walk's record.
+        OnPropertyChanged(nameof(HasRetrievalDiagnostics));
+        OnPropertyChanged(nameof(HasRetrievalMismatch));
+        ReWalkUsingPageTotalsCommand.NotifyCanExecuteChanged();
+        ExportRetrievalReportCommand.NotifyCanExecuteChanged();
         ScanCommand.NotifyCanExecuteChanged();
         ApplyCommand.NotifyCanExecuteChanged();
         // The other source may have a saved scan of its own.
@@ -554,6 +567,240 @@ public partial class StepDedupViewModel : RunStateViewModel
 
     [ObservableProperty]
     private string _scanSummary = "";
+
+    // ── Catalog retrieval diagnostics ───────────────────────────────────────
+
+    private CatalogRetrievalDiagnostics? _lastRetrieval;
+
+    /// <summary>One-shot mode for the re-walk action: ignore the scope count as
+    /// the walk's denominator and follow the pages' own total.</summary>
+    private bool _preferPageTotalForScan;
+
+    /// <summary>
+    /// The last whole-scope catalog walk's retrieval numbers, or null before one
+    /// has completed. Read-only: it reports what the walk did, it never steers
+    /// it. The view renders the numbers side by side so a count that disagrees
+    /// with the pages (or pages that disagree with what was kept) is visible
+    /// without opening the log file.
+    /// </summary>
+    public CatalogRetrievalDiagnostics? LastRetrieval => _lastRetrieval;
+
+    /// <summary>The diagnostics block is catalog-only and appears after a walk.</summary>
+    public bool HasRetrievalDiagnostics => IsDaminion && _lastRetrieval is not null;
+
+    /// <summary>Which scope the numbers describe, and when the walk finished.</summary>
+    public string RetrievalScopeText => _lastRetrieval is { } r
+        ? $"{DescribeRetrievalScope(r.Scope)} · {r.ReportedUtc.ToLocalTime():HH:mm:ss}"
+        : "";
+
+    public string RetrievalCountText => FormatRetrievalNumber(_lastRetrieval?.ScopeCount);
+
+    public string RetrievalPageTotalText => FormatRetrievalNumber(_lastRetrieval?.PageTotal);
+
+    public string RetrievalPagesText => FormatRetrievalNumber(_lastRetrieval?.Pages);
+
+    public string RetrievalScannedText => FormatRetrievalNumber(_lastRetrieval?.Scanned);
+
+    public string RetrievalKeptText => FormatRetrievalNumber(_lastRetrieval?.Kept);
+
+    /// <summary>
+    /// One sentence comparing the three totals. A count that differs from what
+    /// was kept is the retrieval problem the view exists to expose; for
+    /// collection/saved-search scopes a difference is expected, because those
+    /// pages are filtered on this side.
+    /// </summary>
+    public string RetrievalComparisonText
+    {
+        get
+        {
+            if (_lastRetrieval is not { } r) return "";
+            var parts = new List<string>();
+
+            if (r.ScopeCount is { } counted)
+            {
+                var difference = counted - r.Kept;
+                parts.Add(difference == 0
+                    ? $"Counted and kept agree at {counted:N0}."
+                    : $"Counted {counted:N0} vs {r.Kept:N0} kept " +
+                      $"({Math.Abs(difference):N0} {(difference > 0 ? "missing" : "extra")}).");
+            }
+
+            if (r.PageTotal is { } pageTotal && pageTotal != r.ScopeCount)
+                parts.Add($"The pages reported {pageTotal:N0}.");
+
+            if (!r.CountDrivesTotal && r.Scope is ("collection" or "saved_search"))
+                parts.Add("Those scopes are filtered locally, so a difference is expected.");
+            else if (!r.CountDrivesTotal && r.ScopeCount is not null)
+                parts.Add("This walk followed the pages' total instead of the count.");
+
+            return parts.Count > 0
+                ? string.Join(" ", parts)
+                : $"{r.Kept:N0} item(s) kept; the server reported no total.";
+        }
+    }
+
+    /// <summary>
+    /// Record the walk's one-shot diagnostics report. Internal so the view's
+    /// formatting and visibility can be tested without a server; the scan passes
+    /// a <see cref="Progress{T}"/> that lands here on the UI thread.
+    /// </summary>
+    internal void ApplyRetrievalDiagnostics(CatalogRetrievalDiagnostics diagnostics)
+    {
+        _lastRetrieval = diagnostics;
+        RetrievalActionMessage = "";
+        OnPropertyChanged(nameof(LastRetrieval));
+        OnPropertyChanged(nameof(HasRetrievalDiagnostics));
+        OnPropertyChanged(nameof(HasRetrievalMismatch));
+        OnPropertyChanged(nameof(RetrievalScopeText));
+        OnPropertyChanged(nameof(RetrievalCountText));
+        OnPropertyChanged(nameof(RetrievalPageTotalText));
+        OnPropertyChanged(nameof(RetrievalPagesText));
+        OnPropertyChanged(nameof(RetrievalScannedText));
+        OnPropertyChanged(nameof(RetrievalKeptText));
+        OnPropertyChanged(nameof(RetrievalComparisonText));
+        ReWalkUsingPageTotalsCommand.NotifyCanExecuteChanged();
+        ExportRetrievalReportCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>
+    /// True when the count and the kept items disagree on an all/keyword scope —
+    /// the case the re-walk action exists for. Collection and saved-search scopes
+    /// filter locally, so their difference is not a retrieval failure.
+    /// </summary>
+    public bool HasRetrievalMismatch =>
+        HasRetrievalDiagnostics &&
+        _lastRetrieval is { } r &&
+        r.ScopeCount is { } counted &&
+        counted != r.Kept &&
+        r.Scope is ("all" or "search");
+
+    /// <summary>A one-shot message after an action (re-walking, report written).</summary>
+    public string RetrievalActionMessage
+    {
+        get => _retrievalActionMessage;
+        private set
+        {
+            if (!SetProperty(ref _retrievalActionMessage, value)) return;
+            OnPropertyChanged(nameof(HasRetrievalActionMessage));
+        }
+    }
+
+    private string _retrievalActionMessage = "";
+
+    public bool HasRetrievalActionMessage => !string.IsNullOrWhiteSpace(RetrievalActionMessage);
+
+    /// <summary>The re-walk is a scan, so it needs a runnable source and no run in flight.</summary>
+    private bool CanReWalkUsingPageTotals() => HasRetrievalMismatch && CanScan();
+
+    /// <summary>
+    /// Re-run the catalog walk with the scope count ignored as the denominator:
+    /// the pages' own total steers the bar and the report. It is the diagnostic
+    /// response to "the count says more than the walk kept" — a transient page or
+    /// filter problem can disappear on a second pass, and the new numbers say so.
+    /// It reuses <see cref="ScanCommand"/> so the shared Stop cancels it.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanReWalkUsingPageTotals))]
+    private async Task ReWalkUsingPageTotalsAsync()
+    {
+        if (IsScanning) return;
+        const string message = "Re-walking with page totals…";
+        _preferPageTotalForScan = true;
+        RetrievalActionMessage = message;
+        try
+        {
+            await ScanCommand.ExecuteAsync(null);
+        }
+        finally
+        {
+            _preferPageTotalForScan = false;
+            // A completed walk replaced the message through its report; a
+            // cancelled/failed one must not leave "Re-walking…" on screen.
+            if (RetrievalActionMessage == message) RetrievalActionMessage = "";
+        }
+    }
+
+    /// <summary>Export is available whenever the block shows a completed walk.</summary>
+    private bool CanExportRetrievalReport() => HasRetrievalDiagnostics;
+
+    /// <summary>
+    /// Write the last walk's report beside the app's other exports: all the
+    /// numbers, which total the walk followed, the comparison sentence and where
+    /// the page-level detail lives. It never modifies the scan or the catalog.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanExportRetrievalReport))]
+    private async Task ExportRetrievalReportAsync()
+    {
+        if (_lastRetrieval is not { } report) return;
+        var path = (_retrievalReportPathProvider ?? DefaultRetrievalReportPath)();
+        try
+        {
+            var text = BuildRetrievalReport(
+                report, OperationTitle, RetrievalComparisonText, SynapicLog.LogFilePath);
+            await File.WriteAllTextAsync(path, text, Encoding.UTF8);
+            RetrievalActionMessage = $"Report written to {path}";
+            SynapicLog.Info(nameof(StepDedupViewModel), $"Retrieval report written to {path}");
+        }
+        catch (Exception e)
+        {
+            RetrievalActionMessage = $"Could not write the report: {e.Message}";
+            SynapicLog.Warning(nameof(StepDedupViewModel), RetrievalActionMessage);
+        }
+    }
+
+    private static string DefaultRetrievalReportPath()
+    {
+        var name = $"synapic_retrieval_{DateTime.Now:yyyyMMdd_HHmmss_fff}.txt";
+        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), name);
+    }
+
+    /// <summary>
+    /// The exported report. Internal so its fields can be asserted without
+    /// touching the user's Documents folder.
+    /// </summary>
+    internal static string BuildRetrievalReport(
+        CatalogRetrievalDiagnostics report,
+        string operationTitle,
+        string comparison,
+        string? logPath)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("Synapic retrieval report");
+        sb.AppendLine($"Operation: {operationTitle}");
+        sb.AppendLine($"Generated: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+        sb.AppendLine($"Scope: {DescribeRetrievalScope(report.Scope)} ({report.Scope})");
+        sb.AppendLine($"Walk finished (UTC): {report.ReportedUtc:yyyy-MM-dd'T'HH:mm:ss'Z'}");
+        sb.AppendLine($"Counted: {FormatReportNumber(report.ScopeCount)}");
+        sb.AppendLine($"Page total: {FormatReportNumber(report.PageTotal)}");
+        sb.AppendLine($"Pages: {report.Pages}");
+        sb.AppendLine($"Raw scanned: {report.Scanned:N0}");
+        sb.AppendLine($"Kept: {report.Kept:N0}");
+        sb.AppendLine($"Total followed: " +
+                      (report.CountDrivesTotal
+                          ? "scope count"
+                          : report.PageTotal is not null
+                              ? "page total"
+                              : "none reported"));
+        sb.AppendLine();
+        sb.AppendLine(comparison);
+        sb.AppendLine();
+        sb.AppendLine($"Full page-level detail: " +
+                      (string.IsNullOrWhiteSpace(logPath) ? "logs/synapic.log" : logPath));
+        return sb.ToString();
+    }
+
+    /// <summary>A report-friendly number: "unknown" reads better than the UI's dash.</summary>
+    private static string FormatReportNumber(int? value) => value is { } v ? v.ToString("N0") : "unknown";
+
+    private static string DescribeRetrievalScope(string scope) => scope switch
+    {
+        "all" => "entire catalog",
+        "search" => "keyword search",
+        "collection" => "collection",
+        "saved_search" => "saved search",
+        _ => scope,
+    };
+
+    private static string FormatRetrievalNumber(int? value) => value is { } v ? v.ToString("N0") : "—";
 
     /// <summary>
     /// The selectable fingerprints. Each maps to a real engine algorithm; a
@@ -1299,7 +1546,13 @@ public partial class StepDedupViewModel : RunStateViewModel
                 ? $"Fetching items from Daminion: {p.Scanned:N0} of {total:N0}…"
                 : $"Fetching items from Daminion: {p.Scanned:N0} so far…";
         });
-        var items = await WorkflowRunner.FetchEntireScopeAsync(ds, fetchProgress, ct);
+        // One report at the end of the walk, kept for the read-only diagnostics
+        // block: the count, the page total, the pages, the raw cursor and what
+        // was actually kept, all together. Progress<T> marshals it to the UI
+        // thread, like the per-page progress above.
+        var retrieval = new Progress<CatalogRetrievalDiagnostics>(ApplyRetrievalDiagnostics);
+        var items = await WorkflowRunner.FetchEntireScopeAsync(
+            ds, fetchProgress, ct, retrieval, ignoreScopeCount: _preferPageTotalForScan);
 
         // The walk is over; hashing owns the bar from here. Drop the fetch ETA —
         // it names the wrong phase, and its last value would otherwise sit there
@@ -1309,9 +1562,9 @@ public partial class StepDedupViewModel : RunStateViewModel
         ProgressText = $"Scanning {items.Count:N0} item(s)…";
         CurrentFile = "";
         EtaText = "";
-        var serverHashCount = items.Count(i => i.ServerHashCode != 0);
-        SynapicLog.Info(nameof(StepDedupViewModel),
-            $"{OperationTitle} fetch: {items.Count} item(s) in scope ({ScopeIdForLog()}) — " +
+        var serverHashCount = items.Count(i => i.ServerHashCode != 0);            SynapicLog.Info(nameof(StepDedupViewModel),
+                $"{OperationTitle} fetch: {items.Count} item(s) in scope ({ScopeIdForLog()})" +
+                (_preferPageTotalForScan ? " [re-walk: page totals steer the bar]" : "") + " — " +
             (serverHashCount > 0
                 ? $"{serverHashCount} carry a server hash (grouped without download), " +
                   $"{items.Count - serverHashCount} need a download to hash"
@@ -1904,6 +2157,8 @@ public partial class StepDedupViewModel : RunStateViewModel
         StopScanCommand.NotifyCanExecuteChanged();
         ApplyCommand.NotifyCanExecuteChanged();
         StopApplyCommand.NotifyCanExecuteChanged();
+        ReWalkUsingPageTotalsCommand.NotifyCanExecuteChanged();
+        ExportRetrievalReportCommand.NotifyCanExecuteChanged();
     }
 
     /// <summary>This mode's primary run is the scan (CONTEXT D-05).</summary>

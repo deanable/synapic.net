@@ -62,7 +62,10 @@ public partial class OperationShellViewModel : ViewModelBase
         AppSettingsRegistryStore? appSettingsStore = null,
         DedupFingerprintCache? dedupFingerprintCache = null)
     {
-        Source = new Step1DatasourceViewModel(session, connectionStore);
+        // The source step writes the active tab/folder back to the same store
+        // launch restores it from, so a restart opens on the source in use.
+        Source = new Step1DatasourceViewModel(
+            session, connectionStore, appSettingsStore: appSettingsStore);
         TagParameters = new Step2EngineViewModel(
             session, sidecar, engineStore, presetStore, computeAvailabilityProbe);
         TagRun = new Step3ProcessViewModel(session, sidecar, Source);

@@ -54,6 +54,80 @@
         <ProgressBar IsIndeterminate="True" Height="6" IsVisible="{Binding IsScanning}" />
         <TextBlock Text="{Binding ScanSummary}" Opacity="0.8" TextWrapping="Wrap"
                    IsVisible="{Binding ScanSummary}" />
+
+        <!-- Retrieval diagnostics for the last catalog walk: the count the
+             source panel shows, the total the pages themselves reported, the
+             pages read, the raw records scanned and the unique items kept —
+             side by side, so a mismatch is visible without opening
+             logs/synapic.log. The numbers themselves are read-only. The only
+             controls act on them: a re-walk that follows page totals when the
+             count and the kept items disagree, and an export of the report.
+             Both leave the catalog untouched. Appears only for a Daminion
+             source after a walk. -->
+        <Border x:Name="RetrievalDiagnostics"
+                IsVisible="{Binding HasRetrievalDiagnostics}"
+                BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
+                BorderThickness="1" CornerRadius="6" Padding="10,8"
+                ToolTip.Tip="What the last Daminion walk actually did: the scope count, the pages' own total, and how many items it kept. The numbers are read-only; the actions re-walk or export.">
+          <StackPanel Spacing="6">
+            <DockPanel>
+              <TextBlock DockPanel.Dock="Right" Classes="hint"
+                         Text="{Binding RetrievalScopeText}" />
+              <TextBlock Text="Catalog retrieval — last walk" FontSize="12"
+                         FontWeight="SemiBold" />
+            </DockPanel>
+            <WrapPanel>
+              <StackPanel MinWidth="92" Margin="0,0,20,4"
+                          ToolTip.Tip="The scope count shown for the connection — the same query the walk is steered by on all/keyword scopes.">
+                <TextBlock Classes="hint" Text="Counted" />
+                <TextBlock x:Name="RetrievalCountValue" FontSize="16" FontWeight="SemiBold"
+                           Text="{Binding RetrievalCountText}" />
+              </StackPanel>
+              <StackPanel MinWidth="92" Margin="0,0,20,4"
+                          ToolTip.Tip="The totalCount the catalog pages themselves reported (the last one seen).">
+                <TextBlock Classes="hint" Text="Page total" />
+                <TextBlock x:Name="RetrievalPageTotalValue" FontSize="16" FontWeight="SemiBold"
+                           Text="{Binding RetrievalPageTotalText}" />
+              </StackPanel>
+              <StackPanel MinWidth="92" Margin="0,0,20,4"
+                          ToolTip.Tip="Pages read (one page is at most 500 catalog records).">
+                <TextBlock Classes="hint" Text="Pages" />
+                <TextBlock x:Name="RetrievalPagesValue" FontSize="16" FontWeight="SemiBold"
+                           Text="{Binding RetrievalPagesText}" />
+              </StackPanel>
+              <StackPanel MinWidth="92" Margin="0,0,20,4"
+                          ToolTip.Tip="Raw records the cursor consumed, including records a client-side filter dropped.">
+                <TextBlock Classes="hint" Text="Raw scanned" />
+                <TextBlock x:Name="RetrievalScannedValue" FontSize="16" FontWeight="SemiBold"
+                           Text="{Binding RetrievalScannedText}" />
+              </StackPanel>
+              <StackPanel MinWidth="92" Margin="0,0,20,4"
+                          ToolTip.Tip="Unique eligible items the walk handed to the scan — what was actually kept.">
+                <TextBlock Classes="hint" Text="Kept" />
+                <TextBlock x:Name="RetrievalKeptValue" FontSize="16" FontWeight="SemiBold"
+                           Text="{Binding RetrievalKeptText}" />
+              </StackPanel>
+            </WrapPanel>
+            <TextBlock Classes="hint" Text="{Binding RetrievalComparisonText}" />
+            <WrapPanel>
+              <!-- Only when the count and the kept items disagree: this is a
+                   diagnostic second pass, not a normal scan path. -->
+              <Button x:Name="ReWalkUsingPageTotalsButton"
+                      Content="Re-walk using page totals"
+                      Command="{Binding ReWalkUsingPageTotalsCommand}"
+                      IsVisible="{Binding HasRetrievalMismatch}"
+                      Margin="0,0,8,4"
+                      ToolTip.Tip="Runs the catalog walk again and lets each page's total steer the progress bar instead of the scope count. The catalog is not changed." />
+              <Button x:Name="ExportRetrievalReportButton"
+                      Content="Export report"
+                      Command="{Binding ExportRetrievalReportCommand}"
+                      Margin="0,0,8,4"
+                      ToolTip.Tip="Writes this walk's numbers and comparison to a text file in Documents." />
+            </WrapPanel>
+            <TextBlock Classes="hint" Text="{Binding RetrievalActionMessage}"
+                       IsVisible="{Binding HasRetrievalActionMessage}" />
+          </StackPanel>
+        </Border>
       </StackPanel>
     </Border>
 

@@ -257,9 +257,10 @@ operation runs (one progress bar is shared by both).
 - `InitializeAsync` — the launch sequence `App` runs: reconnect when the stored
   source is Daminion (`ConnectCoreAsync`, shared with the Connect button), then
   count once.
-- `ApplyStoredSource` (on `DatasourceState`) restores the folder/type from
-  `config.json` at startup, so the processing views have a source before the
-  user touches anything.
+- `ApplyStoredSource` (on `DatasourceState`) restores the folder/type at
+  startup, so the processing views have a source before the user touches
+  anything. `App` feeds it from the registry store (`restored.ToDatasourceSettings()`),
+  not from `config.json`, which is now only a backup.
 - `ToSelectionForProcessing(client)` builds the orchestrator's
   `DatasourceSelection` (sharing the authenticated client).
 
@@ -267,6 +268,59 @@ Persistence: on a **successful** connect, every field is saved to
 `DaminionConnectionStore`; on construction the form is pre-filled from the
 store, and `InitializeAsync` reconnects to it once at launch (a failed login
 just leaves the form filled in).
+
+The *active source* is written back too, through `SaveStoredSource`
+(`AppSettingsRegistryStore`, fields `DatasourceType` / `LocalPath` /
+`LocalRecursive`): switching the radio buttons records which tab wins the next
+launch, and a folder path is recorded once it resolves (or is cleared), so a
+half-typed path never becomes the default. Redundant writes are skipped by
+comparing with the stored state. Wiring: `OperationShellViewModel` passes the
+store into `Step1DatasourceViewModel`. Because launch reads the source from the
+registry, a session that ended connected to a catalog reopens on Daminion (and
+is reconnected), and one that ended on a folder reopens on that folder.
+
+The Daminion retrieval path logs every query it sends and every answer it gets,
+because a total and a page set that disagree are otherwise impossible to
+diagnose from the UI. `GetFilteredItemCountAsync` logs `Count request:` (scope,
+ids, search/queryLine/operators) and `Count response:` (the raw `count`,
+`totalCount` and `data` fields and the effective value), plus the sanity-check
+and fallback probes. `GetItemsFilteredCoreAsync` logs one `Page <endpoint>:`
+line per request with its index, size, scope, saved search/collection id, search
+clauses and operators, and the response's raw/eligible/returned counts, its
+`totalCount` and the id range. The count and the pages deliberately build their
+status/untagged clauses from the same `BuildFilterClauses` (the documented
+text values `flag:approved` / `flag:rejected` / `flag:unassigned`), so the number
+shown for a scope and the pages walked for it come from one query; an
+unfiltered scope sends no `search` at all (not a literal `*`).
+`WorkflowRunner.FetchItemsCoreAsync` logs the whole walk's parameters, takes the
+dedup/similar denominator from `GetFilteredItemCountAsync` for `all`/`search`
+scopes when it succeeds (falling back to the page's `totalCount`; collection and
+saved-search pages keep the page total, because their raw cursor and a locally
+filtered count are not on the same scale), and warns when a page's total
+contradicts it or when a server-filtered walk returns fewer items than the
+scope count — the two symptoms of the old "500 of 47,851" progress bar.
+`FetchEntireScopeAsync` also takes an optional one-shot
+`CatalogRetrievalDiagnostics` sink. At the end of a whole-scope walk it reports
+the scope count, the last page total, the pages read, the raw records scanned
+and the unique items kept in one record (including for an empty scope, which
+produces no page progress at all) and logs a `Daminion retrieval diagnostics:`
+line. The dedup/similar scan card keeps the last report and renders it as a
+diagnostics block — `HasRetrievalDiagnostics`, `RetrievalCountText`,
+`RetrievalPageTotalText`, `RetrievalPagesText`, `RetrievalScannedText`,
+`RetrievalKeptText` and `RetrievalComparisonText` — so a count/page/kept
+mismatch is visible without opening the log. The numbers themselves are
+read-only; two non-destructive actions sit under them. When
+`HasRetrievalMismatch` (a count-vs-kept disagreement on an all/keyword scope),
+`ReWalkUsingPageTotalsCommand` runs the scan again through the normal
+`ScanCommand` with `ignoreScopeCount: true`: the scope count is still reported
+but no longer steers the walk, so each page's `totalCount` does. The mode is
+one-shot, and a normal scan is back on the count. `ExportRetrievalReportCommand`
+writes a text report (operation, scope, count, page total, pages, raw scanned,
+kept, which total was followed, the comparison and the log path) to a
+timestamped file in Documents, with the result in `RetrievalActionMessage`.
+Neither action changes the catalog. The block is catalog-only;
+collection/saved-search differences are labelled as the expected result of
+client-side filtering and do not offer the re-walk.
 
 ### `Steps/Step2EngineViewModel`
 - Local model picker (`LocalModels` from `/models/list`, `SelectedModel`,
@@ -343,7 +397,18 @@ each original, hashing it, and deleting the temp file. Both phases drive the
 shared `RunStateViewModel` bar — `ApplyCatalogFetchProgress` for the walk
 (records/page/ETA) and `ApplyProgress` for hashing — so a dedup run no longer
 leaves the bar idle while it works, and a cancelled scan clears the estimate.
-The Server
+The card also carries the last walk's **retrieval diagnostics**
+(`LastRetrieval`, `HasRetrievalDiagnostics`, and the `Retrieval*Text`
+properties): the scope count, the pages' own total, pages, raw records and
+kept items side by side, plus a sentence that spells out a mismatch. On a
+count-vs-kept disagreement `HasRetrievalMismatch` exposes
+`ReWalkUsingPageTotalsCommand`, which re-runs the normal scan with the count
+ignored as the denominator (one-shot; the shared Stop still cancels it), and
+`ExportRetrievalReportCommand` always writes the last report to a timestamped
+text file in Documents (`BuildRetrievalReport`; path injectable for tests). It
+is shown only for a Daminion source and after a walk; the numbers are not
+editable and neither action touches the catalog. The
+Server
 hash picker (Daminion only) decides how those server hashes are compared —
 Exact (identical values only, the default) or Hamming at the threshold. Produces 
 `Groups` — a vertical list of
@@ -607,15 +672,20 @@ fetching, throttling, pause/cancel, progress with ETA, error isolation and the
     `ProcessAll` is set, which ignores both the `MaxItems` ceiling and partial
     pages and keeps requesting until the server returns nothing, guarded by an
     identical-raw-page-id infinite-loop check.
-- `FetchEntireScopeAsync(ds, progress, ct)` (static) — the same walk with the
-  ceiling and the paginate switch forced off, for operations that are only
-  correct over the complete set. Deduplication and Similar images must use
-  this: Step 1's `MaxItems` ceiling defaults to 100 and the catalog API answers
-  at most 500 records per call, so inheriting the tagging ceiling silently
-  compared the first 100 items. Reports `CatalogFetchProgress(Kept, Scanned,
-  Pages, Total)` after every page — `Scanned` is the raw cursor (the metric the
-  server's total is comparable with), `Kept` the eligible subset, `Pages` the
-  completed 500-record pages — and logs each boundary. The scan renders the
+- `FetchEntireScopeAsync(ds, progress, ct, diagnostics)` (static) — the same
+  walk with the ceiling and the paginate switch forced off, for operations
+  that are only correct over the complete set. Deduplication and Similar images
+  must use this: Step 1's `MaxItems` ceiling defaults to 100 and the catalog
+  API answers at most 500 records per call, so inheriting the tagging ceiling
+  silently compared the first 100 items. Reports
+  `CatalogFetchProgress(Kept, Scanned, Pages, Total)` after every page —
+  `Scanned` is the raw cursor (the metric the server's total is comparable
+  with), `Kept` the eligible subset, `Pages` the completed 500-record pages —
+  and logs each boundary. The optional `IProgress<CatalogRetrievalDiagnostics>`
+  reports the whole walk once at the end (count, last page total, pages,
+  scanned, kept) for the scan card's diagnostics block; `ignoreScopeCount`
+  keeps that count in the report but lets the pages' totals steer the walk
+  (the re-walk action's diagnostic mode). The scan renders the
   walk on the shared run bar as `Fetching catalog: 1,500/47,851 items` plus
   `ETA … per page`, using `EstimateCatalogFetchProgress(elapsed, pages, scanned,
   total)`: average page cost so far × pages the scope total still implies, with

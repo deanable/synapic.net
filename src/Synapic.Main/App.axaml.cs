@@ -120,11 +120,10 @@ public partial class App : Application
                     DefaultConfidenceThreshold = restored.DefaultConfidenceThreshold,
                     DefaultMaxItems = restored.DefaultMaxItems,
                 },
-                Datasource = new DatasourceSettings
-                {
-                    LocalPath = restored.LocalPath,
-                    LocalRecursive = restored.LocalRecursive,
-                },
+                // Which source was active comes back with the rest of the
+                // settings: a session last used on a Daminion server must open
+                // on the catalog (and be reconnected), not on the folder tab.
+                Datasource = restored.ToDatasourceSettings(),
                 Processing = new ProcessingSettings
                 {
                     ResizeScale = restored.ResizeScale,
@@ -144,9 +143,11 @@ public partial class App : Application
         // every durable setting has one store type behind it.
         services.AddSingleton(appSettingsStore);
         // The start screen owns the source, and the record count runs on launch,
-        // so the stored source comes back with the session: the folder and the
-        // source type from config.json, the Daminion connection from the registry
-        // (password included, DPAPI-protected).
+        // so the stored source comes back with the session: which tab was active
+        // and the folder, both from the registry store, and the Daminion
+        // connection from its own key (password included, DPAPI-protected).
+        // Without this a restart always landed on the folder tab, even for a
+        // user who had closed the app connected to a catalog.
         var session = new Session();
         session.Datasource.ApplyStoredSource(config.Datasource);
         services.AddSingleton(session);

@@ -102,7 +102,8 @@ the data source to defaults.</p>
 <h3>App settings &mdash; <code>HKCU\Software\Synapic\AppData</code></h3>
 
 <p>Everything else the app remembers: appearance and logging, what a new session
-starts from, the local folder the source kept, the processing limits, and the
+starts from, which source the app opens on (and the local folder it kept), the
+processing limits, and the
 rules of the three processing operations &mdash;
 <a href="dedup.html">Deduplication</a>,
 <a href="similar.html">Similar images</a> and
@@ -118,7 +119,7 @@ then on the registry is what the forms read and write.</p>
 <tr><th class="setting">Values</th><th>Meaning</th></tr>
 <tr><td><code>Theme</code>, <code>LogLevel</code>, <code>ShowDiagnostics</code>, <code>TelemetryEnabled</code>, <code>AutoLaunchSidecar</code>, <code>AutoInstallSidecar</code></td><td>Appearance, logging and first-run behaviour, from the <span class="ui">App</span> tab.</td></tr>
 <tr><td><code>DefaultDevice</code>, <code>DefaultConfidenceThreshold</code>, <code>DefaultMaxItems</code></td><td>What a new session starts from.</td></tr>
-<tr><td><code>LocalPath</code>, <code>LocalRecursive</code></td><td>The local folder the source remembers. The Daminion half of the source is the key above.</td></tr>
+<tr><td><code>DatasourceType</code>, <code>LocalPath</code>, <code>LocalRecursive</code></td><td>Which source the next launch opens on &mdash; <code>local</code> or <code>daminion</code> &mdash; and the local folder it remembers (with the subfolders switch). The Daminion half of the source, connection and scope included, is the key above; <code>DatasourceType=daminion</code> is what makes the launch reconnect to it.</td></tr>
 <tr><td><code>MaxItems</code>, <code>ProcessAll</code>, <code>ResizeScale</code>, <code>UseThumbnailOverride</code></td><td>The processing limits on the <span class="ui">Connection</span> tab.</td></tr>
 <tr><td><code>DedupAlgorithm</code>, <code>DedupThreshold</code>, <code>DedupServerHashMatch</code>, <code>DedupSelectOldest</code>, <code>DedupSelectNewest</code>, <code>DedupSelectSmallest</code>, <code>DedupSelectLargest</code>, <code>DedupSelectedAction</code>, <code>DedupMoveDestination</code></td><td>The <span class="ui">Dedup</span> tab: the algorithm, the threshold (<code>0.90</code> for the default PHash, with a tighter starting value for DHash or AHash), the server-hash rule, the four keep-set switches, the selected action and the move destination.</td></tr>
 <tr><td><code>SimilarAlgorithm</code>, <code>SimilarThreshold</code>, <code>SimilarServerHashMatch</code>, <code>SimilarSelectOldest</code>, <code>SimilarSelectNewest</code>, <code>SimilarSelectSmallest</code>, <code>SimilarSelectLargest</code>, <code>SimilarSelectedAction</code>, <code>SimilarMoveDestination</code></td><td>The <span class="ui">Similar</span> tab: the same nine settings for the similarity search, with its own threshold (<code>0.85</code> for the default PHash, tighter for DHash or AHash). They are separate values on purpose &mdash; widening one search never widens the other. See <a href="similar.html">Similar images</a>.</td></tr>

@@ -519,26 +519,47 @@ public sealed class DaminionApiClient
             // caller walking a large catalog can say "1,500 of 47,851".
             int? totalCount = null;
             // The server applies the filters to the "all" and "search" queries, so
-            // their raw page is already eligible. Collection and saved-search pages
-            // come back raw, and Synapic applies the status/untagged filters itself
-            // — the eligible subset can therefore be smaller than the server page.
+            // their raw page is already eligible. Collection pages come back raw,
+            // and Synapic applies the status/untagged filters itself — the eligible
+            // subset can therefore be smaller than the server page. Saved searches
+            // get the same text clauses as `search` (so the server and the count
+            // agree) but keep the local pass as a safety net for builds that ignore
+            // them on a structured query.
             var filtersLocally = false;
+
+            // Exactly what this request asked for, so the log line pairs a page
+            // with its query. The walk's "total" and the source panel's count are
+            // both only as trustworthy as knowing which query produced them.
+            var endpoint = "MediaItems/Get";
+            string? requestSearch = null;
+            string? requestQueryLine = null;
+            string[]? requestOperators = null;
+
+            async Task<DaminionItemsResponse> GetMediaItemsAsync(
+                string? search, string? queryLine, string[]? f)
+                => await api.GetItems(
+                    startIndex, batch, f: f, search: search, queryLine: queryLine,
+                    maxItemsCount: 100000, ct: ct).ConfigureAwait(false);
 
             switch (scope)
             {
-                case "search" when !string.IsNullOrWhiteSpace(searchTerm):
-                {
-                    var query = QuoteSearchTerm(searchTerm!);
-                    if (filters.Length > 0) query += " " + string.Join(" ", filters);
-                    var response = await api.GetItems(startIndex, batch, f: null, search: query, maxItemsCount: 100000, ct: ct).ConfigureAwait(false);
-                    rawPage = response.EffectiveItems;
-                    totalCount = response.TotalCount;
-                    break;
-                }
+                case "search" when string.IsNullOrWhiteSpace(searchTerm):
+                    // An empty keyword box selects the whole (filtered) catalog in
+                    // the source panel's count; the walk must read the same set
+                    // instead of failing on a scope that has nothing to search for.
+                    goto case "all";
+                case "search":
+                    requestSearch = filters.Length > 0
+                        ? $"{QuoteSearchTerm(searchTerm!)} {string.Join(" ", filters)}"
+                        : QuoteSearchTerm(searchTerm!);
+                    goto case "all";
                 case "all":
                 {
-                    var query = filters.Length > 0 ? string.Join(" ", filters) : "*";
-                    var response = await api.GetItems(startIndex, batch, f: null, search: query, maxItemsCount: 100000, ct: ct).ConfigureAwait(false);
+                    // No clauses means no search filter at all; a literal '*' is
+                    // not documented as "everything" and would make the page (and
+                    // its totalCount) depend on a wildcard the server may not honour.
+                    requestSearch ??= filters.Length > 0 ? string.Join(" ", filters) : null;
+                    var response = await GetMediaItemsAsync(requestSearch, null, null);
                     rawPage = response.EffectiveItems;
                     totalCount = response.TotalCount;
                     break;
@@ -547,7 +568,10 @@ public sealed class DaminionApiClient
                 {
                     // Python parity: /api/SharedCollection/GetItems?id=… —
                     // the /api/Collections/GetItems/{id} variant 404s on
-                    // server 11.0.0.3906 (damserver.local).
+                    // server 11.0.0.3906 (damserver.local). The endpoint takes no
+                    // filter parameters, so this page is filtered on this side;
+                    // its totalCount is the collection's raw total.
+                    endpoint = "SharedCollection/GetItems";
                     var response = await api.GetSharedCollectionItems(collectionId.Value, startIndex, batch, ct).ConfigureAwait(false);
                     rawPage = response.EffectiveItems;
                     totalCount = response.TotalCount;
@@ -558,9 +582,14 @@ public sealed class DaminionApiClient
                 {
                     // Structured query: "tagId,valueId" + "tagId,any" operators,
                     // mirroring the original saved-search lookup ("Saved Searches" tag).
+                    // The status/untagged text clauses ride along in `search` so the
+                    // server narrows the page the same way the count does; the local
+                    // filter below stays as a safety net for builds that ignore it.
                     var tagId = await GetTagIdAsync("saved searches", fallback: SavedSearchesTagFallbackId, ct).ConfigureAwait(false);
-                    var f = new[] { $"{tagId},any" };
-                    var response = await api.GetItems(startIndex, batch, f: f, queryLine: $"{tagId},{savedSearchId}", maxItemsCount: 100000, ct: ct).ConfigureAwait(false);
+                    requestSearch = filters.Length > 0 ? string.Join(" ", filters) : null;
+                    requestOperators = new[] { $"{tagId},any" };
+                    requestQueryLine = $"{tagId},{savedSearchId}";
+                    var response = await GetMediaItemsAsync(requestSearch, requestQueryLine, requestOperators);
                     rawPage = response.EffectiveItems;
                     totalCount = response.TotalCount;
                     filtersLocally = true;
@@ -577,6 +606,21 @@ public sealed class DaminionApiClient
             // maxItems caps the eligible subset this call returns, never the page
             // the server was asked for: the caller still advances by RawCount.
             var items = maxItems > 0 ? eligible.Take(maxItems).ToArray() : eligible;
+
+            // One line per page request: the query, the page's size and the
+            // server's total. A wrong "N of M" or a missing page is diagnosed
+            // from this line and the matching [count] line, not guessed from
+            // the UI.
+            SynapicLog.Info(nameof(DaminionApiClient),
+                $"Page {endpoint}: index={startIndex} size={batch} scope={scope}" +
+                (savedSearchId is { } ss ? $" savedSearch={ss}" : "") +
+                (collectionId is { } coll ? $" collection={coll}" : "") +
+                $" search='{requestSearch}' queryLine='{requestQueryLine}' " +
+                $"f=[{string.Join(",", requestOperators ?? Array.Empty<string>())}]" +
+                $" -> raw={rawPage.Length} eligible={eligible.Length} returned={items.Length} " +
+                $"totalCount={(totalCount?.ToString() ?? "none")}" +
+                (rawPage.Length > 0 ? $" ids={rawPage[0].Id}..{rawPage[^1].Id}" : ""));
+
             return new DaminionItemPage(items, rawPage, totalCount);
         }
         catch (DaminionException)
@@ -594,14 +638,23 @@ public sealed class DaminionApiClient
         }
     }
 
+    /// <summary>
+    /// The text clauses the fetch sends as its <c>search</c> query, and the same
+    /// clauses <see cref="GetFilteredItemCountAsync"/> counts with — the two
+    /// numbers a user compares ("counted N, walked M") have to be produced by
+    /// the same query, or the discrepancy is in the client, not the catalog.
+    /// Flag values are the tag's documented text representations
+    /// ("Approved"/"Rejected"/"Unassigned"), not the structured value ids: a
+    /// count built from one representation and pages from another cannot agree.
+    /// </summary>
     private static string[] BuildFilterClauses(string statusFilter, string[]? untaggedFields)
     {
         var parts = new List<string>();
         switch ((statusFilter ?? "all").ToLowerInvariant())
         {
-            case "approved": parts.Add("flag:flagged"); break;
+            case "approved": parts.Add("flag:approved"); break;
             case "rejected": parts.Add("flag:rejected"); break;
-            case "unassigned": parts.Add("flag:unflagged"); break;
+            case "unassigned": parts.Add("flag:unassigned"); break;
         }
         foreach (var field in untaggedFields ?? Array.Empty<string>())
         {
@@ -866,13 +919,15 @@ public sealed class DaminionApiClient
     /// Returns -1 on failure (Python parity — callers must not treat it as a real count).
     /// </summary>
     /// <remarks>
-    /// Mirrors the original's structure: status filters become structured
-    /// flag-tag clauses (approved=2, rejected=3, unassigned=1 — NOT the
-    /// flag:flagged text queries the /tag fetch path uses); untagged fields
-    /// and the search term form a text query; collection scope resolves the
-    /// "shared collections" tag (fallback 46); a count that equals the whole
-    /// catalog despite active filters is re-derived from a 1-item search; a
-    /// zero text-search count falls back to the keyword value id.
+    /// The status, untagged and search conditions are the same text clauses the
+    /// item fetch sends (<see cref="BuildFilterClauses"/>), so the number shown
+    /// for a scope and the pages that scope is walked with are produced by one
+    /// query — a count built from different clauses reports a total the walk
+    /// can never match. Collection scope resolves the "shared collections" tag
+    /// (fallback 46); a count that equals the whole catalog despite active
+    /// filters is re-derived from a 1-item search; a zero text-search count
+    /// falls back to the keyword value id. Every request and response is logged
+    /// so a mismatch can be traced to the exact query.
     /// </remarks>
     public async Task<int> GetFilteredItemCountAsync(
         string scope = "all",
@@ -890,28 +945,9 @@ public sealed class DaminionApiClient
             var fParts = new List<string>();
             var searchParts = new List<string>();
 
-            // Status filter via the flag tag (structured query; Python parity).
-            var sf = (statusFilter ?? "all").ToLowerInvariant();
-            if (sf != "all")
-            {
-                var flagTagId = await GetTagIdAsync("flag", fallback: 41, ct).ConfigureAwait(false);
-                var flagValue = sf switch
-                {
-                    "approved" => 2,
-                    "rejected" => 3,
-                    "unassigned" => 1,
-                    _ => (int?)null,
-                };
-                if (flagValue is { } fv)
-                {
-                    qParts.Add($"{flagTagId},{fv}");
-                    fParts.Add($"{flagTagId},any");
-                }
-            }
-
-            // Untagged fields: text-based 'Tag:none' clauses.
-            foreach (var field in untaggedFields ?? Array.Empty<string>())
-                searchParts.Add($"{NormalizeUntaggedField(field)}:none");
+            // Status + untagged fields: the same text clauses the page fetch
+            // sends, so the count and the walk describe one query.
+            searchParts.AddRange(BuildFilterClauses(statusFilter, untaggedFields));
 
             // Keyword search term (quoted phrase).
             if (scope == "search" && !string.IsNullOrWhiteSpace(searchTerm))
@@ -936,12 +972,23 @@ public sealed class DaminionApiClient
             var queryLine = qParts.Count > 0 ? string.Join(";", qParts) : null;
             var operators = fParts.Count > 0 ? string.Join(";", fParts) : null;
 
-            var count = (await GetApi().GetCount(
+            SynapicLog.Info(nameof(DaminionApiClient),
+                $"Count request: scope={scope}" +
+                (savedSearchId is { } ss ? $" savedSearch={ss}" : "") +
+                (collectionId is { } coll ? $" collection={coll}" : "") +
+                $" search='{combinedSearch}' queryLine='{queryLine}' f='{operators}'");
+
+            var countResponse = await GetApi().GetCount(
                 search: combinedSearch,
                 queryLine: queryLine,
                 f: operators,
                 force: "false",
-                ct: ct).ConfigureAwait(false)).EffectiveCount;
+                ct: ct).ConfigureAwait(false);
+            var count = countResponse.EffectiveCount;
+            SynapicLog.Info(nameof(DaminionApiClient),
+                $"Count response: count={countResponse.Count?.ToString() ?? "none"} " +
+                $"totalCount={countResponse.TotalCount?.ToString() ?? "none"} " +
+                $"data={countResponse.Data?.ToString() ?? "none"} -> {count} (scope={scope})");
 
             // Sanity check (Python parity): a count that matches the whole
             // catalog size despite active filters/scope is suspect — re-derive
@@ -949,19 +996,29 @@ public sealed class DaminionApiClient
             // accurately (up to maxItemsCount).
             if ((combinedSearch is not null || queryLine is not null) && count > 0)
             {
-                var totalCatalog = (await GetApi().GetCount(ct: ct).ConfigureAwait(false)).EffectiveCount;
+                var catalogResponse = await GetApi().GetCount(ct: ct).ConfigureAwait(false);
+                var totalCatalog = catalogResponse.EffectiveCount;
+                SynapicLog.Info(nameof(DaminionApiClient),
+                    $"Count sanity check: filtered={count} catalog={totalCatalog} " +
+                    $"(count={catalogResponse.Count?.ToString() ?? "none"}, " +
+                    $"totalCount={catalogResponse.TotalCount?.ToString() ?? "none"}, " +
+                    $"data={catalogResponse.Data?.ToString() ?? "none"})");
                 if (count >= totalCatalog)
                 {
                     SynapicLog.Warning(nameof(DaminionApiClient),
                         $"Count {count} matches total catalog size despite filters — falling back to a 1-item search");
-                    count = (await GetApi().GetItems(
+                    var probe = await GetApi().GetItems(
                         index: 0,
                         size: 1,
                         f: ParseQueryOperators(operators),
                         search: combinedSearch,
                         queryLine: queryLine,
                         maxItemsCount: 100000,
-                        ct: ct).ConfigureAwait(false)).TotalCount ?? 0;
+                        ct: ct).ConfigureAwait(false);
+                    count = probe.TotalCount ?? 0;
+                    SynapicLog.Info(nameof(DaminionApiClient),
+                        $"Count fallback (1-item search): totalCount={probe.TotalCount?.ToString() ?? "none"} " +
+                        $"items={probe.EffectiveItems.Length} -> {count}");
                 }
             }
 
@@ -985,7 +1042,8 @@ public sealed class DaminionApiClient
             }
 
             SynapicLog.Info(nameof(DaminionApiClient),
-                $"Item count: {count} | scope: {scope} | query: '{combinedSearch}' | queryLine: '{queryLine}'");
+                $"Item count: {count} | scope: {scope} | query: '{combinedSearch}' " +
+                $"| queryLine: '{queryLine}' | f: '{operators}'");
             return count;
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)

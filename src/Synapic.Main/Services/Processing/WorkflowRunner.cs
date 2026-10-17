@@ -79,6 +79,31 @@ public sealed record WorkflowRunSummary(int Total, int Processed, int Succeeded,
 public readonly record struct CatalogFetchProgress(int Kept, int Scanned, int Pages, int? Total);
 
 /// <summary>
+/// One whole-scope catalog walk's retrieval numbers, reported together when the
+/// walk ends so they can be read side by side. <see cref="ScopeCount"/> is the
+/// count the source panel shows, <see cref="PageTotal"/> the total the pages
+/// themselves reported (the last one seen), <see cref="Pages"/> how many pages
+/// were read, <see cref="Scanned"/> how many raw records the cursor consumed and
+/// <see cref="Kept"/> how many unique eligible items were collected. Collection
+/// and saved-search walks are filtered client-side, so their count and page
+/// total describe different sets; <see cref="CountDrivesTotal"/> says whether the
+/// walk was steered by the count (all/keyword scopes) or by the page total.
+/// </summary>
+/// <param name="ScopeCount">The scope count, or null when the count request
+/// failed (the client's -1 sentinel).</param>
+/// <param name="PageTotal">The last page's reported total, or null when no page
+/// reported one.</param>
+public sealed record CatalogRetrievalDiagnostics(
+    string Scope,
+    int? ScopeCount,
+    int? PageTotal,
+    int Pages,
+    int Scanned,
+    int Kept,
+    bool CountDrivesTotal,
+    DateTime ReportedUtc);
+
+/// <summary>
 /// The shared batch kernel behind every route of the app. Tagging,
 /// deduplication and upscaling differ only in their
 /// <see cref="WorkflowDefinition"/> and <see cref="IWorkflowItemHandler"/>;
@@ -154,17 +179,31 @@ public sealed class WorkflowRunner
     /// which is what <paramref name="progress"/> is for: it reports the running
     /// item count (and the server's total when it reports one) after every page.
     /// </remarks>
+    /// <param name="diagnostics">Optional one-shot report when the walk ends,
+    /// carrying the count, the page total, the pages walked, the raw records
+    /// scanned and the items kept. Reported even when the scope is empty (zero
+    /// pages), so a "counted 0 / kept 0" result is still visible.</param>
+    /// <param name="ignoreScopeCount">Diagnostic re-walk mode: still ask for the
+    /// scope count (so the report can show it) but do not use it as the walk's
+    /// denominator — follow each page's own total instead. The retrieved items
+    /// are unaffected; the progress bar and the report's `CountDrivesTotal` say
+    /// which total was followed.</param>
     public static async Task<IReadOnlyList<ProcessWorkItem>> FetchEntireScopeAsync(
         DatasourceSelection ds,
         IProgress<CatalogFetchProgress>? progress = null,
-        CancellationToken ct = default)
-        => await FetchItemsCoreAsync(ds, entireScope: true, progress, ct).ConfigureAwait(false);
+        CancellationToken ct = default,
+        IProgress<CatalogRetrievalDiagnostics>? diagnostics = null,
+        bool ignoreScopeCount = false)
+        => await FetchItemsCoreAsync(ds, entireScope: true, progress, ct, diagnostics, ignoreScopeCount)
+            .ConfigureAwait(false);
 
     private static async Task<IReadOnlyList<ProcessWorkItem>> FetchItemsCoreAsync(
         DatasourceSelection ds,
         bool entireScope,
         IProgress<CatalogFetchProgress>? progress,
-        CancellationToken ct)
+        CancellationToken ct,
+        IProgress<CatalogRetrievalDiagnostics>? diagnostics = null,
+        bool ignoreScopeCount = false)
     {
         var items = new List<ProcessWorkItem>();
 
@@ -184,6 +223,56 @@ public sealed class WorkflowRunner
         }
 
         var client = ds.DaminionClient ?? throw new InvalidOperationException("Daminion client not connected");
+        // One line naming the scope and filters every page below belongs to, so
+        // the paged queries in the log can be matched to the operation that ran
+        // them (dedup/similar/tagging all share this walk).
+        SynapicLog.Info(nameof(WorkflowRunner),
+            $"Daminion fetch: scope={ds.Scope}" +
+            (ds.SavedSearchId is { } ss ? $" savedSearch={ss}" : "") +
+            (ds.CollectionId is { } coll ? $" collection={coll}" : "") +
+            $" status={ds.StatusFilter} untagged=[{string.Join(",", ds.UntaggedFields ?? Array.Empty<string>())}]" +
+            (string.IsNullOrWhiteSpace(ds.SearchTerm) ? "" : $" term='{ds.SearchTerm}'") +
+            $" maxItems={ds.MaxItems} processAll={ds.ProcessAll} autoPaginate={ds.AutoPaginate} " +
+            $"entireScope={entireScope}");
+
+        // A whole-scope walk over an all/keyword scope takes its denominator from
+        // the same count query the source panel shows. The per-page totalCount is
+        // not always that number: some builds report the raw catalog size there
+        // even when the page itself was filtered, which is exactly how
+        // "500 of 47,851" appears for a scope of 1,500. A failed count (<= 0)
+        // falls back to the page's totalCount. Collection and saved-search walks
+        // keep the page's total instead: those pages can include raw records the
+        // client-side filters drop, so the raw cursor and a filtered count would
+        // not be on the same scale.
+        //
+        // The count is still requested for collection/saved-search scopes when a
+        // diagnostics sink is attached: nothing steers the walk by it, but the
+        // diagnostics view is where "counted N / pages say M / kept K" is meant
+        // to be readable, and without the call it would show a blank column.
+        int? countedTotal = null;
+        int? scopeCount = null;
+        var countDrivesTotal = !ignoreScopeCount && ds.Scope is ("all" or "search");
+        if (entireScope && (countDrivesTotal || diagnostics is not null))
+        {
+            var counted = await client.GetFilteredItemCountAsync(
+                scope: ds.Scope,
+                savedSearchId: ds.SavedSearchId,
+                collectionId: ds.CollectionId,
+                searchTerm: ds.SearchTerm,
+                untaggedFields: ds.UntaggedFields,
+                statusFilter: ds.StatusFilter,
+                ct: ct).ConfigureAwait(false);
+            if (counted >= 0) scopeCount = counted;
+            if (countDrivesTotal && counted > 0) countedTotal = counted;
+            SynapicLog.Info(nameof(WorkflowRunner),
+                $"Daminion scope count: {counted}" +
+                (countedTotal is not null
+                    ? " (walk denominator)"
+                    : countDrivesTotal
+                        ? " (walk falls back to each page's totalCount)"
+                        : " (diagnostic only; the walk follows the page totalCount)"));
+        }
+
         var startIndex = 0;
         // "Process all" (or a zero/negative max) lifts the ceiling entirely: the
         // only stopping condition is an empty page from the server. A whole-scope
@@ -197,6 +286,11 @@ public sealed class WorkflowRunner
         // work item per catalog record.
         var seenIds = new HashSet<int>();
         var pagesWalked = 0;
+        int? scopeTotal = countedTotal;
+        // The last total a page itself reported — kept for diagnostics even when
+        // the count is the walk's denominator, because the disagreement between
+        // the two is the thing the read-only view exists to show.
+        int? lastPageTotal = null;
 
         while (items.Count < limit)
         {
@@ -214,6 +308,43 @@ public sealed class WorkflowRunner
                 maxItems: DaminionApiClient.PageSize,
                 startIndex: startIndex,
                 ct: ct).ConfigureAwait(false);
+
+            // The server's own total for this page; keep one denominator for the
+            // whole walk instead of letting the bar jump if a page reports a
+            // different number (a catalog changing mid-walk, or a build that
+            // counts a different set for the same query).
+            if (page.TotalCount is { } pageTotal)
+            {
+                lastPageTotal = pageTotal;
+                if (countedTotal is { } authoritative)
+                {
+                    if (pageTotal != authoritative)
+                    {
+                        SynapicLog.Warning(nameof(WorkflowRunner),
+                            $"Daminion page at index {startIndex} reports totalCount={pageTotal}, " +
+                            $"but the scope count said {authoritative}; keeping the count for the walk");
+                    }
+                }
+                else
+                {
+                    if (scopeTotal is { } previous && previous != pageTotal)
+                    {
+                        SynapicLog.Warning(nameof(WorkflowRunner),
+                            $"Daminion page at index {startIndex} reports totalCount={pageTotal}, " +
+                            $"previous page said {previous}; following the server's total");
+                    }
+                    scopeTotal = pageTotal;
+                }
+            }
+
+            // A page larger than the requested size means the server ignored
+            // `size`; the cursor still advances by what came back, but it is
+            // worth a line because every later offset depends on it.
+            if (page.RawCount > DaminionApiClient.PageSize)
+            {
+                SynapicLog.Warning(nameof(WorkflowRunner),
+                    $"Daminion returned {page.RawCount} records for a size={DaminionApiClient.PageSize} page at index {startIndex}");
+            }
 
             // Only a completely empty raw page is the end of the result set. A
             // page whose records were all filtered out is not: later raw pages can
@@ -252,10 +383,14 @@ public sealed class WorkflowRunner
             // before the cursor moves so it names the position just reached.
             pagesWalked++;
             progress?.Report(new CatalogFetchProgress(
-                items.Count, startIndex + page.RawCount, pagesWalked, page.TotalCount));
+                items.Count, startIndex + page.RawCount, pagesWalked, scopeTotal));
             SynapicLog.Info(nameof(WorkflowRunner),
-                $"Daminion page at {startIndex}: {page.RawCount} record(s), {items.Count} kept so far" +
-                (page.TotalCount is { } scopeTotal ? $" of {scopeTotal} in scope" : ""));
+                $"Daminion page at {startIndex}: {page.RawCount} raw record(s), " +
+                $"{page.Items.Length} eligible, {items.Count} kept so far" +
+                (scopeTotal is { } total ? $" of {total} in scope" : "") +
+                (page.TotalCount is { } pageTotal2 && pageTotal2 != scopeTotal
+                    ? $" (page totalCount={pageTotal2})"
+                    : ""));
 
             // Advance by the raw page the server returned, not by the eligible
             // subset we kept: advancing by the smaller filtered count would skip
@@ -268,7 +403,50 @@ public sealed class WorkflowRunner
             if (!ds.AutoPaginate || page.RawCount < DaminionApiClient.PageSize) break;
         }
 
-        SynapicLog.Info(nameof(WorkflowRunner), $"Fetched {items.Count} Daminion items (scope={ds.Scope})");
+        SynapicLog.Info(nameof(WorkflowRunner),
+            $"Fetched {items.Count} Daminion items (scope={ds.Scope}, " +
+            $"total={(scopeTotal?.ToString() ?? "unknown")}, pages={pagesWalked})");
+
+        if (entireScope && diagnostics is not null)
+        {
+            var report = new CatalogRetrievalDiagnostics(
+                Scope: ds.Scope,
+                ScopeCount: scopeCount,
+                PageTotal: lastPageTotal,
+                Pages: pagesWalked,
+                Scanned: startIndex,
+                Kept: items.Count,
+                CountDrivesTotal: countedTotal is not null,
+                ReportedUtc: DateTime.UtcNow);
+            diagnostics.Report(report);
+            SynapicLog.Info(nameof(WorkflowRunner),
+                $"Daminion retrieval diagnostics: scope={report.Scope} " +
+                $"count={(report.ScopeCount?.ToString() ?? "unknown")} " +
+                $"pageTotal={(report.PageTotal?.ToString() ?? "unknown")} " +
+                $"pages={report.Pages} scanned={report.Scanned} kept={report.Kept} " +
+                $"totalFrom={(report.CountDrivesTotal ? "count" : "page total")}");
+        }
+
+        // A short read for a server-filtered scope is a retrieval problem; for a
+        // collection/saved search the difference can legitimately be records the
+        // client-side filters dropped, so say which it is instead of guessing.
+        if (scopeTotal is { } expected && items.Count != expected)
+        {
+            var difference = expected - items.Count;
+            if (ds.Scope is "collection" or "saved_search")
+            {
+                SynapicLog.Info(nameof(WorkflowRunner),
+                    $"Daminion walk kept {items.Count} of {expected} items; " +
+                    $"{difference} record(s) were filtered out or not returned");
+            }
+            else
+            {
+                SynapicLog.Warning(nameof(WorkflowRunner),
+                    $"Daminion walk returned {items.Count} items but the scope count is {expected} " +
+                    $"({difference} missing) — check the Count request/response and Page lines");
+            }
+        }
+
         return items;
     }
 

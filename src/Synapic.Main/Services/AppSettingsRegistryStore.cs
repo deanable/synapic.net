@@ -67,7 +67,12 @@ public sealed record AppSettingsState(
     double UpscaleSharpenAmount,
     bool UpscaleOverwriteExisting,
 
-    // Data source (local) — mirrors the Daminion store's role for folders
+    // Data source: which one the next launch starts on, and the local folder
+    // it remembers. The Daminion half (server, credentials, scope, filters)
+    // lives in DaminionConnectionStore; this only records that the catalog was
+    // the active source, so the launch sequence reconnects instead of falling
+    // back to the folder tab.
+    string DatasourceType,          // "local" | "daminion"
     string LocalPath,
     bool LocalRecursive,
 
@@ -75,7 +80,22 @@ public sealed record AppSettingsState(
     int MaxItems,
     bool ProcessAll,
     int ResizeScale,
-    bool UseThumbnailOverride);
+    bool UseThumbnailOverride)
+{
+    /// <summary>
+    /// The stored source in the session's own shape, so launch restores it with
+    /// the same call the old config.json path used
+    /// (<see cref="Synapic.Main.Models.DatasourceState.ApplyStoredSource"/>).
+    /// Only the identity of the source: its scope and limits are the forms'
+    /// own settings.
+    /// </summary>
+    public DatasourceSettings ToDatasourceSettings() => new()
+    {
+        Type = DatasourceType == "daminion" ? "daminion" : "local",
+        LocalPath = LocalPath ?? "",
+        LocalRecursive = LocalRecursive,
+    };
+}
 
 /// <summary>
 /// Registry store for the general app settings. Flat string/dword values, no
@@ -189,6 +209,7 @@ public sealed class AppSettingsRegistryStore
         UpscaleDenoiseStrength: 1.0,
         UpscaleSharpenAmount: 0,
         UpscaleOverwriteExisting: true,
+        DatasourceType: "local",
         LocalPath: "",
         LocalRecursive: false,
         MaxItems: 100,
@@ -264,6 +285,7 @@ public sealed class AppSettingsRegistryStore
                 UpscaleDenoiseStrength: D("UpscaleDenoiseStrength", 1.0),
                 UpscaleSharpenAmount: D("UpscaleSharpenAmount", 0),
                 UpscaleOverwriteExisting: I("UpscaleOverwriteExisting", 1) != 0,
+                DatasourceType: S("DatasourceType") == "daminion" ? "daminion" : "local",
                 LocalPath: S("LocalPath") ?? "",
                 LocalRecursive: B("LocalRecursive"),
                 MaxItems: I("MaxItems", 100),
@@ -328,6 +350,7 @@ public sealed class AppSettingsRegistryStore
             D("UpscaleDenoiseStrength", state.UpscaleDenoiseStrength);
             D("UpscaleSharpenAmount", state.UpscaleSharpenAmount);
             I("UpscaleOverwriteExisting", state.UpscaleOverwriteExisting ? 1 : 0);
+            S("DatasourceType", state.DatasourceType);
             S("LocalPath", state.LocalPath);
             B("LocalRecursive", state.LocalRecursive);
             I("MaxItems", state.MaxItems);
@@ -403,6 +426,7 @@ public sealed class AppSettingsRegistryStore
                 UpscaleDenoiseStrength: 1.0,
                 UpscaleSharpenAmount: 0,
                 UpscaleOverwriteExisting: true,
+                DatasourceType: cfg.Datasource.Type == "daminion" ? "daminion" : "local",
                 LocalPath: cfg.Datasource.LocalPath,
                 LocalRecursive: cfg.Datasource.LocalRecursive,
                 MaxItems: cfg.Processing.MaxItems > 0 ? cfg.Processing.MaxItems : 100,

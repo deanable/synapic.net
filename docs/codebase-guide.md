@@ -189,6 +189,7 @@ huggingface_hub, pillow, tqdm, psutil, qwen-vl-utils, PyInstaller 6.18.0).
 | `AppConfig` | the loaded config object |
 | `Session` | wizard state shared by every view model |
 | `DaminionConnectionStore` | registry-backed Step 1 persistence |
+| `AppSettingsRegistryStore` | registry-backed app settings, incl. the active source |
 | `EngineSettingsStore` | registry-backed Step 2 persistence |
 | `IInferenceSidecar` | `InferenceSidecarService` |
 | `ISidecarDownloadService` | `SidecarDownloadService` |
@@ -289,7 +290,9 @@ Notes:
 - `config.json` is written by `MainWindowViewModel.PersistConfig` when the user
   reaches Results, on Start Over, and at other lifecycle points. Only a
   successful Daminion login rewrites the registry connection block, so a typo
-  can never clobber a working set.
+  can never clobber a working set. The active source (tab + local folder) is
+  written to `AppSettingsRegistryStore` as it changes, because launch restores
+  the source from there.
 - `EngineSettingsStore`/`DaminionConnectionStore` and the app-wide
   `AppSettingsRegistryStore` are Windows-only by design; the app remains
   functional (with defaults) on Linux/macOS.

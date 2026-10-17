@@ -324,6 +324,175 @@ public class StepDedupViewModelTests
         Assert.Equal("", vm.EtaText);
     }
 
+    // ── Read-only retrieval diagnostics ─────────────────────────────────────
+
+    /// <summary>
+    /// The diagnostics block puts the three totals next to each other and says
+    /// plainly when the count and the kept items disagree. The numbers are
+    /// read-only; the only controls are the diagnostic re-walk (offered only on
+    /// a disagreement) and the report export.
+    /// </summary>
+    [AvaloniaFact]
+    public void Retrieval_diagnostics_show_count_page_total_and_kept_side_by_side_with_actions()
+    {
+        var vm = new StepDedupViewModel { DatasourceType = "daminion" };
+        vm.ApplyRetrievalDiagnostics(new CatalogRetrievalDiagnostics(
+            Scope: "all",
+            ScopeCount: 1500,
+            PageTotal: 47_851,
+            Pages: 3,
+            Scanned: 1500,
+            Kept: 1480,
+            CountDrivesTotal: true,
+            ReportedUtc: DateTime.UtcNow));
+
+        // The formatter follows the current culture (thousands separators
+        // differ by locale), so the expectations are formatted the same way the
+        // view model formats them.
+        var counted = 1500.ToString("N0");
+        var pageTotal = 47_851.ToString("N0");
+        var kept = 1480.ToString("N0");
+
+        Assert.True(vm.HasRetrievalDiagnostics);
+        Assert.Equal(counted, vm.RetrievalCountText);
+        Assert.Equal(pageTotal, vm.RetrievalPageTotalText);
+        Assert.Equal("3", vm.RetrievalPagesText);
+        Assert.Equal(counted, vm.RetrievalScannedText);
+        Assert.Equal(kept, vm.RetrievalKeptText);
+        Assert.StartsWith("entire catalog · ", vm.RetrievalScopeText);
+        Assert.Contains("20 missing", vm.RetrievalComparisonText);
+        Assert.Contains(pageTotal, vm.RetrievalComparisonText);
+
+        var view = new StepDedup { DataContext = vm };
+        var window = new Window { Content = view, Width = 1000, Height = 900 };
+        window.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs();
+            var panel = Assert.Single(view.GetVisualDescendants().OfType<Border>(),
+                border => border.Name == "RetrievalDiagnostics");
+            Assert.True(panel.IsEffectivelyVisible);
+
+            string Value(string name) => Assert.Single(
+                panel.GetVisualDescendants().OfType<TextBlock>(), text => text.Name == name).Text ?? "";
+
+            Assert.Equal(counted, Value("RetrievalCountValue"));
+            Assert.Equal(pageTotal, Value("RetrievalPageTotalValue"));
+            Assert.Equal("3", Value("RetrievalPagesValue"));
+            Assert.Equal(counted, Value("RetrievalScannedValue"));
+            Assert.Equal(kept, Value("RetrievalKeptValue"));
+
+            // The numbers are read-only: no field looks editable.
+            Assert.Empty(panel.GetVisualDescendants().OfType<TextBox>());
+            Assert.Empty(panel.GetVisualDescendants().OfType<ComboBox>());
+            Assert.Empty(panel.GetVisualDescendants().OfType<CheckBox>());
+            Assert.Empty(panel.GetVisualDescendants().OfType<Slider>());
+
+            // Exactly the two diagnostic actions, and the re-walk is offered on
+            // a count-vs-kept disagreement.
+            Assert.Equal(2, panel.GetVisualDescendants().OfType<Button>().Count());
+            var reWalk = Assert.Single(panel.GetVisualDescendants().OfType<Button>(),
+                button => button.Name == "ReWalkUsingPageTotalsButton");
+            var export = Assert.Single(panel.GetVisualDescendants().OfType<Button>(),
+                button => button.Name == "ExportRetrievalReportButton");
+            Assert.True(reWalk.IsEffectivelyVisible);
+            Assert.True(export.IsEffectivelyVisible);
+            Assert.True(vm.HasRetrievalMismatch);
+
+            // Agreement removes the re-walk; the export stays.
+            vm.ApplyRetrievalDiagnostics(new CatalogRetrievalDiagnostics(
+                Scope: "all", ScopeCount: 1500, PageTotal: 1500, Pages: 3, Scanned: 1500,
+                Kept: 1500, CountDrivesTotal: true, ReportedUtc: DateTime.UtcNow));
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(vm.HasRetrievalMismatch);
+            Assert.False(reWalk.IsEffectivelyVisible);
+            Assert.True(export.IsEffectivelyVisible);
+
+            // Catalog-only: a local source hides the block without dropping the
+            // last catalog walk's record.
+            vm.DatasourceType = "local";
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(vm.HasRetrievalDiagnostics);
+            Assert.False(panel.IsEffectivelyVisible);
+            Assert.NotNull(vm.LastRetrieval);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    /// <summary>
+    /// A collection scope is filtered on this side, so its difference is
+    /// expected — and the block says so instead of raising a false alarm.
+    /// </summary>
+    [Fact]
+    public void Retrieval_diagnostics_explain_a_collection_scope_difference()
+    {
+        var vm = new StepDedupViewModel { DatasourceType = "daminion" };
+        vm.ApplyRetrievalDiagnostics(new CatalogRetrievalDiagnostics(
+            Scope: "collection",
+            ScopeCount: 120,
+            PageTotal: 150,
+            Pages: 1,
+            Scanned: 150,
+            Kept: 120,
+            CountDrivesTotal: false,
+            ReportedUtc: DateTime.UtcNow));
+
+        Assert.Contains("filtered locally", vm.RetrievalComparisonText);
+        Assert.Contains(150.ToString("N0"), vm.RetrievalComparisonText);
+        Assert.Contains("collection", vm.RetrievalScopeText);
+        // A local-filtering difference is not a retrieval failure, so no re-walk.
+        Assert.False(vm.HasRetrievalMismatch);
+    }
+
+    /// <summary>
+    /// The report export writes every number, which total the walk followed and
+    /// the comparison sentence to the chosen file, and says where it went.
+    /// </summary>
+    [Fact]
+    public async Task Export_retrieval_report_writes_the_numbers_and_comparison()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"synapic-retrieval-{Guid.NewGuid():N}.txt");
+        try
+        {
+            var vm = new StepDedupViewModel(retrievalReportPathProvider: () => path)
+            {
+                DatasourceType = "daminion",
+            };
+            vm.ApplyRetrievalDiagnostics(new CatalogRetrievalDiagnostics(
+                Scope: "all",
+                ScopeCount: 1500,
+                PageTotal: 47_851,
+                Pages: 3,
+                Scanned: 1500,
+                Kept: 1480,
+                CountDrivesTotal: true,
+                ReportedUtc: DateTime.UtcNow));
+
+            Assert.True(vm.ExportRetrievalReportCommand.CanExecute(null));
+            await vm.ExportRetrievalReportCommand.ExecuteAsync(null);
+
+            Assert.True(File.Exists(path));
+            var text = await File.ReadAllTextAsync(path);
+            Assert.Contains("Synapic retrieval report", text);
+            Assert.Contains("Operation: Deduplication", text);
+            Assert.Contains($"Counted: {1500.ToString("N0")}", text);
+            Assert.Contains($"Page total: {47_851.ToString("N0")}", text);
+            Assert.Contains($"Kept: {1480.ToString("N0")}", text);
+            Assert.Contains("Total followed: scope count", text);
+            Assert.Contains("20 missing", text);
+            Assert.Contains("Full page-level detail:", text);
+            Assert.Contains(path, vm.RetrievalActionMessage);
+            Assert.True(vm.HasRetrievalActionMessage);
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
     /// <summary>A local scan drives the same bar, so it never reads "Idle" mid-run.</summary>
     [Fact]
     public void Local_hash_progress_reports_files_and_an_eta()
