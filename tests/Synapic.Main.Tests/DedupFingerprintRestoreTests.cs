@@ -25,9 +25,21 @@ public class DedupFingerprintRestoreTests
             algorithm,
             0.95,
             items.Length,
-            items.Select(i => new CachedDedupItem(i.Key, Path.GetFileName(i.Key), 1234, null, null)).ToArray(),
+            items.Select(i => new CachedDedupItem(i.Key, Basename(i.Key), 1234, null, null)).ToArray(),
             items.ToDictionary(i => i.Key, i => i.Hash),
             new Dictionary<string, ulong>());
+
+    /// <summary>The display name the saved scan carries for a row. The tests
+    /// deliberately simulate Windows source rows ("C:\photos\a.jpg"), so the
+    /// name is split on both separators: in production the save path only ever
+    /// names keys from the local file system, but Path.GetFileName is a no-op
+    /// for a Windows path on a Linux runner and turned the round-trip test into
+    /// an OS coincidence rather than a store contract.</summary>
+    private static string Basename(string key)
+    {
+        var cut = key.LastIndexOfAny(['/', '\\']);
+        return cut < 0 ? key : key[(cut + 1)..];
+    }
 
     [Fact]
     public async Task A_saved_scan_round_trips_with_its_hashes_and_rows()
