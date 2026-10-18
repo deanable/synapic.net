@@ -189,11 +189,12 @@ public class DedupServiceTests
     [Fact]
     public void ServerHashes_HammingRule_GroupsLikeTheAlgorithmicPath()
     {
+        // The server hash is 32 bits wide, so 0.90 is a 3-bit budget, not 6.
         var close = new Dictionary<string, ulong>
         {
             ["daminion:1"] = 0UL,
-            ["daminion:2"] = 0b_111111UL,  // 6 bits from #1 → inside the threshold
-            ["daminion:3"] = 0b_1111111UL, // 7 from #1, but 1 from #2 → joins the chain
+            ["daminion:2"] = 0b_111UL,    // 3 bits from #1 → inside the threshold
+            ["daminion:3"] = 0b_1111UL,   // 4 from #1, but 1 from #2 → joins the chain
         };
 
         var groups = DedupTestHarness.GroupExactHamming(close);
@@ -201,6 +202,8 @@ public class DedupServiceTests
         Assert.Single(groups);
         Assert.Equal(3, groups[0].Items.Length);
         Assert.Equal("server-hash", groups[0].HashType);
+        // Scores are normalized over the hash's own 32 bits, not 64.
+        Assert.Equal(1.0 - 4.0 / 32.0, groups[0].SimilarityScores[2], 6);
     }
 
     [Fact]

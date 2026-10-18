@@ -76,6 +76,66 @@ public class SimilarSearchTests : IDisposable
         Assert.NotEqual(duplicates.ThresholdHint, similar.ThresholdHint);
     }
 
+    /// <summary>
+    /// The two profiles differ in what they compare, not only in how loosely:
+    /// the duplicate scan may group the catalog's own content hash (identical
+    /// files share it, no download needed), while the similarity search may not
+    /// — a content hash cannot say two images look alike. Reusing it made a
+    /// catalog similarity scan an exact-match scan, so the algorithm and
+    /// threshold never applied to a single image.
+    /// </summary>
+    [Fact]
+    public void Only_the_duplicate_scan_can_use_the_catalog_content_hash()
+    {
+        var duplicates = new StepDedupViewModel { DatasourceType = "daminion" };
+        var similar = new StepDedupViewModel(profile: ImageMatchProfile.Similar) { DatasourceType = "daminion" };
+
+        Assert.True(duplicates.BuildOptions().UseServerHashes);
+        Assert.False(similar.BuildOptions().UseServerHashes);
+
+        // And the run page says which rule it used: the duplicate summary names
+        // the server-hash rule, the similarity summary does not (it hashes pixels).
+        Assert.Contains("server hash", duplicates.ScanSettingsSummary);
+        Assert.DoesNotContain("server hash", similar.ScanSettingsSummary);
+
+        // The settings form follows: the rule is offered only where it applies.
+        Assert.True(duplicates.ShowsServerHashRule);
+        Assert.False(similar.ShowsServerHashRule);
+    }
+
+    /// <summary>
+    /// A saved Similar scan built only from the catalog's content hashes is the
+    /// old path's output. Restoring it would show exact-match groups the search
+    /// no longer produces — and make a fixed build look unchanged on the next
+    /// launch — so it is dropped instead of re-grouped.
+    /// </summary>
+    [Fact]
+    public void A_similar_result_of_content_hashes_alone_is_not_restored()
+    {
+        CachedDedupScan Cached(Dictionary<string, ulong> perceptual, Dictionary<string, ulong> exact) =>
+            new(Version: 1, SourceKey: "daminion|url|saved_search|8|0|city street", Algorithm: "phash",
+                Threshold: 0.85, TotalFiles: 500, Items: Array.Empty<CachedDedupItem>(),
+                PerceptualHashes: perceptual, ExactHashes: exact);
+
+        var serverHashesOnly = new Dictionary<string, ulong> { ["daminion:1"] = 4242UL };
+
+        Assert.True(StepDedupViewModel.IsStaleSimilarCache(
+            Cached(new Dictionary<string, ulong>(), serverHashesOnly), isSimilar: true));
+
+        // Fingerprint present: a real similarity scan, whatever else it holds.
+        Assert.False(StepDedupViewModel.IsStaleSimilarCache(
+            Cached(new Dictionary<string, ulong> { ["daminion:1"] = 42UL }, serverHashesOnly), isSimilar: true));
+
+        // A local scan has no server hashes to be stale about.
+        Assert.False(StepDedupViewModel.IsStaleSimilarCache(
+            Cached(new Dictionary<string, ulong>(), new Dictionary<string, ulong>()), isSimilar: true));
+
+        // And the rule belongs to the similarity profile: the duplicate scan
+        // legitimately saves a result of server hashes alone.
+        Assert.False(StepDedupViewModel.IsStaleSimilarCache(
+            Cached(new Dictionary<string, ulong>(), serverHashesOnly), isSimilar: false));
+    }
+
     // ── The similarity band ────────────────────────────────────────────────
 
     [Fact]
@@ -439,6 +499,13 @@ public class SimilarSearchTests : IDisposable
 
             var panel = Assert.Single(window.GetVisualDescendants().OfType<SimilarSettingsPanel>());
             Assert.Same(shell.Operations.Similar, panel.DataContext);
+
+            // No server-hash rule on this tab: the similarity search hashes pixels,
+            // so offering the catalog content-hash rule would be a dead control.
+            var panelTexts = panel.GetVisualDescendants().OfType<TextBlock>()
+                .Select(t => t.Text ?? string.Empty)
+                .ToList();
+            Assert.DoesNotContain("Server hash:", panelTexts);
 
             // The row opens the operation, and the run page comes up over that same
             // instance with the similarity wording.

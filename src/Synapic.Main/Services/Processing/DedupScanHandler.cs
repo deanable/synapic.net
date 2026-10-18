@@ -143,12 +143,26 @@ public sealed class DedupScanHandler : IWorkflowItemHandler
         // This is the cheap path the user asked for: it removes the
         // download + perceptual-hash cost for every item whose server hash is
         // present (the common case on Daminion 11.x).
-        if (item.ServerHashCode is { } serverHash && serverHash != 0)
+        //
+        // The similarity profile turns the shortcut off (UseServerHashes=false):
+        // a content hash answers "is this the same file", not "does this look
+        // alike", and reusing it there silently replaced the perceptual
+        // comparison with exact matching — so every catalog scan reported almost
+        // no similar images whatever the algorithm and threshold said.
+        if (item.ServerHashCode is { } serverHash && serverHash != 0 && _options.UseServerHashes)
         {
             var key = $"daminion:{id}";
+            // The server's hash is a signed 32-bit number (every observed value
+            // fits int, and roughly half are negative). Zero-extend it: casting
+            // long → ulong sign-extends, which puts 32 guaranteed-equal high bits
+            // on every negative value and 32 guaranteed-different high bits
+            // between a negative and a positive. Hamming mode then compared the
+            // sign padding instead of the hash, which is how a page of unrelated
+            // items produced three "similar" groups.
+            var contentHash = unchecked((ulong)(uint)serverHash);
             lock (_hashesLock)
             {
-                ExactHashes[key] = (ulong)serverHash;
+                ExactHashes[key] = contentHash;
                 Records[key] = new DedupScanRecord(
                     key,
                     item.FileName ?? $"Item {id}",
@@ -168,10 +182,12 @@ public sealed class DedupScanHandler : IWorkflowItemHandler
             return WorkflowItemOutcome.Ok;
         }
 
-        // No server hash available — fall back to the old path: download the
+        // No usable server hash — fall back to the old path: download the
         // original, compute a perceptual hash, delete the temp file.
         SynapicLog.Debug(nameof(DedupScanHandler),
-            $"Dedup: item {id} ({item.FileName}) → no server hash, downloading original");
+            item.ServerHashCode is { } skipped && skipped != 0
+                ? $"Dedup: item {id} ({item.FileName}) → server hash {skipped} ignored for this scan, downloading original"
+                : $"Dedup: item {id} ({item.FileName}) → no server hash, downloading original");
 
         var temp = await _downloader.DownloadOriginalAsync(id, ct).ConfigureAwait(false);
         if (string.IsNullOrEmpty(temp) || !File.Exists(temp))
@@ -258,10 +274,12 @@ public sealed class DedupScanHandler : IWorkflowItemHandler
         SynapicLog.Info(nameof(DedupScanHandler),
             $"Server-hash comparison: {_options.ServerHashMatch} " +
             (ServerHashGrouped == 0
-                ? "(no server hashes in this scope)"
+                ? _options.UseServerHashes
+                    ? "(no server hashes in this scope)"
+                    : "(not used by this scan — the similarity search hashes pixels)"
                 : _options.ServerHashMatch == ServerHashMatchMode.Exact
                     ? "(identical hash values only)"
-                    : $"(hamming distance ≤ {DedupService.MaxHammingDistance(_options.Threshold)} bits)"));
+                    : $"(hamming distance ≤ {DedupService.MaxHammingDistance(_options.Threshold, bits: 32)} of 32 bits)"));
         SynapicLog.Info(nameof(DedupScanHandler),
             $"Download failures: {DownloadFailures}");
         SynapicLog.Info(nameof(DedupScanHandler),

@@ -273,12 +273,35 @@ public sealed class WorkflowRunner
                         : " (diagnostic only; the walk follows the page totalCount)"));
         }
 
-        var startIndex = 0;
+        // The walk's cursors. Daminion's REST reference defines `index` as "the
+        // serial number of the requested page", but this walk (like the Python
+        // client it ports) has always sent an item offset — and the two agree only
+        // for page 0. Offset stepping stays the default, because that is what
+        // every working catalog walk has been served with; a walk that runs dry
+        // before the search's own record count switches to page serials and
+        // carries on (see the empty-page branch below).
+        var offsetCursor = 0;  // item offset to request (default semantics)
+        var pageCursor = 0;    // page serial to request, once switched
+        var pageMode = false;  // true after the switch
+        var rawScanned = 0;    // raw records the server has returned (bar + report)
+        var droppedByFilters = 0; // raw records this side's filters dropped, not returned ones
         // "Process all" (or a zero/negative max) lifts the ceiling entirely: the
         // only stopping condition is an empty page from the server. A whole-scope
         // fetch (dedup/similar) always lifts it, whatever Step 1 holds.
         var processAll = entireScope || ds.ProcessAll || ds.MaxItems <= 0;
         var limit = processAll ? int.MaxValue : ds.MaxItems;
+        // The search's own record count, when there is one. It decides two things:
+        // that an empty page arriving before it is not the end, and when a
+        // page-serial walk has collected everything and may stop. A scope whose
+        // count is unavailable keeps the old "walk until the server returns
+        // nothing" rule.
+        var countTarget = countedTotal ?? (scopeCount is > 0 ? scopeCount : null);
+        // A page-serial continuation may not run longer than the count implies,
+        // even if the server keeps answering: the search said how many records it
+        // has, and a walk past that is a server-side loop, not a bigger scope.
+        var pageBudget = countTarget is { } target
+            ? target / DaminionApiClient.PageSize + 4
+            : int.MaxValue;
         var lastPageIds = new HashSet<int>();
         // Catalog ids already queued. Collection and saved-search pages are
         // filtered on this side and the cursor advances by the raw page, so a
@@ -295,6 +318,7 @@ public sealed class WorkflowRunner
         while (items.Count < limit)
         {
             ct.ThrowIfCancellationRequested();
+            var requestIndex = pageMode ? pageCursor : offsetCursor;
             var page = await client.GetItemsPageAsync(
                 scope: ds.Scope,
                 savedSearchId: ds.SavedSearchId,
@@ -306,7 +330,7 @@ public sealed class WorkflowRunner
                 // count is capped below, and a page shorter than the requested
                 // size is what signals the catalog ended.
                 maxItems: DaminionApiClient.PageSize,
-                startIndex: startIndex,
+                startIndex: requestIndex,
                 ct: ct).ConfigureAwait(false);
 
             // The server's own total for this page; keep one denominator for the
@@ -321,7 +345,7 @@ public sealed class WorkflowRunner
                     if (pageTotal != authoritative)
                     {
                         SynapicLog.Warning(nameof(WorkflowRunner),
-                            $"Daminion page at index {startIndex} reports totalCount={pageTotal}, " +
+                            $"Daminion page at index {requestIndex} reports totalCount={pageTotal}, " +
                             $"but the scope count said {authoritative}; keeping the count for the walk");
                     }
                 }
@@ -330,7 +354,7 @@ public sealed class WorkflowRunner
                     if (scopeTotal is { } previous && previous != pageTotal)
                     {
                         SynapicLog.Warning(nameof(WorkflowRunner),
-                            $"Daminion page at index {startIndex} reports totalCount={pageTotal}, " +
+                            $"Daminion page at index {requestIndex} reports totalCount={pageTotal}, " +
                             $"previous page said {previous}; following the server's total");
                     }
                     scopeTotal = pageTotal;
@@ -343,13 +367,61 @@ public sealed class WorkflowRunner
             if (page.RawCount > DaminionApiClient.PageSize)
             {
                 SynapicLog.Warning(nameof(WorkflowRunner),
-                    $"Daminion returned {page.RawCount} records for a size={DaminionApiClient.PageSize} page at index {startIndex}");
+                    $"Daminion returned {page.RawCount} records for a size={DaminionApiClient.PageSize} page at index {requestIndex}");
             }
 
             // Only a completely empty raw page is the end of the result set. A
             // page whose records were all filtered out is not: later raw pages can
             // still hold eligible items, so keep advancing past it.
-            if (page.RawCount == 0) break;
+            if (page.RawCount == 0)
+            {
+                // An empty page before the search's own record count is not the
+                // end: the walk is paging with the wrong cursor. Daminion's
+                // reference says `index` is a page serial, so continue from the
+                // page the raw records already cover. Only a walk that did return
+                // a full page can be short this way — below that the scope is
+                // simply smaller than a page.
+                // The margin is deliberate: below a page's worth of records left, the
+                // scope is simply smaller than the count claims and another cursor
+                // would only ask the same empty page again.
+                if (!pageMode && countTarget is { } countedRecords && items.Count < countedRecords &&
+                    countedRecords > rawScanned + DaminionApiClient.PageSize)
+                {
+                    pageMode = true;
+                    // Every page fetched so far was one page, so the next serial is
+                    // simply how many pages have been read (page 0 included).
+                    pageCursor = Math.Max(1, pagesWalked);
+                    SynapicLog.Warning(nameof(WorkflowRunner),
+                        $"Daminion returned an empty page at index {requestIndex} while the search counts {countedRecords} records " +
+                        $"({items.Count} fetched) — continuing with page serials from {pageCursor}, " +
+                        "the parameter the REST reference documents for `index`");
+                    continue;
+                }
+
+                // A page-serial walk that runs dry has collected what the search
+                // has, or the server stopped answering; either way this is the end.
+                if (pageMode)
+                {
+                    if (countTarget is { } shortOf && items.Count < shortOf)
+                        SynapicLog.Warning(nameof(WorkflowRunner),
+                            $"Daminion page serials ran dry after {pagesWalked} page(s): {items.Count} of {shortOf} records fetched; " +
+                            "the scope is a subset of the search's count");
+                    else
+                        SynapicLog.Info(nameof(WorkflowRunner),
+                            $"Daminion page-serial walk complete: {items.Count} record(s) in {pagesWalked} page(s)");
+                    break;
+                }
+
+                // An empty page *before* the scope's own count is not an end and
+                // not a filter: the walk is short. Without this line the scan
+                // reported "500 files scanned" for a 6,704-item scope as if it
+                // were whole.
+                if (scopeCount is { } scopeExpected && items.Count < scopeExpected)
+                    SynapicLog.Warning(nameof(WorkflowRunner),
+                        $"Daminion returned an empty page at index {requestIndex} but the scope count is {scopeExpected} — " +
+                        $"{items.Count} item(s) fetched, {scopeExpected - items.Count} not reached; the scan compares a subset");
+                break;
+            }
 
             // Infinite-loop guard (processing.py parity): if the server returns
             // the same raw ids for every offset (e.g. the untagged filter is not
@@ -379,13 +451,15 @@ public sealed class WorkflowRunner
             // Every page boundary is a progress point: on a large catalog the
             // walk itself can take a while, and a scan that shows no movement
             // looks hung. A filtered page keeps the same kept count, so it is
-            // reported too — the raw cursor is what advanced. `Scanned` is taken
-            // before the cursor moves so it names the position just reached.
+            // reported too — the raw records are what advanced. `Scanned` is the
+            // number of raw records the server has returned so far.
+            rawScanned += page.RawCount;
+            droppedByFilters += page.RawCount - page.Items.Length;
             pagesWalked++;
             progress?.Report(new CatalogFetchProgress(
-                items.Count, startIndex + page.RawCount, pagesWalked, scopeTotal));
+                items.Count, rawScanned, pagesWalked, scopeTotal));
             SynapicLog.Info(nameof(WorkflowRunner),
-                $"Daminion page at {startIndex}: {page.RawCount} raw record(s), " +
+                $"Daminion page {(pageMode ? $"serial {requestIndex}" : $"at offset {requestIndex}")}: {page.RawCount} raw record(s), " +
                 $"{page.Items.Length} eligible, {items.Count} kept so far" +
                 (scopeTotal is { } total ? $" of {total} in scope" : "") +
                 (page.TotalCount is { } pageTotal2 && pageTotal2 != scopeTotal
@@ -395,7 +469,17 @@ public sealed class WorkflowRunner
             // Advance by the raw page the server returned, not by the eligible
             // subset we kept: advancing by the smaller filtered count would skip
             // the raw records the filter dropped and overlap the next page.
-            startIndex += page.RawCount;
+            offsetCursor += page.RawCount;
+            if (pageMode) pageCursor++;
+
+            // A page-serial walk knows its target: stop once the search's records
+            // are all in, or when the budget for this scope is spent.
+            if (pageMode && (countTarget is { } reached && rawScanned >= reached || pagesWalked >= pageBudget))
+            {
+                SynapicLog.Info(nameof(WorkflowRunner),
+                    $"Daminion page-serial walk collected {items.Count} record(s) in {pagesWalked} page(s)");
+                break;
+            }
 
             // Process-all never treats a partial page as the end: some endpoints
             // cap a single response, so keep requesting until a page is empty.
@@ -414,7 +498,7 @@ public sealed class WorkflowRunner
                 ScopeCount: scopeCount,
                 PageTotal: lastPageTotal,
                 Pages: pagesWalked,
-                Scanned: startIndex,
+                Scanned: rawScanned,
                 Kept: items.Count,
                 CountDrivesTotal: countedTotal is not null,
                 ReportedUtc: DateTime.UtcNow);
@@ -427,23 +511,25 @@ public sealed class WorkflowRunner
                 $"totalFrom={(report.CountDrivesTotal ? "count" : "page total")}");
         }
 
-        // A short read for a server-filtered scope is a retrieval problem; for a
-        // collection/saved search the difference can legitimately be records the
-        // client-side filters dropped, so say which it is instead of guessing.
-        if (scopeTotal is { } expected && items.Count != expected)
+        // A short read is a retrieval problem whichever the scope. For a
+        // collection/saved search the difference can also be records the
+        // client-side filters dropped, so separate the two cases by whether this
+        // side dropped anything instead of assuming the benign one.
+        if (scopeCount is { } expected && items.Count != expected)
         {
             var difference = expected - items.Count;
-            if (ds.Scope is "collection" or "saved_search")
+            var droppedLocally = droppedByFilters;
+            if (ds.Scope is "collection" or "saved_search" && droppedLocally > 0)
             {
                 SynapicLog.Info(nameof(WorkflowRunner),
                     $"Daminion walk kept {items.Count} of {expected} items; " +
-                    $"{difference} record(s) were filtered out or not returned");
+                    $"{droppedLocally} record(s) were dropped by this side's filters and {difference - droppedLocally} were not returned");
             }
             else
             {
                 SynapicLog.Warning(nameof(WorkflowRunner),
                     $"Daminion walk returned {items.Count} items but the scope count is {expected} " +
-                    $"({difference} missing) — check the Count request/response and Page lines");
+                    $"({difference} missing) — the walk stopped early; check the Count request/response and Page lines");
             }
         }
 

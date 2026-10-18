@@ -69,13 +69,17 @@ reports what it still holds &mdash; which should read zero files.</p>
 <span class="ui">Server hash</span> rule decides how the catalog's own
 content hashes are compared: <span class="ui">Exact</span> (the default) trusts
 only identical values, <span class="ui">Hamming</span> compares them by
-similarity at the threshold.</li>
+similarity at the threshold. (Only this operation can use the server hash —
+<a href="similar.html">Similar images</a> always hashes pixels, because a
+content hash says nothing about whether two images look alike.)</li>
 <li>Press <span class="ui">Scan</span>. On a catalog source the scan first
 gathers <em>every</em> item in the scope, 500 records per request, showing
 <span class="ui">Fetching items from Daminion: 1,500 of 47,851&hellip;</span> on a
 large catalog &mdash; the <span class="ui">Max items</span> ceiling does not
 apply here, because a duplicate outside the fetched prefix would be reported
-as unique. The shared <span class="ui">Run</span> bar tracks that walk as well:
+as unique. The walk keeps paging until the search's own record count is in hand,
+using the page number rather than the offset if the catalog stops answering at a
+later position, so the whole scope is gathered. The shared <span class="ui">Run</span> bar tracks that walk as well:
 records fetched of the scope total, the page it is on, and an estimate of the
 time left, then it switches to hashing progress. Progress is reported as files
 are hashed:

@@ -82,32 +82,36 @@ search, shared collection or saved search), chosen on the processing view that
 runs. For a local source the scan covers <span class="path">.jpg</span>,
 <span class="path">.jpeg</span>, <span class="path">.png</span>,
 <span class="path">.tif</span> and <span class="path">.tiff</span>, subfolders
-included. For the catalog source, items the catalog has already hashed are
-compared without downloading them; the rest are downloaded to a temporary file,
-hashed and deleted again &mdash; one at a time, so a big collection never lands
-on disk whole.</p>
+included. The catalog source is downloaded and fingerprinted the same way,
+one item at a time and deleted again as soon as it is hashed, so a big
+collection never lands on disk whole. It does <em>not</em> reuse Daminion's own
+<span class="term">server hash</span>: that is a content hash, which can say two
+items are the same file but nothing about whether two images look alike. The
+<span class="ui">Deduplication</span> operation is the one that uses it, and the
+similarity search hashes pixels so the algorithm and threshold apply to every
+item.</p>
 
 <h2>Running the search</h2>
 
 <ol class="steps">
 <li>Set the <span class="ui">Algorithm</span> and the
 <span class="ui">Similarity threshold</span> on
-<span class="ui">Settings &rsaquo; Similar</span>. For a catalog source the
-<span class="ui">Server hash</span> rule decides how Daminion's own content
-hashes are compared: <span class="ui">Exact</span> (the default) trusts only
-identical values, <span class="ui">Hamming</span> compares them at the
-threshold like the algorithmic hashes.</li>
+<span class="ui">Settings &rsaquo; Similar</span>. Those two rules apply to
+every item in the scope, local or catalog.</li>
 <li>Press <span class="ui">Search</span>. On a catalog source the search first
 gathers <em>every</em> item in the scope, 500 records per request, showing
 <span class="ui">Fetching items from Daminion: 1,500 of 47,851&hellip;</span> on a
 large catalog &mdash; the <span class="ui">Max items</span> ceiling does not
 apply here, because a similar image outside the fetched prefix would be
-reported as unique. The shared <span class="ui">Run</span> bar tracks that walk
+reported as unique. The walk keeps going until the search's own record count is
+in hand: if the catalog stops answering at a later page position, it carries on
+using the page number instead of the offset, so a scope larger than one page is
+still gathered whole. The shared <span class="ui">Run</span> bar tracks that walk
 as well: records fetched of the scope total, the page it is on, and an estimate
 of the time left, then it switches to hashing progress. Progress is reported as
 files are hashed:
-<span class="ui">Hashed 240/1500&hellip;</span> &mdash; or as items are grouped
-from the catalog's own hashes or downloaded for hashing.</li>
+<span class="ui">Hashed 240/1500&hellip;</span> &mdash; or, on a catalog source, as
+each item is downloaded for hashing.</li>
 <li>Read the summary: <span class="ui">1500 files scanned &mdash; 9 groups, 21
 similar images</span>, or the guidance line that says nothing matched and points
 at the threshold.</li>
@@ -166,7 +170,10 @@ per operation and source, the newest eight per operation kept, no image copies
 same results, and the <span class="ui">Threshold</span> slider is live at once:
 no hashing and no catalog walk. Nothing is restored under a different
 algorithm, and pointing the source somewhere else shows nothing until that
-source is searched. <span class="ui">Scan</span> still re-reads the source and
+source is searched. A saved result that holds only the catalog's content hashes
+&mdash; what an older build stored for this operation &mdash; is not restored:
+the search hashes pixels, so that result is rescanned rather than shown.
+<span class="ui">Scan</span> still re-reads the source and
 replaces the saved copy, and <span class="ui">Apply</span> discards it, because
 the files it described have changed. Deleting the
 <span class="path">fingerprints</span> folder is safe: the next search simply

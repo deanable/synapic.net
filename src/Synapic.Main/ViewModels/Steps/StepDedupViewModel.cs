@@ -467,6 +467,13 @@ public partial class StepDedupViewModel : RunStateViewModel
 
     public bool IsDaminion => DatasourceType == "daminion";
 
+    /// <summary>
+    /// Whether the form offers the catalog's server-hash rule. Only the duplicate
+    /// scan can use a content hash: the similarity profile hashes pixels, so
+    /// showing the setting there would offer a control that changes nothing.
+    /// </summary>
+    public bool ShowsServerHashRule => IsDaminion && !IsSimilar;
+
     /// <summary>Settable radio bindings (getter-only ones bind dead — see Step 1).</summary>
     public bool IsLocalSelected
     {
@@ -492,6 +499,7 @@ public partial class StepDedupViewModel : RunStateViewModel
         OnPropertyChanged(nameof(DatasourceType));
         OnPropertyChanged(nameof(IsLocal));
         OnPropertyChanged(nameof(IsDaminion));
+        OnPropertyChanged(nameof(ShowsServerHashRule));
         OnPropertyChanged(nameof(IsLocalSelected));
         OnPropertyChanged(nameof(IsDaminionSelected));
         SelectedAction = 0;
@@ -606,8 +614,9 @@ public partial class StepDedupViewModel : RunStateViewModel
     /// <summary>
     /// One sentence comparing the three totals. A count that differs from what
     /// was kept is the retrieval problem the view exists to expose; for
-    /// collection/saved-search scopes a difference is expected, because those
-    /// pages are filtered on this side.
+    /// collection/saved-search scopes a difference is expected only when this
+    /// side dropped records (scanned &gt; kept). A whole-page walk that still ends
+    /// short is called what it is: a short read.
     /// </summary>
     public string RetrievalComparisonText
     {
@@ -628,9 +637,21 @@ public partial class StepDedupViewModel : RunStateViewModel
             if (r.PageTotal is { } pageTotal && pageTotal != r.ScopeCount)
                 parts.Add($"The pages reported {pageTotal:N0}.");
 
-            if (!r.CountDrivesTotal && r.Scope is ("collection" or "saved_search"))
-                parts.Add("Those scopes are filtered locally, so a difference is expected.");
-            else if (!r.CountDrivesTotal && r.ScopeCount is not null)
+            // A collection/saved-search difference is only "expected" when this
+            // side actually dropped records. When every page was returned whole
+            // and the walk still ends short, the difference is a retrieval
+            // failure — excusing it here is what made "500 of 6,704" look normal.
+            if (r.Scope is ("collection" or "saved_search") && r.Scanned > r.Kept)
+                parts.Add($"{r.Scanned - r.Kept:N0} record(s) were filtered locally, so a difference is expected.");
+            else if (r.ScopeCount is { } inScope && r.Kept < inScope)
+                parts.Add($"The walk read {r.Kept:N0} of {inScope:N0} — an empty page ended it early, " +
+                          "so this is a short read, not a local filter.");
+
+            // A re-walk on an all/keyword scope deliberately ignores the count, so
+            // the two totals disagree by design; the sentence names the total that
+            // steered it. (A collection or saved search never uses the count as its
+            // denominator, so saying this there would explain nothing.)
+            if (!r.CountDrivesTotal && r.Scope is ("all" or "search"))
                 parts.Add("This walk followed the pages' total instead of the count.");
 
             return parts.Count > 0
@@ -857,6 +878,14 @@ public partial class StepDedupViewModel : RunStateViewModel
         ? "Same hashCode value only — groups byte-identical catalog items."
         : "Hamming distance at the threshold, the way algorithmic hashes compare.";
 
+    /// <summary>
+    /// What the similarity search does with a catalog item instead of using the
+    /// server's content hash: it hashes pixels. A content hash only answers "is
+    /// this the same file", which is the duplicate scan's question.
+    /// </summary>
+    public string SimilarHashingHint =>
+        "Catalog items are downloaded and fingerprinted with the algorithm above; the catalog's own hash is a content hash, so it cannot say two images look alike.";
+
     partial void OnSelectedServerHashMatchChanged(int value)
     {
         OnPropertyChanged(nameof(ServerHashMatchHint));
@@ -902,7 +931,7 @@ public partial class StepDedupViewModel : RunStateViewModel
             if (SelectLargest) keep.Add("largest");
             var keepText = keep.Count == 0 ? "keep-set by hand" : $"keep {string.Join(" + ", keep)}";
 
-            var server = IsDaminion
+            var server = ShowsServerHashRule
                 ? $" · server hash: {ServerHashMatches[Math.Clamp(SelectedServerHashMatch, 0, ServerHashMatches.Length - 1)]}"
                 : "";
 
@@ -1072,11 +1101,20 @@ public partial class StepDedupViewModel : RunStateViewModel
     /// The scan's parameters as the dedup engine wants them (clamps included),
     /// mirroring StepUpscaleViewModel.BuildOptions. Public for tests.
     /// </summary>
+    /// <remarks>
+    /// The similarity profile does not use the catalog's own content hash. That
+    /// hash answers "is this the same file", so grouping it (exactly, or even by
+    /// hamming distance at a threshold meant for a 64-bit perceptual
+    /// fingerprint) is not a similarity search — and on Daminion 11.x every item
+    /// carries one, so the profile's algorithm and threshold never applied to a
+    /// single image. It hashes pixels instead.
+    /// </remarks>
     public DedupOptions BuildOptions() => new(
         (HashAlgorithm)Math.Clamp(SelectedAlgorithm, 0, Algorithms.Length - 1),
         Threshold,
         MaxDimension: 512,
-        ServerHashMatch: ServerHashMatch);
+        ServerHashMatch: ServerHashMatch,
+        UseServerHashes: !IsSimilar);
 
     private bool CanScan() => !IsScanning && (IsLocal ? !string.IsNullOrWhiteSpace(FolderPath) : DaminionReady);
 
@@ -1165,6 +1203,16 @@ public partial class StepDedupViewModel : RunStateViewModel
         }
     }
 
+    /// <summary>
+    /// True when a saved scan cannot describe this operation: a Similar result
+    /// built entirely from the catalog's content hashes. Those fingerprints
+    /// answer "is this the same file", which is the duplicate scan's question;
+    /// the similarity search hashes pixels. Internal so the rule is testable
+    /// without a catalog.
+    /// </summary>
+    internal static bool IsStaleSimilarCache(CachedDedupScan cached, bool isSimilar) =>
+        isSimilar && cached.PerceptualHashes.Count == 0 && cached.ExactHashes.Count > 0;
+
     private async Task RestoreCoreAsync(string sourceKey)
     {
         if (_fingerprintCache is null) return;
@@ -1190,6 +1238,18 @@ public partial class StepDedupViewModel : RunStateViewModel
         {
             SynapicLog.Info(nameof(StepDedupViewModel),
                 $"Saved {OperationTitle} scan skipped: it used {cached.Algorithm}, the current fingerprint is {algorithm}");
+            return;
+        }
+
+        // A similarity result with no perceptual fingerprints came from the old
+        // path that grouped the catalog's content hash. Restoring it would show
+        // the exact-match groups this operation no longer produces — and make a
+        // fixed build look unchanged on the next launch — so it is dropped and
+        // the source rescanned instead.
+        if (IsStaleSimilarCache(cached, IsSimilar))
+        {
+            SynapicLog.Info(nameof(StepDedupViewModel),
+                $"Saved {OperationTitle} scan skipped: it holds only catalog content hashes, not fingerprints");
             return;
         }
 
@@ -1322,7 +1382,11 @@ public partial class StepDedupViewModel : RunStateViewModel
             SynapicLog.Info(nameof(StepDedupViewModel),
                 $"Scan starting — source={(IsDaminion ? $"Daminion catalog, {ScopeIdForLog()}" : $"local folder '{FolderPath}'")}, " +
                 $"algorithm={opts.Algorithm}, threshold={opts.Threshold:0.###}, maxDimension={opts.MaxDimension}" +
-                (IsDaminion ? $", serverHashMatch={opts.ServerHashMatch}" : ""));
+                (IsDaminion
+                    ? opts.UseServerHashes
+                        ? $", serverHashMatch={opts.ServerHashMatch}"
+                        : ", hashing pixels (server hashes not used for similarity)"
+                    : ""));
 
             // Before pulling whole originals, drop anything a previous crash
             // left in the download folder — a scan is the only flow that can
@@ -1356,6 +1420,11 @@ public partial class StepDedupViewModel : RunStateViewModel
                     ? "No images found in this source — choose a folder or scope with images, then scan again."
                     : $"No {MatchNounPlural} found among {result.TotalFiles} images — try a lower threshold or another algorithm."
                 : $"{result.TotalFiles} files scanned — {Groups.Count} groups, {dupCount} {MatchNounPlural}";
+            // "500 files scanned" reads as the whole scope. When the walk ended
+            // before the scope's own count, say so next to the result instead of
+            // leaving it to the diagnostics block below.
+            if (IsDaminion && _lastRetrieval is { } walk && walk.ScopeCount is { } inScope && walk.Kept < inScope)
+                ScanSummary += $" The scope holds {inScope:N0}; the walk read {walk.Kept:N0}.";
             SynapicLog.Info(nameof(StepDedupViewModel), ScanSummary);
             TelemetryService.Shared.RecordDedup(dupCount);
 

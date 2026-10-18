@@ -49,12 +49,23 @@ public enum ServerHashMatchMode
     Hamming,
 }
 
-/// <summary>Dedup options (spec §5.3).</summary>
+/// <summary>
+/// Dedup options (spec §5.3).
+/// </summary>
+/// <remarks>
+/// <see cref="UseServerHashes"/> is the catalog shortcut: a Daminion item's own
+/// <c>hashCode</c> is a content hash, so identical files share it and need no
+/// download. It is only meaningful for the duplicate scan — a content hash says
+/// nothing about visual similarity, and comparing those values by hamming
+/// distance groups coincidences rather than lookalikes. The similarity profile
+/// therefore turns it off and hashes pixels.
+/// </remarks>
 public sealed record DedupOptions(
     HashAlgorithm Algorithm = HashAlgorithm.PHash,
     double Threshold = 0.90,
     int MaxDimension = 512,
-    ServerHashMatchMode ServerHashMatch = ServerHashMatchMode.Exact);
+    ServerHashMatchMode ServerHashMatch = ServerHashMatchMode.Exact,
+    bool UseServerHashes = true);
 
 /// <summary>Progress reported during hashing/grouping.</summary>
 public sealed record DedupProgress(int FilesHashed, int TotalFiles, int GroupsFound);
@@ -235,7 +246,9 @@ public sealed class DedupService : IDedupService
         };
         GroupDuplicates(perceptualHashes, opts, result.Groups);
         if (opts.ServerHashMatch == ServerHashMatchMode.Hamming)
-            GroupDuplicates(exactHashes, opts, result.Groups, hashType: "server-hash");
+            // The server hash is 32 bits wide, so its budget and its scores are
+            // measured against 32, not the perceptual fingerprint's 64.
+            GroupDuplicates(exactHashes, opts, result.Groups, hashType: "server-hash", bits: 32);
         else
             GroupExact(exactHashes, result.Groups);
         return result;
@@ -533,7 +546,8 @@ public sealed class DedupService : IDedupService
         IReadOnlyDictionary<string, ulong> hashes,
         DedupOptions opts,
         List<DuplicateGroup> groups,
-        string? hashType = null)
+        string? hashType = null,
+        int bits = 64)
     {
         var items = hashes.Keys.ToArray();
         var parent = new Dictionary<string, string>(items.Length);
@@ -553,7 +567,7 @@ public sealed class DedupService : IDedupService
         }
 
         // Normalize hamming distance to a 0-1 similarity; threshold 0.90 → ≤6 bits differ.
-        var maxDistance = MaxHammingDistance(opts.Threshold);
+        var maxDistance = MaxHammingDistance(opts.Threshold, bits);
         // Hoist the hash values into an array: this is the O(n²) hot loop, and
         // two dictionary lookups per pair dominate it on a large scope.
         var values = new ulong[items.Length];
@@ -574,7 +588,7 @@ public sealed class DedupService : IDedupService
             var groupItems = component.OrderBy(p => p).ToArray();
             var representative = groupItems[0];
             var scores = groupItems
-                .Select(p => 1.0 - HammingDistance(hashes[p], hashes[representative]) / 64.0)
+                .Select(p => 1.0 - HammingDistance(hashes[p], hashes[representative]) / (double)bits)
                 .ToArray();
 
             groups.Add(new DuplicateGroup
@@ -624,6 +638,12 @@ public sealed class DedupService : IDedupService
     /// The hamming-distance cutoff a threshold maps to: 0.90 of 64 bits means at
     /// most 6 may differ. Public so the Daminion scan's diagnostics can state
     /// the rule the comparison actually used.
+    ///
+    /// <paramref name="bits"/> is the fingerprint's width, not always 64: the
+    /// Daminion server hash is a signed 32-bit value (every observed value fits
+    /// <c>int</c>), so a budget derived from 64 bits would allow twice the share
+    /// of the hash a threshold promises.
     /// </summary>
-    public static int MaxHammingDistance(double threshold) => (int)Math.Round(64 * (1.0 - threshold));
+    public static int MaxHammingDistance(double threshold, int bits = 64) =>
+        (int)Math.Round(bits * (1.0 - threshold));
 }

@@ -32,18 +32,11 @@
         <TextBlock Classes="hint"
                    Text="Lower is looser: 0.85 groups re-encodes, crops and light edits, 0.90 and above narrows toward exact copies. Similar pairs chain — A-B and B-C group all three even when A and C are further apart — so a low threshold can build large groups." />
 
-        <WrapPanel>
-          <TextBlock Classes="fieldLabel" Text="Server hash:" Margin="0,0,8,8"
-                     IsVisible="{Binding IsDaminion}"
-                     help:HelpScope.Topic="settings-reference.html#similar-server-hash" />
-          <ComboBox SelectedIndex="{Binding SelectedServerHashMatch, Mode=TwoWay}"
-                    ItemsSource="{Binding ServerHashMatches}" MinWidth="140"
-                    Margin="0,0,16,8"
-                    IsVisible="{Binding IsDaminion}"
-                    help:HelpScope.Topic="settings-reference.html#similar-server-hash" />
-        </WrapPanel>
-
-        <TextBlock Classes="hint" Text="{Binding ServerHashMatchHint}" IsVisible="{Binding IsDaminion}" />
+        <!-- No server-hash rule here: the catalog's content hash answers "is this
+             the same file", so a similarity search hashes pixels instead. The
+             duplicate scan's panel offers the rule. -->
+        <TextBlock Classes="hint" Text="{Binding SimilarHashingHint}"
+                   IsVisible="{Binding IsDaminion}" />
       </StackPanel>
     </Border>
 

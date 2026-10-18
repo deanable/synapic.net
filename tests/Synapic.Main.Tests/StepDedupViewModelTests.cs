@@ -493,6 +493,32 @@ public class StepDedupViewModelTests
         }
     }
 
+    /// <summary>
+    /// A saved-search walk can end at an empty page long before the scope's own
+    /// count — the live run read 500 of 6,704 that way. Nothing had been filtered
+    /// on this side, so the block must not excuse the gap as "filtered locally";
+    /// it is a short read and says so.
+    /// </summary>
+    [Fact]
+    public void Retrieval_diagnostics_call_a_short_saved_search_walk_a_short_read()
+    {
+        var vm = new StepDedupViewModel { DatasourceType = "daminion" };
+        vm.ApplyRetrievalDiagnostics(new CatalogRetrievalDiagnostics(
+            Scope: "saved_search",
+            ScopeCount: 6704,
+            PageTotal: 0,
+            Pages: 1,
+            Scanned: 500,
+            Kept: 500,
+            CountDrivesTotal: false,
+            ReportedUtc: DateTime.UtcNow));
+
+        Assert.Contains("500", vm.RetrievalComparisonText);
+        Assert.Contains(6704.ToString("N0"), vm.RetrievalComparisonText);
+        Assert.Contains("short read", vm.RetrievalComparisonText);
+        Assert.DoesNotContain("filtered locally", vm.RetrievalComparisonText);
+    }
+
     /// <summary>A local scan drives the same bar, so it never reads "Idle" mid-run.</summary>
     [Fact]
     public void Local_hash_progress_reports_files_and_an_eta()

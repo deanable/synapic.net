@@ -254,6 +254,46 @@ public sealed class DaminionSelectionBehaviorTests
     }
 
     /// <summary>
+    /// A server that means page serials by `index` — what the REST reference
+    /// documents — answers page 0 and then nothing at the offsets this walk has
+    /// always sent. The search knows how many records it holds, so the walk must
+    /// not stop there: it continues with page serials and still fetches the whole
+    /// scope. This is the live saved-search case (500 of 6,704 fetched).
+    /// </summary>
+    [Fact]
+    public async Task Whole_scope_fetch_continues_with_page_serials_when_offsets_run_dry()
+    {
+        using var server = new CatalogServer(
+            index =>
+            {
+                // One page per serial: 0..1500 in three pages of 500.
+                var start = index * 500;
+                return start >= 1500 ? "{}" : Page(start, Math.Min(500, 1500 - start));
+            },
+            countBody: _ => "{\"count\":1500}");
+        var client = await Connect(server);
+        var reports = new List<CatalogFetchProgress>();
+
+        var items = await WorkflowRunner.FetchEntireScopeAsync(new DatasourceSelection
+        {
+            IsDaminion = true,
+            DaminionClient = client,
+            MaxItems = 100,
+            AutoPaginate = false,
+        }, new RecordingProgress<CatalogFetchProgress>(reports.Add), CancellationToken.None);
+
+        Assert.Equal(1500, items.Count);
+        Assert.Equal(1, items[0].DaminionId);
+        Assert.Equal(1500, items[^1].DaminionId);
+        // Page 0, the empty offset page (index 500 is past the end under page
+        // serials), then serials 1 and 2 — and no fourth request, because the
+        // count said the scope held 1,500 records.
+        Assert.Equal(new[] { 0, 500, 1, 2 }, server.GetIndexes);
+        Assert.Equal(1500, reports[^1].Scanned);
+        Assert.All(reports, r => Assert.Equal(1500, r.Total));
+    }
+
+    /// <summary>
     /// The read-only diagnostics view needs all three numbers together: the
     /// count the source panel shows, the total the pages reported and what was
     /// actually kept. A server whose pages claim the catalog size is exactly the

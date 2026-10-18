@@ -189,15 +189,91 @@ public class DedupScanHandlerTests
             new ProcessWorkItem { DaminionId = 2, FileName = "b.jpg", ServerHashCode = 200 },
             CancellationToken.None);
 
-        var hamming = Options with { ServerHashMatch = ServerHashMatchMode.Hamming };
+        // 100 ^ 200 = 5 bits. The server hash is 32 bits wide, so 0.90 allows
+        // only round(32 × 0.10) = 3; 0.85 allows 5 and bridges the pair. That is
+        // the opt-in rule the user picks when the server hash turns out to be
+        // perceptual — measured on the hash's own width, not on 64 bits.
+        var hamming = Options with { ServerHashMatch = ServerHashMatchMode.Hamming, Threshold = 0.85 };
         var result = new DedupService().GroupFromHashes(
             handler.PerceptualHashes, handler.ExactHashes, hamming);
 
-        // 100 ^ 200 = 5 bits, inside the threshold's 6 — the opt-in rule the user
-        // picks when the server hash turns out to be perceptual.
         var group = Assert.Single(result.Groups);
         Assert.Equal(2, group.Items.Length);
         Assert.Equal("server-hash", group.HashType);
+    }
+
+    /// <summary>
+    /// The similarity profile turns the shortcut off. A content hash answers "is
+    /// this the same file", so reusing it made every catalog similarity scan an
+    /// exact-match scan — the algorithm and threshold applied to no item at all
+    /// (a live run reported "500 items, 500 from server hash, 0 hashed").
+    /// </summary>
+    [Fact]
+    public async Task Similar_scan_hashes_pixels_instead_of_reusing_the_server_hash()
+    {
+        var downloader = new FakeDownloader();
+        var dedup = new FakeDedup();
+        var handler = new DedupScanHandler(downloader, Options with { UseServerHashes = false }, dedup);
+
+        await handler.ProcessAsync(
+            new ProcessWorkItem { DaminionId = 1, FileName = "a.jpg", ServerHashCode = 12345 },
+            CancellationToken.None);
+
+        // The item is downloaded and fingerprinted, not filed under its content hash.
+        Assert.Equal(1, downloader.DownloadOriginalCallCount);
+        Assert.Equal(1, dedup.ComputeHashCallCount);
+        Assert.Empty(handler.ExactHashes);
+        Assert.Single(handler.PerceptualHashes);
+        Assert.Equal(0, handler.ServerHashGrouped);
+    }
+
+    /// <summary>
+    /// Daminion's hashCode is a signed 32-bit number (every observed value fits
+    /// int, about half negative). Casting long → ulong sign-extends, so a
+    /// negative value carried 32 bits of 1s that a positive value could never
+    /// match: Hamming mode compared the sign padding, and a page of unrelated
+    /// items yielded three "similar" groups out of pure coincidence.
+    /// </summary>
+    [Fact]
+    public async Task A_negative_server_hash_is_zero_extended_to_32_bits()
+    {
+        var handler = new DedupScanHandler(new FakeDownloader(), Options, new FakeDedup());
+
+        await handler.ProcessAsync(
+            new ProcessWorkItem { DaminionId = 1, FileName = "a.jpg", ServerHashCode = -1 },
+            CancellationToken.None);
+
+        Assert.Equal(0xFFFF_FFFFUL, handler.ExactHashes["daminion:1"]);
+        // The record still carries the server's own value for display and logs.
+        Assert.Equal(-1, handler.Records["daminion:1"].ServerHashCode);
+    }
+
+    /// <summary>
+    /// The hamming budget for a 32-bit server hash must be derived from 32 bits.
+    /// -1 and 0x7FFFFFFF differ in exactly one bit of 32; the sign-extending cast
+    /// put 33 bits between them, so the pair could never group.
+    /// </summary>
+    [Fact]
+    public void Server_hash_hamming_is_measured_over_32_bits()
+    {
+        var hashes = new Dictionary<string, ulong>
+        {
+            ["daminion:1"] = 0xFFFF_FFFFUL,          // -1
+            ["daminion:2"] = 0x7FFF_FFFFUL,          // int.MaxValue
+        };
+        var opts = Options with { ServerHashMatch = ServerHashMatchMode.Hamming };
+
+        var result = new DedupService().GroupFromHashes(
+            new Dictionary<string, ulong>(), hashes, opts);
+
+        var group = Assert.Single(result.Groups);
+        Assert.Equal(2, group.Items.Length);
+        // 1 of 32 bits differs, so the pair sits at 0.96875 — not 1 − 33/64 = 0.48.
+        Assert.Equal(1.0 - 1.0 / 32.0, group.SimilarityScores[1], 6);
+        // The same threshold is a smaller budget on a narrower hash: 10% of 32
+        // bits, not 10% of 64.
+        Assert.Equal(3, DedupService.MaxHammingDistance(0.90, bits: 32));
+        Assert.Equal(6, DedupService.MaxHammingDistance(0.90));
     }
 
     [Fact]

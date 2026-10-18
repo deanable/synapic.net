@@ -299,6 +299,15 @@ saved-search pages keep the page total, because their raw cursor and a locally
 filtered count are not on the same scale), and warns when a page's total
 contradicts it or when a server-filtered walk returns fewer items than the
 scope count — the two symptoms of the old "500 of 47,851" progress bar.
+Paging itself is resilient to the two meanings of `index`: the walk steps by
+item offset (what every working catalog walk has been served with), but when a
+page comes back empty while the search's own record count still has records
+left, it continues with **page serials** — what the REST reference documents
+for `index` — resuming at the page the raw records already cover, and stops once
+that count is collected (with a page budget as the backstop). That is how a
+saved-search scope that answered page 0 and nothing else still gets fetched
+whole; the switch, the mode each page used and any shortfall are all logged, and
+`Scanned` in the diagnostics is the raw records the server returned.
 `FetchEntireScopeAsync` also takes an optional one-shot
 `CatalogRetrievalDiagnostics` sink. At the end of a whole-scope walk it reports
 the scope count, the last page total, the pages read, the raw records scanned
@@ -407,9 +416,15 @@ ignored as the denominator (one-shot; the shared Stop still cancels it), and
 `ExportRetrievalReportCommand` always writes the last report to a timestamped
 text file in Documents (`BuildRetrievalReport`; path injectable for tests). It
 is shown only for a Daminion source and after a walk; the numbers are not
-editable and neither action touches the catalog. The
-Server
-hash picker (Daminion only) decides how those server hashes are compared —
+editable and neither action touches the catalog. A walk that ends before the
+scope's own count while dropping nothing on this side is reported as a short
+read (`RetrievalComparisonText`), never excused as "filtered locally" — that
+excuse is now reserved for `Scanned > Kept`, and `ScanSummary` carries
+"The scope holds N; the walk read M." next to the result.
+`BuildOptions` decides whether the catalog's content hash may be grouped:
+`UseServerHashes: !IsSimilar`. The Server
+hash picker (Deduplication only — `ShowsServerHashRule`) decides how those
+server hashes are compared —
 Exact (identical values only, the default) or Hamming at the threshold. Produces 
 `Groups` — a vertical list of
 `DuplicateGroupViewModel` cards, each holding `DedupItemViewModel` rows with an
@@ -448,7 +463,11 @@ with the current settings (`GroupFromHashes`), rebuilds the rows (catalog rows
 keep their ids, so Apply works after reconnecting) and sets `ScanSummary` to
 say the results are from the last scan. It is skipped when the saved algorithm
 no longer matches the selected one, when a scan/apply has already rebuilt the
-list, and after the source moves again mid-load; a corrupt, truncated or
+list, and after the source moves again mid-load. The Similar profile also
+discards a saved result that holds only catalog content hashes and no
+fingerprints (`IsStaleSimilarCache`) — that is the old server-hash path's
+output, and restoring it would show exact-match groups the search no longer
+produces; a corrupt, truncated or
 other-version file is logged and ignored, never repaired. `Apply` deletes the
 source's file (its fingerprints describe files that have changed), a rescan
 replaces it, and a scan larger than `MaxItems` (250,000) is not cached.
@@ -723,7 +742,14 @@ fetching, throttling, pause/cancel, progress with ETA, error isolation and the
 
 **`DedupScanHandler`** — the Daminion dedup scan's per-item operation.
 For items that carry a server-computed `HashCode` (from `DaminionItem`), the 
-item is grouped directly from that hash — no download, no algorithmic hash. 
+item is grouped directly from that hash — no download, no algorithmic hash —
+unless the scan set `DedupOptions.UseServerHashes = false`, which the similarity
+profile does: a content hash answers "is this the same file", not "does this look
+alike", so reusing it made every catalog similarity scan an exact-match scan (a
+live run reported 500 items, 500 grouped from server hash, 0 hashed). The value
+is stored zero-extended over 32 bits (`unchecked((ulong)(uint)serverHash)`):
+Daminion's hash is a signed 32-bit number, and casting long → ulong
+sign-extended it into 32 guaranteed-equal (or guaranteed-different) high bits.
 For items without a server hash (older server builds, or scoped queries that 
 omit it), the original is downloaded and hashed the old way (download → 
 `DedupService.ComputeHash` → record → delete temp). One item at a time keeps 
@@ -769,7 +795,10 @@ its own 8×8 / 32×32 grid;
 `GroupFromHashes(perceptualHashes, exactHashes, opts)` groups already-computed
 hashes — the Daminion scan's
 incremental path; server hashes are compared only with each other, by
-`DedupOptions.ServerHashMatch` (exact equality by default, hamming on request).
+`DedupOptions.ServerHashMatch` (exact equality by default, hamming on request),
+and their hamming budget and similarity scores are measured over the hash's own
+32 bits — `MaxHammingDistance(threshold, bits)` takes the width, because 10% of
+32 bits is not 10% of 64.
 Both it and `FindDuplicatesAsync` put the dictionaries they grouped on the
 returned `DedupResult` (`PerceptualHashes` / `ExactHashes`), which is what lets
 the results page re-group at another threshold without reading, hashing or
