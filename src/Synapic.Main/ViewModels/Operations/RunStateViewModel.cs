@@ -14,6 +14,13 @@ namespace Synapic.Main.ViewModels.Operations;
 /// </summary>
 public abstract partial class RunStateViewModel : ViewModelBase
 {
+    public RunStateViewModel()
+    {
+        // Log lines arrive from run callbacks (marshalled by RunLog), so the
+        // bar's log-box visibility is driven on the same notifications.
+        LogLines.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasLogLines));
+    }
+
     /// <summary>The active run's cancellation source; null while idle.</summary>
     protected CancellationTokenSource? Cts;
 
@@ -22,6 +29,13 @@ public abstract partial class RunStateViewModel : ViewModelBase
 
     /// <summary>The run log every run view binds; appended through <see cref="RunLog"/>.</summary>
     public ObservableCollection<string> LogLines { get; } = new();
+
+    /// <summary>
+    /// Whether the run log currently has anything to show: the run bar collapses
+    /// its log box while this is false, so an idle operation does not reserve
+    /// grey space under its action buttons for a log nothing has written to yet.
+    /// </summary>
+    public bool HasLogLines => LogLines.Count > 0;
 
     [ObservableProperty]
     private double _progressPercent;

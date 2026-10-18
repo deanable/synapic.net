@@ -1191,6 +1191,118 @@ public sealed class DaminionApiClient
     }
 
     /// <summary>
+    /// Set the Flag field on items via POST /api/ItemData/BatchChange with the
+    /// Flag tag's guid and its documented text value ("Approved"/
+    /// "Rejected"/"Unassigned", id 0 — the server resolves the text). The dedup
+    /// and similar pages write="Rejected" to mark identified items before a
+    /// manual review pass (marking is reversible; deleting catalog entries is
+    /// not, which is why delete gets the confirmation and this does not).
+    ///
+    /// Like <see cref="DeleteItemsAsync"/>, the call is only believed when it is
+    /// verified: the ids are read back with GetByIds and the write counts as
+    /// done once every one of them answers with the requested flag (one settle
+    /// retry, for asynchronously indexing servers). A BatchChange response of
+    /// <c>{success:true}</c> alone proves nothing — that response also happens
+    /// on writes the server silently ignored.
+    /// </summary>
+    public async Task<bool> SetItemsFlagAsync(
+        IReadOnlyCollection<int> itemIds,
+        DaminionFlagValue flag,
+        CancellationToken ct = default)
+    {
+        if (itemIds.Count == 0) return true;
+        var ids = itemIds.ToArray();
+        var guid = GetTagGuid("flag", "Flag");
+        if (guid is null)
+        {
+            SynapicLog.Warning(nameof(DaminionApiClient),
+                $"Cannot set flag '{flag}' on {ids.Length} item(s) — the catalog's default layout did not include the Flag tag, so its guid is unknown");
+            return false;
+        }
+        var valueText = flag.ToString();
+        try
+        {
+            var resp = await WithSessionRecoveryAsync(api => api.BatchChange(new DaminionBatchChangeRequest
+            {
+                Ids = ids,
+                Data = new[] { new DaminionTagOperation { Guid = guid, Id = 0, Value = valueText, Remove = false } },
+                Delete = false,
+            }, ct), ct).ConfigureAwait(false);
+
+            SynapicLog.Info(nameof(DaminionApiClient),
+                $"POST /api/ItemData/BatchChange ids=[{string.Join(",", ids)}] flag={valueText} → " +
+                TruncateJson(resp));
+
+            return await VerifyFlagsAsync(ids, flag, ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Error(nameof(DaminionApiClient),
+                $"Failed to set flag '{valueText}' on {ids.Length} item(s): {e.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>Flag write read-back: report success only when every id answers
+    /// with the requested value, with one settle retry for async indexing — the
+    /// same honesty the catalog delete applies.</summary>
+    private async Task<bool> VerifyFlagsAsync(int[] ids, DaminionFlagValue expected, CancellationToken ct)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            DaminionItemsResponse? resp = null;
+            try
+            {
+                resp = await WithSessionRecoveryAsync(
+                    api => api.GetItemsByIds(string.Join(",", ids), ct), ct).ConfigureAwait(false);
+            }
+            catch (Exception e)
+            {
+                SynapicLog.Warning(nameof(DaminionApiClient),
+                    $"Flag read-back for {ids.Length} item(s) failed: {e.Message}");
+            }
+
+            if (resp is { } response)
+            {
+                var matching = response.EffectiveItems.Count(i => FlagEquals(i, expected));
+                if (matching == ids.Length)
+                {
+                    SynapicLog.Info(nameof(DaminionApiClient),
+                        $"Flag set to '{expected}' on {ids.Length} item(s) (verified: GetByIds reports it on every one)");
+                    return true;
+                }
+                SynapicLog.Info(nameof(DaminionApiClient),
+                    $"Flag read-back: {matching} of {ids.Length} item(s) currently report '{expected}'");
+            }
+
+            if (attempt > 0)
+            {
+                SynapicLog.Warning(nameof(DaminionApiClient),
+                    $"Flag verification failed — not every id of {ids.Length} answers '{expected}' (permissions or server build?)");
+                return false;
+            }
+            await Task.Delay(750, ct).ConfigureAwait(false); // async-index settle, like Remove
+        }
+    }
+
+    /// <summary>True when the record's flag (numeric 0/1/2 or the text form)
+    /// matches the requested value.</summary>
+    private static bool FlagEquals(DaminionItem item, DaminionFlagValue expected)
+    {
+        if (item.Flag is not { } flag) return false;
+        return flag.ValueKind switch
+        {
+            JsonValueKind.Number => flag.GetInt32() == (int)expected,
+            JsonValueKind.String => string.Equals(flag.GetString(), expected.ToString(), StringComparison.OrdinalIgnoreCase),
+            _ => false,
+        };
+    }
+
+    /// <summary>
     /// Remove catalog entries via POST /api/MediaItems/Remove — the call the
     /// original Python client makes (<c>daminion_api.py delete_items</c>). The
     /// files on the server's disk are not touched (delete:false), only the

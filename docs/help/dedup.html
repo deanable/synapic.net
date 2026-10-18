@@ -69,7 +69,7 @@ reports what it still holds &mdash; which should read zero files.</p>
 <span class="ui">Server hash</span> rule decides how the catalog's own
 content hashes are compared: <span class="ui">Exact</span> (the default) trusts
 only identical values, <span class="ui">Hamming</span> compares them by
-similarity at the threshold. (Only this operation can use the server hash —
+similarity at the threshold. (Only this operation can use the server hash &mdash;
 <a href="similar.html">Similar images</a> always hashes pixels, because a
 content hash says nothing about whether two images look alike.)</li>
 <li>Press <span class="ui">Scan</span>. On a catalog source the scan first
@@ -138,7 +138,7 @@ it holds and lists them as rows &mdash; a small preview thumbnail, name, capture
 date and file size &mdash; every row with its own checkbox. Previews are scaled
 down in memory as the list loads (for the catalog source they come straight
 from the server's thumbnail endpoint); the preview itself is never written to
-disk (the scan's fingerprints and row details are — see <em>Coming back to a
+disk (the scan's fingerprints and row details are &mdash; see <em>Coming back to a
 scan</em> below). A row whose
 image cannot be decoded simply shows no thumbnail. <strong>A checked item is
 kept</strong>; the action applies to the unchecked ones.</p>
@@ -202,10 +202,15 @@ group of two is easy to read; a group of nine is worth opening a couple of.</p>
 <tr><td><span class="ui">Move to folder&hellip;</span> (local source)</td><td>Moves the unchecked files into the folder you pick &mdash; a destination box appears beside the action when this is selected. Nothing is destroyed, and duplicates of the same name in that folder get a numbered suffix (<span class="path">photo (2).jpg</span>) instead of overwriting. The destination folder is remembered for next time, and it must not be inside the scanned folder.</td></tr>
 <tr><td><span class="ui">Tag</span> (local source)</td><td>Not implemented in this version. It records the intent in the log and changes nothing, so do not rely on it to mark duplicates. Use Move to folder, or note them in your catalog by hand.</td></tr>
 <tr><td><span class="ui">Delete from catalog</span> (Daminion source)</td><td>Removes the unchecked items from the Daminion catalog. The original files on the server are not touched, but the catalog entries are: a confirmation prompt appears first, and after that there is no undo. The items are asked for again straight after the delete, so the summary only reports success when the server really dropped them &mdash; otherwise you get <span class="ui">Catalog delete failed</span> and the reason in the log. The scan itself changes nothing &mdash; only <span class="ui">Apply</span> does.</td></tr>
+<tr><td><span class="ui">Reject in catalog</span> (Daminion source)</td><td>Marks the unchecked items <span class="ui">Rejected</span> in the Daminion catalog (the red reject flag) instead of deleting them &mdash; the layer for going through the identified images by hand in Daminion first and deciding there. Nothing is deleted and no prompt appears: rejecting is reversible, so you can un-reject anything later. The write is read straight back, so the summary only reports success when the server really applied the flag; acted-on rows leave the review list and the group list keeps what is left. The scan itself changes nothing &mdash; only <span class="ui">Apply</span> does.</td></tr>
 </table>
 
-<p>After an action the groups it touched are removed from the list and the
-summary reports the result, for example <span class="ui">Moved 4 duplicate(s) to &hellip;</span>. Anything that failed is in the log.</p>
+<p>After a destructive action the groups it touched are removed from the list
+and the summary reports the result, for example <span class="ui">Moved 4
+duplicate(s) to &hellip;</span>. After a <span class="ui">Reject in
+catalog</span> only the rejected rows and the groups they emptied leave the
+list, and what remains stays reviewable (and re-filterable with the threshold
+slider). Anything that failed is in the log.</p>
 
 <h2>When a scan does not do what you expected</h2>
 

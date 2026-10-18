@@ -701,7 +701,7 @@ public class StepDedupViewModelTests
         Assert.True(vm.IsDaminion);
         Assert.False(vm.IsLocal);
         Assert.False(vm.IsLocalSelected);
-        Assert.Equal(new[] { "Delete from catalog" }, vm.Actions);
+        Assert.Equal(new[] { "Delete from catalog", "Reject in catalog" }, vm.Actions);
         Assert.Equal(0, vm.SelectedAction); // clamped back to the new list
 
         vm.IsLocalSelected = true;

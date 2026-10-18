@@ -133,6 +133,25 @@ public partial class DuplicateGroupViewModel : ObservableObject
 
     public string Summary => $"{Items.Count(i => !i.IsChecked)} selected for the action — {Items.Count(i => i.IsChecked)} kept";
 
+    /// <summary>
+    /// Drop the acted-on rows (an applied "Reject in catalog") and refresh the
+    /// count-derived texts the card shows. Rows the group keeps keep their
+    /// previews; the detached ones lose theirs. Internal so the step's apply
+    /// flow drives it and tests can too.
+    /// </summary>
+    internal void RemoveActedItems(HashSet<string> actedKeys)
+    {
+        foreach (var item in Items.Where(i => actedKeys.Contains(i.Key)).ToList())
+        {
+            item.SelectionChanged -= OnItemSelectionChanged;
+            Items.Remove(item);
+            item.DisposeThumb();
+        }
+        OnPropertyChanged(nameof(Header));
+        OnPropertyChanged(nameof(Summary));
+        SelectionChanged?.Invoke();
+    }
+
     /// <summary>Detach and dispose every row preview — the group is leaving
     /// the list (fresh scan or applied action).</summary>
     internal void DisposeThumbs()
@@ -941,8 +960,14 @@ public partial class StepDedupViewModel : RunStateViewModel
 
     public string[] LocalActions { get; } = { "Tag", "Move to folder…", "Delete from disk" };
 
-    /// <summary>Actions offered per source: Daminion only supports deleting catalog entries.</summary>
-    public string[] Actions => IsDaminion ? new[] { "Delete from catalog" } : LocalActions;
+    /// <summary>Actions offered per source. Catalog items can go two ways:
+    /// deleted from the catalog (destructive, confirmed), or marked rejected so
+    /// the identified files can be gone through by hand in Daminion first —
+    /// a reversible flag write, no confirmation. Local files get tag/move/delete.
+    /// </summary>
+    public string[] Actions => IsDaminion
+        ? ["Delete from catalog", "Reject in catalog"]
+        : LocalActions;
 
     [ObservableProperty]
     private int _selectedAction; // index into Actions
@@ -2096,16 +2121,22 @@ public partial class StepDedupViewModel : RunStateViewModel
             .ToList();
         if (targets.Count == 0) return;
 
+        var client = IsDaminion ? _step1?.ConnectedClient : null;
+        if (IsDaminion && client is null) return;
+
+        // Index into Actions: catalog item index 1 is "Reject in catalog" (and
+        // is only offered on a Daminion source), local index 1 is the move-to
+        // folder action. Resolved here because both the pre-apply log and the
+        // confirmation gate below name the chosen action before anything runs.
+        var rejecting = client is not null && SelectedAction == 1;
+
         // Say what is about to happen before any destructive call goes out —
         // the summary line after Apply only reports what the call claimed.
         SynapicLog.Info(nameof(StepDedupViewModel),
-            IsDaminion
-                ? $"Apply requested — remove {targets.Count} item(s) from the catalog: "
+            client is not null
+                ? $"Apply requested — {(rejecting ? "mark rejected" : "remove")} {targets.Count} item(s) in the catalog: "
                   + $"ids [{string.Join(", ", targets.Where(t => t.DaminionId is not null).Select(t => t.DaminionId))}]"
                 : $"Apply requested — {SelectedActionLabel()} on {targets.Count} {MatchNoun} file(s)");
-
-        var client = IsDaminion ? _step1?.ConnectedClient : null;
-        if (IsDaminion && client is null) return;
 
         var ids = client is not null
             ? targets.Where(t => t.DaminionId is not null).Select(t => t.DaminionId!.Value).ToList()
@@ -2115,7 +2146,7 @@ public partial class StepDedupViewModel : RunStateViewModel
         // The prompts are the user's decision, not the operation: they settle
         // before the busy state starts, so the bar measures the work itself (and
         // a declined prompt never flashes one).
-        if (client is not null)
+        if (client is not null && !rejecting)
         {
             // Fail closed: no confirmation hook wired = no catalog delete.
             if (ConfirmAction is null ||
@@ -2153,10 +2184,20 @@ public partial class StepDedupViewModel : RunStateViewModel
         {
             if (client is not null)
             {
-                ok = await client.DeleteItemsAsync(ids, ct);
-                summary = ok
-                    ? $"Deleted {ids.Count} item(s) from the Daminion catalog"
-                    : "Catalog delete failed — see log";
+                if (rejecting)
+                {
+                    ok = await client.SetItemsFlagAsync(ids, DaminionFlagValue.Rejected, ct);
+                    summary = ok
+                        ? $"Rejected {ids.Count} item(s) in the Daminion catalog"
+                        : "Catalog reject failed — see log";
+                }
+                else
+                {
+                    ok = await client.DeleteItemsAsync(ids, ct);
+                    summary = ok
+                        ? $"Deleted {ids.Count} item(s) from the Daminion catalog"
+                        : "Catalog delete failed — see log";
+                }
             }
             else
             {
@@ -2189,22 +2230,48 @@ public partial class StepDedupViewModel : RunStateViewModel
 
         if (ok)
         {
-            // Groups that had something acted on leave the list; groups where the
-            // user kept everything remain (nothing happened there).
-            foreach (var group in Groups.Where(g => g.Items.Any(i => !i.IsChecked)).ToList())
+            if (rejecting)
             {
-                group.SelectionChanged -= OnGroupSelectionChanged;
-                Groups.Remove(group);
-                group.DisposeThumbs();
-            }
+                // Rejection keeps the files, so the fingerprints still describe
+                // the source: the rows acted on leave the review list (find them
+                // by key — checkboxes may have changed while the call ran),
+                // groups reduced to a single image stop being matches, but the
+                // retained results and the saved scan stay armed for the slider
+                // and a restart. What was rejected can be re-reviewed (and
+                // un-rejected) in Daminion itself.
+                var acted = new HashSet<string>(targets.Select(t => t.Key));
+                foreach (var group in Groups.ToList())
+                {
+                    if (!group.Items.Any(i => acted.Contains(i.Key))) continue;
+                    group.RemoveActedItems(acted);
 
-            // The acted-on files are gone or moved, so the retained fingerprints
-            // no longer describe the source: the slider must not re-group what is
-            // no longer there. The next scan re-arms it — and the saved copy is
-            // dropped too, or a restart would offer to re-group deleted files.
-            _lastScan = null;
-            if (_scanSourceKey is not null) _fingerprintCache?.Delete(OperationKey, _scanSourceKey);
-            OnPropertyChanged(nameof(CanRetune));
+                    if (group.Items.Count > 1) continue; // still a match group
+                    // A group reduced to a single image has no match left to
+                    // review — it goes the way the acted-on rows did.
+                    group.SelectionChanged -= OnGroupSelectionChanged;
+                    Groups.Remove(group);
+                    group.DisposeThumbs();
+                }
+            }
+            else
+            {
+                // Groups that had something acted on leave the list; groups where the
+                // user kept everything remain (nothing happened there).
+                foreach (var group in Groups.Where(g => g.Items.Any(i => !i.IsChecked)).ToList())
+                {
+                    group.SelectionChanged -= OnGroupSelectionChanged;
+                    Groups.Remove(group);
+                    group.DisposeThumbs();
+                }
+
+                // The acted-on files are gone or moved, so the retained fingerprints
+                // no longer describe the source: the slider must not re-group what is
+                // no longer there. The next scan re-arms it — and the saved copy is
+                // dropped too, or a restart would offer to re-group deleted files.
+                _lastScan = null;
+                if (_scanSourceKey is not null) _fingerprintCache?.Delete(OperationKey, _scanSourceKey);
+                OnPropertyChanged(nameof(CanRetune));
+            }
         }
         UpdateSummary();
     }

@@ -631,6 +631,15 @@ parameter set (documented on the interface).
   actually gone. It previously posted `delete:true` to `ItemData/BatchChange`,
   which answers `success:true` without removing anything — the bug behind "dedup
   delete did nothing". Logs the request ids and the response envelope.
+- `SetItemsFlagAsync(ids, DaminionFlagValue)` — the reversible half of the
+  catalog actions: writes the Flag field via `ItemData/BatchChange` with the
+  Flag tag's guid (resolved from the default layout; no guid → no request,
+  fail closed) and the documented text value (`Rejected`/`Approved`/
+  `Unassigned`, id 0 so the server resolves the text). Then **verifies** like
+  the delete: `GetByIds` read-back (one 750 ms settle retry) must report the
+  requested flag on every id before the call says it worked. Used by the dedup
+  and similar apply's "Reject in catalog" (= `Rejected`), which never prompts
+  because rejection is reversible; delete keeps its fail-closed confirmation.
 - Version control for the upscale flow: `CheckOutItemsAsync(ids)` /
   `UndoCheckOutItemsAsync(ids)` (POST `{"Ids":[…]}`, `false` when the server
   refuses so the item is skipped/rolled back) and
@@ -647,7 +656,9 @@ variation (`mediaItems` / `items` / `data`, `count` / `totalCount` / `data`),
 `DaminionCollection`,
 `DaminionVerifyResult`, `DaminionBatchChangeRequest`,
 `DaminionTagOperation`, `DaminionRemoveRequest` (ids + delete flag),
-`DaminionRemoveResponse` (per-id status map + success/errorCode envelope).
+`DaminionRemoveResponse` (per-id status map + success/errorCode envelope),
+`DaminionFlagValue` (`Unassigned`/`Approved`/`Rejected` — the numeric ids the
+item records carry and the text forms the search filter and BatchChange use).
 
 `DaminionItem.HashCode` is the server-computed content hash from the Daminion 
 API's `/api/MediaItems/Get` response (`hashCode` field). It is recalculated 

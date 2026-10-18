@@ -19,7 +19,7 @@ reports each image, and the one that ends the run.</p>
 
 <table>
 <tr><th class="setting">Where</th><th>What it holds</th></tr>
-<tr><td>The run log inside a processing view</td><td>The most recent lines of that operation's run, scrolling as the batch runs. Includes the inference server's own error output, prefixed <code>[sidecar:err]</code>.</td></tr>
+<tr><td>The run log inside a processing view</td><td>The most recent lines of that operation's run, scrolling as the batch runs. Includes the inference server's own error output, prefixed <code>[sidecar:err]</code>. While nothing has been logged the run bar hides the log box entirely, so an idle run does not reserve space for it underneath its action row.</td></tr>
 <tr><td>The log drawer at the bottom of the window</td><td>The app-wide log, and the place a build's or a download's own output appears. Shown only while <span class="ui">Show diagnostics</span> is ticked in Settings &rsaquo; App &rsaquo; Logging.</td></tr>
 <tr><td><span class="path">logs\synapic.log</span>, next to the executable</td><td>The current run, written as it happens. It starts empty each time the app starts.</td></tr>
 <tr><td><span class="path">logs\archives\</span></td><td>The previous runs. Each app start moves the old log here, and the ten most recent archives are kept.</td></tr>

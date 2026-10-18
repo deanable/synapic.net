@@ -204,6 +204,25 @@ public sealed class DaminionVersionIdsRequest
     public int[] Ids { get; init; } = Array.Empty<int>();
 }
 
+/// <summary>
+/// Daminion's Flag field values. The catalog search treats them as the tag's
+/// documented text representations ("Approved"/"Rejected"/"Unassigned") and
+/// the media-item records carry the numeric ones (0 unflagged, 1 approved/
+/// flagged, 2 rejected) — <see cref="DaminionApiClient"/> reads both, writes
+/// by text.
+/// </summary>
+public enum DaminionFlagValue
+{
+    /// <summary>Unflagged (0).</summary>
+    Unassigned = 0,
+
+    /// <summary>Flagged / approved (1).</summary>
+    Approved = 1,
+
+    /// <summary>Rejected (2).</summary>
+    Rejected = 2,
+}
+
 /// <summary>One tag operation: attach/remove a tag value by id or by raw value.</summary>
 public sealed class DaminionTagOperation
 {

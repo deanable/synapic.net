@@ -539,15 +539,19 @@ public class WorkflowOrderTests
 
                 Assert.Single(window.GetVisualDescendants().OfType<RunStateBar>());
 
-                // The run's own surface, once: one progress bar per *run*
-                // (dedup's scan bar is indeterminate and only shows while it runs,
-                // so it is not a second reading of the same state) and one log.
-                var logs = window.GetVisualDescendants().OfType<ListBox>()
+                // The run's own surface, once: one progress bar per *run* (dedup's
+                // scan bar is indeterminate and only shows while it runs, so it is
+                // not a second reading of the same state) and one log. The log's
+                // box collapses while empty (an idle run used to reserve grey
+                // space under the action row doing nothing), so the rule the tree
+                // must satisfy is "no readable run log other than the bar's": at
+                // most one visible run log, and when there is one it is the bar's.
+                var visibleLogs = window.GetVisualDescendants().OfType<ListBox>()
                     .Where(l => EffectivelyVisible(l) && l.Name is "LogList" or "RunLogList")
                     .ToList();
-                Assert.True(logs.Count == 1,
-                    $"{view}: {logs.Count} run logs on screen ({string.Join(", ", logs.Select(l => l.Name))}); the run has one log");
-                Assert.Equal("RunLogList", logs[0].Name);
+                Assert.True(visibleLogs.Count is 0 or 1,
+                    $"{view}: {visibleLogs.Count} run logs on screen ({string.Join(", ", visibleLogs.Select(l => l.Name))}); the run has one log");
+                if (visibleLogs.Count == 1) Assert.Equal("RunLogList", visibleLogs[0].Name);
 
                 var progress = window.GetVisualDescendants().OfType<ProgressBar>()
                     .Where(EffectivelyVisible).ToList();
