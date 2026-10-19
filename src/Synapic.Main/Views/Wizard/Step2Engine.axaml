@@ -35,6 +35,29 @@
                      Opacity="0.7" TextWrapping="Wrap" MaxWidth="420" Margin="0,0,12,8" />
         </WrapPanel>
 
+        <!-- The sidecar runs LiquidAI LFM models only, so the download choice
+             is a picker over that family's variants instead of a free-text
+             repo id: every entry runs, and the size hint makes the RAM/VRAM
+             cost visible before a multi-gigabyte download starts. -->
+        <WrapPanel>
+          <TextBlock Classes="fieldLabel" Text="LFM model variant:" Margin="0,0,8,8"
+                     VerticalAlignment="Center" />
+          <ComboBox SelectedItem="{Binding SelectedLfmVariant}" ItemsSource="{Binding LfmOptions}"
+                    MinWidth="210" Margin="0,0,12,8">
+            <ComboBox.ItemTemplate>
+              <DataTemplate>
+                <StackPanel Spacing="1">
+                  <TextBlock Text="{Binding Label}" FontWeight="SemiBold" />
+                  <TextBlock Text="{Binding Note}" Opacity="0.75" FontSize="11"
+                             TextWrapping="Wrap" MaxWidth="420" />
+                </StackPanel>
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+          <TextBlock Text="{Binding SelectedVariantStatus}" VerticalAlignment="Center"
+                     Opacity="0.8" Margin="0,0,12,8" TextWrapping="Wrap" MaxWidth="420" />
+        </WrapPanel>
+
         <ListBox ItemsSource="{Binding LocalModels}" SelectedItem="{Binding SelectedModel}"
                  MaxHeight="180" MinHeight="90">
           <ListBox.ItemTemplate>
@@ -50,7 +73,8 @@
           </ListBox.ItemTemplate>
         </ListBox>
 
-        <TextBox Watermark="Model id (Hugging Face repo)" Text="{Binding ManualModelId}" />
+        <TextBlock Classes="hint" TextWrapping="Wrap"
+                   Text="Sizes are approximate full-download figures; a variant only warms up after its download finishes, so pick the one that fits the machine and press Download model. Larger variants return better keywords and descriptions." />
       </StackPanel>
     </Border>
 

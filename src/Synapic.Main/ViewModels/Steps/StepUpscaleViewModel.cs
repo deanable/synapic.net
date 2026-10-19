@@ -82,8 +82,13 @@ public partial class StepUpscaleViewModel : RunStateViewModel
     [ObservableProperty]
     private double _sharpenAmount;
 
+    /// <summary>False out of the box since version control is baked in: a run
+    /// writes its output beside the previous one (…_v2, …_v3) instead of replacing
+    /// it. Ticking the box restores replace-in-place. The Daminion path needs no
+    /// version file of its own — the check-in there already creates a new version
+    /// of the catalog item.</summary>
     [ObservableProperty]
-    private bool _overwriteExisting = true;
+    private bool _overwriteExisting;
 
     /// <summary>Denoise blending only means anything for the balanced workflow.</summary>
     public bool IsDenoiseEnabled => SelectedWorkflow == BalancedIndex;
@@ -158,7 +163,7 @@ public partial class StepUpscaleViewModel : RunStateViewModel
             var denoise = IsDenoiseEnabled ? $" · denoise {DenoiseStrength:0.00}" : "";
             var sharpen = SharpenAmount > 0 ? $" · sharpen {SharpenAmount:0.00}" : "";
             var quality = format is "JPEG" or "WEBP" ? $" · quality {JpegQuality:0}" : "";
-            var overwrite = OverwriteExisting ? " · overwrite output" : " · keep existing output";
+            var overwrite = OverwriteExisting ? " · overwrite output" : " · new _v2 versions, no overwrite";
 
             return $"{workflow} · {factor} · precision {precision} · output {format}"
                 + quality + denoise + sharpen + overwrite;

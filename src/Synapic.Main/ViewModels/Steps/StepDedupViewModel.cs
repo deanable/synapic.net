@@ -96,11 +96,27 @@ public partial class DedupItemViewModel : ObservableObject
     /// <summary>Programmatic (rule/scan) checkbox write used by the auto-select recompute.</summary>
     internal void SetCheckedByRule(bool checkedState)
     {
-        _suppressRule = true;
-        IsChecked = checkedState;
+        _suppressRule = true;        IsChecked = checkedState;
         _suppressRule = false;
         SelectionChanged?.Invoke();
     }
+
+    // ── Quick keep/exclude controls (right-click menu, double-click) ────────
+
+    /// <summary>Keep this image: it drops out of the apply batch (its
+    /// checkbox goes on). The right-click menu's top action.
+    /// </summary>
+    [RelayCommand]
+    private void KeepItem() => IsChecked = true;
+
+    /// <summary>Select this image for the action: the checkbox goes off and
+    /// Apply includes it again.
+    /// </summary>
+    [RelayCommand]
+    private void SelectForAction() => IsChecked = false;
+
+    /// <summary>The double-click toggle: easy exclusion without opening the menu.</summary>
+    public void ToggleKeep() => IsChecked = !IsChecked;
 
     private static string FormatSize(long bytes) => bytes switch
     {
@@ -737,7 +753,9 @@ public partial class StepDedupViewModel : RunStateViewModel
     /// the pages' own total steers the bar and the report. It is the diagnostic
     /// response to "the count says more than the walk kept" — a transient page or
     /// filter problem can disappear on a second pass, and the new numbers say so.
-    /// It reuses <see cref="ScanCommand"/> so the shared Stop cancels it.
+    /// It always re-walks (never the retained-fingerprint fast path, whose whole
+    /// point is to avoid walking), and the shared Stop still cancels it because
+    /// the body runs on its own cancellation source.
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanReWalkUsingPageTotals))]
     private async Task ReWalkUsingPageTotalsAsync()
@@ -748,7 +766,7 @@ public partial class StepDedupViewModel : RunStateViewModel
         RetrievalActionMessage = message;
         try
         {
-            await ScanCommand.ExecuteAsync(null);
+            await RunFullScanAsync(CancellationToken.None);
         }
         finally
         {
@@ -1380,10 +1398,47 @@ public partial class StepDedupViewModel : RunStateViewModel
         }
     }
 
+    /// <summary>
+    /// The run bar's primary action. When this source already has retained
+    /// fingerprints (a finished scan, or the saved scan a restart restored),
+    /// pressing it re-groups instantly instead of hashing everything again —
+    /// the same fast method the automatic restore uses — because re-grouping
+    /// is free now, and the user paid for the hashing once. Walking and
+    /// hashing every file again is the explicit "Re-hash from disk" action
+    /// (and the natural next step when files changed).
+    /// </summary>
     [RelayCommand(CanExecute = nameof(CanScan))]
     private async Task ScanAsync(CancellationToken ct)
     {
-        IsScanning = true;
+        if (CanRetune)
+        {
+            var version = Interlocked.Increment(ref _retuneVersion);
+            await RetuneAsync(CancellationToken.None, version);
+            if (!string.IsNullOrEmpty(ScanSummary))
+                ScanSummary +=
+                    " — fingerprints reused, nothing re-hashed. Use Re-hash from disk to pick up new or changed files.";
+            return;
+        }
+
+        await RunFullScanAsync(ct);
+    }
+
+    /// <summary>The explicit full scan: walk the source and hash every file
+    /// again, no matter what fingerprints are on hand.</summary>
+    [RelayCommand(CanExecute = nameof(CanScan))]
+    private async Task HashAgainAsync(CancellationToken ct)
+        => await RunFullScanAsync(ct);
+
+    /// <summary>The scan body in full: fetch, hash, group, render and cache.
+    /// Runs on its own cancellation source so the shared bar's Stop cancels it
+    /// whichever entry point started it (the page Scan command used to own the
+    /// token, which left a bar-started scan unstoppable).
+    /// </summary>
+    private async Task RunFullScanAsync(CancellationToken commandToken)
+    {
+        BeginRun();
+        var ct = Cts!.Token;
+        _ = commandToken; // the command token is superseded by the run's own source
         // A threshold moved while results were on screen is persisted by the
         // recalculation it scheduled; if a scan supersedes that, save it here.
         PersistState();
@@ -1472,9 +1527,9 @@ public partial class StepDedupViewModel : RunStateViewModel
         }
         finally
         {
-            IsScanning = false;
             // A cancelled or failed scan must not leave an estimate running on
             // the bar — it would promise work that is no longer happening.
+            EndRun();
             EtaText = "";
             // The threshold may have moved while the scan ran (the settings tab
             // is reachable during a long fetch). Those results were grouped at
@@ -2167,10 +2222,11 @@ public partial class StepDedupViewModel : RunStateViewModel
             ScanSummary = "Delete cancelled";
             SynapicLog.Info(nameof(StepDedupViewModel), "Local duplicate delete cancelled");
             return;
-        }
-
-        bool ok;
+        }        bool ok;
         string summary;
+        // The catalog reject reports which ids the read-back confirmed, so a
+        // partially applied batch is visible instead of failing wholesale.
+        DaminionFlagWriteResult? flagWrite = null;
 
         // An Apply and a recalculation must not overlap: one is acting on the
         // rows the other is rebuilding. CanApply already excludes IsRetuning;
@@ -2186,10 +2242,13 @@ public partial class StepDedupViewModel : RunStateViewModel
             {
                 if (rejecting)
                 {
-                    ok = await client.SetItemsFlagAsync(ids, DaminionFlagValue.Rejected, ct);
+                    flagWrite = await client.SetItemsFlagDetailedAsync(ids, DaminionFlagValue.Rejected, ct);
+                    ok = flagWrite.Success;
                     summary = ok
-                        ? $"Rejected {ids.Count} item(s) in the Daminion catalog"
-                        : "Catalog reject failed — see log";
+                        ? $"Rejected {flagWrite.Verified} item(s) in the Daminion catalog"
+                        : flagWrite.Verified == 0
+                            ? $"Catalog reject did not stick — the server marked none of {flagWrite.Requested} item(s) Rejected (see log)"
+                            : $"Only {flagWrite.Verified} of {flagWrite.Requested} item(s) were marked Rejected — the rest left the review list untouched; re-run Apply for them (see log)";
                 }
                 else
                 {
@@ -2228,18 +2287,24 @@ public partial class StepDedupViewModel : RunStateViewModel
         ScanSummary = summary;
         SynapicLog.Info(nameof(StepDedupViewModel), summary);
 
-        if (ok)
+        // Only rows the write actually confirmed leave the review list: after a
+        // partial reject, the unmarked ones stay so re-running Apply retries them.
+        var clearTargets = ok && !rejecting || flagWrite is { Verified: > 0 };
+        if (clearTargets)
         {
             if (rejecting)
             {
                 // Rejection keeps the files, so the fingerprints still describe
-                // the source: the rows acted on leave the review list (find them
+                // the source: the confirmed rows leave the review list (find them
                 // by key — checkboxes may have changed while the call ran),
                 // groups reduced to a single image stop being matches, but the
                 // retained results and the saved scan stay armed for the slider
                 // and a restart. What was rejected can be re-reviewed (and
                 // un-rejected) in Daminion itself.
-                var acted = new HashSet<string>(targets.Select(t => t.Key));
+                var confirmedIds = flagWrite!.VerifiedIds.ToHashSet();
+                var acted = new HashSet<string>(
+                    targets.Where(t => t.DaminionId is { } id && confirmedIds.Contains(id))
+                        .Select(t => t.Key));
                 foreach (var group in Groups.ToList())
                 {
                     if (!group.Items.Any(i => acted.Contains(i.Key))) continue;
@@ -2302,6 +2367,10 @@ public partial class StepDedupViewModel : RunStateViewModel
 
     /// <summary>The bar's primary action is this mode's scan, under its own name.</summary>
     public override string RunActionLabel => "Scan";
+
+    /// <summary>Exposed for tests: the retained-fingerprint fast rescan used the
+    /// automatic restore's method without touching the source.</summary>
+    public bool HasRetainedScan => _lastScan is not null && HasRetunableScan;
 
     /// <summary>
     /// The scan's Stop, on the shared bar. It cancels whichever entry point

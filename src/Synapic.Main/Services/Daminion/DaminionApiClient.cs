@@ -1191,49 +1191,77 @@ public sealed class DaminionApiClient
     }
 
     /// <summary>
-    /// Set the Flag field on items via POST /api/ItemData/BatchChange with the
-    /// Flag tag's guid and its documented text value ("Approved"/
+    /// Items per flag-write batch. A very large id list in one BatchChange
+    /// call is exactly where the server applies a subset and answers
+    /// success:true — the "only a subset of the group was tagged" report. The
+    /// write goes out in modest batches with a read-back after each, so the
+    /// caller learns precisely which items got the flag and can retry the rest.
+    /// </summary>
+    public const int FlagWriteBatchSize = 200;
+
+    /// <summary>Set the Flag field on items via POST /api/ItemData/BatchChange
+    /// with the Flag tag's guid and its documented text value ("Approved"/
     /// "Rejected"/"Unassigned", id 0 — the server resolves the text). The dedup
     /// and similar pages write="Rejected" to mark identified items before a
     /// manual review pass (marking is reversible; deleting catalog entries is
     /// not, which is why delete gets the confirmation and this does not).
     ///
     /// Like <see cref="DeleteItemsAsync"/>, the call is only believed when it is
-    /// verified: the ids are read back with GetByIds and the write counts as
-    /// done once every one of them answers with the requested flag (one settle
-    /// retry, for asynchronously indexing servers). A BatchChange response of
-    /// <c>{success:true}</c> alone proves nothing — that response also happens
-    /// on writes the server silently ignored.
+    /// verified: the ids are read back with GetByIds and each batch counts as
+    /// done once every one of its ids answers with the requested flag (one
+    /// settle retry, for asynchronously indexing servers). A BatchChange
+    /// response of <c>{success:true}</c> alone proves nothing — that response
+    /// also happens on writes the server silently ignored.
     /// </summary>
-    public async Task<bool> SetItemsFlagAsync(
+    public Task<bool> SetItemsFlagAsync(
+        IReadOnlyCollection<int> itemIds,
+        DaminionFlagValue flag,
+        CancellationToken ct = default)
+        => SetItemsFlagDetailedAsync(itemIds, flag, ct).ContinueWith(t => t.Result.Success, ct);
+
+    /// <summary>The same write as <see cref="SetItemsFlagAsync"/>, but returning
+    /// which ids the read-back actually confirmed — so a partially applied
+    /// batch can be named (and its confirmed rows cleared from the review
+    /// list) instead of being reported as an all-or-nothing failure.
+    /// </summary>
+    public async Task<DaminionFlagWriteResult> SetItemsFlagDetailedAsync(
         IReadOnlyCollection<int> itemIds,
         DaminionFlagValue flag,
         CancellationToken ct = default)
     {
-        if (itemIds.Count == 0) return true;
         var ids = itemIds.ToArray();
+        if (ids.Length == 0) return new DaminionFlagWriteResult(0, 0, Array.Empty<int>());
         var guid = GetTagGuid("flag", "Flag");
         if (guid is null)
         {
             SynapicLog.Warning(nameof(DaminionApiClient),
                 $"Cannot set flag '{flag}' on {ids.Length} item(s) — the catalog's default layout did not include the Flag tag, so its guid is unknown");
-            return false;
+            return new DaminionFlagWriteResult(ids.Length, 0, Array.Empty<int>());
         }
         var valueText = flag.ToString();
+
+        var verified = new List<int>();
         try
         {
-            var resp = await WithSessionRecoveryAsync(api => api.BatchChange(new DaminionBatchChangeRequest
+            var batchTotal = (int)Math.Ceiling(ids.Length / (double)FlagWriteBatchSize);
+            for (var offset = 0; offset < ids.Length; offset += FlagWriteBatchSize)
             {
-                Ids = ids,
-                Data = new[] { new DaminionTagOperation { Guid = guid, Id = 0, Value = valueText, Remove = false } },
-                Delete = false,
-            }, ct), ct).ConfigureAwait(false);
+                var batch = ids[offset..Math.Min(offset + FlagWriteBatchSize, ids.Length)];
+                var batchNumber = offset / FlagWriteBatchSize + 1;
 
-            SynapicLog.Info(nameof(DaminionApiClient),
-                $"POST /api/ItemData/BatchChange ids=[{string.Join(",", ids)}] flag={valueText} → " +
-                TruncateJson(resp));
+                var resp = await WithSessionRecoveryAsync(api => api.BatchChange(new DaminionBatchChangeRequest
+                {
+                    Ids = batch,
+                    Data = new[] { new DaminionTagOperation { Guid = guid, Id = 0, Value = valueText, Remove = false } },
+                    Delete = false,
+                }, ct), ct).ConfigureAwait(false);
 
-            return await VerifyFlagsAsync(ids, flag, ct).ConfigureAwait(false);
+                SynapicLog.Info(nameof(DaminionApiClient),
+                    $"POST /api/ItemData/BatchChange (batch {batchNumber}/{batchTotal}) ids=[{string.Join(",", batch)}] flag={valueText} → " +
+                    TruncateJson(resp));
+
+                verified.AddRange(await VerifyFlagBatchAsync(batch, flag, ct).ConfigureAwait(false));
+            }
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -1243,14 +1271,24 @@ public sealed class DaminionApiClient
         {
             SynapicLog.Error(nameof(DaminionApiClient),
                 $"Failed to set flag '{valueText}' on {ids.Length} item(s): {e.Message}");
-            return false;
         }
+
+        var confirmed = ids.Where(verified.Contains).ToArray();
+        if (confirmed.Length == ids.Length)
+            SynapicLog.Info(nameof(DaminionApiClient),
+                $"Flag set to '{valueText}' on {ids.Length} item(s) (verified)" +
+                (ids.Length > FlagWriteBatchSize ? $" across {(int)Math.Ceiling(ids.Length / (double)FlagWriteBatchSize)} batches" : ""));
+        else
+            SynapicLog.Warning(nameof(DaminionApiClient),
+                $"Flag write partially verified: {confirmed.Length} of {ids.Length} id(s) report '{valueText}'" +
+                (confirmed.Length > 0 ? " — re-run Apply for the rest" : ""));
+        return new DaminionFlagWriteResult(ids.Length, confirmed.Length, confirmed);
     }
 
-    /// <summary>Flag write read-back: report success only when every id answers
+    /// <summary>Flag write read-back: return exactly which ids of the batch answer
     /// with the requested value, with one settle retry for async indexing — the
     /// same honesty the catalog delete applies.</summary>
-    private async Task<bool> VerifyFlagsAsync(int[] ids, DaminionFlagValue expected, CancellationToken ct)
+    private async Task<IReadOnlyList<int>> VerifyFlagBatchAsync(int[] ids, DaminionFlagValue expected, CancellationToken ct)
     {
         for (var attempt = 0; ; attempt++)
         {
@@ -1268,22 +1306,26 @@ public sealed class DaminionApiClient
 
             if (resp is { } response)
             {
-                var matching = response.EffectiveItems.Count(i => FlagEquals(i, expected));
-                if (matching == ids.Length)
+                var matching = response.EffectiveItems
+                    .Where(i => ids.Contains(i.Id) && FlagEquals(i, expected))
+                    .Select(i => i.Id)
+                    .Distinct()
+                    .ToList();
+                if (matching.Count == ids.Length)
                 {
-                    SynapicLog.Info(nameof(DaminionApiClient),
-                        $"Flag set to '{expected}' on {ids.Length} item(s) (verified: GetByIds reports it on every one)");
-                    return true;
+                    return matching;
                 }
                 SynapicLog.Info(nameof(DaminionApiClient),
-                    $"Flag read-back: {matching} of {ids.Length} item(s) currently report '{expected}'");
+                    $"Flag read-back: {matching.Count} of {ids.Length} item(s) currently report '{expected}'");
             }
 
             if (attempt > 0)
             {
-                SynapicLog.Warning(nameof(DaminionApiClient),
-                    $"Flag verification failed — not every id of {ids.Length} answers '{expected}' (permissions or server build?)");
-                return false;
+                return resp is null ? Array.Empty<int>() : resp.EffectiveItems
+                    .Where(i => ids.Contains(i.Id) && FlagEquals(i, expected))
+                    .Select(i => i.Id)
+                    .Distinct()
+                    .ToList();
             }
             await Task.Delay(750, ct).ConfigureAwait(false); // async-index settle, like Remove
         }

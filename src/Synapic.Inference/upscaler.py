@@ -495,12 +495,18 @@ class Swin2SRUpscaler:
         return output_path, save_kwargs, final_fmt
 
     def _next_available_path(self, output_path: Path) -> Path:
+        """Next unused version of an output that must not be replaced.
+
+        The existing file is version 1, the first conflict becomes ``_v2``
+        (the second version), the next ``_v3`` — so the version number in the
+        file name is also the output's history position.
+        """
         base = output_path.with_suffix("")
         ext = output_path.suffix
-        idx = 1
+        idx = 2
         candidate = output_path
         while candidate.exists():
-            candidate = Path(f"{base}_{idx}{ext}")
+            candidate = Path(f"{base}_v{idx}{ext}")
             idx += 1
         return candidate
 

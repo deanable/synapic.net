@@ -22,10 +22,13 @@
           <ComboBox SelectedIndex="{Binding SelectedAlgorithm}" ItemsSource="{Binding Algorithms}"
                     MinWidth="140" Margin="0,0,16,8" />
           <TextBlock Classes="fieldLabel" Text="Threshold:" Margin="0,0,8,8" />
-          <NumericUpDown Value="{Binding Threshold}" Minimum="0.5" Maximum="1"
-                         Increment="0.01" Width="110" Margin="0,0,16,8"
-                         help:HelpScope.Topic="settings-reference.html#dedup-threshold"
-                         ToolTip.Tip="{Binding ThresholdHint}" />
+          <Slider Minimum="0.5" Maximum="1" TickFrequency="0.01" IsSnapToTickEnabled="True"
+                  Width="160" Value="{Binding Threshold, Mode=TwoWay}" Margin="0,0,8,8"
+                  help:HelpScope.Topic="settings-reference.html#dedup-threshold"
+                  ToolTip.Tip="{Binding ThresholdHint}" VerticalAlignment="Center" />
+          <TextBlock Text="{Binding Threshold, StringFormat={}{0:0.00}}"
+                     FontWeight="SemiBold" VerticalAlignment="Center" MinWidth="40" Margin="0,0,16,8"
+                     help:HelpScope.Topic="settings-reference.html#dedup-threshold" />
         </WrapPanel>
 
         <WrapPanel>

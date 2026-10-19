@@ -611,8 +611,17 @@ public sealed class DaminionSelectionBehaviorTests
             Assert.Equal(2, report.Kept);
             Assert.Contains("followed the pages' total", vm.RetrievalComparisonText);
 
-            // The page-total mode is one-shot: a normal scan is back to the count.
+            // A normal Scan press now re-uses the retained fingerprints (the
+            // fast rescan), so it walks nothing and the retrieval report stays.
+            var pagesAfterReWalk = server.GetIndexes.Length;
             await vm.ScanCommand.ExecuteAsync(null);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(pagesAfterReWalk, server.GetIndexes.Length);
+            Assert.Contains("fingerprints reused", vm.ScanSummary);
+
+            // The page-total mode is one-shot: the explicit re-hash walks again
+            // with the count as the denominator.
+            await vm.HashAgainCommand.ExecuteAsync(null);
             Dispatcher.UIThread.RunJobs();
             Assert.True(vm.LastRetrieval!.CountDrivesTotal);
         }

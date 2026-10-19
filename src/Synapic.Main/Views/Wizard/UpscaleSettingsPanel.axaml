@@ -33,11 +33,13 @@
         <WrapPanel>
           <TextBlock Classes="fieldLabel" Text="Output:" Margin="0,0,8,8" />
           <ComboBox SelectedIndex="{Binding SelectedOutputFormat}" ItemsSource="{Binding OutputFormats}"
-                    MinWidth="130" Margin="0,0,16,8" />
-          <TextBlock Classes="fieldLabel" Text="Quality:" Margin="0,0,8,8" />
-          <NumericUpDown Value="{Binding JpegQuality}" Minimum="70" Maximum="100" Increment="1"
-                         Width="110" Margin="0,0,16,8" FormatString="0"
-                         ToolTip.Tip="JPEG/WEBP quality used when the output format is one of those." />
+                    MinWidth="130" Margin="0,0,16,8" />          <TextBlock Classes="fieldLabel" Text="Quality:" Margin="0,0,8,8" />
+          <Slider Minimum="70" Maximum="100" TickFrequency="1" IsSnapToTickEnabled="True"
+                  Width="160" Value="{Binding JpegQuality, Mode=TwoWay}" Margin="0,0,8,8"
+                  VerticalAlignment="Center"
+                  ToolTip.Tip="JPEG/WEBP quality used when the output format is one of those." />
+          <TextBlock Text="{Binding JpegQuality, StringFormat={}{0:0}}"
+                     FontWeight="SemiBold" VerticalAlignment="Center" MinWidth="28" Margin="0,0,16,8" />
           <TextBlock Classes="fieldLabel" Text="Denoise:" Margin="0,0,8,8" />
           <Slider Minimum="0" Maximum="1" Width="160" Value="{Binding DenoiseStrength}"
                   VerticalAlignment="Center" Margin="0,0,16,8"
@@ -49,9 +51,9 @@
           <TextBlock Classes="fieldLabel" Text="Sharpen:" Margin="0,0,8,8" />
           <Slider Minimum="0" Maximum="2" Width="240" Value="{Binding SharpenAmount}"
                   VerticalAlignment="Center" Margin="0,0,16,8"
-                  ToolTip.Tip="Unsharp mask after upscaling; 0 = off." />
-          <CheckBox Content="Overwrite existing output" IsChecked="{Binding OverwriteExisting}"
-                    VerticalAlignment="Center" Margin="0,0,16,8" />
+                  ToolTip.Tip="Unsharp mask after upscaling; 0 = off." />          <CheckBox Content="Overwrite existing output (off = keep as new _v2, _v3 versions)" IsChecked="{Binding OverwriteExisting}"
+                    VerticalAlignment="Center" Margin="0,0,16,8"
+                    ToolTip.Tip="Off: every run writes a new version beside the last one (…_v2, …_v3). On: replaces the previous output file. The Daminion path always checks the upscaled file in as a new version either way." />
         </WrapPanel>
       </StackPanel>
     </Border>

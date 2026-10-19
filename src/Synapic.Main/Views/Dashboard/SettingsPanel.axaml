@@ -82,13 +82,19 @@
                     ToolTip.Tip="Compute device a new session starts on; the engine form can still change it per session." />
         </WrapPanel>
 
-        <WrapPanel Classes="settingsRow">
-          <TextBlock Classes="fieldLabel" Text="Tagging confidence:" Margin="0,0,8,8" />
-          <NumericUpDown Value="{Binding DefaultConfidenceThreshold}" Minimum="0" Maximum="1"
-                         Increment="0.05" FormatString="0.00" Width="120" Margin="0,0,12,8" />
+        <WrapPanel Classes="settingsRow">          <TextBlock Classes="fieldLabel" Text="Tagging confidence:" Margin="0,0,8,8" />
+          <Slider Minimum="0" Maximum="1" TickFrequency="0.05" IsSnapToTickEnabled="True"
+                  Width="160" Value="{Binding DefaultConfidenceThreshold, Mode=TwoWay}"
+                  VerticalAlignment="Center" Margin="0,0,8,8" />
+          <TextBlock Text="{Binding DefaultConfidenceThreshold, StringFormat={}{0:0.00}}"
+                     FontWeight="SemiBold" VerticalAlignment="Center" MinWidth="36" Margin="0,0,16,8" />
           <TextBlock Classes="fieldLabel" Text="Max items:" Margin="0,0,8,8" />
-          <NumericUpDown Value="{Binding DefaultMaxItems}" Minimum="0" Maximum="1000000"
-                         Increment="50" Width="120" Margin="0,0,12,8" />
+          <Slider Minimum="50" Maximum="5000" TickFrequency="50" IsSnapToTickEnabled="True"
+                  Width="160" Value="{Binding DefaultMaxItems, Mode=TwoWay}"
+                  VerticalAlignment="Center" Margin="0,0,8,8"
+                  ToolTip.Tip="How many items a new session's runs start with; the max-items control can be changed per session. 0 and blank previously meant unlimited — tick 'Process all' in a session instead." />
+          <TextBlock Text="{Binding DefaultMaxItems, StringFormat={}{0:N0}}"
+                     FontWeight="SemiBold" VerticalAlignment="Center" MinWidth="56" Margin="0,0,16,8" />
         </WrapPanel>
       </StackPanel>
     </Border>

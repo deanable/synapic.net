@@ -223,6 +223,21 @@ public enum DaminionFlagValue
     Rejected = 2,
 }
 
+/// <summary>
+/// What a catalog flag write actually did, counted id by id — the honest
+/// report a verify-after-write call returns. The BatchChange route answers
+/// <c>success:true</c> for writes it quietly ignores (and for batches it
+/// partially applies), so only the read-back counts: <see cref="Verified"/>
+/// is how many of the requested ids actually answered with the flag.
+/// </summary>
+public sealed record DaminionFlagWriteResult(
+    int Requested,
+    int Verified,
+    IReadOnlyList<int> VerifiedIds)
+{
+    public bool Success => Requested == 0 || Verified == Requested;
+}
+
 /// <summary>One tag operation: attach/remove a tag value by id or by raw value.</summary>
 public sealed class DaminionTagOperation
 {

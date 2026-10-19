@@ -521,8 +521,10 @@ public class StepUpscaleViewModelTests
             var parameters = vm.LogLines.Single(l => l.Contains("Parameters:", StringComparison.Ordinal));
             Assert.Equal(
                 "Parameters: workflow=balanced, factor=4x, precision=auto, max_dimension=2048, " +
-                "output=keep, quality=88, denoise=0.50, sharpen=0.25, overwrite=true",
-                parameters[(parameters.IndexOf(']') + 2)..]);      // strip "[HH:mm:ss] "
+                "output=keep, quality=88, denoise=0.50, sharpen=0.25, overwrite=false",
+                parameters[(parameters.IndexOf(']') + 2)..]);      // strip "[HH:mm:ss] " — version
+                // control ships on: an un-touched Overwrite box stays off, so the
+                // run writes _v2 versions instead of replacing previous outputs.
             Assert.Contains(vm.LogLines, l => l.Contains("No images were found in this source — choose a folder or catalog scope with images, then run upscale again.", StringComparison.Ordinal));
         }
         finally

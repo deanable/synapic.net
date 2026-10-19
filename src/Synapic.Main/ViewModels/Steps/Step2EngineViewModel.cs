@@ -49,6 +49,28 @@ public partial class Step2EngineViewModel : ViewModelBase
     /// </summary>
     public ObservableCollection<DeviceOption> DeviceOptions { get; } = new();
 
+    /// <summary>
+    /// The LFM VLM variants the download setting offers, smallest first. The
+    /// 450M is the shipped default (it was the only choice before): the larger
+    /// variants give better keywords and descriptions but need proportionally
+    /// more RAM/VRAM. Sizes and hints are approximate and named as such.
+    /// </summary>
+    public static readonly LfmVariant[] LfmCatalog =
+    {
+        new("LiquidAI/LFM2.5-VL-450M", "450M — fast (default)", "≈1 GB",
+            "Lightest: fine on CPU and any older GPU. The quality baseline."),
+        new("LiquidAI/LFM2.5-VL-1.6B", "1.6B — better quality", "≈3.5 GB",
+            "Noticeably better keywords and descriptions; comfortable with 8 GB+ RAM or a 4 GB+ GPU."),
+        new("LiquidAI/LFM2.5-VL-3B", "3B — best quality", "≈6.5 GB",
+            "Most capable; wants ~12 GB RAM or a GPU with 8 GB+ VRAM (CUDA recommended)."),
+    };
+
+    /// <summary>The variants this instance offers. A model id saved by an older
+    /// build (or a repo picked before the picker existed) joins the list rather
+    /// than being dropped from the settings.
+    /// </summary>
+    public ObservableCollection<LfmVariant> LfmOptions { get; } = new(LfmCatalog);
+
     public string[] ProbabilityModeOptions { get; } = { "LLM only", "Probability only", "Both" };
 
     /// <summary>
@@ -56,6 +78,11 @@ public partial class Step2EngineViewModel : ViewModelBase
     /// always yields category, keywords and description in one JSON payload.
     /// </summary>
     public const string MultimodalTask = "image-text-to-text";
+
+    /// <summary>The variant highlighted in the variant picker; mirrors the
+    /// manual model id when the id is one the picker knows.</summary>
+    [ObservableProperty]
+    private LfmVariant? _selectedLfmVariant;
 
     /// <summary>
     /// The device the Device combo shows. Hand-written rather than generated:
@@ -166,6 +193,10 @@ public partial class Step2EngineViewModel : ViewModelBase
             TrySelectDevice(engine.Device);
         }
 
+        // The variant picker mirrors whatever model id the hydration or the
+        // session left in the form, so a saved id stays visible and editable.
+        SyncLfmVariant(ManualModelId);
+
         // Correct any stale per-field task persisted by an older session.
         engine.Task = MultimodalTask;
         LoadSystemPromptPresets();
@@ -190,9 +221,7 @@ public partial class Step2EngineViewModel : ViewModelBase
         try
         {
             var saved = _engineStore.Load();
-            if (saved is null) return false;
-
-            // Model + task.
+            if (saved is null) return false;            // Model + task.
             ManualModelId = saved.ModelId;
             _session.Engine.ModelId = saved.ModelId;
             _session.Engine.Task = MultimodalTask;
@@ -393,6 +422,65 @@ public partial class Step2EngineViewModel : ViewModelBase
     {
         PushToSession();
         OnPropertyChanged(nameof(ModelSummary));
+        // Keep the variant picker honest: a different way to set the id (a
+        // pre-fill from the registry, a pick from the local list) selects the
+        // matching variant when there is one.
+        if (!_loading)
+        {
+            var match = LfmOptions.FirstOrDefault(v => v.Id == value);
+            if (match is not null && !ReferenceEquals(match, SelectedLfmVariant))
+                SelectedLfmVariant = match;
+        }
+    }
+
+    partial void OnSelectedLfmVariantChanged(LfmVariant? value)
+    {
+        if (value is null) return;
+        if (!_loading)
+        {
+            ManualModelId = value.Id;
+            PushToSession();
+            OnPropertyChanged(nameof(ModelSummary));
+        }
+        OnPropertyChanged(nameof(SelectedVariantStatus));
+    }
+
+    /// <summary>
+    /// Select the variant matching <paramref name="modelId"/>, keeping the list
+    /// complete when the id is not a catalog entry (a repo picked by an older
+    /// build must stay visible and downloadable, not vanish from settings).
+    /// Called by hydration and by anything that re-reads the session.
+    /// </summary>
+    public void SyncLfmVariant(string modelId)
+    {
+        var match = LfmOptions.FirstOrDefault(v => v.Id == modelId);
+        if (match is not null)
+        {
+            SelectedLfmVariant = match;
+        }
+        else if (!string.IsNullOrWhiteSpace(modelId))
+        {
+            var custom = new LfmVariant(modelId, modelId, "custom repo", "Saved from a previous build or a hand-picked Hugging Face repo.");
+            LfmOptions.Insert(0, custom);
+            SelectedLfmVariant = custom;
+        }
+        else
+        {
+            SelectedLfmVariant = LfmOptions.First();
+        }
+    }
+
+    /// <summary>Download state of the selected LFM variant, read off the last
+    /// local-model refresh (the sidecar's /models/list).</summary>
+    public string SelectedVariantStatus
+    {
+        get
+        {
+            if (SelectedLfmVariant is not { } variant) return "";
+            if (LocalModels.Any(m => m.Id == variant.Id))
+                return $"{variant.SizeText} — downloaded ✓";
+            return $"{variant.SizeText} — not downloaded (press Download model)";
+        }
     }
 
     /// <summary>
@@ -769,6 +857,7 @@ public partial class Step2EngineViewModel : ViewModelBase
             foreach (var m in models.OrderByDescending(m => m.Downloaded).ThenBy(m => m.Id))
                 LocalModels.Add(m);
             ModelsMessage = $"{LocalModels.Count} local models found";
+            OnPropertyChanged(nameof(SelectedVariantStatus));
         }
         catch (OperationCanceledException) when (operationToken.IsCancellationRequested)
         {
@@ -826,6 +915,7 @@ public partial class Step2EngineViewModel : ViewModelBase
             foreach (var model in models.OrderByDescending(model => model.Downloaded).ThenBy(model => model.Id))
                 LocalModels.Add(model);
             ModelsMessage = $"{LocalModels.Count} local models found";
+            OnPropertyChanged(nameof(SelectedVariantStatus));
         }
         catch (OperationCanceledException) when (operationToken.IsCancellationRequested)
         {
@@ -884,4 +974,16 @@ public partial class Step2EngineViewModel : ViewModelBase
 public sealed record DeviceOption(string Name, string Value)
 {
     public override string ToString() => Name;
+}
+
+/// <summary>
+/// One option in the LFM model variant picker (Step 2's Model card): the
+/// Hugging Face repo id, a short human label, the approximate download size
+/// and a one-line hardware hint. The sidecar runs LiquidAI VLMs only, so the
+/// picker lists that family's non-quantized variants (the GGUF/ONNX/MLX
+/// builds are excluded — the loader cannot run them).
+/// </summary>
+public sealed record LfmVariant(string Id, string Label, string SizeText, string Note)
+{
+    public override string ToString() => Label;
 }

@@ -49,6 +49,15 @@
           </WrapPanel>
           <TextBlock Classes="hint" Text="{Binding RetuneHint}" TextWrapping="Wrap" />
         </StackPanel>
+        <!-- Retained fingerprints only re-group; this walks and hashes every
+             file again — the escape when source files changed or the last scan
+             was trimmed. Hidden while nothing is retained (a scan then hashes
+             anyway). -->
+        <Button x:Name="HashAgainButton" Content="Re-hash from disk"
+                Command="{Binding HashAgainCommand}"
+                IsVisible="{Binding HasRetainedScan}"
+                Margin="0,0,8,4"
+                ToolTip.Tip="Ignore the retained fingerprints and re-hash every file in the source — for folders or scopes that changed since the last scan." />
         <ProgressBar IsIndeterminate="True" Height="4" IsVisible="{Binding IsRetuning}" />
 
         <ProgressBar IsIndeterminate="True" Height="6" IsVisible="{Binding IsScanning}" />
@@ -149,8 +158,14 @@
                 <ItemsControl.ItemTemplate>
                   <DataTemplate x:DataType="vm:DedupItemViewModel">
                     <!-- Auto thumb column: rows without a preview collapse it
-                         instead of showing an empty box. -->
-                    <Grid ColumnDefinitions="Auto,Auto,*,150,90" Margin="4,2">
+                         instead of showing an empty box. Double-tapping the row
+                         is the quick keep/exclude toggle; right-clicking opens a
+                         menu with the same actions per item (fast exclusion from
+                         the apply batch). -->
+                    <Grid ColumnDefinitions="Auto,Auto,*,150,90" Margin="4,2"
+                          DoubleTapped="OnGroupItemDoubleTapped"
+                          ContextRequested="OnGroupItemContextRequested"
+                          ToolTip.Tip="Double-click to keep/exclude this image from the action; right-click for the menu.">
                       <CheckBox Grid.Column="0" IsChecked="{Binding IsChecked}" VerticalAlignment="Center" />
                       <Image Grid.Column="1" Source="{Binding Thumb}" IsVisible="{Binding HasThumb}"
                              Width="44" Height="44" Margin="8,0,0,0" Stretch="Uniform"

@@ -257,7 +257,7 @@ class TestUpscaleFastWorkflow:
         assert first.status_code == 200
         second = client.post("/upscale", json=payload)
         assert second.status_code == 200
-        assert Path(second.json()["output_path"]).name == "photo_upscaled_1.png"
+        assert Path(second.json()["output_path"]).name == "photo_upscaled_v2.png"
 
     def test_explicit_output_path_honored(self, client, tmp_path):
         image = _make_image(tmp_path / "photo.png")
@@ -365,7 +365,7 @@ class TestUpscaleFastWorkflow:
         )
         assert resp.status_code == 200, resp.text
         body = resp.json()
-        assert Path(body["output_path"]).name == "target_1.png"
+        assert Path(body["output_path"]).name == "target_v2.png"
         # Existing file must remain 4x4 untouched
         with Image.open(existing) as preserved:
             assert preserved.size == (4, 4)
@@ -577,4 +577,4 @@ class TestSwin2SRUpscalerInternals:
         target = tmp_path / "x_upscaled.png"
         assert instance._next_available_path(target) == target
         target.write_bytes(b"x")
-        assert instance._next_available_path(target).name == "x_upscaled_1.png"
+        assert instance._next_available_path(target).name == "x_upscaled_v2.png"
