@@ -1,1 +1,11 @@
 We need to incorporate different models into the model download setting. 
+
+The numeric value up down controls need to be replaced with sliders. You can't see the value. 
+
+Upscaling needs version control baked in. 
+
+There needs to be a easy selection option to exclude something from similar checking. Like a right click select or or maybe a double click on the actual item in the list view. 
+
+Manual deduplication check does not use the same fast method that the automatic check does. And the abort does not stop the process. 
+
+Similar search only tagged a subset of the entire group as rejected. 
