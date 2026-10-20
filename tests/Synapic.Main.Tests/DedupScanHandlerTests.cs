@@ -7,16 +7,30 @@ namespace Synapic.Main.Tests;
 /// <summary>
 /// Tests for the DedupScanHandler's server-hash shortcut path: when a Daminion
 /// item carries a server-computed hashCode, the handler groups it without
-/// downloading the original. Items without a server hash still go through the
-/// download-and-algorithmic-hash path.
+/// downloading anything. Items without a server hash are fingerprinted from the
+/// server's preview, falling back to the original when the server renders none.
 /// </summary>
 public class DedupScanHandlerTests
 {
-    /// <summary>A fake downloader whose DownloadOriginalAsync is tracked.</summary>
+    /// <summary>A fake downloader whose two download paths are tracked.
+    /// <see cref="PreviewAvailable"/> off (the default) models a server that
+    /// renders no preview, which is the fallback path.</summary>
     private sealed class FakeDownloader : IDaminionDownloader
     {
         public int DownloadOriginalCallCount { get; private set; }
+        public int DownloadPreviewCallCount { get; private set; }
+        public bool PreviewAvailable { get; init; }
         public string TempDir { get; } = Path.Combine(Path.GetTempPath(), $"synapic-dedup-tests-{Guid.NewGuid():N}");
+
+        public async Task<string?> DownloadPreviewAsync(int itemId, int width, int height, CancellationToken ct = default)
+        {
+            DownloadPreviewCallCount++;
+            if (!PreviewAvailable) return null;
+            Directory.CreateDirectory(TempDir);
+            var path = Path.Combine(TempDir, $"preview_{itemId}");
+            await File.WriteAllBytesAsync(path, new byte[] { 7, 7, 7 }, ct);
+            return path;
+        }
 
         public async Task<string?> DownloadOriginalAsync(int itemId, CancellationToken ct = default)
         {
@@ -33,6 +47,9 @@ public class DedupScanHandlerTests
     {
         public Task<string?> DownloadOriginalAsync(int itemId, CancellationToken ct = default)
             => Task.FromResult<string?>(null);
+
+        public Task<string?> DownloadPreviewAsync(int itemId, int width, int height, CancellationToken ct = default)
+            => Task.FromResult<string?>(null);
     }
 
     /// <summary>A fake IDedupService whose ComputeHash is tracked.</summary>
@@ -40,9 +57,15 @@ public class DedupScanHandlerTests
     {
         public int ComputeHashCallCount { get; private set; }
 
+        /// <summary>Models bytes that decode to nothing: the first hash attempt
+        /// fails, later ones succeed (a preview that cannot be read, then the
+        /// original).</summary>
+        public bool FailFirstCall { get; init; }
+
         public ulong? ComputeHash(string path, DedupOptions opts)
         {
             ComputeHashCallCount++;
+            if (FailFirstCall && ComputeHashCallCount == 1) return null;
             return 0xFF_FFFF_FFFF_FFFFUL; // a deterministic fake hash
         }
 
@@ -447,5 +470,127 @@ public class DedupScanHandlerTests
         Assert.Equal(2048, record.SizeBytes);
         Assert.Equal(7, record.ServerHashCode);
         Assert.Equal(0, handler.DownloadFailures);
+    }
+
+    // ── Hashing the server's preview instead of the original ───────────────
+
+    /// <summary>An item whose catalog record carries its pixel size.</summary>
+    private static ProcessWorkItem Sized(int id, int w = 6000, int h = 4000, long size = 5_000_000) =>
+        new()
+        {
+            DaminionId = id,
+            FileName = $"item{id}.jpg",
+            ServerHashCode = 0,
+            Width = w,
+            Height = h,
+            SizeBytes = size,
+        };
+
+    [Fact]
+    public async Task AServerHashedItem_StaysTheCheapestPath_NoPreviewNoOriginal()
+    {
+        // The preview path must not push a request onto the items the catalog
+        // already hashed: those are grouped from the hash with no transfer at all.
+        var downloader = new FakeDownloader { PreviewAvailable = true };
+        var handler = new DedupScanHandler(downloader, Options, new FakeDedup());
+
+        await handler.ProcessAsync(
+            new ProcessWorkItem
+            {
+                DaminionId = 1, FileName = "a.jpg", ServerHashCode = 4242, Width = 6000, Height = 4000,
+            },
+            CancellationToken.None);
+
+        Assert.Equal(0, downloader.DownloadPreviewCallCount);
+        Assert.Equal(0, downloader.DownloadOriginalCallCount);
+        Assert.Equal(0, handler.PreviewHashed);
+        Assert.Equal(1, handler.ServerHashGrouped);
+    }
+
+    [Fact]
+    public async Task ThePreviewIsHashed_NotTheOriginal_WhenTheServerRendersOne()
+    {
+        var downloader = new FakeDownloader { PreviewAvailable = true };
+        var dedup = new FakeDedup();
+        var handler = new DedupScanHandler(downloader, Options, dedup);
+
+        var outcome = await handler.ProcessAsync(Sized(1, size: 4_321_000), CancellationToken.None);
+
+        Assert.True(outcome.Success);
+        Assert.Equal(1, downloader.DownloadPreviewCallCount);
+        Assert.Equal(0, downloader.DownloadOriginalCallCount);
+        Assert.Equal(1, dedup.ComputeHashCallCount);
+
+        var record = handler.Records["daminion:1"];
+        // The review list's size column and the smallest/largest rules describe
+        // the file the user is keeping, not the preview that was hashed.
+        Assert.Equal(4_321_000, record.SizeBytes);
+        Assert.Equal(0, handler.PreviewFailures);
+        Assert.Equal(0, handler.DownloadFailures);
+    }
+
+    [Fact]
+    public async Task NoPreview_FallsBackToTheOriginal()
+    {
+        var downloader = new FakeDownloader { PreviewAvailable = false };
+        var handler = new DedupScanHandler(downloader, Options, new FakeDedup());
+
+        var outcome = await handler.ProcessAsync(Sized(1), CancellationToken.None);
+
+        Assert.True(outcome.Success);
+        Assert.Equal(1, downloader.DownloadPreviewCallCount);
+        Assert.Equal(1, downloader.DownloadOriginalCallCount);
+        Assert.Equal(0, handler.PreviewHashed);
+        Assert.Equal(1, handler.PreviewFailures);
+        // The downloaded original's own length is what is known on this path.
+        Assert.Equal(3, handler.Records["daminion:1"].SizeBytes);
+    }
+
+    [Fact]
+    public async Task DimensionsUnknown_SkipsThePreviewRequest()
+    {
+        // A preview request needs a box; without the catalog's dimensions the
+        // handler would have to look them up, which is a second request per item.
+        var downloader = new FakeDownloader { PreviewAvailable = true };
+        var handler = new DedupScanHandler(downloader, Options, new FakeDedup());
+
+        await handler.ProcessAsync(
+            new ProcessWorkItem { DaminionId = 1, FileName = "x.jpg" }, CancellationToken.None);
+
+        Assert.Equal(0, downloader.DownloadPreviewCallCount);
+        Assert.Equal(1, downloader.DownloadOriginalCallCount);
+        Assert.Equal(0, handler.PreviewHashed);
+    }
+
+    [Fact]
+    public async Task APreviewThatCannotBeDecoded_FallsBackToTheOriginal()
+    {
+        // Losing the item from the scan because its preview is broken would be
+        // worse than the download this path exists to avoid.
+        var downloader = new FakeDownloader { PreviewAvailable = true };
+        var dedup = new FakeDedup { FailFirstCall = true };
+        var handler = new DedupScanHandler(downloader, Options, dedup);
+
+        var outcome = await handler.ProcessAsync(Sized(1), CancellationToken.None);
+
+        Assert.True(outcome.Success);
+        Assert.Equal(1, downloader.DownloadPreviewCallCount);
+        Assert.Equal(1, downloader.DownloadOriginalCallCount);
+        Assert.Equal(2, dedup.ComputeHashCallCount);
+        Assert.Equal(0, handler.PreviewHashed);
+        Assert.Equal(0, handler.HashFailures);
+    }
+
+    [Fact]
+    public async Task AGroupedPreviewItem_HasNoCaptureDate()
+    {
+        // A preview carries no EXIF, so the handler cannot invent a date; the
+        // review list fills it in from the item's metadata for grouped rows.
+        var handler = new DedupScanHandler(
+            new FakeDownloader { PreviewAvailable = true }, Options, new FakeDedup());
+
+        await handler.ProcessAsync(Sized(1), CancellationToken.None);
+
+        Assert.Null(handler.Records["daminion:1"].DateTakenUtc);
     }
 }

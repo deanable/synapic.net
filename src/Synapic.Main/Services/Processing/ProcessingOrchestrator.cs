@@ -399,9 +399,23 @@ public sealed record ProcessWorkItem
     public long SizeBytes { get; init; }
 
     /// <summary>
+    /// The catalog's own pixel size for a Daminion item (0 when the server did
+    /// not report one). The dedup scan uses it to ask for a preview at the right
+    /// aspect ratio without a second round trip: <c>DownloadPreviewAsync</c>
+    /// looks the dimensions up itself when it is not given them, which is one
+    /// extra API call per item over a whole catalog.
+    /// </summary>
+    public int Width { get; init; }
+
+    /// <summary>See <see cref="Width"/>.</summary>
+    public int Height { get; init; }
+
+    /// <summary>
     /// Best available date for this item: EXIF capture date, else file creation
-    /// date (for Daminion items the server may include this, otherwise it is
-    /// filled in later from the downloaded original or left null).
+    /// date. The catalog walk does not set it (Daminion's media-item payload
+    /// carries no capture date); the dedup scan therefore takes it from the
+    /// original it downloads, and — when it hashes a preview instead — leaves it
+    /// null for the review list to fill in from the item's metadata.
     /// </summary>
     public DateTime? DateTakenUtc { get; init; }
 }

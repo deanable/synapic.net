@@ -38,8 +38,31 @@ public partial class DedupItemViewModel : ObservableObject
     /// <summary>File size in bytes when known (local FileInfo or downloaded original).</summary>
     public long? SizeBytes { get; init; }
 
-    /// <summary>Best available date: EXIF capture date, else file creation date.</summary>
-    public DateTime? DateTaken { get; init; }
+    private DateTime? _dateTaken;
+
+    /// <summary>Best available date: EXIF capture date, else file creation date.
+    /// A local scan and a catalog scan that read the original fill this in up
+    /// front. A catalog scan hashes the server's preview instead (a quarter of
+    /// the bytes for the same fingerprint) and a preview carries no EXIF, so the
+    /// date arrives later, from the item's own metadata, for the rows that end up
+    /// in a group — see <see cref="SetDateTaken"/>.</summary>
+    public DateTime? DateTaken
+    {
+        get => _dateTaken;
+        init => _dateTaken = value;
+    }
+
+    /// <summary>
+    /// Fill in the capture date after construction (the catalog metadata read) and
+    /// tell the row, so the oldest/newest rules and the date column see it.
+    /// </summary>
+    internal void SetDateTaken(DateTime? value)
+    {
+        if (_dateTaken == value) return;
+        _dateTaken = value;
+        OnPropertyChanged(nameof(DateTaken));
+        OnPropertyChanged(nameof(DateText));
+    }
 
     /// <summary>Catalog item id when the source is Daminion.</summary>
     public int? DaminionId { get; init; }
@@ -1794,8 +1817,10 @@ public partial class StepDedupViewModel : RunStateViewModel
     // ── Live retune (the results page's threshold slider) ───────────────────
 
     /// <summary>How long the slider must rest before a recalculation starts.
-    /// Dragging fires a value change per pixel; each one would otherwise pay the
-    /// O(n²) grouping cost. 300 ms is below the threshold of "feels immediate".</summary>
+    /// Dragging fires a value change per pixel, and every one of them rebuilds
+    /// every group card — the grouping itself is cheap now (the near-duplicate
+    /// search is bucketed by pigeonhole, not pairwise), but the rebuild walks the
+    /// whole review list. 300 ms is below the threshold of "feels immediate".</summary>
     internal const int RetuneDebounceMs = 300;
 
     /// <summary>The debounce + regroup currently scheduled or running — tests
@@ -1950,8 +1975,30 @@ public partial class StepDedupViewModel : RunStateViewModel
                         continue;
 
                     index++;
-                    var name = _pendingDaminionItems?.GetValueOrDefault(key)?.DisplayName ?? key;
+                    var row = _pendingDaminionItems?.GetValueOrDefault(key);
+                    var name = row?.DisplayName ?? key;
                     ScanSummary = $"Fetching preview {index}/{keys.Length}: {name}";
+
+                    // The scan fingerprints the server's preview, which carries no
+                    // EXIF, so a catalog row arrives without a capture date. Read it
+                    // from the item's metadata here instead — for the rows the user
+                    // is actually reviewing, not for the whole catalog, which would
+                    // put a second request on every item and undo the saving. Local
+                    // scans keep the date they read from the file itself.
+                    if (row is { DateTaken: null })
+                    {
+                        try
+                        {
+                            if (await client.GetItemCaptureDateAsync(id, ct) is { } taken)
+                                row.SetDateTaken(taken);
+                        }
+                        catch (OperationCanceledException) { throw; }
+                        catch (Exception e)
+                        {
+                            SynapicLog.Debug(nameof(StepDedupViewModel),
+                                $"No capture date for {name}: {e.Message}");
+                        }
+                    }
 
                     try
                     {

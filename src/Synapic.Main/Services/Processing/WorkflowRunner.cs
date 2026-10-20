@@ -461,6 +461,10 @@ public sealed class WorkflowRunner
                     FileName = item.FileName ?? $"Item {item.Id}",
                     ServerHashCode = item.HashCode ?? 0,
                     SizeBytes = item.FileSize ?? 0,
+                    // The catalog reports these on the same record, so a preview
+                    // request needs no dimension lookup of its own.
+                    Width = item.Dimensions?.W ?? 0,
+                    Height = item.Dimensions?.H ?? 0,
                 });
             }
 

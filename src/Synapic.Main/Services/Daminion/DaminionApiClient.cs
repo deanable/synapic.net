@@ -1760,6 +1760,200 @@ public sealed class DaminionApiClient
         }
     }
 
+    /// <summary>
+    /// The item's capture date, read from its catalog metadata — or null when the
+    /// item carries no date-shaped tag this reader recognises.
+    /// </summary>
+    /// <remarks>
+    /// The dedup/similar scan fingerprints a catalog item from the server's
+    /// preview rather than its original, because a perceptual hash is a 32×32
+    /// grid and the preview is a quarter of the bytes. A preview carries no EXIF,
+    /// though, so the capture date the review list's "keep oldest/newest" rules
+    /// need has to come from somewhere: the media-item record does not carry one
+    /// (the API documents id/hashCode/name/fileName/mediaFormat/version state/
+    /// colorLabel/width/height/fileSize/formatType/expirationDate and no date),
+    /// so it is read from <c>ItemData/GetAll</c>. That is one small JSON call per
+    /// *grouped* row — a handful in a normal scan — not per catalog item, which
+    /// would put the request count back where downloading originals left it.
+    /// </remarks>
+    public async Task<DateTime?> GetItemCaptureDateAsync(int itemId, CancellationToken ct = default)
+    {
+        try
+        {
+            var payload = await WithSessionRecoveryAsync(
+                api => api.GetItemDataAll(itemId, ct), ct).ConfigureAwait(false);
+            return ParseCaptureDate(TagPairsFromItemData(payload));
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Debug(nameof(DaminionApiClient),
+                $"No capture date read for item {itemId}: {e.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Flatten <c>ItemData/GetAll</c> into (tag name, value) pairs. The payload
+    /// nests them (observed on server 11.x):<br/>
+    /// <c>{ properties: [ { name, id, properties: [ { propertyName,
+    /// propertyGuid, propertyValue, values, isMultiplyValues, propertyType } ] } ] }</c><br/>
+    /// so the tag name lives in <c>propertyName</c> and the value either in
+    /// <c>propertyValue</c> or, for a multi-value tag, in the <c>values</c> array.
+    /// Reading the JSON's own property names instead (as the metadata *verify*
+    /// helper does) would only ever find the words "propertyName"/"propertyValue"
+    /// and never a caption date. Internal so the shape is pinned by a test built
+    /// from a real payload rather than guessed at.
+    /// </summary>
+    internal static List<(string Key, string Value)> TagPairsFromItemData(JsonElement payload)
+    {
+        var pairs = new List<(string Key, string Value)>();
+        CollectTagPairs(payload, pairs);
+        return pairs;
+    }
+
+    private static void CollectTagPairs(JsonElement node, List<(string Key, string Value)> found)
+    {
+        switch (node.ValueKind)
+        {
+            case JsonValueKind.Object:
+            {
+                string? name = null;
+                if (node.TryGetProperty("propertyName", out var nameElement)
+                    && nameElement.ValueKind == JsonValueKind.String)
+                    name = nameElement.GetString();
+
+                if (!string.IsNullOrWhiteSpace(name))
+                {
+                    var added = false;
+                    if (node.TryGetProperty("propertyValue", out var valueElement)
+                        && valueElement.ValueKind == JsonValueKind.String
+                        && valueElement.GetString() is { Length: > 0 } single)
+                    {
+                        found.Add((name, single));
+                        added = true;
+                    }
+                    if (!added && node.TryGetProperty("values", out var values)
+                        && values.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var item in values.EnumerateArray())
+                        {
+                            if (item.ValueKind == JsonValueKind.String && item.GetString() is { Length: > 0 } multi)
+                                found.Add((name, multi));
+                        }
+                    }
+                }
+
+                foreach (var property in node.EnumerateObject())
+                    CollectTagPairs(property.Value, found);
+                break;
+            }
+            case JsonValueKind.Array:
+                foreach (var element in node.EnumerateArray())
+                    CollectTagPairs(element, found);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Pick the capture date out of an item's tag pairs. Tag names are
+    /// matched after normalising case and separators, because the layout calls it
+    /// "Date Taken" on one server and "DateTimeOriginal"/"Created" on another;
+    /// a modification or expiry date is deliberately never used as a capture date
+    /// (it says when the file was touched, not when the picture was taken).
+    /// Internal so the rule is testable without a server.
+    /// </summary>
+    internal static DateTime? ParseCaptureDate(IEnumerable<(string Key, string Value)> pairs)
+    {
+        // Most-specific first: a catalog that carries both "Created" (import
+        // time) and "Date Taken" must answer with the shutter time.
+        string[] preference =
+        {
+            "datetaken", "datetimeoriginal", "originaldate", "taken",
+            "datecreated", "creationdate", "created", "filecreated",
+        };
+
+        var byKey = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (key, value) in pairs)
+        {
+            if (string.IsNullOrWhiteSpace(value)) continue;
+            var normalized = NormalizeTagKey(key);
+            // First non-empty value wins: values repeat across the payload's
+            // nested shapes and they describe the same tag.
+            byKey.TryAdd(normalized, value);
+        }
+
+        foreach (var wanted in preference)
+        {
+            foreach (var (key, value) in byKey)
+            {
+                if (!key.Contains(wanted, StringComparison.Ordinal)) continue;
+                if (key.Contains("modif", StringComparison.Ordinal)
+                    || key.Contains("expir", StringComparison.Ordinal)
+                    || key.Contains("print", StringComparison.Ordinal)) continue;
+                if (TryParseDateValue(value, out var parsed)) return parsed;
+            }
+        }
+        return null;
+    }
+
+    private static string NormalizeTagKey(string key) =>
+        new string(key.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
+
+    /// <summary>
+    /// Parse the date strings catalog tags carry. Daminion's own rendering is
+    /// dotted and has no culture equivalent — a live catalog returns
+    /// <c>2025.12.27.11.23.52</c> — so that shape is matched exactly first;
+    /// ISO-8601 (with or without a zone) and culture-shaped values follow. A
+    /// value with no offset is wall-clock time and is read as local, then stored
+    /// as UTC — the same convention
+    /// <see cref="Processing.DedupService.ReadImageDateUtc"/> uses for EXIF, so
+    /// rows sort together whichever source filled them in.
+    /// </summary>
+    private static bool TryParseDateValue(string value, out DateTime result)
+    {
+        string[] dotted =
+        {
+            "yyyy.MM.dd.HH.mm.ss", "yyyy.MM.dd.HH.mm", "yyyy.MM.dd", "yyyy.MM.dd HH:mm:ss",
+        };
+        if (DateTime.TryParseExact(value.Trim(), dotted,
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AllowWhiteSpaces, out var dottedParsed))
+        {
+            result = DateTime.SpecifyKind(dottedParsed, DateTimeKind.Local).ToUniversalTime();
+            return true;
+        }
+
+        var styles = System.Globalization.DateTimeStyles.AllowWhiteSpaces;
+        foreach (var culture in new[]
+                 {
+                     System.Globalization.CultureInfo.InvariantCulture,
+                     System.Globalization.CultureInfo.CurrentCulture,
+                 })
+        {
+            if (DateTimeOffset.TryParse(value, culture, styles, out var withOffset))
+            {
+                result = withOffset.UtcDateTime;
+                return true;
+            }
+            if (DateTime.TryParse(value, culture, styles, out var bare))
+            {
+                result = bare.Kind switch
+                {
+                    DateTimeKind.Utc => bare,
+                    DateTimeKind.Local => bare.ToUniversalTime(),
+                    _ => DateTime.SpecifyKind(bare, DateTimeKind.Local).ToUniversalTime(),
+                };
+                return true;
+            }
+        }
+        result = default;
+        return false;
+    }
+
     private static void CollectKeyValuePairs(JsonElement node, List<(string Key, string Value)> found)
     {
         switch (node.ValueKind)

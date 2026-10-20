@@ -446,10 +446,17 @@ downloaded once per scan and only items that newly enter a group are fetched.
 The slider hides while scanning or applying, after an Apply (the source changed,
 so `_lastScan` is dropped), and when the selected algorithm no longer matches
 the one that produced the fingerprints — hashes are not comparable across
-algorithms. Measured release-build grouping cost: ~0.4 ms for 1,000 items,
-~22 ms for 10,000, ~90 ms for 20,000 and ~0.5–1.0 s for 50,000 (O(n²)
-comparisons), which is what makes the slider feel live up to a large personal
-library and still usable, with a busy line, on a huge catalog.
+algorithms. Grouping is not a pairwise sweep (see `DedupService` below):
+identical fingerprints are bucketed by value, and near-duplicates are found by
+pigeonhole — split the fingerprint into threshold+1 bit groups, and any two
+values inside the hamming radius must match exactly on at least one of them.
+Candidates are then measured with the real distance, so the groups are exactly
+what the pairwise definition produces. Measured release-build cost: 5,000
+fingerprints 3 ms, 20,000 28 ms; 20,000 *identical* copies (the case pairwise
+unioning made slowest — one component, a 20,000-link parent chain) 13 ms, down
+from 14,269 ms. Two scans of the same folder produce the same group order: the
+local scan reports its fingerprints in file order even though its workers
+finish in any order.
 A completed scan is also **saved for the next launch**. `DedupFingerprintCache`
 (gzipped JSON, one file per operation and source under
 `%LOCALAPPDATA%\Synapic\fingerprints`, the newest eight per operation kept)
@@ -625,6 +632,18 @@ parameter set (documented on the interface).
   pinned by `DaminionTempDownloadTests`.
 - `UpdateItemMetadataAsync` (BatchChange), `RemoveKeywordsAsync`,
   `VerifyItemMetadataAsync` (re-read + compare → `DaminionVerifyResult`).
+- `GetItemCaptureDateAsync(id)` — the item's capture date from
+  `ItemData/GetAll`, because neither the media-item record nor a preview carries
+  one. `TagPairsFromItemData` flattens the payload's
+  `{properties:[{properties:[{propertyName,propertyValue}]}]}` shape (the tag name
+  is `propertyName`, not a JSON member of its own — a reader keyed on the member
+  names finds the words "propertyName"/"propertyValue" and never a date), and
+  `ParseCaptureDate` prefers "Date Taken"/"DateTimeOriginal" over an import date
+  and never accepts a modified/expiry date as a capture date. The server renders
+  dates as `2025.12.27.11.23.52`, which no culture parse accepts, so that shape is
+  matched exactly first — found by a live run: the catalog's tag is "Creation
+  Datetime" and every value is dotted. An unparseable payload is null, not an
+  exception. Used for the grouped rows of a catalog scan, which hashes previews.
 - `DeleteItemsAsync(ids)` — POST `MediaItems/Remove` with
   `{ids, delete:false}` (daminion_api.py `delete_items`), then **verifies** with
   `GetByIds` (one 750 ms settle retry) and only reports success when the ids are
@@ -761,12 +780,25 @@ live run reported 500 items, 500 grouped from server hash, 0 hashed). The value
 is stored zero-extended over 32 bits (`unchecked((ulong)(uint)serverHash)`):
 Daminion's hash is a signed 32-bit number, and casting long → ulong
 sign-extended it into 32 guaranteed-equal (or guaranteed-different) high bits.
-For items without a server hash (older server builds, or scoped queries that 
-omit it), the original is downloaded and hashed the old way (download → 
-`DedupService.ComputeHash` → record → delete temp). One item at a time keeps 
-a large scope from landing on disk whole. Counters: 
-`ServerHashGrouped` (items grouped from server hash only), 
-`DownloadFailures`, `HashFailures`. Produces `ExactHashes` (server content
+For items without a server hash (older server builds, scoped queries that omit
+it, or the similarity profile, which always hashes pixels), the item is
+fingerprinted from the server's **preview**, not its original (preview →
+`DedupService.ComputeHash` → record → delete temp). Every fingerprint here is a
+≤32×32 grid, so the ~2000 px preview carries far more detail than the comparison
+reads; on a live catalog of 30 originals (2.4–6.6 MP) it produced the same pHash
+as the original every time in the end-to-end run (0 bits on 24/24, mean 0.07 and
+max 2 bits on the wider 30-item probe) while the scan took 6.2 s instead of 19.5 s
+and transferred a quarter of the bytes. The original is still the fallback: a
+server that renders no preview, an item whose dimensions the catalog did not
+report (a preview request needs a box, and looking the size up would be a second
+request per item), or a preview that cannot be decoded. `PreviewBoxFor` scales the
+catalog's own aspect ratio to 512 — the width `DedupOptions.MaxDimension` already
+caps the working copy at. A preview carries no EXIF, so `DedupScanRecord.DateTakenUtc`
+stays null on that path and the review list fills it in from the item's metadata
+(`DaminionApiClient.GetItemCaptureDateAsync` → `ParseCaptureDate`) for the rows
+that actually land in a group. One item at a time keeps a large scope from
+landing on disk whole. Counters: `ServerHashGrouped` (items grouped from server
+hash only), `PreviewHashed`, `PreviewFailures`, `DownloadFailures`, `HashFailures`. Produces `ExactHashes` (server content
 hashes, grouped by the Server hash rule) and `PerceptualHashes` 
 (both `Dictionary<string, ulong>` keyed `"daminion:{id}"`, never compared
 with each other) plus `Records` 
@@ -788,8 +820,9 @@ beside the original as `{name}_upscaled{ext}`.
 items wait; cancellation wins.
 
 **`DedupService`** (`IDedupService`) — NetVips-backed perceptual hashing
-(pHash via a 32×32 DCT, dHash, aHash),
-Union-Find grouping with a hamming-distance threshold, and
+(pHash via a separable 32×32 DCT that only computes the 8×8 block the hash
+uses, dHash, aHash), Union-Find grouping (path halving, union by size) with a
+hamming-distance threshold, and
 `ApplyToPathsAsync` (also behind `ApplyActionsAsync`) for Delete / Move (into a
 `duplicates/` subfolder) / Tag. `ComputeHash` is public static (instance member
 on the interface too) and returns `null` for unreadable images. Before anything
@@ -814,6 +847,29 @@ Both it and `FindDuplicatesAsync` put the dictionaries they grouped on the
 returned `DedupResult` (`PerceptualHashes` / `ExactHashes`), which is what lets
 the results page re-group at another threshold without reading, hashing or
 downloading anything again.
+
+Grouping is a hamming *radius* search over a graph, and has to see the same
+groups a pairwise sweep would. Identical fingerprints are one component by
+inspection — bucketed by value, never compared — which is both the cheapest
+path and the one that matters most, because pairwise unioning turned a folder of
+exact copies into a single component reached through a 20,000-link parent chain.
+Everything else goes through pigeonhole candidate generation: the fingerprint is
+split into `threshold+1` disjoint bit groups, so two values inside the radius
+must agree exactly on at least one group (if every group differed they would be
+at least `threshold+1` bits apart). Each group is bucketed in turn, only pairs
+sharing a bucket are measured with the real distance, and the bit positions are
+dealt round-robin in order of how evenly each bit splits the set — a contiguous
+split lets one low-entropy region put most of the catalog in a single bucket and
+hands that share back to pairwise comparison. Candidates are a superset of the
+true pairs, so the result is identical to the pairwise definition;
+`DedupAlgorithmEquivalenceTests` asserts that against the definition itself for
+several thresholds, widths and hash distributions.
+`FindDuplicatesAsync` hashes files with `Math.Clamp(ProcessorCount/2, 1, 8)`
+workers (`LocalHashingParallelism`, internal so the throughput trade-off stays
+measurable): a local scan writes nothing, so the serial walk kept only for the
+catalog's one-download-at-a-time path was leaving the machine's cores idle. The
+fingerprints are then handed to the grouper in file order, not completion order,
+so a folder scanned twice produces the same review list in the same order.
 `DedupFingerprintCache` (`Services/Processing/DedupFingerprintCache.cs`)
 persists a `CachedDedupScan` per operation and source — see
 `StepDedupViewModel` above for the restore rules — with

@@ -152,10 +152,25 @@ public interface IDedupService
 public sealed class DedupService : IDedupService
 {
     /// <summary>
+    /// How many files the local scan hashes at once. A local scan writes
+    /// nothing, so the serial walk that the catalog path needs (one download on
+    /// disk at a time) has no reason to apply here: each file is an independent
+    /// decode, and leaving a modern machine's cores idle was most of a folder
+    /// scan's wall clock. Capped below the core count because libvips already
+    /// threads a single large decode internally — oversubscribing only adds
+    /// cache and memory pressure. Internal and settable so the throughput test
+    /// measures the trade-off instead of assuming it.
+    /// </summary>
+    internal static int LocalHashingParallelism { get; set; } =
+        Math.Clamp(Environment.ProcessorCount / 2, 1, 8);
+
+    /// <summary>
     /// Local scan: hash every path, then group. The per-file loop is the
-    /// shared <see cref="WorkflowRunner"/> (sequential, like every dedup
-    /// scan), so hashing, progress and error isolation behave exactly as they
-    /// do on the Daminion scan and the other routes.
+    /// shared <see cref="WorkflowRunner"/>, so progress and error isolation
+    /// behave exactly as they do on the Daminion scan and the other routes —
+    /// but with <see cref="LocalHashingParallelism"/> workers, because a local
+    /// scan has nothing to serialise (see that property for why the catalog
+    /// scan does).
     /// </summary>
     public async Task<DedupResult> FindDuplicatesAsync(
         IEnumerable<string> imagePaths,
@@ -173,7 +188,7 @@ public sealed class DedupService : IDedupService
         var workflow = new WorkflowDefinition(
             Key: "dedup",
             Title: "Duplicate scan",
-            MaxDegreeOfParallelism: 1,
+            MaxDegreeOfParallelism: LocalHashingParallelism,
             Description: $"hashing {algo} at threshold {opts.Threshold:0.###}");
 
         // The runner reports at item start and completion; only the completion
@@ -186,6 +201,15 @@ public sealed class DedupService : IDedupService
         await new WorkflowRunner().RunItemsAsync(
             workflow, items, new LocalHashHandler(opts, hashes), runnerProgress, log: null, pause: null, ct).ConfigureAwait(false);
 
+        // The workers finish in whatever order the decoder gets to them, so the
+        // hash map's order is not the scan's order. Group order follows that
+        // order, and a review list whose cards move between two scans of the same
+        // folder is a bug — so hand the grouper the file order it was given, which
+        // is exactly what a serial walk produced.
+        var ordered = new Dictionary<string, ulong>(hashes.Count);
+        foreach (var path in paths)
+            if (hashes.TryGetValue(path, out var hash)) ordered[path] = hash;
+
         var result = new DedupResult
         {
             TotalFiles = paths.Length,
@@ -193,9 +217,9 @@ public sealed class DedupService : IDedupService
             Threshold = opts.Threshold,
             // Kept after grouping so the results page can re-group at another
             // threshold without re-reading a single file.
-            PerceptualHashes = hashes,
+            PerceptualHashes = ordered,
         };
-        GroupDuplicates(hashes, opts, result.Groups);
+        GroupDuplicates(ordered, opts, result.Groups);
 
         progress?.Report(new DedupProgress(paths.Length, paths.Length, result.Groups.Count));
         return result;
@@ -485,52 +509,85 @@ public sealed class DedupService : IDedupService
         return hash;
     }
 
+    /// <summary>
+    /// Cosine table for the 32-point DCT axis, only the eight low-frequency
+    /// terms pHash reads. The transform keeps its top-left 8×8 block, so the
+    /// other 24 frequencies of each axis are never sampled.
+    /// </summary>
+    private static readonly double[,] PhashCos = BuildPhashCos();
+
+    private static double[,] BuildPhashCos()
+    {
+        const int n = 32, kept = 8;
+        var table = new double[n, kept];
+        for (var x = 0; x < n; x++)
+        {
+            for (var u = 0; u < kept; u++)
+                table[x, u] = Math.Cos((2.0 * x + 1.0) * u * Math.PI / (2.0 * n));
+        }
+        return table;
+    }
+
     private static ulong ComputePHash(Image gray)
     {
         // 32x32 grayscale, 2D DCT, top-left 8x8 → median threshold (imagehash phash).
+        //
+        // The DCT is separable and only 64 of its 1024 coefficients are used, so
+        // it is computed as 32 row transforms of 8 terms followed by 8 column
+        // transforms of 8 terms — about 10,000 multiply-adds, where transforming
+        // the full 32x32 block costs about 1,000,000 for coefficients the hash
+        // then throws away. Same coefficients, same threshold; measured at 7x
+        // less time for this stage (0.096 → 0.013 ms per hash), which is a small
+        // share of a scan next to decoding the file.
         using var small = gray.Resize(32.0 / gray.Width, vscale: 32.0 / gray.Height);
         var pixels = small.WriteToMemory<byte>();
-        var matrix = new double[32 * 32];
-        for (var i = 0; i < pixels.Length; i++) matrix[i] = pixels[i];
 
-        var dct = Dct2D(matrix, 32);
+        // Pass 1: for every row, the 8 low-frequency horizontal coefficients.
+        var rows = new double[32 * 8];
+        for (var y = 0; y < 32; y++)
+        {
+            var offset = y * 32;
+            for (var u = 0; u < 8; u++)
+            {
+                var sum = 0.0;
+                for (var x = 0; x < 32; x++)
+                    sum += pixels[offset + x] * PhashCos[x, u];
+                rows[y * 8 + u] = sum;
+            }
+        }
+
+        // Pass 2: combine those rows vertically into the 8x8 block.
         var flats = new double[64];
-        var idx = 0;
-        for (var y = 0; y < 8; y++)
-            for (var x = 0; x < 8; x++)
-                flats[idx++] = dct[y * 32 + x];
+        for (var v = 0; v < 8; v++)
+        {
+            var cv = v == 0 ? 1.0 / Math.Sqrt(2.0) : 1.0;
+            for (var u = 0; u < 8; u++)
+            {
+                var sum = 0.0;
+                for (var y = 0; y < 32; y++)
+                    sum += rows[y * 8 + u] * PhashCos[y, v];
+                var cu = u == 0 ? 1.0 / Math.Sqrt(2.0) : 1.0;
+                flats[v * 8 + u] = 0.25 * cu * cv * sum;
+            }
+        }
 
         // Exclude the DC term like imagehash does (flatten()[1:] after median
         // over the 8x8 block minus first element).
+        //
+        // Known limit, deliberately not papered over: in a picture with almost no
+        // structure (a solid colour, a blank scan) most of these coefficients are
+        // mathematically zero, so which side of the median each lands on is
+        // rounding noise and the fingerprint is meaningless. Snapping those ties
+        // to one side was tried and rejected — it gives every uniform image the
+        // same fingerprint, which offers unrelated blank files to the user as
+        // duplicates. Rounding noise is the lesser evil: identical pixels still
+        // produce an identical hash, so real copies are still found, while two
+        // different featureless images stay apart.
         var median = Median(flats.Skip(1).ToArray());
         ulong hash = 0;
         for (var i = 0; i < 64; i++)
             if (flats[i] > median) hash |= 1UL << (63 - i);
         return hash;
-    }
-
-    private static double[] Dct2D(double[] input, int n)
-    {
-        var output = new double[n * n];
-        var cos = new double[n, n];
-        for (var x = 0; x < n; x++)
-            for (var u = 0; u < n; u++)
-                cos[x, u] = Math.Cos((2.0 * x + 1.0) * u * Math.PI / (2.0 * n));
-
-        for (var u = 0; u < n; u++)
-        {
-            for (var v = 0; v < n; v++)
-            {
-                var sum = 0.0;
-                for (var y = 0; y < n; y++)
-                    for (var x = 0; x < n; x++)
-                        sum += input[y * n + x] * cos[x, u] * cos[y, v];
-                var cu = u == 0 ? 1.0 / Math.Sqrt(2.0) : 1.0;
-                var cv = v == 0 ? 1.0 / Math.Sqrt(2.0) : 1.0;
-                output[v * n + u] = 0.25 * cu * cv * sum;
-            }
-        }
-        return output;
     }
 
     private static double Median(double[] values)
@@ -542,6 +599,30 @@ public sealed class DedupService : IDedupService
 
     // ── Grouping (Union-Find port of dedup_engine.py) ───────────────────────
 
+    /// <summary>
+    /// Group by hamming radius: two fingerprints inside the threshold join the
+    /// same component, and membership is transitive (A–B and B–C is one group
+    /// even when A and C are further apart than the threshold).
+    /// </summary>
+    /// <remarks>
+    /// The comparison is expressed as a graph, not as a pairwise sweep. Written
+    /// as the obvious double loop it is n²/2 popcounts — 125 million at 20,000
+    /// fingerprints, 1.25 billion at 50,000 — and it is re-run on every move of
+    /// the results page's threshold slider. Two structural properties make that
+    /// unnecessary without changing a single group:<br/>
+    /// <b>Identical fingerprints</b> are one component by inspection, so they are
+    /// bucketed by value and never compared. This is also what makes a folder of
+    /// exact copies cheap; pairwise unioning made every equal pair a union, and
+    /// the parent chain grew one link per pair.<br/>
+    /// <b>Near-duplicates</b> are found by pigeonhole: split the fingerprint into
+    /// threshold+1 disjoint bit groups. Two values at distance d differ in at
+    /// least one bit of at least one group, so if they are within d at least one
+    /// group's bits must match exactly. Bucketing on each group in turn and
+    /// checking only the pairs that share a bucket cannot miss a pair inside the
+    /// radius — the candidates are a superset of the true pairs, and every
+    /// candidate is still measured with the real distance. On a catalog-scale set
+    /// that is a few thousand comparisons instead of billions.
+    /// </remarks>
     private static void GroupDuplicates(
         IReadOnlyDictionary<string, ulong> hashes,
         DedupOptions opts,
@@ -550,42 +631,113 @@ public sealed class DedupService : IDedupService
         int bits = 64)
     {
         var items = hashes.Keys.ToArray();
-        var parent = new Dictionary<string, string>(items.Length);
-        foreach (var item in items) parent[item] = item;
-
-        string Find(string x)
-        {
-            while (parent[x] != x) x = parent[x] = parent[parent[x]];
-            return x;
-        }
-
-        void Union(string a, string b)
-        {
-            var ra = Find(a);
-            var rb = Find(b);
-            if (ra != rb) parent[ra] = rb;
-        }
+        if (items.Length < 2) return;
 
         // Normalize hamming distance to a 0-1 similarity; threshold 0.90 → ≤6 bits differ.
         var maxDistance = MaxHammingDistance(opts.Threshold, bits);
-        // Hoist the hash values into an array: this is the O(n²) hot loop, and
-        // two dictionary lookups per pair dominate it on a large scope.
+
+        // Hoist the hash values into an array: every inner loop below indexes it.
         var values = new ulong[items.Length];
         for (var i = 0; i < items.Length; i++) values[i] = hashes[items[i]];
 
+        var components = new UnionFind(items.Length);
+
+        // 1. Identical fingerprints — one component, no distance work at all.
+        //    `distinct` holds one representative item index per distinct value;
+        //    only those representatives take part in the near-duplicate search.
+        var distinct = new List<int>(items.Length);
+        var firstWithValue = new Dictionary<ulong, int>(items.Length);
         for (var i = 0; i < items.Length; i++)
         {
-            var value = values[i];
-            for (var j = i + 1; j < items.Length; j++)
+            if (firstWithValue.TryGetValue(values[i], out var first))
             {
-                if (HammingDistance(value, values[j]) <= maxDistance) Union(items[i], items[j]);
+                components.Union(i, first);
+            }
+            else
+            {
+                firstWithValue[values[i]] = i;
+                distinct.Add(i);
             }
         }
 
-        var components = items.GroupBy(Find).Where(g => g.Count() > 1);
-        foreach (var component in components)
+        // 2. Near-duplicates — pigeonhole candidates, then the real distance.
+        if (maxDistance > 0 && distinct.Count > 1)
         {
-            var groupItems = component.OrderBy(p => p).ToArray();
+            if (maxDistance >= bits)
+            {
+                // Every fingerprint is inside the radius of every other one.
+                for (var i = 1; i < distinct.Count; i++) components.Union(distinct[0], distinct[i]);
+            }
+            else
+            {
+                var distinctValues = new ulong[distinct.Count];
+                for (var i = 0; i < distinct.Count; i++) distinctValues[i] = values[distinct[i]];
+                var nextInBucket = new int[distinct.Count];
+
+                foreach (var mask in BitGroupMasks(distinctValues, bits, maxDistance + 1))
+                {
+                    // Bucket headers + an intrusive chain, one group at a time: a
+                    // List per bucket would allocate one list per distinct
+                    // fingerprint per group (140,000 of them at catalog scale)
+                    // and dominate the grouping cost it exists to avoid.
+                    var head = new Dictionary<ulong, int>(distinctValues.Length);
+                    Array.Fill(nextInBucket, -1);
+                    for (var i = 0; i < distinctValues.Length; i++)
+                    {
+                        var key = distinctValues[i] & mask;
+                        if (head.TryGetValue(key, out var first))
+                        {
+                            nextInBucket[i] = first;
+                            head[key] = i;
+                        }
+                        else
+                        {
+                            head[key] = i;
+                        }
+                    }
+
+                    foreach (var start in head.Values)
+                    {
+                        if (nextInBucket[start] < 0) continue; // single value in the bucket
+                        for (var x = start; x >= 0; x = nextInBucket[x])
+                        {
+                            var a = distinct[x];
+                            for (var y = nextInBucket[x]; y >= 0; y = nextInBucket[y])
+                            {
+                                var b = distinct[y];
+                                if (HammingDistance(values[a], values[b]) <= maxDistance)
+                                    components.Union(a, b);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Components → groups, in the order each component first appears in
+        //    the item list (what the previous GroupBy produced), with members
+        //    ordered by path.
+        var memberLists = new List<List<int>>();
+        var listByRoot = new Dictionary<int, int>();
+        for (var i = 0; i < items.Length; i++)
+        {
+            var root = components.Find(i);
+            if (!listByRoot.TryGetValue(root, out var listIndex))
+            {
+                listByRoot[root] = listIndex = memberLists.Count;
+                memberLists.Add(new List<int>(2));
+            }
+            memberLists[listIndex].Add(i);
+        }
+
+        foreach (var members in memberLists)
+        {
+            if (members.Count < 2) continue;
+
+            var groupItems = members
+                .Select(i => items[i])
+                .OrderBy(p => p)
+                .ToArray();
             var representative = groupItems[0];
             var scores = groupItems
                 .Select(p => 1.0 - HammingDistance(hashes[p], hashes[representative]) / (double)bits)
@@ -598,6 +750,80 @@ public sealed class DedupService : IDedupService
                 HashType = hashType ?? opts.Algorithm.ToString().ToLowerInvariant(),
                 KeepItem = groupItems[0], // keep-first; UI can override (largest/newest)
             });
+        }
+    }
+
+    /// <summary>
+    /// The pigeonhole partition as bit masks: <paramref name="groups"/> disjoint
+    /// groups of bit positions. Bit positions are dealt round-robin in order of
+    /// how evenly each bit splits this set, so every group carries a similar
+    /// amount of information. A partition of arbitrary (contiguous) bit ranges
+    /// would work too, but on real fingerprints some ranges are far more uniform
+    /// than others — a group whose bits are almost always the same puts a large
+    /// share of the catalog in one bucket and hands that share back to pairwise
+    /// comparison. Balancing the groups keeps the candidate sets small.
+    /// </summary>
+    private static ulong[] BitGroupMasks(ulong[] values, int bits, int groups)
+    {
+        var ones = new int[bits];
+        foreach (var value in values)
+        {
+            for (var bit = 0; bit < bits; bit++)
+                if ((value & (1UL << bit)) != 0) ones[bit]++;
+        }
+
+        var count = values.Length;
+        var order = Enumerable.Range(0, bits)
+            .OrderBy(bit => Math.Abs(2L * ones[bit] - count)) // most evenly split first
+            .ThenBy(bit => bit)
+            .ToArray();
+
+        var masks = new ulong[groups];
+        for (var i = 0; i < order.Length; i++)
+            masks[i % groups] |= 1UL << order[i];
+        return masks;
+    }
+
+    /// <summary>
+    /// Disjoint-set forest with path halving and union by size. Union by size is
+    /// not cosmetic: the previous implementation always attached one root to the
+    /// other, so a set that grew one pair at a time became a linked list and
+    /// every Find walked it — quadratic in a set that is really one component.
+    /// </summary>
+    private sealed class UnionFind
+    {
+        private readonly int[] _parent;
+        private readonly int[] _size;
+
+        public UnionFind(int count)
+        {
+            _parent = new int[count];
+            _size = new int[count];
+            for (var i = 0; i < count; i++)
+            {
+                _parent[i] = i;
+                _size[i] = 1;
+            }
+        }
+
+        public int Find(int x)
+        {
+            while (_parent[x] != x)
+            {
+                _parent[x] = _parent[_parent[x]];
+                x = _parent[x];
+            }
+            return x;
+        }
+
+        public void Union(int a, int b)
+        {
+            a = Find(a);
+            b = Find(b);
+            if (a == b) return;
+            if (_size[a] < _size[b]) (a, b) = (b, a);
+            _parent[b] = a;
+            _size[a] += _size[b];
         }
     }
 

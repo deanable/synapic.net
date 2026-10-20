@@ -477,6 +477,16 @@ standalone CPU and CUDA sidecar executables — see `packaging.md`.
   default PHash — the other fingerprints carry their own tighter defaults), the
   wording, the operation key and which half of the settings store each reads,
   so loosening one search cannot loosen the other.
+- **Dedup grouping is a bucketed radius search, not a pairwise sweep** —
+  identical fingerprints are one component by value, and near-duplicates come
+  from pigeonhole bucketing (threshold+1 bit groups), then the real hamming
+  distance. It is provably the same grouping as comparing every pair, and it is
+  what keeps the review list and the threshold slider usable on a large catalog.
+  A local scan hashes in parallel (nothing is written); the catalog scan fetches
+  one item at a time so a large scope never lands on disk whole, and fetches the
+  server's *preview* rather than the original — a fingerprint is a 32×32 grid, and
+  the preview was measurably the same fingerprint at a third of the time. The
+  capture date a preview cannot carry is read from the catalog per grouped row.
 - **The upscaler runs in the sidecar** (`POST /upscale`, Swin2SR/Lanczos —
   `src/Synapic.Inference/upscaler.py`, a verbatim port of the original app's
   `core/upscaler.py`), keeping the algorithm next to its Python origin; only
