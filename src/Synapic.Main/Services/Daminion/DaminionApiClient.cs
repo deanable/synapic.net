@@ -472,6 +472,17 @@ public sealed class DaminionApiClient
             scope, savedSearchId, collectionId, searchTerm,
             untaggedFields, statusFilter, maxItems, startIndex, ct).ConfigureAwait(false)).Items;
 
+    /// <summary>Fetch exact catalog records by ID, with the same session recovery used by paged reads.</summary>
+    public async Task<DaminionItem[]> GetItemsByIdsAsync(IEnumerable<int> itemIds, CancellationToken ct = default)
+    {
+        var ids = string.Join(",", itemIds.Distinct());
+        if (ids.Length == 0) return Array.Empty<DaminionItem>();
+        var response = await WithSessionRecoveryAsync(
+            api => api.GetItemsByIds(ids, ct), ct).ConfigureAwait(false);
+        return response.EffectiveItems;
+    }
+
+
     /// <summary>
     /// Retrieve one batch (≤ <see cref="PageSize"/>) along with the raw page the
     /// server returned. At most one batch per call; callers advance

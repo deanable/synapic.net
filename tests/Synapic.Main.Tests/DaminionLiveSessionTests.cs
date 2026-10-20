@@ -1,4 +1,7 @@
+using System.Numerics;
+using Synapic.Main.Services;
 using Synapic.Main.Services.Daminion;
+using Synapic.Main.Services.Processing;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -13,12 +16,93 @@ namespace Synapic.Main.Tests;
 /// ("Authorization has been denied for this request.").
 ///
 /// Opt-in like Daminion_round_trip_against_live_server: set
-/// SYNAPIC_TEST_DAMINION_URL / _USERNAME / _PASSWORD. CI (no env vars) skips.
+/// SYNAPIC_TEST_DAMINION_URL / _USERNAME / _PASSWORD, or use the saved Windows
+/// Daminion connection in HKCU. CI without either skips.
 /// Read-only: login, authenticated reads, logout — no metadata writes.
 /// </summary>
 public class DaminionLiveSessionTests
 {
     private readonly ITestOutputHelper _output;
+
+    [Fact]
+    public async Task Similar_item_ids_hashCode_is_compared_with_original_pixel_phash()
+    {
+        // This deliberately named test is run explicitly, never as part of the
+        // normal suite. Credentials stay in process memory and neither output nor
+        // assertions include the saved URL, username or password.
+        var url = GetLiveSetting("SYNAPIC_TEST_DAMINION_URL", saved => saved.ServerUrl);
+        var username = GetLiveSetting("SYNAPIC_TEST_DAMINION_USERNAME", saved => saved.Username);
+        var password = GetLiveSetting("SYNAPIC_TEST_DAMINION_PASSWORD", saved => saved.Password);
+
+        Assert.False(string.IsNullOrWhiteSpace(url), "No saved Daminion server URL is available.");
+        Assert.False(string.IsNullOrWhiteSpace(username), "No saved Daminion username is available.");
+        Assert.False(string.IsNullOrEmpty(password), "No saved Daminion password is available.");
+
+        var client = new DaminionApiClient(url!, username!, password!);
+        await client.AuthenticateAsync();
+        try
+        {
+            // The user identified these two different-aspect-ratio images as
+            // similar. Fetch only their catalog records and originals; no scan,
+            // writes, or broader catalog sampling occurs.
+            const int firstId = 86068;
+            const int secondId = 86233;
+            var items = await client.GetItemsByIdsAsync(new[] { firstId, secondId });
+            Assert.Equal(2, items.Length);
+            var byId = items.ToDictionary(item => item.Id);
+            Assert.True(byId.TryGetValue(firstId, out var first), $"Daminion did not return item {firstId}.");
+            Assert.True(byId.TryGetValue(secondId, out var second), $"Daminion did not return item {secondId}.");
+            Assert.NotNull(first!.HashCode);
+            Assert.NotNull(second!.HashCode);
+
+            var originalPaths = new List<string>();
+            try
+            {
+                var firstPath = await client.DownloadOriginalAsync(firstId);
+                Assert.False(string.IsNullOrWhiteSpace(firstPath), $"Could not download original for item {firstId}.");
+                originalPaths.Add(firstPath!);
+                var secondPath = await client.DownloadOriginalAsync(secondId);
+                Assert.False(string.IsNullOrWhiteSpace(secondPath), $"Could not download original for item {secondId}.");
+                originalPaths.Add(secondPath!);
+
+                var options = new DedupOptions(Algorithm: HashAlgorithm.PHash, MaxDimension: 512);
+                var firstPHash = DedupService.ComputeHash(firstPath!, options);
+                var secondPHash = DedupService.ComputeHash(secondPath!, options);
+                Assert.True(firstPHash.HasValue, $"Could not compute pHash from item {firstId} original.");
+                Assert.True(secondPHash.HasValue, $"Could not compute pHash from item {secondId} original.");
+
+                var firstServerHash = unchecked((uint)first.HashCode!.Value);
+                var secondServerHash = unchecked((uint)second.HashCode!.Value);
+                var serverDistance = BitOperations.PopCount(firstServerHash ^ secondServerHash);
+                var pixelDistance = BitOperations.PopCount(firstPHash!.Value ^ secondPHash!.Value);
+                _output.WriteLine($"Read-only comparison for similar items {firstId}/{secondId}: " +
+                                  $"server hash distance={serverDistance} bits (32-bit); " +
+                                  $"original-image pHash distance={pixelDistance} bits (64-bit); " +
+                                  $"dimensions={first.Dimensions?.W}x{first.Dimensions?.H} / {second.Dimensions?.W}x{second.Dimensions?.H}.");
+                _output.WriteLine(serverDistance == 0
+                    ? "Result: server hash matches exactly for this pair; because the images are visually similar but differently sized, this supports a resize-tolerant hash only if the originals are not byte-identical."
+                    : serverDistance <= 6
+                        ? "Result: server hashes are close under a 32-bit Hamming metric and pixel pHashes are compared separately; this single pair is suggestive but cannot identify the server algorithm."
+                        : "Result: server hashes are not close under a 32-bit Hamming metric for this pair; this does not support treating hashCode as a pHash-like fingerprint from this observation alone.");
+            }
+            finally
+            {
+                foreach (var path in originalPaths)
+                    try { File.Delete(path); } catch (IOException) { }
+            }
+        }
+        finally
+        {
+            await client.LogoutAsync();
+        }
+    }
+
+    private static string? GetLiveSetting(string environmentName, Func<DaminionConnectionParams, string> select)
+    {
+        var environmentValue = Environment.GetEnvironmentVariable(environmentName);
+        if (!string.IsNullOrWhiteSpace(environmentValue)) return environmentValue;
+        return new DaminionConnectionStore().Load() is { } saved ? select(saved) : null;
+    }
 
     public DaminionLiveSessionTests(ITestOutputHelper output) => _output = output;
 
