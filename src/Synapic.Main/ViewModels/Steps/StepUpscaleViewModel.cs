@@ -340,7 +340,7 @@ public partial class StepUpscaleViewModel : RunStateViewModel
             var summary = await new WorkflowRunner().RunAsync(
                 workflow, ds, handler, progress,
                 logSink,
-                pause: null, Cts!.Token);
+                pause: null, ct: Cts!.Token);
 
             var line = summary.Total == 0
                 ? "No images were found in this source — choose a folder or catalog scope with images, then run upscale again."

@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Synapic.Main.Models;
 using Synapic.Main.Services.Processing;
 using Synapic.Main.ViewModels.Steps;
 using Xunit;
@@ -284,6 +285,50 @@ public class DedupFingerprintRestoreTests
         finally
         {
             Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [Avalonia.Headless.XUnit.AvaloniaFact]
+    public async Task A_saved_daminion_scan_is_not_restored_after_filters_change()
+    {
+        using var cacheDir = new TempDir();
+        try
+        {
+            var session = new Session();
+            session.Datasource.Type = "daminion";
+            session.Datasource.DaminionUrl = "http://catalog";
+            session.Datasource.DaminionScope = "all";
+            var source = new Step1DatasourceViewModel(session);
+
+            // This is the pre-filter cache identity: scope and search only.
+            // Such a cache must not be reused after the result set is narrowed.
+            var oldSourceKey = "daminion|http://catalog||all|||";
+            await new DedupFingerprintCache(cacheDir.Path).SaveAsync("dedup", new CachedDedupScan(
+                DedupFingerprintCache.CurrentVersion,
+                oldSourceKey,
+                "phash",
+                0.95,
+                2,
+                new[]
+                {
+                    new CachedDedupItem("daminion:1", "a.jpg", 100, null, 1),
+                    new CachedDedupItem("daminion:2", "b.jpg", 100, null, 2),
+                },
+                new Dictionary<string, ulong> { ["daminion:1"] = 0UL, ["daminion:2"] = 1UL },
+                new Dictionary<string, ulong>()));
+
+            source.UntaggedKeywords = true;
+            var vm = new StepDedupViewModel(
+                step1: source,
+                fingerprintCache: new DedupFingerprintCache(cacheDir.Path));
+            await vm.RestoreCompletion;
+
+            Assert.Empty(vm.Groups);
+            Assert.False(vm.CanRetune);
+        }
+        finally
+        {
+            // Cache temp directory is removed by TempDir.Dispose.
         }
     }
 

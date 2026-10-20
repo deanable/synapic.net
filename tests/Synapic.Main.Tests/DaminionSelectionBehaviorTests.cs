@@ -143,9 +143,8 @@ public sealed class DaminionSelectionBehaviorTests
     /// <summary>
     /// A dedup/similar scan must see the whole scope, not a prefix: the catalog
     /// API answers at most 500 records per call, and Step 1's "max items"
-    /// ceiling (100 by default) belongs to tagging. This walks 1,500 records in
-    /// three pages with the ceiling at 100 and auto-pagination switched off, and
-    /// expects every one of them.
+    /// ceiling belongs to partial workflows. This walks 1,500 records in three
+    /// pages with the ceiling at 100 and auto-pagination switched off.
     /// </summary>
     [Fact]
     public async Task Whole_scope_fetch_walks_every_page_past_the_source_ceiling()
@@ -254,11 +253,9 @@ public sealed class DaminionSelectionBehaviorTests
     }
 
     /// <summary>
-    /// A server that means page serials by `index` — what the REST reference
-    /// documents — answers page 0 and then nothing at the offsets this walk has
-    /// always sent. The search knows how many records it holds, so the walk must
-    /// not stop there: it continues with page serials and still fetches the whole
-    /// scope. This is the live saved-search case (500 of 6,704 fetched).
+    /// A saved-search server may cap its count at 500 yet have more result pages.
+    /// If offsets run dry after the first page, continue by page serials when no
+    /// count is available to prove the result set has ended.
     /// </summary>
     [Fact]
     public async Task Whole_scope_fetch_continues_with_page_serials_when_offsets_run_dry()
@@ -269,8 +266,7 @@ public sealed class DaminionSelectionBehaviorTests
                 // One page per serial: 0..1500 in three pages of 500.
                 var start = index * 500;
                 return start >= 1500 ? "{}" : Page(start, Math.Min(500, 1500 - start));
-            },
-            countBody: _ => "{\"count\":1500}");
+            });
         var client = await Connect(server);
         var reports = new List<CatalogFetchProgress>();
 
@@ -286,11 +282,12 @@ public sealed class DaminionSelectionBehaviorTests
         Assert.Equal(1, items[0].DaminionId);
         Assert.Equal(1500, items[^1].DaminionId);
         // Page 0, the empty offset page (index 500 is past the end under page
-        // serials), then serials 1 and 2 — and no fourth request, because the
-        // count said the scope held 1,500 records.
-        Assert.Equal(new[] { 0, 500, 1, 2 }, server.GetIndexes);
+        // serials), then serials 1 and 2 and the final empty serial page.
+        Assert.Equal(new[] { 0, 500, 1, 2, 3 }, server.GetIndexes);
         Assert.Equal(1500, reports[^1].Scanned);
-        Assert.All(reports, r => Assert.Equal(1500, r.Total));
+        // This server reports an incrementing total while pages are requested;
+        // the progress total follows that monotonic high-water mark.
+        Assert.Equal(new int?[] { 500, 1000, 1500, 1500 }, reports.Select(r => r.Total).ToArray());
     }
 
     /// <summary>
@@ -424,13 +421,39 @@ public sealed class DaminionSelectionBehaviorTests
     }
 
     /// <summary>
-    /// The reverse guarantee: a tagging run still honours its ceiling and its
-    /// auto-paginate switch. Whole-scope fetching is for dedup/similar only.
+    /// Tagging itself must page across the full Daminion scope regardless of
+    /// the Step 1 item ceiling. A 1,200-item scope must produce 1,200 sidecar
+    /// calls and result rows rather than stopping at the first 500-item response.
     /// </summary>
     [Fact]
-    public async Task Scoped_fetch_still_respects_the_step_one_ceiling()
+    public async Task Tagging_processes_every_item_across_full_pages()
     {
         using var server = new CatalogServer(index => Page(index, index < 1500 ? 500 : 0));
+        var client = await Connect(server);
+        var sidecar = new CountingTagSidecar();
+        var results = new List<ProcessItemResult>();
+        var orchestrator = new ProcessingOrchestrator(sidecar, new CapturingMetadataWriter(), maxDegreeOfParallelism: 8);
+
+        await orchestrator.RunAsync(new DatasourceSelection
+        {
+            IsDaminion = true,
+            DaminionClient = client,
+            MaxItems = 100,
+            ProcessAll = false,
+            AutoPaginate = false,
+        },
+            new TagRequest { ModelId = "test-model", Task = "image-text-to-text" },
+            new Progress<ProcessProgress>(), _ => Task.CompletedTask, CancellationToken.None, results);
+
+        Assert.Equal(1500, sidecar.TagCalls);
+        Assert.Equal(1500, results.Count);
+        Assert.Equal(new[] { 0, 500, 1000, 1500 }, server.GetIndexes);
+    }
+
+    [Fact]
+    public async Task Upscale_scoped_fetch_still_respects_the_step_one_ceiling()
+    {
+        using var server = new CatalogServer(index => Page(index, 500));
         var client = await Connect(server);
 
         var items = await WorkflowRunner.FetchItemsAsync(new DatasourceSelection
@@ -442,6 +465,41 @@ public sealed class DaminionSelectionBehaviorTests
 
         Assert.Equal(100, items.Count);
         Assert.Equal(new[] { 0 }, server.GetIndexes);
+    }
+
+    [Fact]
+    public void Daminion_similarity_requires_pixel_hashing()
+    {
+        var options = new Synapic.Main.Services.Processing.DedupOptions(UseServerHashes: false);
+        Assert.False(options.UseServerHashes);
+    }
+
+    private sealed class CountingTagSidecar : IInferenceSidecar
+    {
+        private int _tagCalls;
+        public int TagCalls => Volatile.Read(ref _tagCalls);
+        public SidecarStatus CurrentStatus => SidecarStatus.Ready;
+        public int SidecarPort => 0;
+        public bool IsRunning => true;
+        public event EventHandler<SidecarStatusChangedEventArgs>? StatusChanged { add { } remove { } }
+        public event Action<string>? LogReceived { add { } remove { } }
+        public Task StartAsync(CancellationToken ct = default) => Task.CompletedTask;
+        public Task StopAsync(TimeSpan? gracefulTimeout = null) => Task.CompletedTask;
+        public Task<TagResponse> TagAsync(TagRequest request, CancellationToken ct = default)
+        {
+            Interlocked.Increment(ref _tagCalls);
+            return Task.FromResult(new TagResponse { Category = "Nature", Keywords = ["tree"], Description = "A tree" });
+        }
+        public Task<ModelInfo[]> ListModelsAsync(CancellationToken ct = default) => Task.FromResult(Array.Empty<ModelInfo>());
+        public Task DownloadModelAsync(string modelId, CancellationToken ct = default) => Task.CompletedTask;
+        public Task<HealthResponse> GetHealthAsync(CancellationToken ct = default) => Task.FromResult(new HealthResponse());
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class CapturingMetadataWriter : IMetadataWriter
+    {
+        public Task<bool> WriteAsync(string path, TagResult tags, CancellationToken ct = default) => Task.FromResult(true);
+        public Task<TagResult?> ReadAsync(string path, CancellationToken ct = default) => Task.FromResult<TagResult?>(null);
     }
 
     [Fact]

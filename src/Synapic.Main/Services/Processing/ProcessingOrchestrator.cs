@@ -175,7 +175,10 @@ public sealed class ProcessingOrchestrator
         TagFieldSelection? tagFields = null)
     {
         var handler = new TaggingItemHandler(ds, template, _sidecar, _metadataWriter, log, results, tagFields);
-        await Runner.RunAsync(BuildWorkflow(tagFields), ds, handler, progress, log, pause, ct).ConfigureAwait(false);
+        // Daminion tagging operates on the full selected scope; partial-prefix
+        // processing made page-sized result counts look like a completed scope.
+        await Runner.RunAsync(BuildWorkflow(tagFields), ds, handler, progress, log, pause,
+            entireScope: ds.IsDaminion, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>

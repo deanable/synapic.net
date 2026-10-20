@@ -287,7 +287,10 @@ public partial class StepDedupViewModel : RunStateViewModel
         // there (type, folder, connection, scope) moves this step's own gate and
         // read-backs too.
         if (_step1 is not null)
+        {
             _step1.PropertyChanged += (_, e) => OnSharedSourceChanged(e.PropertyName);
+            _step1.PropertyChanged += (_, e) => OnSharedFilterChanged(e.PropertyName);
+        }
 
         // A restart should land on the last scan's results, not an empty review
         // list: the fingerprints and rows were saved for exactly this source, and
@@ -317,6 +320,22 @@ public partial class StepDedupViewModel : RunStateViewModel
         // scope change leaves the old groups on screen but takes the slider away.
         OnPropertyChanged(nameof(CanRetune));
         // …and the newly configured source may have a saved scan of its own.
+        ScheduleRestore();
+    }
+
+    /// <summary>Filter settings also change which catalog items a saved fingerprint set describes.</summary>
+    private void OnSharedFilterChanged(string? propertyName)
+    {
+        if (propertyName is not (nameof(Step1DatasourceViewModel.StatusFilterIndex)
+            or nameof(Step1DatasourceViewModel.UntaggedKeywords)
+            or nameof(Step1DatasourceViewModel.UntaggedCategories)
+            or nameof(Step1DatasourceViewModel.UntaggedDescription)
+            or nameof(Step1DatasourceViewModel.SearchTerm)
+            or nameof(Step1DatasourceViewModel.SavedSearchId)
+            or nameof(Step1DatasourceViewModel.CollectionId)
+            or nameof(Step1DatasourceViewModel.ScopeIndex))) return;
+
+        OnPropertyChanged(nameof(CanRetune));
         ScheduleRestore();
     }
 
@@ -1171,8 +1190,13 @@ public partial class StepDedupViewModel : RunStateViewModel
         if (IsDaminion)
         {
             if (_step1 is null) return null;
-            return $"daminion|{(_step1.DaminionUrl ?? "").Trim()}|{_step1.Scope}|{_step1.SavedSearchId}|"
-                   + $"{_step1.CollectionId}|{(_step1.SearchTerm ?? "").Trim()}";
+            // A cache includes only the retained source's data, not today's
+            // filters or threshold options. Every value that changes the
+            // returned item set belongs in this identity, or a fast restore
+            // would silently show stale/incorrect groups.
+            return $"daminion|{(_step1.DaminionUrl ?? "").Trim()}|{_step1.ActiveCatalog ?? ""}|{_step1.Scope}|{_step1.SavedSearchId}|"
+                   + $"{_step1.CollectionId}|{(_step1.SearchTerm ?? "").Trim()}|{_step1.StatusFilter}|"
+                   + $"{_step1.UntaggedKeywords},{_step1.UntaggedCategories},{_step1.UntaggedDescription}";
         }
 
         var folder = FolderPath?.Trim();
