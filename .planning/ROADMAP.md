@@ -197,17 +197,21 @@ advance PROJECT.md and STATE.md.
 |------|-------------|---------|
 | 12-01 | UI acceptance executed against the installed build | [12-01-SUMMARY.md](phases/12-ui-acceptance-and-release/12-01-SUMMARY.md) · transcript: [12-ACCEPTANCE.md](phases/12-ui-acceptance-and-release/12-ACCEPTANCE.md) |
 
-**Outcome (criteria 1 and 2):** all seven `03-UAT.md` rows carry a recorded result with quoted
-observations — executed 2026-10-24 by Windows UI Automation against the installed build launched from
+**Outcome — all three criteria met (2026-10-24):** all seven `03-UAT.md` rows carry a recorded result
+with quoted observations — executed by Windows UI Automation against the installed build launched from
 the Start-menu shortcut (`artifacts/phase-12/uat-sweep.ps1`), not inferred. The dashboard-on-launch
 complaint is closed with the installed build as its evidence: the shortcut resolves to the exe built
 from this tree (2026-10-23T23:59:34), the cold start lands on the dashboard/Settings view, and the
-service comes up RUNNING as LocalService. Criterion 3 (archive, MILESTONES entry, tag `v1.0`,
-PROJECT/STATE advanced) is the remaining ship step. The phase also retired a recorded residual: the
+service comes up RUNNING as LocalService. And v1.0 shipped: phases 1–3 archived to
+`milestones/v1.0-REQUIREMENTS.md`/`v1.0-ROADMAP.md`, a MILESTONES entry following the v1.1 template,
+PROJECT.md/STATE.md advanced, tag `v1.0` pushed. The phase also retired a recorded residual: the
 release workflow's MSI leg dropped its `continue-on-error` guard after the local dry run produced both
 artifacts.
 
-## 🚧 v1.0 UI Refactor (In Progress)
+## v1.0 UI Refactor (shipped 2026-10-24 — archived to [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md))
+
+<details>
+<summary>Phase 1–3 detail (executed 2026-10-08 → 2026-10-09; gate PASSED 2026-10-23; UAT closed 2026-10-24)</summary>
 
 ### Phase 1: Extract run state and operation contract
 
@@ -351,6 +355,8 @@ Plans:
   an extra item. Two §5 rows are recorded ✗ in the record: a health-details surface and §5's wide
   section-nav layout do not exist.
 
+</details>
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -368,7 +374,8 @@ Plans:
 | 11. Close the UI-refactor gate | v1.2 | 1/1 | Complete | 2026-10-23 |
 | 12. UI acceptance and release | v1.2 | — | In progress | — |
 
-**v1.0 remaining work:** the seven `03-UAT.md` scenarios executed against the installed build and the
-ship itself (archive, MILESTONES entry, tag `v1.0`) — Phase 12. The §10 gate is closed; criterion 8 has
-been ✓ since the 2026-10-13 addendum, and criterion 6 since the Phase 11 restatement. See
-`.planning/phases/03-collapse-navigation-and-retire-settings-dialogs/03-05-SUMMARY.md`.
+**v1.0 shipped 2026-10-24** (tag `v1.0`): the seven `03-UAT.md` scenarios were executed against the
+installed build on 2026-10-24 and the ship followed — archive, MILESTONES entry, PROJECT/STATE
+advanced. The §10 gate closed with the Phase 11 restatement; the UAT closed with Phase 12's
+execution. See `.planning/phases/03-collapse-navigation-and-retire-settings-dialogs/03-05-SUMMARY.md`
+and `.planning/phases/12-ui-acceptance-and-release/12-ACCEPTANCE.md`.

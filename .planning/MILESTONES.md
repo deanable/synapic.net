@@ -8,6 +8,45 @@ git tags.
 
 ---
 
+## v1.0 — UI Refactor (dashboard-first, dialogs retired)
+
+**Shipped:** 2026-10-24
+**Phases:** 1–3 (3 phases, 14 plans)
+**Requirements:** §10 criteria 1–9 + Phase-3 roadmap success criteria 1–5 — all ✓ (no REQ-ids; v1.0's requirement set is archived in full at the links below)
+**Archive:** [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md), [milestones/v1.0-REQUIREMENTS.md](milestones/v1.0-REQUIREMENTS.md)
+**Tag:** `v1.0`
+**Base commit:** `f511036d` (last commit before the UI-refactor work began)
+
+### Stats
+
+| Metric | Value |
+|--------|-------|
+| Phases | 3 (1, 2, 3) |
+| Plans | 14 (4 + 5 + 5), plus the §5 settings view adopted by `03-04` |
+| Gate evidence (2026-10-23 re-run) | clean Release build 0/0; full suite `-m:1` 1011 passed / 0 failed / 6 credential-gated skips; layout audit 20/20 |
+| UAT (2026-10-24, installed build) | 7/7 scenarios passed with recorded observations (`03-UAT.md`, transcript `phases/12-…/12-ACCEPTANCE.md`) |
+| Timeline | 2026-10-08 → 2026-10-24 (plans executed in two days; the gate stood open on criterion 6's wording until the 2026-10-23 restatement) |
+
+### Delivered
+
+The dashboard-first UI: cold start on the Settings view with every operation route in the sidebar and
+its parameters on the Settings view's tabs — no operation-settings dialog anywhere. One shared source
+across routes; a run bar with busy state and a working Stop for every long-running action (dedup
+Apply included); per-route output with report, export, retry and Daminion-write verification. Every
+empty-result and report branch the shipped UI can reach is inventoried in
+`docs/ui-empty-branches.md` with the behavioral test that names it, kept honest by
+`EmptyBranchInventoryTests`, which fails the suite when any citation rots.
+
+### Known gaps at close
+
+None against v1.0's own criteria. The original UAT major finding ("no dashboard on launch" — a stale
+MSI older than the UI) is closed on the record: the installed build, launched from the Start-menu
+shortcut built from this tree, opens on the dashboard (`03-UAT.md` gap closure, 2026-10-24). Deferred
+items live in v1.2's REQUIREMENTS (background dedup/upscale, the in-app indexer status surface,
+indexer self-update, the help corpus still naming wizard steps, unsigned installers).
+
+---
+
 ## v1.1 — Windows Indexer Service
 
 **Shipped:** 2026-10-23

@@ -17,21 +17,16 @@ queue, and writing back while nobody is at the desk.
 Pick a source and get correct, reviewable results written back — without the user ever fighting the
 UI, and without anyone needing to be at the desk for the routine tagging to happen.
 
-## Current Milestone: v1.2 Release Integrity
+## Current Milestone: none — v1.2 closed, v1.0 shipped (2026-10-24)
 
-**Goal:** Close the three gaps v1.1 left unproven — the MSI channel, the live Daminion path, and v1.0's own
-gate — and finally ship v1.0. No new product capability.
+**v1.2 Release Integrity is complete — 16/16 requirements.** The MSI channel is built, verified and
+now unguarded in the release workflow; the Daminion fault table is proven against real catalogs; the
+phase-3 gate is PASSED behind the finite, drift-checked empty-branch inventory; the seven UAT
+scenarios are executed on the installed build with recorded observations; and v1.0 is archived
+([milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)) and tagged `v1.0`.
 
-**Target features:**
-- MSI and Burn bundle rebuilt with the indexer payload and verified end to end: silent install, in-place
-  upgrade, uninstall, service parity with the Inno path, documented role (phase 9)
-- A live Daminion round trip on the provided server: connect, tag an untagged scope, check in, read back,
-  no duplicate keywords on re-run, and a real outage that pauses and resumes (phase 10)
-- §10 criterion 6 restated as a finitely checkable claim, backed by an inventory whose every row names an
-  existing test, plus the missing Tag cancellation/fetch-failure evidence and a clean 03-05 re-run (phase 11)
-- The six pending v1.0 UAT scenarios executed on the installed build, then v1.0 archived and tagged (phase 12)
-
-Requirements: [REQUIREMENTS.md](REQUIREMENTS.md) (16 requirements, MSI/DAM/GATE/UAT).
+**Next milestone:** not yet chosen — see Candidates below. The planning tree (REQUIREMENTS/ROADMAP/
+STATE) is next reset when that milestone is defined.
 
 ## Current State
 
@@ -50,9 +45,9 @@ and stops inside its 10-second budget with no orphaned sidecar.
 Release -m:1`); Release build 0/0. The default parallel run is unstable on this machine — one differing
 Avalonia UI test per run, each passing alone — so gates record the serial run.
 
-**Open:** milestone v1.0 (UI refactor) is not shipped. Phase 3 executed all five plans, but its gate
-left `docs/ui-design.md` §10 criteria 6 and 8 open. That debt stays against Phase 3 and is not
-absorbed into v1.1.
+**Open:** nothing against a shipped milestone. The v1.0-era debt named below was closed by v1.2
+(criterion 6 restated and evidenced — phase 11; criteria 8's record reconciled; the UAT executed —
+phase 12). Deferred items are listed under Candidates After v1.2.
 
 ## Candidates After v1.2
 
@@ -67,24 +62,22 @@ Not scoped. The evidence suggests, in order:
 
 ### Validated
 
+- ✓ **v1.0 UI Refactor** — shipped 2026-10-24. Dashboard-first UI, dialogs retired, every §10
+  criterion and roadmap criterion verified, UAT 7/7 on the installed build. Archive:
+  [milestones/v1.0-REQUIREMENTS.md](milestones/v1.0-REQUIREMENTS.md).
 - ✓ **Windows Indexer Service** — v1.1. `Synapic.Indexer.exe` tags unattended on a schedule, on
   filesystem events or from a Daminion untagged query, writes back to files or the catalog, installs
   and uninstalls from the Windows installer, recovers `InFlight` work after a crash or reboot, and
   matches the desktop kernel's tags on the same fixture. 31/31 requirements; archive at
   [milestones/v1.1-REQUIREMENTS.md](milestones/v1.1-REQUIREMENTS.md).
+- ✓ **v1.2 Release Integrity** — shipped 2026-10-24. MSI channel verified and unguarded in the release
+  workflow; live Daminion fault table proven; the phase-3 gate PASSED behind the drift-checked
+  inventory; v1.0 shipped. 16/16 requirements; record in [REQUIREMENTS.md](REQUIREMENTS.md).
 - ✓ **§5 app-wide settings view** — v1.0 Phase 3 (delivered by `03-04`, verified by `03-05`), with two
   §5 rows recorded ✗ (health details, wide section-nav layout).
 
 ### Active
 
-- **v1.0 UI refactor** per `docs/ui-design.md` (SSOT) — dashboard-first, one shared operation layout.
-  Phases 1 and 2 complete; **Phase 3 open on §10 criterion 6**, to be closed by v1.2 Phases 11–12.
-  - Criterion 6: its "exhaustive" wording is not finitely verifiable; restating it as an inventory plus
-    named-test claim is v1.2 phase 11.
-  - Criterion 8: **✓** — closed by the 2026-10-13 addendum (37/37 supported or explicitly remapped). The
-    "12 partial, 2 unsupported" figure in older planning text predates that addendum.
-- **v1.2 Release Integrity** — MSI channel (MSI-01..05), live Daminion (DAM-01..04), gate closure
-  (GATE-01..04) and v1.0 release (UAT-01..03).
 - **Help corpus naming:** the compiled help still names the old wizard steps
   (`HelpTopics.ForStepIndex` maps 0–5). A docs pass, not a phase.
 
@@ -158,6 +151,37 @@ the model twice; and the parallel solution test run is unstable in this environm
 ## Milestone History
 
 <details>
+<summary>v1.2 Release Integrity (phases 9–12) — shipped 2026-10-24</summary>
+
+**Goal:** Close the three gaps v1.1 left unproven — the MSI channel, the live Daminion path, and v1.0's
+own gate — and finally ship v1.0. No new product capability.
+
+**Outcome:** 16/16 requirements. The MSI and its Burn bundle build from one command against the shared
+payload and were verified through silent install → dashboard → in-place upgrade → uninstall with
+ProgramData kept; the live Daminion round trip wrote and read back real catalog items with exact-once
+keywords, and a real firewall outage paused and resumed a run with nothing dropped; §10 criterion 6 was
+restated as the finite inventory in `docs/ui-empty-branches.md` with the `EmptyBranchInventoryTests`
+drift check; the 03-05 gate re-ran clean (build 0/0; suite `-m:1` 1011/0/6-opt-in; layout audit 20/20)
+and its verdict is PASSED; the seven UAT scenarios executed on the installed build with recorded
+observations; v1.0 archived and tagged.
+
+Record: [REQUIREMENTS.md](REQUIREMENTS.md) · evidence: phases 9–12 summaries and
+[phases/12-ui-acceptance-and-release/12-ACCEPTANCE.md](phases/12-ui-acceptance-and-release/12-ACCEPTANCE.md).
+
+</details>
+
+<details>
+<summary>v1.0 UI Refactor (phases 1–3) — shipped 2026-10-24</summary>
+
+**Goal:** Replace the wizard UI with the dashboard-first design of `docs/ui-design.md`: one shared
+operation layout, navigation collapsed to the sidebar, settings dialogs retired, and the nine §10
+acceptance criteria as the gate.
+
+Full record: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md).
+
+</details>
+
+<details>
 <summary>v1.1 Windows Indexer Service (phases 4–8) — shipped 2026-10-23</summary>
 
 **Goal:** Ship `Synapic.Indexer.exe` — an unattended Windows Service that tags images on a
@@ -179,4 +203,4 @@ Full record: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md).
 
 ---
 
-*Last updated: 2026-10-23 — milestone v1.2 Release Integrity started.*
+*Last updated: 2026-10-24 — v1.2 closed; v1.0 shipped and tagged.*

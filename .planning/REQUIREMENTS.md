@@ -43,7 +43,7 @@ Three gaps motivated this milestone, each recorded honestly in the v1.1 archive 
 
 - [x] **UAT-01**: The six pending `03-UAT.md` scenarios are executed against the installed build and recorded pass/fail with what was observed, replacing the `[pending]` placeholders. Done 2026-10-24: all seven scenarios (the six pending plus the re-run of the failed first one) executed by Windows UI Automation against the installed build launched from the Start-menu shortcut — `artifacts/phase-12/uat-sweep.ps1`, transcript in [12-ACCEPTANCE.md](phases/12-ui-acceptance-and-release/12-ACCEPTANCE.md), results and quoted observations written back to `03-UAT.md` (7 passed / 0 pending; the original major gap marked closed with its evidence)
 - [x] **UAT-02**: The original complaint is closed on the record: the installed application opens on the dashboard, and the stale-artifact root cause (an installer older than the UI) is retired by the MSI phase. Done 2026-10-24: the app launched from the Start-menu shortcut (target `C:\Program Files\Synapic\Synapic.exe`, built from this tree 2026-10-23T23:59:34) opened on the dashboard/Settings view with every operation route and no retired chrome; the service came up RUNNING as LocalService with recovery actions; the `03-UAT.md` gap record carries the closure
-- [ ] **UAT-03**: v1.0 ships — phases 1–3 archived to `.planning/milestones/`, a MILESTONES.md entry, tag `v1.0`, and PROJECT.md/STATE.md advanced to the next milestone
+- [x] **UAT-03**: v1.0 ships — phases 1–3 archived to `.planning/milestones/`, a MILESTONES.md entry, tag `v1.0`, and PROJECT.md/STATE.md advanced to the next milestone. Done 2026-10-24: `milestones/v1.0-REQUIREMENTS.md` (the real §10 + roadmap criteria set, not v1.1's) and `milestones/v1.0-ROADMAP.md` (plans 4/5/5 as executed) written; the MILESTONES.md v1.0 entry follows the v1.1 template (Shipped 2026-10-24, stats, gate and UAT evidence, known-gaps-at-close); PROJECT.md/STATE.md advanced past the ship; tag `v1.0` pushed to main on this commit, triggering the release workflow whose MSI leg now runs unguarded
 
 ## Deferred (carried forward, not in this milestone)
 
@@ -81,9 +81,9 @@ Three gaps motivated this milestone, each recorded honestly in the v1.1 archive 
 | GATE-04 | Phase 11 | Complete |
 | UAT-01 | Phase 12 | Complete |
 | UAT-02 | Phase 12 | Complete |
-| UAT-03 | Phase 12 | Pending |
+| UAT-03 | Phase 12 | Complete |
 
-**Coverage:** 16 total, 16 mapped, 0 unmapped.
+**Coverage:** 16 total, 16 mapped, 0 unmapped. 16/16 complete — v1.2 closed.
 
 ---
 *Requirements defined: 2026-10-23*

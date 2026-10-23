@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Release Integrity
-status: executing
-last_updated: "2026-10-23T19:30:00.000Z"
-last_activity: 2026-10-23
+status: complete
+last_updated: "2026-10-24T01:10:00.000Z"
+last_activity: 2026-10-24
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 11
-  completed_plans: 10
-  percent: 91
+  completed_plans: 11
+  percent: 100
 ---
 
 # Project State
@@ -27,24 +27,15 @@ Daminion) and finally ship v1.0. Requirements: [REQUIREMENTS.md](REQUIREMENTS.md
 
 ## Current Position
 
-Phase: 11 of 12 — Close the UI-refactor gate — **complete** (GATE-01..04)
-Plan: 1 of 1 executed (11-01 gate re-verification)
-Status: criterion 6 restated as the finite inventory in `docs/ui-empty-branches.md` (56 rows: 55 named,
-1 shadowed, 0 partial, 0 gap) with the `EmptyBranchInventoryTests` drift check over every `Named by`
-citation; the eleven gap rows and seven partial rows closed by naming each in a test, which found and
-fixed two product defects (`ProbabilitySummary` switching on display strings; `Refresh` appending the
-empty-report wording to populated reports); the §10 matrix records criterion 6 ✓ and 8 ✓ and the 03-05
-verdict is PASSED. Full evidence, including the 2026-10-23 build and suite numbers, in
-`.planning/phases/03-collapse-navigation-and-retire-settings-dialogs/03-05-SUMMARY.md` (Phase 11
-section) and `.planning/phases/11-close-the-ui-refactor-gate/11-01-SUMMARY.md`.
-Next: Phase 12 — UAT-01 and UAT-02 are complete (2026-10-24: all seven `03-UAT.md` scenarios executed
-against the installed build by `artifacts/phase-12/uat-sweep.ps1`, observations recorded; the
-dashboard-on-launch complaint closed on the record). Remaining: UAT-03 — ship v1.0 (archive phases 1–3,
-MILESTONES entry, tag `v1.0`, PROJECT/STATE advanced).
-Last activity: 2026-10-24 — Phase 12 UAT executed: MSI dry run from the current tree (guard dropped on
-the release workflow's MSI leg — the residual is retired), silent elevated install exit 0, service
-RUNNING as LocalService with recovery actions, seven scenarios passed with quoted observations.
-
+**v1.2 closed and v1.0 shipped (2026-10-24).** All 16 requirements complete: MSI-01..05 (channel built,
+verified, and its release-workflow guard dropped after the 2026-10-24 dry run), DAM-01..04 (live
+catalogs, real outage), GATE-01..04 (criterion 6 restated as the drift-checked inventory; 03-05 verdict
+PASSED; full suite `-m:1` 1011 passed / 0 failed / 6 credential-gated skips; build 0/0; layout audit
+20/20), UAT-01/02 (seven scenarios executed on the installed build with quoted observations), UAT-03
+(phases 1–3 archived to `milestones/v1.0-*`, MILESTONES entry, PROJECT/STATE advanced, tag `v1.0`).
+Next milestone: not yet chosen — see PROJECT.md → Candidates After v1.2 (background dedup/upscale
+BG-01/02, the operator surface UI-01/DIST-01, installer signing). The planning tree resets when it is
+defined.
 ## Deferred Items
 
 Items acknowledged and deferred at the v1.1 milestone close on 2026-10-23:
@@ -65,7 +56,7 @@ v1.2 Phase 12 (UAT-01/UAT-02) has now resolved it — see
 | 9 | MSI and bundle as a supported channel | MSI-01..05 | 5/5 — 5/5 ✓ (silent install 0, service LocalService/Auto/restart×3, upgrade over a second ProductCode, uninstall 1060 with ProgramData kept, installed dashboard PASS) |
 | 10 | Live Daminion round trip | DAM-01..04 | 4/4 — 4/4 ✓ (DAM-01 scope reported on both catalogs, DAM-02 exact-once round trip on items 26-50, DAM-03 real firewall outage paused then resumed six rows to completion, DAM-04 transcript + procedure) |
 | 11 | Close the UI-refactor gate | GATE-01..04 | 1/1 — gate re-verified 2026-10-23: criterion 6 restated as the drift-checked inventory, matrix records 6 ✓ and 8 ✓, 03-05 verdict PASSED |
-| 12 | UI acceptance and release | UAT-01..03 | 1/1 — UAT-01 ✓ UAT-02 ✓ (seven scenarios executed on the installed build, observations recorded, dashboard complaint closed); UAT-03 (ship) remains |
+| 12 | UI acceptance and release | UAT-01..03 | 1/1 — 3/3 ✓ (seven scenarios executed on the installed build with observations; v1.0 archived, MILESTONES entry added, tagged `v1.0`, PROJECT/STATE advanced) |
 
 Dependency shape: 9, 10 and 11 are independent; 12 needs 9 (installed build) and 11 (gate green).
 The Daminion target is a real server the user provides; credentials stay in `SYNAPIC_TEST_DAMINION_*`
