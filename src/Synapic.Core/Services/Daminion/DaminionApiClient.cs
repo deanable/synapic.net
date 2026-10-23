@@ -1117,6 +1117,14 @@ public sealed class DaminionApiClient
     /// /api/ItemData/BatchChange tag operations (value-id resolution not yet
     /// cached; falls back to raw values which Daminion resolves server-side).
     /// </summary>
+    /// <remarks>
+    /// A raw-value add is not idempotent on server 11.x: sending the same
+    /// category or keyword again attaches a <em>second</em> copy, so a run
+    /// repeated over the same items doubles their keyword list. The item is read
+    /// first and values it already carries are not sent; a write with nothing
+    /// new to add is a success, because the catalog already holds what was asked
+    /// for. Only a layout that cannot name the tag is a failure.
+    /// </remarks>
     public async Task<bool> UpdateItemMetadataAsync(
         int itemId,
         string? category = null,
@@ -1124,35 +1132,71 @@ public sealed class DaminionApiClient
         string? description = null,
         CancellationToken ct = default)
     {
+        IReadOnlyList<(string Key, string Value)> existing;
+        try
+        {
+            existing = await GetItemTagPairsAsync(itemId, ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Error(nameof(DaminionApiClient),
+                $"Failed to read item {itemId} before writing metadata: {e.Message}");
+            return false;
+        }
+
         var operations = new List<DaminionTagOperation>();
+        var missingSchema = new List<string>();
 
         if (!string.IsNullOrEmpty(category))
         {
             var guid = GetTagGuid("category", "categories", "Categories");
-            if (guid is not null)
+            if (guid is null) missingSchema.Add("categories");
+            else if (!HasValue(existing, "categor", category))
                 operations.Add(new DaminionTagOperation { Guid = guid, Value = category, Remove = false });
         }
 
         if (keywords is { Count: > 0 })
         {
             var guid = GetTagGuid("keywords", "Keywords");
-            if (guid is not null)
+            if (guid is null)
+            {
+                missingSchema.Add("keywords");
+            }
+            else
             {
                 foreach (var keyword in keywords)
+                {
+                    if (string.IsNullOrWhiteSpace(keyword)) continue;
+                    if (HasValue(existing, "keyword", keyword)) continue;
                     operations.Add(new DaminionTagOperation { Guid = guid, Value = keyword, Remove = false });
+                }
             }
         }
 
         if (!string.IsNullOrEmpty(description))
         {
             var guid = GetTagGuid("description", "caption", "Description");
-            if (guid is not null)
+            if (guid is null) missingSchema.Add("description");
+            else if (!HasValue(existing, "description", description) && !HasValue(existing, "caption", description))
                 operations.Add(new DaminionTagOperation { Guid = guid, Value = description, Remove = false });
         }
 
         if (operations.Count == 0)
         {
-            SynapicLog.Warning(nameof(DaminionApiClient), $"No metadata operations for item {itemId} (tag schema missing?)");
+            if (missingSchema.Count == 0)
+            {
+                SynapicLog.Info(nameof(DaminionApiClient),
+                    $"Item {itemId} already carries the requested metadata; nothing was written");
+                return true;
+            }
+
+            SynapicLog.Warning(nameof(DaminionApiClient),
+                $"No metadata operations for item {itemId} (the layout names no tag guid for " +
+                $"{string.Join(", ", missingSchema)})");
             return false;
         }
 
@@ -1173,6 +1217,17 @@ public sealed class DaminionApiClient
             return false;
         }
     }
+
+    /// <summary>
+    /// Whether a tag already holds this value. The tag name is matched tolerantly
+    /// (Categories/Category, Caption/Description); the value must match exactly
+    /// after trimming, never as a substring.
+    /// </summary>
+    internal static bool HasValue(
+        IReadOnlyList<(string Key, string Value)> tags, string keyFragment, string value)
+        => tags.Any(kv =>
+            kv.Key.Contains(keyFragment, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(kv.Value.Trim(), value.Trim(), StringComparison.OrdinalIgnoreCase));
 
     /// <summary>Remove keywords from an item (BatchChange Remove=true) — used to undo test writes and by dedup tagging.</summary>
     public async Task<bool> RemoveKeywordsAsync(int itemId, IEnumerable<string> keywords, CancellationToken ct = default)
@@ -1698,10 +1753,16 @@ public sealed class DaminionApiClient
 
     /// <summary>
     /// Re-read an item via /api/ItemData/GetAll/{id} and check the expected
-    /// tags landed (Step 4 “Verify Daminion writes”). Field matching is
-    /// tolerant: tag keys are located case-insensitively anywhere in the
-    /// payload since Daminion's layout varies between versions.
+    /// tags landed (Step 4 “Verify Daminion writes”).
     /// </summary>
+    /// <remarks>
+    /// The read is tag-name based (<see cref="TagPairsFromItemData"/>), not
+    /// JSON-member based: on server 11.x the payload names the tag in
+    /// <c>propertyName</c> and the value in <c>propertyValue</c>, so a matcher
+    /// keyed on the payload's own member names finds the words "propertyName"
+    /// and "propertyValue" and nothing else — every field then reported missing
+    /// on a write that actually landed.
+    /// </remarks>
     public async Task<DaminionVerifyResult> VerifyItemMetadataAsync(
         int itemId,
         string? category = null,
@@ -1711,42 +1772,11 @@ public sealed class DaminionApiClient
     {
         try
         {
-            var payload = await WithSessionRecoveryAsync(
-                api => api.GetItemDataAll(itemId, ct), ct).ConfigureAwait(false);
-            var found = new List<(string Key, string Value)>();
-            CollectKeyValuePairs(payload, found);
-
-            var missing = new List<string>();
-
-            if (!string.IsNullOrEmpty(category) &&
-                !found.Any(kv => kv.Key.Contains("categor", StringComparison.OrdinalIgnoreCase) &&
-                                 kv.Value.Contains(category, StringComparison.OrdinalIgnoreCase)))
-            {
-                missing.Add($"category '{category}'");
-            }
-
-            if (keywords is { Count: > 0 })
-            {
-                var stored = found
-                    .Where(kv => kv.Key.Contains("keyword", StringComparison.OrdinalIgnoreCase))
-                    .Select(kv => kv.Value)
-                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
-                var absent = keywords.Where(k => !stored.Contains(k)).ToList();
-                if (absent.Count > 0)
-                    missing.Add($"keywords {string.Join(", ", absent.Select(k => $"'{k}'"))}");
-            }
-
-            if (!string.IsNullOrEmpty(description) &&
-                !found.Any(kv =>
-                    (kv.Key.Contains("description", StringComparison.OrdinalIgnoreCase) ||
-                     kv.Key.Contains("caption", StringComparison.OrdinalIgnoreCase)) &&
-                    kv.Value.Contains(description[..Math.Min(description.Length, 40)], StringComparison.OrdinalIgnoreCase)))
-            {
-                missing.Add("description");
-            }
+            var tags = await GetItemTagPairsAsync(itemId, ct).ConfigureAwait(false);
+            var missing = FindMissingFields(tags, category, keywords, description);
 
             return missing.Count == 0
-                ? new DaminionVerifyResult(true, $"Item {itemId} verified")
+                ? new DaminionVerifyResult(true, $"Item {itemId} verified ({tags.Count} tag values read)")
                 : new DaminionVerifyResult(false, $"Item {itemId}: not found — {string.Join("; ", missing)}");
         }
         catch (OperationCanceledException)
@@ -1759,6 +1789,63 @@ public sealed class DaminionApiClient
         {
             return new DaminionVerifyResult(false, $"Item {itemId}: verify failed — {e.Message}");
         }
+    }
+
+    /// <summary>
+    /// An item's metadata as (tag name, value) pairs — the read the verifier and
+    /// the live acceptance both work from, so "what the catalog says" has one
+    /// reader.
+    /// </summary>
+    public async Task<IReadOnlyList<(string Key, string Value)>> GetItemTagPairsAsync(
+        int itemId, CancellationToken ct = default)
+    {
+        var payload = await WithSessionRecoveryAsync(
+            api => api.GetItemDataAll(itemId, ct), ct).ConfigureAwait(false);
+        return TagPairsFromItemData(payload);
+    }
+
+    /// <summary>
+    /// Which of the written fields the read-back cannot find. Matching is
+    /// deliberately tolerant about the *tag name* (the layout calls the same
+    /// tag "Categories" on one server and "Category" on another, and a
+    /// description may be listed as "Caption") and strict about the value:
+    /// a keyword must be present as a whole value, never as a substring of a
+    /// longer one.
+    /// </summary>
+    internal static IReadOnlyList<string> FindMissingFields(
+        IReadOnlyList<(string Key, string Value)> tags,
+        string? category, IReadOnlyList<string>? keywords, string? description)
+    {
+        var missing = new List<string>();
+
+        if (!string.IsNullOrEmpty(category) &&
+            !tags.Any(kv => kv.Key.Contains("categor", StringComparison.OrdinalIgnoreCase) &&
+                            kv.Value.Contains(category, StringComparison.OrdinalIgnoreCase)))
+        {
+            missing.Add($"category '{category}'");
+        }
+
+        if (keywords is { Count: > 0 })
+        {
+            var stored = tags
+                .Where(kv => kv.Key.Contains("keyword", StringComparison.OrdinalIgnoreCase))
+                .Select(kv => kv.Value.Trim())
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var absent = keywords.Where(k => !stored.Contains(k)).ToList();
+            if (absent.Count > 0)
+                missing.Add($"keywords {string.Join(", ", absent.Select(k => $"'{k}'"))}");
+        }
+
+        if (!string.IsNullOrEmpty(description) &&
+            !tags.Any(kv =>
+                (kv.Key.Contains("description", StringComparison.OrdinalIgnoreCase) ||
+                 kv.Key.Contains("caption", StringComparison.OrdinalIgnoreCase)) &&
+                kv.Value.Contains(description[..Math.Min(description.Length, 40)], StringComparison.OrdinalIgnoreCase)))
+        {
+            missing.Add("description");
+        }
+
+        return missing;
     }
 
     /// <summary>
@@ -1813,7 +1900,32 @@ public sealed class DaminionApiClient
     {
         var pairs = new List<(string Key, string Value)>();
         CollectTagPairs(payload, pairs);
+        // Older builds (and the stubs that stand in for them) answer with the
+        // tag name as the member name — {"Category":"Nature"}. That shape is
+        // read only when the nested form produced nothing, so a server 11.x
+        // payload is never reinterpreted through its own member names (which is
+        // exactly how the old verifier managed to see no tags at all).
+        if (pairs.Count == 0) CollectFlatPairs(payload, pairs);
         return pairs;
+    }
+
+    private static void CollectFlatPairs(JsonElement node, List<(string Key, string Value)> found)
+    {
+        switch (node.ValueKind)
+        {
+            case JsonValueKind.Object:
+                foreach (var property in node.EnumerateObject())
+                {
+                    if (property.Value.ValueKind is JsonValueKind.String or JsonValueKind.Number)
+                        found.Add((property.Name, property.Value.ToString()));
+                    CollectFlatPairs(property.Value, found);
+                }
+                break;
+            case JsonValueKind.Array:
+                foreach (var element in node.EnumerateArray())
+                    CollectFlatPairs(element, found);
+                break;
+        }
     }
 
     private static void CollectTagPairs(JsonElement node, List<(string Key, string Value)> found)
@@ -1842,8 +1954,24 @@ public sealed class DaminionApiClient
                     {
                         foreach (var item in values.EnumerateArray())
                         {
-                            if (item.ValueKind == JsonValueKind.String && item.GetString() is { Length: > 0 } multi)
-                                found.Add((name, multi));
+                            // A multi-value tag (Keywords, Categories) lists its
+                            // values as objects — { text, id, tagName, … } — not
+                            // as bare strings. Accepting only strings read a
+                            // tagged item as untagged.
+                            if (item.ValueKind == JsonValueKind.String
+                                && item.GetString() is { Length: > 0 } plain)
+                            {
+                                found.Add((name, plain));
+                                continue;
+                            }
+
+                            if (item.ValueKind == JsonValueKind.Object)
+                            {
+                                var text = GetStringProperty(item, "text")
+                                           ?? GetStringProperty(item, "rawValue")
+                                           ?? GetStringProperty(item, "value");
+                                if (!string.IsNullOrWhiteSpace(text)) found.Add((name, text));
+                            }
                         }
                     }
                 }
@@ -1953,25 +2081,6 @@ public sealed class DaminionApiClient
         }
         result = default;
         return false;
-    }
-
-    private static void CollectKeyValuePairs(JsonElement node, List<(string Key, string Value)> found)
-    {
-        switch (node.ValueKind)
-        {
-            case JsonValueKind.Object:
-                foreach (var property in node.EnumerateObject())
-                {
-                    if (property.Value.ValueKind is JsonValueKind.String or JsonValueKind.Number)
-                        found.Add((property.Name, property.Value.ToString()));
-                    CollectKeyValuePairs(property.Value, found);
-                }
-                break;
-            case JsonValueKind.Array:
-                foreach (var element in node.EnumerateArray())
-                    CollectKeyValuePairs(element, found);
-                break;
-        }
     }
 
     public async Task LogoutAsync(CancellationToken ct = default)

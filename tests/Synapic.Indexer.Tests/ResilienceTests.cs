@@ -173,6 +173,8 @@ public sealed class ResilienceTests
             $"transient={summary.TransientFailure} completed={summary.Completed} " +
             $"err={(await harness.Repository.GetByKeyAsync(PathKey.ForDaminion(1)))!.LastError}");
         Assert.True(harness.Executor.IsPaused);
+        Assert.Equal(1, harness.Executor.PauseCount);
+        Assert.Equal(0, harness.Executor.ResumeCount);
         Assert.Equal(1, (await harness.Repository.GetByKeyAsync(PathKey.ForDaminion(1)))!.Attempts);
 
         // Inside the window nothing is claimed, so nothing is attempted again.
@@ -182,7 +184,13 @@ public sealed class ResilienceTests
 
         harness.Clock.Advance(JobOutcomeClassifier.CatalogPauseDelay + TimeSpan.FromSeconds(1));
         Assert.False(harness.Executor.IsPaused);
+        Assert.Equal(0, harness.Executor.ResumeCount); // observing the window end is not resuming
         await harness.Executor.ExecuteOnceAsync(CancellationToken.None);
+
+        // The next batch is what resumes the run, and it says so: the counter is
+        // the observable half of the "catalog is available again" log line.
+        Assert.Equal(1, harness.Executor.ResumeCount);
+        Assert.Equal(2, harness.Executor.PauseCount);
 
         // The outage is still there, so the batch pauses again — but it ran, and
         // no item was dropped: every row is still Pending and still owned.

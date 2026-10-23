@@ -221,7 +221,7 @@ sc.exe start SynapicIndexer
 |---|---|---|
 | **Python Sidecar Crash / OOM** | Background inference fails | `WatchProcessExit` detects process termination; restarts `synapic-inference.exe` with exponential backoff (max 3 retries per batch). |
 | **File Lock Contention** | Cannot read image or write EXIF | Item is marked `TransientFailure` in SQLite queue; re-queued for retry after 60 seconds. |
-| **Daminion Server Unreachable** | Cannot fetch or write tags | Pauses current run; retries Daminion API connection every 5 minutes until server responds. |
+| **Daminion Server Unreachable** | Cannot fetch or write tags | Pauses the run for five minutes: every claimed row goes back to `Pending` and none is failed (`Catalog unavailable; the run is paused until …` in the log). The first batch after the window runs again and logs `The catalog is available again; the run resumes after being paused N minutes.` — no operator action. A failure on the write alone (the download had succeeded) is a one-minute transient retry, not a pause. |
 | **System Shutdown / Reboot** | Mid-batch interruption | SQLite job queue tracks state per item. On service startup, unacknowledged jobs in `InFlight` state are automatically re-queued. |
 | **Corrupt Image File** | Sidecar or decoder error | Item is permanently marked `Failed` in DB with error detail logged; batch continues processing remaining queue. |
 

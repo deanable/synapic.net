@@ -31,6 +31,7 @@ public sealed class BatchExecutor
     private readonly Func<DatasourceSelection>? _daminionSelection;
 
     private DateTimeOffset _pauseUntil = DateTimeOffset.MinValue;
+    private DateTimeOffset? _pausedAt;
     private long _batchId;
 
     public BatchExecutor(
@@ -62,6 +63,16 @@ public sealed class BatchExecutor
 
     public bool IsPaused => _clock.GetUtcNow() < _pauseUntil;
 
+    /// <summary>How many times this run has paused for an unreachable catalog.</summary>
+    public int PauseCount { get; private set; }
+
+    /// <summary>
+    /// How many times a paused run has resumed. A resume is observed by the next
+    /// batch that runs after the pause window, not by the clock alone: the run
+    /// is only "back" when it is working again.
+    /// </summary>
+    public int ResumeCount { get; private set; }
+
     /// <summary>
     /// Claim one batch and process it. Returns the number of rows the batch
     /// finished with (0 when there was nothing to do or the run is paused).
@@ -71,6 +82,16 @@ public sealed class BatchExecutor
     private async Task<int> ExecuteOnceAsync(CancellationToken ct, bool retried)
     {
         if (IsPaused) return 0;
+
+        if (_pausedAt is { } pausedAt)
+        {
+            var paused = _clock.GetUtcNow() - pausedAt;
+            _pausedAt = null;
+            ResumeCount++;
+            SynapicLog.Info(nameof(BatchExecutor),
+                $"The catalog is available again; the run resumes after being paused " +
+                $"{paused.TotalMinutes:0.0} minutes.");
+        }
 
         var claimed = await _repository.ClaimBatchAsync(BatchSize, ct).ConfigureAwait(false);
         if (claimed.Count == 0) return 0;
@@ -123,6 +144,8 @@ public sealed class BatchExecutor
         if (outcome.PauseIds.Count > 0)
         {
             _pauseUntil = _clock.GetUtcNow() + JobOutcomeClassifier.CatalogPauseDelay;
+            _pausedAt = _clock.GetUtcNow();
+            PauseCount++;
             foreach (var id in outcome.PauseIds)
                 await _repository.ReturnToPendingAsync(id, "catalog unavailable — run paused", ct)
                     .ConfigureAwait(false);

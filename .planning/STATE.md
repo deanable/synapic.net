@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Release Integrity
 status: executing
-last_updated: "2026-10-23T08:20:00.000Z"
+last_updated: "2026-10-23T15:20:00.000Z"
 last_activity: 2026-10-23
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 5
-  completed_plans: 5
-  percent: 25
+  total_plans: 9
+  completed_plans: 8
+  percent: 33
 ---
 
 # Project State
@@ -27,11 +27,15 @@ Daminion) and finally ship v1.0. Requirements: [REQUIREMENTS.md](REQUIREMENTS.md
 
 ## Current Position
 
-Phase: 9 of 12 — MSI and bundle as a supported channel — **complete**
-Plan: 5 of 5 complete (09-01 … 09-05)
-Status: Phase 9 gated; next is Phase 10 (live Daminion), which needs the user's server and credentials
-Last activity: 2026-10-23 — Phase 9 executed: MSI rebuilt with the indexer, silent install / in-place
-reinstall / major upgrade / uninstall / dashboard / service parity verified on this machine
+Phase: 10 of 12 — Live Daminion round trip — **executing, blocked on DAM-03**
+Plan: 3 of 4 executed (10-01, 10-02, 10-04 complete; 10-03 code and hermetic facts complete)
+Status: DAM-01, DAM-02 and DAM-04 proven against `researchserver.juicefilm.local`; DAM-03's live outage
+fact has not run — the catalog stopped answering at 14:39 and the fact needs it reachable either side
+of the block. The command to finish it is in
+`.planning/phases/10-live-daminion-round-trip/10-ACCEPTANCE.md`
+Last activity: 2026-10-23 — Phase 10 executed: live scope reported, 25 items written twice with exact-once
+keywords and pre-existing values preserved; three product defects found and fixed (verifier tag-name
+read, object-shaped multi-values, non-idempotent catalog write)
 
 ## Deferred Items
 
@@ -50,7 +54,7 @@ resolving it is v1.0 work. It is now **claimed by v1.2 Phase 12** (requirement U
 | Phase | Name | Requirements | Plans |
 |-------|------|--------------|-------|
 | 9 | MSI and bundle as a supported channel | MSI-01..05 | 5/5 — 5/5 ✓ (silent install 0, service LocalService/Auto/restart×3, upgrade over a second ProductCode, uninstall 1060 with ProgramData kept, installed dashboard PASS) |
-| 10 | Live Daminion round trip | DAM-01..04 | TBD |
+| 10 | Live Daminion round trip | DAM-01..04 | 3/4 executed — 3/4 ✓ (DAM-01 scope reported, DAM-02 exact-once round trip on items 26-50, DAM-04 transcript + procedure; DAM-03 live fact blocked: catalog unreachable) |
 | 11 | Close the UI-refactor gate | GATE-01..04 | TBD |
 | 12 | UI acceptance and release | UAT-01..03 | TBD |
 

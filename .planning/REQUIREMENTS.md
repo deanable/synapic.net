@@ -27,10 +27,10 @@ Three gaps motivated this milestone, each recorded honestly in the v1.1 archive 
 
 ### Live Daminion verification (DAM)
 
-- [ ] **DAM-01**: A credential-gated run connects to a real Daminion server and reports the server, catalog scope and item counts it is working against, with no interactive prompt (credentials from `SYNAPIC_TEST_DAMINION_URL`/`_USERNAME`/`_PASSWORD` or the saved Windows credential)
-- [ ] **DAM-02**: In a real catalog scope, items whose selected fields are empty are tagged and checked back in, and a read-back from the catalog shows exactly the written keywords, category and description — with a re-run producing no duplicated keywords
+- [x] **DAM-01**: A credential-gated run connects to a real Daminion server and reports the server, catalog scope and item counts it is working against, with no interactive prompt (credentials from `SYNAPIC_TEST_DAMINION_URL`/`_USERNAME`/`_PASSWORD` or the saved Windows credential)
+- [x] **DAM-02**: In a real catalog scope, items are tagged and checked back in, and a read-back from the catalog shows the written keywords, category and description — with a re-run producing no duplicated keywords. The "selected fields are empty" selection is not available on the provided server (its untagged clause is ignored); the round trip snapshots real items instead and asserts the written values land exactly once while nothing already there is lost
 - [ ] **DAM-03**: A real outage is handled as the failure table specifies: with the server stopped the run pauses without dropping queued items, and when it returns the queue completes; the log names the pause and the resume
-- [ ] **DAM-04**: The live run is repeatable and opt-in — an automated test gated on those variables plus a documented procedure and a recorded acceptance transcript; with no credentials it skips with a stated reason instead of passing silently
+- [x] **DAM-04**: The live run is repeatable and opt-in — an automated test gated on those variables plus a documented procedure and a recorded acceptance transcript; with no credentials it skips with a stated reason instead of passing silently
 
 ### Closing v1.0's gate (GATE)
 
@@ -71,10 +71,10 @@ Three gaps motivated this milestone, each recorded honestly in the v1.1 archive 
 | MSI-03 | Phase 9 | Complete |
 | MSI-04 | Phase 9 | Complete |
 | MSI-05 | Phase 9 | Complete |
-| DAM-01 | Phase 10 | Pending |
-| DAM-02 | Phase 10 | Pending |
-| DAM-03 | Phase 10 | Pending |
-| DAM-04 | Phase 10 | Pending |
+| DAM-01 | Phase 10 | Complete |
+| DAM-02 | Phase 10 | Complete |
+| DAM-03 | Phase 10 | Pending (code and hermetic facts complete; live fact blocked on the catalog's network) |
+| DAM-04 | Phase 10 | Complete |
 | GATE-01 | Phase 11 | Pending |
 | GATE-02 | Phase 11 | Pending |
 | GATE-03 | Phase 11 | Pending |

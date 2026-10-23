@@ -29,6 +29,9 @@ A test that cannot run on this machine says so instead of passing quietly:
   and when the live catalog does not contain the fixture items the comparison is
   about. Filter them out for a hermetic run:
   `dotnet test Synapic.Net.sln -c Release --filter "Category!=Live"`.
+  The phase 10 round trip (tag → read back → re-run, plus a real firewall
+  outage) runs through `build/acceptance-daminion.ps1`; see
+  [Live catalog round trip](#live-catalog-round-trip-phase-10).
 - **Windows-only** — registry tests use the `[WindowsFact]` attribute
   (`PlatformFacts.cs`), so off Windows they report as skipped with the reason
   instead of a green that asserted nothing. The handful of `[AvaloniaFact]`
@@ -87,6 +90,7 @@ machine. The one real sidecar process (and real model) is the opt-in
 | `ResilienceTests` | The five §8 scenarios through the executor: a crash between items restarted with the affected row retried (`attempts == 2`), a sidecar that will not restart leaving rows transient with a five-minute due time, a file held open during the write retried after 60 s once released, a corrupt JPEG failed permanently on the first attempt while the batch continues, and an unreachable catalog (a real client on a closed port) pausing the run with every row back in `Pending` and no claim inside the window. |
 | `ParityTests` | TAG-04 over persisted metadata: one fixture image through the desktop's `RunAsync` and the indexer's `BatchExecutor` with the same template produces the same category, description and keyword set, and the same happens with `writeDescription=false`. |
 | `RealSidecarKillTests` | Opt-in (`SYNAPIC_TEST_REAL_KILL=1`): the production `InferenceSidecarService` launches the built bundle, the batch starts, the process is killed during the first in-flight `/tag`, and the supervisor restarts it (new pid) with every row `Completed`, at least one retried and the tags read back from disk. Skips with the reason when the bundle or cached model is absent. |
+| `DaminionLiveAcceptanceTests` | Opt-in (`Category=Live`, `[SkippableFact]`): the live round trip — the resolved scope reported before any write, 25 items tagged through the real executor and the real client, the catalog read back per item (verifier + exact tag values), the same ids written again with one copy of each keyword, and a real firewall outage pausing the run and it resuming by itself. Skips with its reason when there are no credentials, no outage helper, or too few items. See [Live catalog round trip](#live-catalog-round-trip-phase-10). |
 
 ---
 
@@ -135,6 +139,7 @@ machine. The one real sidecar process (and real model) is the opt-in
 | `DaminionCaptureDateTests` | The catalog capture-date reader behind preview hashing: the nested `ItemData/GetAll` payload (`propertyName`/`propertyValue`, plus multi-value `values`) flattens to tag pairs, "Date Taken"/"DateTimeOriginal" win over an import "Created" date, a modified/expiry date is never taken as a capture date, the server's own dotted `2025.12.27.11.23.52` rendering parses (as do ISO and culture shapes, with an offset honoured), an empty or unparseable value is null rather than an exception, and the first non-empty value for a tag wins. |
 | `DedupAlgorithmEquivalenceTests` | The optimised comparison against the definitions it replaced: grouping equals a pairwise union-find sweep for pHash at 0.50/0.85/0.90/0.97/0.99/1.00 and for 32-bit server hashes in hamming mode (group membership, order and per-item scores), a chained A–B–C group stays one group, a set whose fingerprints all share one region is still fully compared (the balanced pigeonhole split), and the shipped pHash equals a full 32×32 DCT reference on structured, gradient, edge, detail, portrait and small images. Plus the parallel local scan producing the same fingerprints and the same ordered groups as a serial one (an original and its copy grouped together), and a featureless image hashing stably with its copies still matching. |
 | `DedupGroupingScaleTests` | Grouping at catalog scale stays inside a time ceiling — 5,000 and 20,000 fingerprints at 0.90, and 20,000 byte-identical copies, the case a pairwise union made quadratic (measured 14.3 s before the bucketed search, 13 ms after). |
+| `DaminionVerifyMetadataTests` | The "Verify Daminion writes" read-back on the payload server 11.x actually returns: a written category, keyword set and description are found through the tag-name/value pairs (the JSON-member matcher this replaced could only ever find `propertyName`/`propertyValue` and reported every field missing), a keyword must match a whole value rather than a substring, a missing field is named, and a tolerance check keeps the case-insensitive tag-name matching. |
 | `DedupFingerprintRestoreTests` | The restart cache: a saved scan round-trips its hashes and row metadata, belongs to one operation and source, ignores a corrupt or other-version file instead of throwing, is deleted per source, and is pruned to the newest eight per operation. Through the view model: a new instance reopens the last scan with no second scan, restores the slider live and retunes from the saved hashes, refuses a scan saved under another algorithm or another folder, takes the slider away when the source moves, drops the file after Apply, and the shipped container resolving the shell hands the registered store to both searches (a saved scan reopens through the real DI wiring). |
 | `SimilarSearchTests` | The Similar images operation as its own thing: the two profiles over one implementation (each with its own key, title and wording), the looser 0.84 starting threshold — 10 of the 64 bits where duplicates allow 6, and the `BuildOptions` the scan actually runs with — the band between the two thresholds (fingerprints 10 bits apart group only under the similarity search, 12 bits apart under neither), transitive chaining (A-B and B-C is one group where the duplicate scan finds nothing), the per-fingerprint defaults behind those numbers (pHash 0.90/0.84, dHash 0.96/0.90, aHash 0.98/0.93 — measured over 220 same-photo and 462 different-photo pairs of real photographs, with the budget floored so each default keeps its bit count), that an untouched threshold follows the algorithm it is switched to while a tuned one is left alone, and that a store holding a saved algorithm but no threshold falls back to *that* algorithm's default, and the two registry halves: each form restores its own algorithm, threshold, keep-set and move destination while leaving the other's at its defaults (those last two facts return early off Windows, where the store is a no-op). |
 | `MetadataWriterTests` | XMP write/read round-trips for JPEG and PNG. |
@@ -168,10 +173,73 @@ otherwise, so CI (ubuntu) stays green:
 
 | Test | Requires |
 |------|----------|
-| `DaminionLiveSessionTests`, `EndToEndRoundTripTests` (Daminion half) | `SYNAPIC_TEST_DAMINION_URL`, `SYNAPIC_TEST_DAMINION_USERNAME`, `SYNAPIC_TEST_DAMINION_PASSWORD` |
+| `DaminionLiveSessionTests`, `EndToEndRoundTripTests` (Daminion half), `DaminionLiveAcceptanceTests` | `SYNAPIC_TEST_DAMINION_URL`, `SYNAPIC_TEST_DAMINION_USERNAME`, `SYNAPIC_TEST_DAMINION_PASSWORD` (or `build/acceptance-daminion.ps1`, which reads the saved Windows connection) |
+| `DaminionLiveAcceptanceTests.Live_outage_pauses_and_the_queue_completes` | `SYNAPIC_TEST_DAMINION_BLOCK_DIR`, pointing at the directory an elevated `build/block-daminion.ps1` is watching |
 | `EndToEndRoundTripTests` (sidecar half) | a built sidecar executable (`artifacts/<rid>/synapic-inference*` or bundled next to the app) |
 | `RealSidecarKillTests` | `SYNAPIC_TEST_REAL_KILL=1`, a built sidecar bundle and `LFM2.5-VL-1.6B` in `%LOCALAPPDATA%\Synapic\models`; loads the model twice |
 | `DaminionConnectionStoreTests`, `EngineSettingsStoreTests` | Windows (registry) |
+
+---
+
+## Live catalog round trip (phase 10)
+
+`tests/Synapic.Indexer.Tests/DaminionLiveAcceptanceTests.cs` is the only suite
+that writes to a real catalog, and it is never part of a hermetic run:
+
+```powershell
+# The whole live round trip, with the credential the app already saved
+# (HKCU\Software\Synapic\Daminion, DPAPI) — nothing is printed or committed.
+build/acceptance-daminion.ps1
+
+# One fact
+build/acceptance-daminion.ps1 -Filter "FullyQualifiedName~Live_round_trip"
+```
+
+`acceptance-daminion.ps1` resolves `SYNAPIC_TEST_DAMINION_URL/_USERNAME/_PASSWORD`
+first and falls back to the saved connection, then hands the values to the child
+`dotnet test` process through its environment only. It exits 3, naming the
+missing piece, when neither source is complete.
+
+What it writes: metadata (category, one keyword, description) on the items of
+the selected scope — 25 for the round trip, a handful more for the outage. It
+deletes nothing, sets no flags, and does not change catalog administration. Runs
+are marked with a dated keyword (`synapic-live-YYYY-MM-DD`) so a later run can
+find what this one wrote; the tags stay, because tagging is the product's output,
+not test residue.
+
+The scope is resolved against what the server holds, not trusted from a constant:
+the named saved search if the server enumerates it, then a saved search by name,
+then the catalog. The fallback is printed with the reason — a structured
+saved-search query that names an id the server does not have can quietly answer
+with the whole catalog, and a run on the whole catalog must not be reported as a
+run on the scope it was asked for.
+
+The round trip does not require items that are already empty. On the server this
+was built against, `keywords:none` is ignored by both the item endpoint and the
+count, so an "untagged page" is really the catalog head. It selects real items
+from the resolved scope, snapshots what they carry, and asserts that the written
+keyword and category land exactly once while every value already there survives
+the write.
+
+The outage fact needs a second, elevated shell, because "the catalog went away"
+is a real Windows firewall block on this machine's outbound TCP, not a closed
+port:
+
+```powershell
+# elevated
+build/block-daminion.ps1 -WorkDir artifacts/phase-10/block -TimeoutSeconds 300
+```
+
+It waits for `block.request`, applies the rule, proves a new connection now
+fails, writes `block.ack`, waits for `unblock.request`, proves the server answers
+again, removes the rule in a `finally` and writes `unblock.ack`. Without
+`SYNAPIC_TEST_DAMINION_BLOCK_DIR` pointing at that directory the outage fact
+skips, naming the helper — it will not pretend a closed port is an outage.
+
+The transcript of the acceptance run is committed at
+[`.planning/phases/10-live-daminion-round-trip/10-ACCEPTANCE.md`](../.planning/phases/10-live-daminion-round-trip/10-ACCEPTANCE.md).
+The raw console output (`artifacts/phase-10/live-*.log`) is written by the script
+and is not committed — `artifacts/` is ignored.
 
 ---
 
