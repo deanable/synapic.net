@@ -589,7 +589,12 @@ public class WorkflowOrderTests
         shell.Operations.TagParameters.ManualModelId = "LiquidAI/LFM2.5-VL-450M";
         Assert.Contains("LiquidAI/LFM2.5-VL-450M", shell.Operations.TagParameters.ModelSummary);
         Assert.Equal("Built-in tag instruction", shell.Operations.TagParameters.PromptSummary);
+        // The summary has to name the mode that is set, not the default one:
+        // switching to LLM-only must change the words.
+        shell.Operations.TagParameters.ProbabilityModeIndex = 0;
         Assert.Contains("LLM only", shell.Operations.TagParameters.ProbabilitySummary);
+        shell.Operations.TagParameters.ProbabilityModeIndex = 1;
+        Assert.Contains("Probability only", shell.Operations.TagParameters.ProbabilitySummary);
 
         // Deduplication: the rule line reads algorithm, threshold and keep-set.
         var dedup = shell.Operations.Dedup;

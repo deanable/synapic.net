@@ -96,6 +96,27 @@ public sealed class Step4ResultsBehaviorTests
         }
     }
 
+    /// <summary>
+    /// A clean report has nothing to retry. The action is disabled — not offered
+    /// and then ignored — and the summary stays the baseline, so no run ever reads
+    /// as if a retry had happened when none could.
+    /// </summary>
+    [Fact]
+    public void Retry_with_nothing_to_retry_stays_disabled_and_says_nothing_about_retrying()
+    {
+        var session = new Session();
+        session.Results.Add(Result("tagged.jpg", ProcessStatus.Success));
+        var source = new Step1DatasourceViewModel(session);
+        var vm = new Step4ResultsViewModel(session, source,
+            new Step3ProcessViewModel(session, new FakeSidecar(), source));
+        vm.Refresh();
+
+        Assert.False(vm.RetryFailedCommand.CanExecute(null));
+        Assert.Equal("1 succeeded (0 verified), 0 failed, 1 total", vm.Summary);
+        Assert.DoesNotContain("Retried", vm.Summary);
+        Assert.DoesNotContain("Retrying", vm.Summary);
+    }
+
     [Fact]
     public async Task Retry_with_empty_source_reports_zero_retried_and_removes_stale_failure_rows()
     {

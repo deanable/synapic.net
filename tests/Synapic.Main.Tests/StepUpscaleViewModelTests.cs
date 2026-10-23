@@ -128,6 +128,19 @@ public class StepUpscaleViewModelTests
         Assert.Equal("No datasource step available", vm.SourceSummary);
     }
 
+    /// <summary>
+    /// A local source with nothing picked says so instead of rendering an empty
+    /// value that reads like a half-loaded form.
+    /// </summary>
+    [Fact]
+    public void Source_summary_says_a_local_folder_is_not_chosen_yet()
+    {
+        var vm = VmForFolder("");
+
+        Assert.False(vm.SourceReady);
+        Assert.Equal("Source: local folder (not chosen)", vm.SourceSummary);
+    }
+
     [Fact]
     public void Local_source_is_ready_only_when_the_folder_exists()
     {
@@ -161,11 +174,13 @@ public class StepUpscaleViewModelTests
             Assert.Equal("No inference sidecar is available", noSidecar.StartBlockedReason);
             Assert.False(noSidecar.StopCommand.CanExecute(null));
 
-            // Sidecar, but no folder → cannot start.
+            // Sidecar, but no folder → cannot start, and the hint names both
+            // ways a source can exist rather than only the local one.
             var noSource = VmForFolder(Path.Combine(Path.GetTempPath(), $"synapic-gone-{Guid.NewGuid():N}"),
                 sidecar: new FakeSidecar { IsRunning = true });
             Assert.False(noSource.StartCommand.CanExecute(null));
-            Assert.Contains("folder", noSource.StartBlockedReason);
+            Assert.Equal("Choose an existing folder or connect to Daminion in Settings",
+                noSource.StartBlockedReason);
 
             // Source and executable, but the server is stopped → cannot start.
             var stopped = VmForFolder(folder, sidecar: new FakeSidecar());

@@ -106,7 +106,10 @@ public partial class Step4ResultsViewModel : ViewModelBase
     {
         Results.Clear();
         foreach (var r in _session.Results) Results.Add(r);
-        UpdateSummary("No results yet — run tagging to create a report.", reset: true);
+        // No suffix: the empty-report wording belongs to UpdateSummary's own
+        // zero-result branch. Passing it here made every populated report read
+        // "1 succeeded (0 verified), 0 failed, 1 total — No results yet …".
+        UpdateSummary("", reset: true);
         ExportCsvCommand.NotifyCanExecuteChanged();
         RetryFailedCommand.NotifyCanExecuteChanged();
         VerifyDaminionCommand.NotifyCanExecuteChanged();

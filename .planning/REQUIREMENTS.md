@@ -34,10 +34,10 @@ Three gaps motivated this milestone, each recorded honestly in the v1.1 archive 
 
 ### Closing v1.0's gate (GATE)
 
-- [ ] **GATE-01**: `docs/ui-design.md` §10 criterion 6 is restated as a finite, checkable claim — every empty-result and report branch the shipped UI can reach is inventoried and each has a named behavioral test — with the reason for the change recorded beside it
-- [ ] **GATE-02**: Every row of that inventory names a test that exists, and a drift check fails when a row names a test that does not exist (the pattern `ConfigDocumentationTests` already uses for configuration keys)
-- [ ] **GATE-03**: The branches still lacking a view-model-level behavioral test (Tag cancellation and fetch-failure presentation, plus any inventory row without one) gain one, and the §10 matrix records criterion 6 ✓ and criterion 8 ✓ with the 2026-10-13 remap visible to the gate
-- [ ] **GATE-04**: The 03-05 gate re-runs clean — build 0/0, full solution suite green with no test weakened or removed, layout audit at four sizes × four routes — and ROADMAP and STATE record Phase 3 complete
+- [x] **GATE-01**: `docs/ui-design.md` §10 criterion 6 is restated as a finite, checkable claim — every empty-result and report branch the shipped UI can reach is inventoried and each has a named behavioral test — with the reason for the change recorded beside it. Done 2026-10-23: [`docs/ui-empty-branches.md`](../docs/ui-empty-branches.md) held 57 branches at restatement (37 named; the gaps were GATE-03, now closed), and the criterion carries the restatement and its reason
+- [x] **GATE-02**: Every row of that inventory names a test that exists, and a drift check fails when a row names a test that does not exist (the pattern `ConfigDocumentationTests` already uses for configuration keys). Done 2026-10-23: `EmptyBranchInventoryTests` resolves every citation and also fails on a `Named`/`Partial` row with no test, an unknown status, a duplicate id and a table below 40 rows. Restated from the original wording, which required *every* row to name a test — impossible while `Gap` and `Shadowed` rows exist by design
+- [x] **GATE-03**: The branches still lacking a view-model-level behavioral test (Tag cancellation and fetch-failure presentation, plus any inventory row without one) gain one, and the §10 matrix records criterion 6 ✓ and criterion 8 ✓ with the 2026-10-13 remap visible to the gate. Inventory half done 2026-10-23: the eleven `Gap` rows and both `Shadowed` rows are resolved by name or removal — one test each for the abort/pause/resume log lines, the Daminion and model gates, the empty-model summary, the truncated-walk sentence, the re-group and unconnected-catalog gates and the `(not chosen)` source summary; `R-07` removed as unreachable (`VerifyItemMetadataAsync` reports a mismatch rather than throwing) and `D-08` reclassified as a named result because the bar keeps it. The seven `Partial` rows are closed too, by asserting the copy rather than the state — which found and fixed two defects: `ProbabilitySummary` switched on display strings while `ProbabilityMode` holds the wire values (every non-default mode read `LLM only`), and `Refresh` appended the empty-report wording, so a populated report ended `— No results yet — run tagging to create a report.` 56 rows: 55 named, 0 partial, 1 shadowed, 0 gaps. Matrix half done 2026-10-23 (Phase 11): the §10 matrix in `03-05-SUMMARY.md` records criterion 6 ✓ (behind the restated inventory and its drift check) and criterion 8 ✓ (2026-10-13 remap visible to the gate), with the 2026-10-09 "criterion 4 ✗" self-check reconciled to the re-run verdict
+- [x] **GATE-04**: The 03-05 gate re-runs clean — build 0/0, full solution suite green with no test weakened or removed, layout audit at four sizes × four routes — and ROADMAP and STATE record Phase 3 complete. Done 2026-10-23: clean Release build 0 warnings/0 errors; full solution suite `-m:1` → 1011 passed, 0 failed, 6 skipped (every skip a credential-gated live test skipping with its stated reason); the tests diff is additions only; `UiLayoutAuditTests` 20/20 (dashboard + all three routes at four sizes — the count of record; the 2026-10-13 "22/22" does not reproduce against the unchanged test file); ROADMAP.md and STATE.md record Phase 3 complete, verdict PASSED in `03-05-SUMMARY.md`
 
 ### Shipping v1.0 (UAT)
 
@@ -75,10 +75,10 @@ Three gaps motivated this milestone, each recorded honestly in the v1.1 archive 
 | DAM-02 | Phase 10 | Complete |
 | DAM-03 | Phase 10 | Complete |
 | DAM-04 | Phase 10 | Complete |
-| GATE-01 | Phase 11 | Pending |
-| GATE-02 | Phase 11 | Pending |
-| GATE-03 | Phase 11 | Pending |
-| GATE-04 | Phase 11 | Pending |
+| GATE-01 | Phase 11 | Complete |
+| GATE-02 | Phase 11 | Complete |
+| GATE-03 | Phase 11 | Complete |
+| GATE-04 | Phase 11 | Complete |
 | UAT-01 | Phase 12 | Pending |
 | UAT-02 | Phase 12 | Pending |
 | UAT-03 | Phase 12 | Pending |

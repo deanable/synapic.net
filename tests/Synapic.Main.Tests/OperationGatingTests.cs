@@ -5,6 +5,7 @@ using Avalonia.VisualTree;
 using Synapic.Main.Models;
 using Synapic.Main.ViewModels;
 using Synapic.Main.ViewModels.Operations;
+using Synapic.Main.ViewModels.Steps;
 using Synapic.Main.Views;
 using Xunit;
 
@@ -35,15 +36,18 @@ public class OperationGatingTests
 
         Assert.True(host.TagRun.StartCommand.CanExecute(null));
 
-        // Uncheck all three: there is nothing to tag, so the run locks.
+        // Uncheck all three: there is nothing to tag, so the run locks — and the
+        // locked button names the setting rather than leaving the user to guess.
         host.TagParameters.TagKeywords = false;
         host.TagParameters.TagCategories = false;
         host.TagParameters.TagDescription = false;
         Assert.False(host.TagRun.StartCommand.CanExecute(null));
+        Assert.Equal("Select at least one tag field in the tagging settings", host.TagRun.StartBlockedReason);
 
-        // Re-checking any one re-enables it.
+        // Re-checking any one re-enables it, and the reason goes away with it.
         host.TagParameters.TagDescription = true;
         Assert.True(host.TagRun.StartCommand.CanExecute(null));
+        Assert.Null(host.TagRun.StartBlockedReason);
     }
 
     [Fact]
@@ -73,6 +77,30 @@ public class OperationGatingTests
         sidecar.RaiseStatus(Synapic.Core.Services.SidecarStatus.Ready);
         Assert.True(host.TagRun.StartCommand.CanExecute(null));
         Assert.Null(host.TagRun.StartBlockedReason);
+    }
+
+    [Fact]
+    public void Tagging_gate_names_the_daminion_connection_and_the_missing_model()
+    {
+        // A catalog source that is selected but not connected: "pick a scope"
+        // would be wrong, because there is nothing to pick one from yet.
+        var catalog = new Session();
+        catalog.Datasource.Type = "daminion";
+        var catalogSource = new Step1DatasourceViewModel(catalog);
+        var catalogRun = new Step3ProcessViewModel(catalog, new FakeSidecar { IsRunning = true }, catalogSource);
+
+        Assert.False(catalogRun.StartCommand.CanExecute(null));
+        Assert.Equal("Connect to the Daminion server in Settings, then pick a scope", catalogRun.StartBlockedReason);
+
+        // A usable local source with no model: the batch has nowhere to send the
+        // items, so Start stays off and names the setting that is missing.
+        var noModel = ReadySession();
+        noModel.Engine.ModelId = "";
+        var localSource = new Step1DatasourceViewModel(noModel);
+        var localRun = new Step3ProcessViewModel(noModel, new FakeSidecar { IsRunning = true }, localSource);
+
+        Assert.False(localRun.StartCommand.CanExecute(null));
+        Assert.Equal("Choose a model in the tagging settings", localRun.StartBlockedReason);
     }
 
     [Fact]

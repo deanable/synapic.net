@@ -616,6 +616,56 @@ public sealed class DaminionSelectionBehaviorTests
     }
 
     /// <summary>
+    /// "500 files scanned" reads as the whole index. When the walk ended before
+    /// the scope's own count, the result sentence says so beside the numbers —
+    /// not only in the diagnostics block the user has to know to open.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Dedup_scan_summary_reports_a_walk_that_read_less_than_the_scope_holds()
+    {
+        using var server = new CatalogServer(
+            index => JsonSerializer.Serialize(new
+            {
+                // 500 records, a scope that claims 1,000: the second page is empty,
+                // so the walk stops with half the count in hand.
+                items = Enumerable.Range(index + 1, Math.Clamp(500 - index, 0, 500))
+                    .Select(id => new { id, fileName = $"item-{id}.jpg", hashCode = 100_000L + id, fileSize = 10 })
+                    .ToArray(),
+                totalCount = 500,
+            }),
+            countBody: _ => "{\"count\":1000}");
+        var session = new Session();
+        session.Datasource.Type = "daminion";
+        var source = new Step1DatasourceViewModel(session)
+        {
+            DaminionUrl = server.BaseUrl,
+            DaminionUser = "test",
+            DaminionPass = "test",
+        };
+        await source.ConnectCommand.ExecuteAsync(null);
+        Assert.True(source.IsDaminionConnected, source.ConnectionMessage);
+        var vm = new StepDedupViewModel(step1: source);
+
+        try
+        {
+            await vm.ScanCommand.ExecuteAsync(null);
+            Dispatcher.UIThread.RunJobs();
+
+            var walk = Assert.IsType<CatalogRetrievalDiagnostics>(vm.LastRetrieval);
+            Assert.Equal(1000, walk.ScopeCount);
+            Assert.Equal(500, walk.Kept);
+            Assert.Equal(
+                $"No duplicates found among 500 images — try a lower threshold or another algorithm. " +
+                $"The scope holds {1000:N0}; the walk read {500:N0}.",
+                vm.ScanSummary);
+        }
+        finally
+        {
+            source.DisconnectCommand.Execute(null);
+        }
+    }
+
+    /// <summary>
     /// The diagnostics block's re-walk action on a real catalog scan: when the
     /// count claims more than the pages kept, the action runs the walk again (so
     /// the transient short read gets a second chance) and the new report records

@@ -419,8 +419,25 @@ The redesign is done when all of these are verifiable:
    parameter is reachable inline in the Parameters region.
 5. **Layout audit green** at 900×600 … 1600×900 for dashboard + all three
    operation routes, including the stacked (narrow) variant.
-6. **Every long-running action has busy + Stop**, including dedup Apply;
-   every empty result has guidance copy.
+6. **Every long-running action has busy + Stop**, including dedup Apply, and
+   every empty-result and report branch the shipped UI can reach is inventoried
+   in [`ui-empty-branches.md`](ui-empty-branches.md) with the behavioral test
+   that names it — and a drift check fails when an inventoried row names a test
+   that does not exist.
+
+   *Restated 2026-10-23 (phase 11, GATE-01).* The old wording ended "every empty
+   result has guidance copy", which quantified over a set nobody had written
+   down — it could not be checked, so it could not be closed. The inventory is
+   that set, made finite: at restatement 57 rows, each marked named, partial,
+   gap or shadowed, with the gaps listed by mode. 37 were named then; the 11 gaps
+   were closed on 2026-10-23 by naming each in a test (`R-07` removed as
+   unreachable, `D-08` reclassified as a named result), leaving 56 rows with no
+   gaps and no partials (one shadowed copy, whose replacement a test pins).
+   Asserting the last copies surfaced two summary defects — the scoring readout
+   described every mode as `LLM only`, and a populated report ended with `No
+   results yet` — both fixed with the tests that found them. "Named" is the
+   claim; the drift check is what keeps it from decaying back into an
+   aspiration.*
 7. **Server status and F1 help work from every route**; run logs are in
    Output, diagnostics reachable from Settings.
 8. **Feature preservation:** `ui-redesign-proposal.md` §4 checklist still
@@ -460,6 +477,7 @@ The redesign is done when all of these are verifiable:
 
 | Document | Role after this design |
 |---|---|
+| [`ui-empty-branches.md`](ui-empty-branches.md) | **Live** — the inventory §10 criterion 6 rests on: every reachable empty-result and report branch, with the test that names it |
 | [`ui-redesign-proposal.md`](ui-redesign-proposal.md) | **Historical** — superseded by this document; kept for rationale and the §4 feature checklist |
 | [`UI-REVIEW.md`](../UI-REVIEW.md) | Audit of the pre-redesign shipped UI; its standards are adopted (§7) and its open findings are requirements here (§4.3) |
 | [`README.md`](../README.md) (spec) §5 | Migration-era wizard description — historical |

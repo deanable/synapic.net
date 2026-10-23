@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Release Integrity
 status: executing
-last_updated: "2026-10-23T16:05:00.000Z"
+last_updated: "2026-10-23T19:30:00.000Z"
 last_activity: 2026-10-23
 progress:
   total_phases: 4
-  completed_phases: 2
-  total_plans: 9
-  completed_plans: 9
-  percent: 50
+  completed_phases: 3
+  total_plans: 11
+  completed_plans: 10
+  percent: 91
 ---
 
 # Project State
@@ -27,19 +27,18 @@ Daminion) and finally ship v1.0. Requirements: [REQUIREMENTS.md](REQUIREMENTS.md
 
 ## Current Position
 
-Phase: 10 of 12 — Live Daminion round trip — **complete** (DAM-01..04)
-Plan: 4 of 4 executed (10-01, 10-02, 10-03, 10-04)
-Status: all four requirements proven against real catalogs. DAM-01, DAM-02 and DAM-04 on
-`researchserver.juicefilm.local` (items 26–50 written twice, exact-once keywords, pre-existing values
-kept); DAM-01 re-checked and DAM-03 proven on `damserver.local` after the first server went away at
-14:39 — a real firewall outage paused the six-item run with nothing failed or dropped, and it resumed
-by itself, completing every row. Transcript:
-`.planning/phases/10-live-daminion-round-trip/10-ACCEPTANCE.md`
-Last activity: 2026-10-23 — Phase 10 executed: live scope reported, 25 items written twice with exact-once
-keywords and pre-existing values preserved; three product defects found and fixed (verifier tag-name
-read, object-shaped multi-values, non-idempotent catalog write); DAM-03 closed on the second catalog,
-which also showed the outage helper blocking only the IPv4 address while the server answered on IPv6,
-and a saved search numbered 16 that existed but held nothing (both fixed)
+Phase: 11 of 12 — Close the UI-refactor gate — **complete** (GATE-01..04)
+Plan: 1 of 1 executed (11-01 gate re-verification)
+Status: criterion 6 restated as the finite inventory in `docs/ui-empty-branches.md` (56 rows: 55 named,
+1 shadowed, 0 partial, 0 gap) with the `EmptyBranchInventoryTests` drift check over every `Named by`
+citation; the eleven gap rows and seven partial rows closed by naming each in a test, which found and
+fixed two product defects (`ProbabilitySummary` switching on display strings; `Refresh` appending the
+empty-report wording to populated reports); the §10 matrix records criterion 6 ✓ and 8 ✓ and the 03-05
+verdict is PASSED. Full evidence, including the 2026-10-23 build and suite numbers, in
+`.planning/phases/03-collapse-navigation-and-retire-settings-dialogs/03-05-SUMMARY.md` (Phase 11
+section) and `.planning/phases/11-close-the-ui-refactor-gate/11-01-SUMMARY.md`.
+Next: Phase 12 — execute the seven `03-UAT.md` scenarios against the installed build (results recorded
+with observations, not inferred), then ship v1.0 (archive, MILESTONES entry, tag `v1.0`).
 
 ## Deferred Items
 
@@ -59,8 +58,8 @@ resolving it is v1.0 work. It is now **claimed by v1.2 Phase 12** (requirement U
 |-------|------|--------------|-------|
 | 9 | MSI and bundle as a supported channel | MSI-01..05 | 5/5 — 5/5 ✓ (silent install 0, service LocalService/Auto/restart×3, upgrade over a second ProductCode, uninstall 1060 with ProgramData kept, installed dashboard PASS) |
 | 10 | Live Daminion round trip | DAM-01..04 | 4/4 — 4/4 ✓ (DAM-01 scope reported on both catalogs, DAM-02 exact-once round trip on items 26-50, DAM-03 real firewall outage paused then resumed six rows to completion, DAM-04 transcript + procedure) |
-| 11 | Close the UI-refactor gate | GATE-01..04 | TBD |
-| 12 | UI acceptance and release | UAT-01..03 | TBD |
+| 11 | Close the UI-refactor gate | GATE-01..04 | 1/1 — gate re-verified 2026-10-23: criterion 6 restated as the drift-checked inventory, matrix records 6 ✓ and 8 ✓, 03-05 verdict PASSED |
+| 12 | UI acceptance and release | UAT-01..03 | In progress — 03-UAT.md scenarios to be executed against the installed build, then archive/tag `v1.0` |
 
 Dependency shape: 9, 10 and 11 are independent; 12 needs 9 (installed build) and 11 (gate green).
 The Daminion target is a real server the user provides; credentials stay in `SYNAPIC_TEST_DAMINION_*`
@@ -80,11 +79,12 @@ Evidence lives in each phase's `NN-MM-SUMMARY.md` and, for v1.1, in the mileston
 
 ## Carried debt from v1.0
 
-Phase 3 (collapse-navigation-and-retire-settings-dialogs) is **not complete**: all five plans executed,
-but the 03-05 gate left §10 criteria 6 (empty-state branches lack behavioral evidence — zero-result
-Daminion and all-failed Upscale) and 8 (the 37-row preservation map still has 12 partial and 2
-unsupported entries) open. This debt is **not** absorbed into v1.1 and must be closed before v1.0 is
-called done. Do not mark Phase 3 complete on the strength of a green suite. See
+Phase 3 (collapse-navigation-and-retire-settings-dialogs): **closed by v1.2 Phase 11** (2026-10-23).
+All five plans executed, and the gate that had stood open since 2026-10-09 on §10 criterion 6's
+wording is now PASSED — the criterion was restated as the finite inventory in
+`docs/ui-empty-branches.md` (D-12-03), every row names a behavioral test, and the drift check keeps
+the citations resolvable. What still stands between here and shipping v1.0 is Phase 12: the six
+pending `03-UAT.md` scenarios and the ship itself. See
 `.planning/phases/03-collapse-navigation-and-retire-settings-dialogs/03-05-SUMMARY.md`.
 
 Also carried: the compiled help corpus still names the old wizard steps (`HelpTopics.ForStepIndex` maps

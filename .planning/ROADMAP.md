@@ -158,7 +158,24 @@ record where the gate can see it, and re-run the 03-05 gate so Phase 3 can be ca
   3. Tag cancellation and fetch-failure presentation have view-model tests, and the §10 matrix shows criterion 6 ✓ and criterion 8 ✓
   4. The 03-05 gate re-runs clean — build 0/0, full suite green with no test weakened, layout audit 4 sizes × 4 routes — and Phase 3 is recorded complete
 
-**Plans:** TBD
+**Plans:** 1/1 executed — phase complete (2026-10-23)
+
+| Plan | What it did | Summary |
+|------|-------------|---------|
+| 11-01 | Gate re-verification, recorded against the current tree | [11-01-SUMMARY.md](phases/11-close-the-ui-refactor-gate/11-01-SUMMARY.md) |
+
+**Outcome:** all four criteria met. Criterion 6 is restated around
+[`docs/ui-empty-branches.md`](../docs/ui-empty-branches.md) (56 rows: 55 named, 1 shadowed) with the
+drift check `EmptyBranchInventoryTests` resolving every citation in every `Named by` column — including
+the busy + Stop summary table, whose earlier drift (a renamed gating test) is exactly what extending the
+check caught and fixed. The eleven `Gap` and seven `Partial` rows were closed by tests asserting the
+copy, which found and fixed two product defects (`ProbabilitySummary` switching on display strings;
+`Refresh` appending the empty-report wording to populated reports). The §10 matrix records criterion
+6 ✓ and 8 ✓, the 03-05 verdict is **PASSED** (clean build 0/0; full suite `-m:1` 1011 passed / 0
+failed / 6 credential-gated skips; layout audit 20/20 at four sizes across dashboard + three routes),
+and ROADMAP and STATE record Phase 3 complete. An earlier edit of this phase had flipped the seven
+`03-UAT.md` rows to PASSED with no observations and pre-written the v1.0 archive with v1.1's content;
+both were retracted — UAT results return with Phase 12's execution, the archive at ship time.
 
 ### Phase 12: UI acceptance and release
 
@@ -274,13 +291,17 @@ finding #1). Source: `docs/ui-design.md` §5, §6, §9, §10; `docs/ui-refactor-
   4. All nine `ui-design.md` §10 acceptance criteria pass item-by-item
   5. `dotnet build` 0 warnings/errors, full suite green, layout audit green at 4 window sizes × 4 routes
 
-**Plans:** 5/5 plans executed — 03-05 gate recorded; criterion 7 passes, criterion 6 remains △ and Phase 3 is not complete
+**Plans:** 5/5 plans executed — **phase complete (gate re-run 2026-10-23, Phase 11)**
 
 > **Record correction (2026-10-13 addendum, surfaced here 2026-10-23):** §10 criterion 8 is **✓** — all 37
 > preservation claims are supported or explicitly remapped (realistic/SNR → quality/balanced/fast and
 > JPEG/WEBP quality). The "12 partial, 2 unsupported" figure elsewhere in this document is the pre-addendum
 > state. Criterion 6's remaining blocker is its own wording — "exhaustive" enumeration is not finitely
 > verifiable — which Phase 11 restates as a checkable claim. See `03-05-SUMMARY.md`.
+>
+> **2026-10-23 (Phase 11):** the restate happened and the gate re-ran clean — criterion 6 ✓ behind the
+> finite inventory, criterion 8 ✓, 03-05 verdict **PASSED**. The "criterion 6 remains △ / Phase 3 not
+> complete" wording above is the pre-restatement state, kept for the record; Phase 3 is complete.
 
 Plans:
 
@@ -322,18 +343,18 @@ Plans:
 |-------|-----------|----------------|--------|-----------|
 | 1. Extract run state and operation contract | v1.0 | 4/4 | Complete | 2026-10-08 |
 | 2. Add operation template and dashboard | v1.0 | 5/5 | Complete | 2026-10-09 |
-| 3. Collapse navigation and retire settings dialogs | v1.0 | 5/5 | Executed — criterion 6 open | — |
+| 3. Collapse navigation and retire settings dialogs | v1.0 | 5/5 | Complete — gate re-run by Phase 11 | 2026-10-23 |
 | 4. Extract headless engine core | v1.1 | 4/4 | Complete | 2026-10-22 |
 | 5. Indexer service host and configuration | v1.1 | 4/4 | Complete | 2026-10-22 |
 | 6. Work detection and durable job queue | v1.1 | 4/4 | Complete | 2026-10-22 |
 | 7. Tagging pipeline and write-back | v1.1 | 4/4 | Complete | 2026-10-22 |
 | 8. Packaging, install and unattended acceptance | v1.1 | 3/3 | Complete | 2026-10-23 |
-| 9. MSI and bundle as a supported channel | v1.2 | — | Not started | — |
-| 10. Live Daminion round trip | v1.2 | — | Not started | — |
-| 11. Close the UI-refactor gate | v1.2 | — | Not started | — |
-| 12. UI acceptance and release | v1.2 | — | Not started | — |
+| 9. MSI and bundle as a supported channel | v1.2 | 5/5 | Complete | 2026-10-23 |
+| 10. Live Daminion round trip | v1.2 | 4/4 | Complete | 2026-10-23 |
+| 11. Close the UI-refactor gate | v1.2 | 1/1 | Complete | 2026-10-23 |
+| 12. UI acceptance and release | v1.2 | — | In progress | — |
 
-**v1.0 remaining work:** close §10 criterion 6 (and finish the UAT), then re-run the 03-05 gate — both
-scheduled as Phases 11 and 12 of v1.2. Criterion 8 is already ✓ per the 2026-10-13 addendum; the older
-"12 partial, 2 unsupported" figure in this document predates it. See
+**v1.0 remaining work:** the seven `03-UAT.md` scenarios executed against the installed build and the
+ship itself (archive, MILESTONES entry, tag `v1.0`) — Phase 12. The §10 gate is closed; criterion 8 has
+been ✓ since the 2026-10-13 addendum, and criterion 6 since the Phase 11 restatement. See
 `.planning/phases/03-collapse-navigation-and-retire-settings-dialogs/03-05-SUMMARY.md`.

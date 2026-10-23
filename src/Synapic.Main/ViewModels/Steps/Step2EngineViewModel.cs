@@ -500,11 +500,17 @@ public partial class Step2EngineViewModel : ViewModelBase
         }
     }
 
-    /// <summary>How a run scores tags, in words (the settings summary reports it).</summary>
+    /// <summary>
+    /// How a run scores tags, in words (the settings summary reports it).
+    /// <see cref="ProbabilityMode"/> is the wire value ("llm"/"probability"/
+    /// "both"), which is what a run sends and a saved profile holds — the summary
+    /// reads that, not a display string, so picking probability for real is named
+    /// as probability rather than silently described as the LLM's own answer.
+    /// </summary>
     public string ProbabilitySummary => ProbabilityMode switch
     {
-        "Probability only" => "Probability only" + ThresholdSuffix(),
-        "Both" => "LLM + probability" + ThresholdSuffix(),
+        "probability" => "Probability only" + ThresholdSuffix(),
+        "both" => "LLM + probability" + ThresholdSuffix(),
         _ => "LLM only (the model's own answer)",
     };
 

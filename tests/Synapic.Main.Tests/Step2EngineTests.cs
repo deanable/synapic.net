@@ -307,6 +307,55 @@ public class Step2EngineTests
         }
     }
 
+    /// <summary>
+    /// The settings summary is the only place a run's model is named before it
+    /// starts, so with no model picked it has to say so rather than render an
+    /// empty box that reads like a broken form.
+    /// </summary>
+    [Fact]
+    public void Model_summary_says_nothing_is_chosen_until_a_model_is_picked()
+    {
+        // Nothing picked from the model list and nothing typed into the id box:
+        // the state a cleared form is in.
+        var session = new Session();
+        session.Engine.ModelId = "";
+        var vm = new Step2EngineViewModel(session, new FakeSidecar());
+
+        Assert.Null(vm.SelectedModel);
+        Assert.Equal("", vm.ManualModelId);
+        Assert.Equal("Not chosen yet — pick a model on step 1 or here.", vm.ModelSummary);
+
+        // A hand-typed id is reported exactly as typed: it is the id the sidecar
+        // will be asked for, so the summary cannot paraphrase it.
+        vm.ManualModelId = "org/hand-picked-vlm";
+        Assert.Equal("org/hand-picked-vlm", vm.ModelSummary);
+    }
+
+    /// <summary>
+    /// The scoring readout is where a run's thresholds are visible before it
+    /// starts, so each mode has to name itself and its candidate list: a
+    /// "probability" run that read like the model's own answer would be the
+    /// wrong promise to make on the settings surface.
+    /// </summary>
+    [Fact]
+    public void Scoring_summary_names_each_probability_mode_and_its_candidates()
+    {
+        var half = 0.5.ToString("0.00");
+        var vm = new Step2EngineViewModel(new Session(), new FakeSidecar());
+
+        vm.ProbabilityModeIndex = 0;   // llm
+        Assert.Equal("LLM only (the model's own answer)", vm.ProbabilitySummary);
+
+        vm.ProbabilityModeIndex = 1;   // probability only
+        Assert.Equal($"Probability only (candidates at {half})", vm.ProbabilitySummary);
+
+        vm.ProbabilityCandidates = "tree, forest";
+        Assert.Equal($"Probability only (candidates at {half}: tree, forest)", vm.ProbabilitySummary);
+
+        vm.ProbabilityModeIndex = 2;   // both
+        Assert.Equal($"LLM + probability (candidates at {half}: tree, forest)", vm.ProbabilitySummary);
+    }
+
     private sealed class ModelOperationSidecar : FakeSidecar
     {
         public Func<CancellationToken, Task<ModelInfo[]>>? OnListModels { get; init; }

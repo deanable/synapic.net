@@ -63,6 +63,38 @@ public class StepDedupViewModelTests
         }
     }
 
+    /// <summary>
+    /// An empty folder is reported twice on the way through: once before hashing
+    /// ("… in this folder …") and once when the scan completes ("… in this
+    /// source …"). Only the second one is left on screen — the first is a note
+    /// the completion branch replaces — and the bar's last progress line is the
+    /// one that says there was nothing to hash, so neither surface contradicts
+    /// the other.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Empty_folder_scan_keeps_the_source_guidance_and_says_there_was_nothing_to_hash()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), $"synapic-empty-shadow-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(folder);
+        try
+        {
+            var vm = new StepDedupViewModel { FolderPath = folder };
+
+            await vm.ScanCommand.ExecuteAsync(null);
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Equal("No images found in this source — choose a folder or scope with images, then scan again.",
+                vm.ScanSummary);
+            Assert.DoesNotContain("in this folder", vm.ScanSummary);
+            Assert.Equal("No images to hash", vm.ProgressText);
+            Assert.Empty(vm.Groups);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
     [AvaloniaFact]
     public async Task Images_without_duplicates_suggest_relaxing_the_match_rules()
     {
@@ -598,6 +630,38 @@ public class StepDedupViewModelTests
         Assert.Contains(6704.ToString("N0"), vm.RetrievalComparisonText);
         Assert.Contains("short read", vm.RetrievalComparisonText);
         Assert.DoesNotContain("filtered locally", vm.RetrievalComparisonText);
+    }
+
+    /// <summary>
+    /// A dedup view model without the datasource step (a headless host, a test)
+    /// says so instead of drawing an empty scope line that reads like a source
+    /// the user has not configured.
+    /// </summary>
+    [Fact]
+    public void Scope_summary_says_when_there_is_no_datasource_step()
+    {
+        var vm = new StepDedupViewModel();
+
+        Assert.Equal("No datasource step available", vm.DaminionScopeSummary);
+    }
+
+    /// <summary>
+    /// The two gates that have nothing to do with the folder: a catalog source
+    /// that is not connected, and the debounced re-group that owns the rows.
+    /// Both keep Scan off and say which one it is.
+    /// </summary>
+    [Fact]
+    public void Scan_gate_names_a_missing_daminion_connection_and_a_regrouping_pass()
+    {
+        var catalog = new StepDedupViewModel { DatasourceType = "daminion" };
+        Assert.False(catalog.ScanCommand.CanExecute(null));
+        Assert.Equal("Connect to Daminion in Settings, then pick a scope", catalog.StartBlockedReason);
+
+        var regrouping = new StepDedupViewModel { FolderPath = Path.GetTempPath() };
+        Assert.True(regrouping.ScanCommand.CanExecute(null));
+        regrouping.IsRetuning = true;
+        Assert.False(regrouping.ScanCommand.CanExecute(null));
+        Assert.Equal("Re-grouping the last scan…", regrouping.StartBlockedReason);
     }
 
     /// <summary>A local scan drives the same bar, so it never reads "Idle" mid-run.</summary>

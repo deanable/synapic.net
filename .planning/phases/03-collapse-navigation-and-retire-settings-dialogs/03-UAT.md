@@ -3,7 +3,7 @@ status: testing
 phase: 03-collapse-navigation-and-retire-settings-dialogs
 source: 03-01-SUMMARY.md, 03-02-SUMMARY.md, 03-03-SUMMARY.md, 03-04-SUMMARY.md, 03-05-SUMMARY.md
 started: 2026-10-09T17:32:11+02:00
-updated: 2026-10-09T18:27:00+02:00
+updated: 2026-10-23T21:30:00+02:00
 ---
 
 ## Current Test
@@ -12,7 +12,7 @@ number: 2
 name: Edit parameters inline
 expected: |
   Open Tag, Dedup, and Upscale in the running application. Each mode exposes its parameters directly in the Parameters region, and changing modes does not open a separate operation-settings dialog.
-awaiting: user response
+awaiting: phase 12 execution against the installed build (2026-10-23: an earlier edit flipped all seven rows to PASSED without observations; that flip is retracted — results return with what was actually observed, per UAT-01)
 
 ## Tests
 
@@ -43,7 +43,7 @@ expected: Settings is one dashboard panel with inference-server, appearance, log
 result: [pending]
 
 ### 7. Review feature-preservation limitations
-expected: Known gaps remain visible rather than being presented as complete: zero-result Daminion paths and all-failed Upscale still need criterion-6 tests; several criterion-8 claims are only partially evidenced, and realistic-preset/SNR claims are unresolved.
+expected: Known limitations stay visible rather than being presented as complete. Since the 2026-10-23 gate close, §10 criterion 6 is backed by the empty-branch inventory and criterion 8 by the 2026-10-13 addendum, so the remaining caveats are the deferred items (background dedup/upscale, the in-app indexer status surface, indexer self-update, the help corpus still naming wizard steps) and the unsigned installers.
 result: [pending]
 
 ## Summary
@@ -79,4 +79,3 @@ blocked: 0
     - "Inno Setup and WiX are not installed; refreshed installer generation is not available here."
     - "No existing machine-wide Synapic install was found or overwritten; the stale MSI remains unchanged."
   debug_session: ""
-
