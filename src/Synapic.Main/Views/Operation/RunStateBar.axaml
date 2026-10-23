@@ -46,6 +46,13 @@
                 IsVisible="{Binding ShowsStop}" Margin="0,0,8,8" />
       </WrapPanel>
 
+      <!-- Why the start button is grey, in the operation's own words: every
+           prerequisite the gate checks (source, model, tag fields, server) is
+           named here while it is missing, so a disabled action is never a dead
+           end. Hidden the moment the gate opens, and while a run is in flight. -->
+      <TextBlock Classes="hint" Text="{Binding StartBlockedReason}"
+                 IsVisible="{Binding HasStartBlockedReason}" TextWrapping="Wrap" />
+
       <!-- The run log: hidden while nothing has been logged (an idle run kept
            an always-present 180 px grey strip under the action buttons doing
            nothing) and sized to its content once lines exist, capped at the

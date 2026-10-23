@@ -5,11 +5,12 @@ using Avalonia.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using Synapic.Main.Models;
 using Synapic.Main.Services;
-using Synapic.Main.Services.Daminion;
-using Synapic.Main.Services.Processing;
+using Synapic.Core.Services.Daminion;
+using Synapic.Core.Services.Processing;
 using Synapic.Main.ViewModels;
 using Synapic.Main.Views;
 
+using Synapic.Core.Services;
 namespace Synapic.Main;
 
 public partial class App : Application
@@ -158,7 +159,9 @@ public partial class App : Application
         // fingerprints on disk, so a restart reopens its review list and its
         // threshold slider without hashing anything again.
         services.AddSingleton(new DedupFingerprintCache());
-        services.AddSingleton<IInferenceSidecar, InferenceSidecarService>();
+        // The sidecar host lives in Synapic.Core and no longer reads Session:
+        // the desktop adapts its Step 2 device choice through this provider.
+        services.AddSynapicEngine();
         services.AddSingleton<ISidecarDownloadService, SidecarDownloadService>();
         // Factory rather than the type: HelpService's constructor arguments are
         // all optional (a container would have to guess at them).

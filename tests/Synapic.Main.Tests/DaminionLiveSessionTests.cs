@@ -1,7 +1,7 @@
 using System.Numerics;
 using Synapic.Main.Services;
-using Synapic.Main.Services.Daminion;
-using Synapic.Main.Services.Processing;
+using Synapic.Core.Services.Daminion;
+using Synapic.Core.Services.Processing;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -24,7 +24,8 @@ public class DaminionLiveSessionTests
 {
     private readonly ITestOutputHelper _output;
 
-    [Fact]
+    [Trait("Category", "Live")]
+    [SkippableFact]
     public async Task Similar_item_ids_hashCode_is_compared_with_original_pixel_phash()
     {
         // This deliberately named test is run explicitly, never as part of the
@@ -34,12 +35,22 @@ public class DaminionLiveSessionTests
         var username = GetLiveSetting("SYNAPIC_TEST_DAMINION_USERNAME", saved => saved.Username);
         var password = GetLiveSetting("SYNAPIC_TEST_DAMINION_PASSWORD", saved => saved.Password);
 
-        Assert.False(string.IsNullOrWhiteSpace(url), "No saved Daminion server URL is available.");
-        Assert.False(string.IsNullOrWhiteSpace(username), "No saved Daminion username is available.");
-        Assert.False(string.IsNullOrEmpty(password), "No saved Daminion password is available.");
+        // Opt-in by definition: report a skip, not a pass or a failure, when the
+        // probe has nothing configured or nowhere to connect.
+        Skip.If(string.IsNullOrWhiteSpace(url), "No saved Daminion server URL is available.");
+        Skip.If(string.IsNullOrWhiteSpace(username), "No saved Daminion username is available.");
+        Skip.If(string.IsNullOrEmpty(password), "No saved Daminion password is available.");
 
         var client = new DaminionApiClient(url!, username!, password!);
-        await client.AuthenticateAsync();
+        try
+        {
+            await client.AuthenticateAsync();
+        }
+        catch (DaminionNetworkException e)
+        {
+            Skip.If(true, $"The saved Daminion server is unreachable: {e.Message}");
+            return;
+        }
         try
         {
             // The user identified these two different-aspect-ratio images as
@@ -48,7 +59,12 @@ public class DaminionLiveSessionTests
             const int firstId = 86068;
             const int secondId = 86233;
             var items = await client.GetItemsByIdsAsync(new[] { firstId, secondId });
-            Assert.Equal(2, items.Length);
+            // The probe compares two specific images the user identified. A
+            // catalog without them (another database, a cleaned-up catalog, a
+            // different account) cannot answer the question — skip rather than
+            // fail a run over an environment that was never configured for it.
+            Skip.If(items.Length != 2,
+                $"The live catalog does not contain the fixture items {firstId} and {secondId} (returned {items.Length}).");
             var byId = items.ToDictionary(item => item.Id);
             Assert.True(byId.TryGetValue(firstId, out var first), $"Daminion did not return item {firstId}.");
             Assert.True(byId.TryGetValue(secondId, out var second), $"Daminion did not return item {secondId}.");
@@ -106,22 +122,30 @@ public class DaminionLiveSessionTests
 
     public DaminionLiveSessionTests(ITestOutputHelper output) => _output = output;
 
-    [Fact]
+    [Trait("Category", "Live")]
+    [SkippableFact]
     public async Task Login_establishes_replayed_cookie_session()
     {
         var baseUrl = Environment.GetEnvironmentVariable("SYNAPIC_TEST_DAMINION_URL");
         var username = Environment.GetEnvironmentVariable("SYNAPIC_TEST_DAMINION_USERNAME");
         var password = Environment.GetEnvironmentVariable("SYNAPIC_TEST_DAMINION_PASSWORD");
-        if (string.IsNullOrEmpty(baseUrl) || string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
-        {
-            // Not configured — the live session flow is opt-in only.
-            return;
-        }
+        // Not configured — the live session flow is opt-in only, and a skip says
+        // so honestly (the previous early return was reported as a pass).
+        Skip.If(string.IsNullOrEmpty(baseUrl) || string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password),
+            "Live Daminion credentials are not configured (SYNAPIC_TEST_DAMINION_URL/_USERNAME/_PASSWORD).");
 
-        var client = new DaminionApiClient(baseUrl, username, password);
+        var client = new DaminionApiClient(baseUrl!, username!, password!);
 
         // 1. Login: query-string credentials; server responds 200 + Set-Cookie.
-        await client.AuthenticateAsync();
+        try
+        {
+            await client.AuthenticateAsync();
+        }
+        catch (DaminionNetworkException e)
+        {
+            Skip.If(true, $"The configured Daminion server is unreachable: {e.Message}");
+            return;
+        }
         Assert.True(client.IsAuthenticated);
 
         // 2. Session replay: an authenticated read must succeed on the SAME

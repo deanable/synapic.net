@@ -24,16 +24,36 @@ Two-process design per the migration spec (README §2):
 
 ## Components
 
+### Windows indexer service (`src/Synapic.Indexer`)
+An unattended host for the same engine: `net10.0-windows`, installed by `sc.exe` (`--install`), reading its
+configuration from `HKLM\SOFTWARE\Synapic\Indexer` overlaid by `%ProgramData%\Synapic\indexer-config.json`.
+It logs to one rolling file plus the Application Event Log, owns the sidecar's lifetime (launch, `/health`
+readiness, idle stop, crash-leftover cleanup) and stops inside a 10-second budget. Detection feeds a SQLite
+queue (`state\indexer.db`, WAL): an interval scan of the configured roots, a debounced `FileSystemWatcher` with
+an exclusive-read probe, and a Daminion untagged query through the same `WorkflowRunner.FetchItemsAsync` the
+desktop uses. Every detector enqueues through one `IWorkIntake`, keyed by canonical path or catalog id, so
+re-detection is a no-op; `--status` reads the queue without starting the host, and `InFlight` rows left by a
+crash return to `Pending` before the first scan. Processing those rows is phase 7.
+
+### Engine core (`src/Synapic.Core`)
+The headless half of the product: a `net10.0` library that references `Synapic.Shared` only. It holds no UI
+framework reference, so a Windows service can run the same code the desktop does. The desktop app and any
+future host consume it; nothing in it reaches back into the app.
+  - `InferenceSidecarService` — sidecar process lifecycle (see below), launched for the device an
+    `ISidecarDeviceProvider` reports
+  - `InferenceApiClient` — typed HTTP client for the sidecar API
+  - `DaminionApiClient` (Refit) — Daminion REST: fetch, thumbnails, metadata write
+  - `ProcessingOrchestrator` / `WorkflowRunner` — batch kernel: fetch → /tag → write, bounded parallelism,
+    pause/resume, per-item status
+  - `MetadataWriterService` — EXIF/IPTC/XMP writes (JPEG APP1 XMP, PNG iTXt, TIFF sidecar)
+  - `SynapicLog` (Serilog facade) — file sink plus a host-supplied sink configuration
+
 ### Avalonia frontend (`src/Synapic.Main`)
 - **ViewModels** (CommunityToolkit.Mvvm): `MainWindowViewModel` (shell, server indicator, Start/Stop Server), `WizardViewModel` (step navigation + validation gates), per-step VMs under `ViewModels/Steps/`.
 - **Services**:
-  - `InferenceSidecarService` — sidecar process lifecycle (see below)
-  - `InferenceApiClient` — typed HTTP client for the sidecar API
-  - `DaminionApiClient` (Refit) — Daminion REST: fetch, thumbnails, metadata write
-  - `ProcessingOrchestrator` — batch pipeline: fetch → /tag → write, bounded parallelism
-  - `MetadataWriterService` — EXIF/IPTC/XMP writes (JPEG APP1 XMP, PNG iTXt, TIFF sidecar)
-  - `DedupService` — pHash/dHash/aHash via NetVips over EXIF-normalised, alpha-flattened pixels, Union-Find grouping; the one perceptual-hash scan behind both the Deduplication and the Similar images operations (`ImageMatchProfile`, starting at 0.90 vs 0.85 under the default pHash; each fingerprint carries its own default threshold)
-  - `ConfigService` / `SynapicLog` (Serilog) / `UpdateCheckService`
+  - `DedupService` — pHash/dHash/aHash via NetVips over EXIF-normalised, alpha-flattened pixels, Union-Find grouping; the one perceptual-hash scan behind both the Deduplication and the Similar images operations (`ImageMatchProfile`, starting at 0.90 vs 0.84 under the default pHash; each fingerprint carries its own default threshold, and the allowed bit distance is floored)
+  - `ConfigService` / `UpdateCheckService`; `SessionSidecarDeviceProvider` supplies the Core sidecar the device
+    chosen in Step 2 (`EngineServiceRegistration` wires the engine services in one place)
   - `CrashReporterService` — local-only crash capture: global exception handlers write per-crash reports (exception + session-log snapshot) to `logs/crashes/`; non-terminal crashes also show a dialog with a copy-diagnostics button. Nothing is sent over the network.
   - `TelemetryService` — opt-in (`ui.telemetryEnabled`, default false) local usage counters in `logs/synapic-usage.json`: launches, batches, items, model usage, dedup runs. No network, no paths, no identifiers.
 

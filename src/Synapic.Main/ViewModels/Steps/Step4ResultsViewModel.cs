@@ -4,9 +4,10 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Synapic.Main.Models;
 using Synapic.Main.Services;
-using Synapic.Main.Services.Processing;
+using Synapic.Core.Services.Processing;
 using Synapic.Shared.Contracts;
 
+using Synapic.Core.Services;
 namespace Synapic.Main.ViewModels.Steps;
 
 /// <summary>
@@ -89,6 +90,13 @@ public partial class Step4ResultsViewModel : ViewModelBase
         VerifyDaminionCommand.NotifyCanExecuteChanged();
     }
 
+    /// <summary>
+    /// True while a retry or a verification is writing to the source. The shell
+    /// counts it as a run, so navigation stays locked for it exactly as it does
+    /// for a batch (review R04: report work was outside the activity lock).
+    /// </summary>
+    public bool HasActiveWork => IsBusy;
+
     partial void OnIsRetryingChanged(bool value) => CancelRetryCommand.NotifyCanExecuteChanged();
 
     partial void OnIsVerifyingChanged(bool value) => CancelVerificationCommand.NotifyCanExecuteChanged();
@@ -99,11 +107,15 @@ public partial class Step4ResultsViewModel : ViewModelBase
         Results.Clear();
         foreach (var r in _session.Results) Results.Add(r);
         UpdateSummary("No results yet — run tagging to create a report.", reset: true);
+        ExportCsvCommand.NotifyCanExecuteChanged();
         RetryFailedCommand.NotifyCanExecuteChanged();
         VerifyDaminionCommand.NotifyCanExecuteChanged();
     }
 
-    [RelayCommand]
+    /// <summary>Export is a report of results; with none there is nothing to write.</summary>
+    private bool CanExportCsv() => Results.Count > 0;
+
+    [RelayCommand(CanExecute = nameof(CanExportCsv))]
     private async Task ExportCsvAsync()
     {
         if (Results.Count == 0) return;

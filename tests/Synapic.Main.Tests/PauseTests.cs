@@ -1,9 +1,10 @@
 using Synapic.Main.Models;
 using Synapic.Main.Services;
-using Synapic.Main.Services.Processing;
+using Synapic.Core.Services.Processing;
 using Synapic.Shared.Contracts;
 using Xunit;
 
+using Synapic.Core.Services;
 namespace Synapic.Main.Tests;
 
 /// <summary>Sidecar fake whose TagAsync blocks until the test releases it — lets pause tests observe in-flight vs queued items deterministically.</summary>

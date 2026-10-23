@@ -9,6 +9,7 @@ using Synapic.Main.Views.Operation;
 using Synapic.Main.Views.Wizard;
 using Xunit;
 
+using Synapic.Core.Services;
 namespace Synapic.Main.Tests;
 
 /// <summary>

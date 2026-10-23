@@ -1,7 +1,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Synapic.Main.Services.Processing;
+using Synapic.Core.Services.Processing;
 
 namespace Synapic.Main.ViewModels.Operations;
 
@@ -107,6 +107,34 @@ public abstract partial class RunStateViewModel : ViewModelBase
     public bool ShowsStop => StopAction is not null && IsRunning;
 
     /// <summary>
+    /// Why this mode's primary action cannot run right now, in the user's words,
+    /// or null when it can. It is the same condition <see cref="CanStart"/> checks
+    /// — each mode answers both from this one property — so the bar's hint and the
+    /// button's gate cannot disagree. A mode returns null while a run is in flight,
+    /// because the bar hides the start button then; the hint is about prerequisites.
+    /// </summary>
+    public virtual string? StartBlockedReason => null;
+
+    /// <summary>True when the start button is disabled and the bar should say why.</summary>
+    public bool HasStartBlockedReason => StartBlockedReason is not null;
+
+    /// <summary>
+    /// Re-evaluate the start gate and its hint together. Every input a mode's
+    /// <see cref="CanStart"/> reads (the source, a setting, the tag fields, the
+    /// server) calls this instead of <c>StartCommand.NotifyCanExecuteChanged</c>,
+    /// so a disabled action button always carries the reason it is disabled.
+    /// Internal: the shell calls it for an operation whose gate reads settings it
+    /// does not own (tagging's fields and model), so this stays a coordination
+    /// detail of this assembly rather than part of the public surface.
+    /// </summary>
+    internal void NotifyStartGateChanged()
+    {
+        StartCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(StartBlockedReason));
+        OnPropertyChanged(nameof(HasStartBlockedReason));
+    }
+
+    /// <summary>
     /// The mode's action row follows the run state, so the bar re-reads it on
     /// every transition — a hidden Pause that stayed enabled would be a button
     /// that does nothing, and a Stop left behind after a run ends is worse.
@@ -116,6 +144,8 @@ public abstract partial class RunStateViewModel : ViewModelBase
         OnPropertyChanged(nameof(ShowsPause));
         OnPropertyChanged(nameof(ShowsResume));
         OnPropertyChanged(nameof(ShowsStop));
+        OnPropertyChanged(nameof(StartBlockedReason));
+        OnPropertyChanged(nameof(HasStartBlockedReason));
     }
 
     /// <summary>

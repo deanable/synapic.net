@@ -42,6 +42,16 @@ public partial class OperationLayout : UserControl
     public static readonly StyledProperty<object?> ReportProperty =
         AvaloniaProperty.Register<OperationLayout, object?>(nameof(Report));
 
+    /// <summary>
+    /// Whether the scope controls inside the source summary accept edits. The
+    /// host clears it while any operation is running: the in-flight run already
+    /// snapshotted its selection, so letting the screen move the source mid-pass
+    /// would describe a source the run is not using (review R04's source-change
+    /// half).
+    /// </summary>
+    public static readonly StyledProperty<bool> IsSourceEditableProperty =
+        AvaloniaProperty.Register<OperationLayout, bool>(nameof(IsSourceEditable), defaultValue: true);
+
     public OperationLayout()
     {
         InitializeComponent();
@@ -63,5 +73,12 @@ public partial class OperationLayout : UserControl
     {
         get => GetValue(ReportProperty);
         set => SetValue(ReportProperty, value);
+    }
+
+    /// <summary>See <see cref="IsSourceEditableProperty"/>.</summary>
+    public bool IsSourceEditable
+    {
+        get => GetValue(IsSourceEditableProperty);
+        set => SetValue(IsSourceEditableProperty, value);
     }
 }

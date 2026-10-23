@@ -4,7 +4,8 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Synapic.Main.Services.Processing;
+using Synapic.Core.Services;
+namespace Synapic.Core.Services.Processing;
 
 /// <summary>One scanned item as stored in the fingerprint cache: enough to
 /// rebuild its review row without touching the file or the catalog.</summary>

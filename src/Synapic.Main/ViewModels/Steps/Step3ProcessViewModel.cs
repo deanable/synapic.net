@@ -1,10 +1,11 @@
 using CommunityToolkit.Mvvm.Input;
 using Synapic.Main.Models;
 using Synapic.Main.Services;
-using Synapic.Main.Services.Processing;
+using Synapic.Core.Services.Processing;
 using Synapic.Main.ViewModels.Operations;
 using Synapic.Shared.Contracts;
 
+using Synapic.Core.Services;
 namespace Synapic.Main.ViewModels.Steps;
 
 /// <summary>
@@ -27,6 +28,13 @@ public partial class Step3ProcessViewModel : RunStateViewModel
         _sidecar = sidecar;
         _step1 = step1;
         _orchestrator = new ProcessingOrchestrator(sidecar, maxDegreeOfParallelism: 4);
+
+        // The start gate reads the source and the server, both owned elsewhere:
+        // pick a folder (or connect) and start the server, and Start has to
+        // re-evaluate — otherwise it stays grey from launch until something else
+        // happens to notify it.
+        _step1.PropertyChanged += (_, _) => NotifyStartGateChanged();
+        _sidecar.StatusChanged += (_, _) => NotifyStartGateChanged();
     }
 
     /// <summary>The sidecar instance the orchestrator uses (Step 4 retries need it).</summary>
@@ -59,8 +67,32 @@ public partial class Step3ProcessViewModel : RunStateViewModel
         ResumeCommand.NotifyCanExecuteChanged();
     }
 
-    // Start stays disabled until at least one tag field is selected (Step 2).
-    protected override bool CanStart() => !IsRunning && _session.Engine.HasSelectedTagField;
+    /// <summary>
+    /// Start requires every setting the batch depends on: a usable source, a
+    /// model, at least one tag field and a running inference server. The reason
+    /// and the gate are one property, so the disabled button says which one is
+    /// missing instead of leaving the user to guess.
+    /// </summary>
+    public override string? StartBlockedReason
+    {
+        get
+        {
+            if (IsRunning) return null;   // the bar hides Start while a batch runs
+            if (!_step1.HasUsableSource)
+                return _step1.IsDaminion
+                    ? "Connect to the Daminion server in Settings, then pick a scope"
+                    : "Choose an existing folder in Settings";
+            if (string.IsNullOrWhiteSpace(_session.Engine.ModelId))
+                return "Choose a model in the tagging settings";
+            if (!_session.Engine.HasSelectedTagField)
+                return "Select at least one tag field in the tagging settings";
+            if (!_sidecar.IsRunning)
+                return "Start the inference server in Settings";
+            return null;
+        }
+    }
+
+    protected override bool CanStart() => !IsRunning && StartBlockedReason is null;
 
     protected override async Task StartCoreAsync(CancellationToken ct)
     {

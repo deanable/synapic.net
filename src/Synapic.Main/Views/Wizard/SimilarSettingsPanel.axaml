@@ -33,7 +33,7 @@
         </WrapPanel>
 
         <TextBlock Classes="hint"
-                   Text="Lower is looser: 0.85 groups re-encodes, crops and light edits, 0.90 and above narrows toward exact copies. Similar pairs chain — A-B and B-C group all three even when A and C are further apart — so a low threshold can build large groups." />
+                   Text="Lower is looser: 0.84 groups re-encodes, crops and light edits, 0.90 and above narrows toward exact copies. Similar pairs chain — A-B and B-C group all three even when A and C are further apart — so a low threshold can build large groups." />
 
         <!-- No server-hash rule here: the catalog's content hash answers "is this
              the same file", so a similarity search hashes pixels instead. The

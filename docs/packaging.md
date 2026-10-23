@@ -10,7 +10,9 @@ self-contained; **Windows is framework-dependent** to keep the installer small
 ```
 artifacts/<rid>/
 ├── Synapic(.exe)            # Avalonia publish (framework-dependent on Windows)
-├── synapic-inference(.exe)  # PyInstaller sidecar
+├── Synapic.Indexer(.exe)    # background indexer service, same folder as the app
+├── Synapic.Core.dll         # headless engine shared by both hosts
+├── synapic-inference(.exe)  # PyInstaller sidecar (one copy, used by both)
 ├── help/*.html              # user help topics, non-Windows RIDs (from docs/help)
 │                           # Windows: Synapic.chm is inside Synapic.dll
 ├── *.dll                    # runtime deps
@@ -26,7 +28,7 @@ build/build-sidecar.ps1|.sh <rid>    # PyInstaller → synapic-inference(.exe) +
 build/install-html-help-workshop.ps1 # Windows only: hhc.exe, from build/vendor (hash-checked)
 docs/help/build-chm.ps1              # Windows only: docs/help → Synapic.chm + SHA-256 manifest
 dotnet publish src/Synapic.Main -c Release -r <rid> --self-contained
-build/package-windows.ps1            # Inno Setup 6 → Synapic-Setup-x64.exe
+build/package-windows.ps1            # publishes the indexer into the payload, then Inno Setup 6 → Synapic-Setup-x64.exe
 build/package-windows-msi.ps1        # WiX → Synapic-win-x64.msi + Synapic-Setup-win-x64-msi.exe
 build/wix/Synapic.Installer.wixproj  # that MSI as a solution project (built on its own)
 build/package-linux.sh               # linuxdeploy → Synapic-x86_64.AppImage
@@ -76,10 +78,47 @@ win-x64 publish:
 | Bundle | `build/wix/Synapic.Bundle.wxs` | `build/package-windows-msi.ps1` | `artifacts/msi/Synapic-Setup-win-x64-msi.exe` |
 
 `package-windows.ps1` is the path CI runs: it takes the win-x64 publish in
-`artifacts/<rid>`, runs the AppId guard, stages the .NET 10 desktop runtime next
-to the payload and compiles the `.iss`. It deliberately does not publish - the
-publish is a separate step in CI - so `artifacts/<rid>` has to be a real publish
-before either packaging script runs.
+`artifacts/<rid>`, runs the AppId guard, **publishes `src/Synapic.Indexer` into
+that same folder**, stages the .NET 10 desktop runtime and compiles the `.iss`.
+The app publish itself remains a separate step in CI; the indexer is published by
+the script so every installer built from a payload contains it.
+
+### The background indexer in the payload
+
+The indexer is a second host over the same `Synapic.Core` engine. It ships in the
+same `artifacts/<rid>` folder as the app rather than a subfolder because it finds
+`synapic-inference.exe` beside itself, and the installer already harvests the
+whole directory - one 226 MB sidecar serves both programs.
+
+- **Publish order is app, then indexer** (D-11-29). The indexer's publish can
+  refresh shared `Microsoft.Extensions.*`/Serilog assemblies in the payload, and
+  it must not replace the ones the desktop was built against. Both packaging
+  scripts fail by name if `Synapic.Indexer.exe`, `Synapic.Core.dll` or
+  `synapic-inference.exe` is missing, instead of producing an installer without
+  the service.
+- **Inno Setup (the shipping channel)** calls
+  `{app}\Synapic.Indexer.exe --install` from `CurStepChanged(ssPostInstall)`
+  after the payload and the runtime prerequisite, and `--uninstall` from
+  `[UninstallRun]` before files are removed. It is in Pascal Script rather than
+  `[Run]` because `[Run]` cannot read an exit code: a registration or start
+  failure is logged and appended to the finish page instead of being swallowed
+  (T-08-03). `--install` is the same code path an operator runs by hand: it
+  creates the service with auto start under `NT AUTHORITY\LocalService`, sets
+  the recovery actions, creates the `SynapicIndexer` Event Log source, grants
+  the ProgramData ACLs and starts the service. The `.iss` contains no `sc.exe`
+  logic.
+- **The MSI does not register the service** (D-11-31). It ships the same files;
+  WiX `ServiceInstall` cannot express the recovery actions, account and Event
+  Log rules that `--install` owns, and a second implementation would drift from
+  the first. After an MSI install, run once from an elevated prompt:
+  `"C:\Program Files\Synapic\Synapic.Indexer.exe" --install`.
+- **Uninstall keeps `%ProgramData%\Synapic`** (D-11-32). The service and its
+  binaries go; the queue database, logs and configuration stay until someone
+  removes them deliberately. An uninstall must not destroy an index or its log
+  trail.
+
+Operator instructions (install, configuration, the password command, logs,
+troubleshooting) live in [indexer-operations.md](indexer-operations.md).
 
 ### The MSI and the bundle
 

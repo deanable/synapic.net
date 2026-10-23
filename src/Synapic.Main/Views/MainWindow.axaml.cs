@@ -4,6 +4,7 @@ using Avalonia.Interactivity;
 using Synapic.Main.Services;
 using Synapic.Main.ViewModels;
 
+using Synapic.Core.Services;
 namespace Synapic.Main.Views;
 
 public partial class MainWindow : Window

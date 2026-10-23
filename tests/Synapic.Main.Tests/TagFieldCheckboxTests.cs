@@ -161,6 +161,8 @@ public class TagFieldCheckboxTests
     [AvaloniaFact]
     public void StoredSelection_HydratesIntoTheCheckboxesAndTheSession()
     {
+        // Avalonia's fact attribute is sealed and has no runtime skip,
+        // so this one still reports as passed off Windows (see D2).
         if (!OperatingSystem.IsWindows()) return;
 
         var keyPath = $@"Software\Synapic\Tests_TagFields_{Guid.NewGuid():N}";

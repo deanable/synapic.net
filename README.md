@@ -339,6 +339,10 @@ Synapic.Net/
 
 │   ├── packaging.md
 
+│   ├── windows-indexer.md          # Background indexer specification
+
+│   ├── indexer-operations.md       # Background indexer: install, configure, operate, troubleshoot
+
 │   └── migration-checklist.md
 
 │
@@ -1345,7 +1349,7 @@ jobs:
 
 - [x] Build StepDedup UI (duplicate-group cards with per-item keep checkboxes, auto-select: oldest/newest/smallest/largest, bulk actions)
 
-- [x] Similar images — the same perceptual scan under a second profile (a looser 0.85 starting threshold under the default pHash), presented as its own operation: its own sidebar row, Settings tab, help topic and registry values, so widening one search never widens the other
+- [x] Similar images — the same perceptual scan under a second profile (a looser 0.84 starting threshold under the default pHash), presented as its own operation: its own sidebar row, Settings tab, help topic and registry values, so widening one search never widens the other
 
 - [x] Live threshold slider on the results — re-groups the fingerprints the scan retained, with no re-hash, ~22 ms for 10,000 images and ~0.6 s for 50,000 in a release build
 

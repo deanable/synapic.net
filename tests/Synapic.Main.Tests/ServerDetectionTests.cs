@@ -10,6 +10,7 @@ using Synapic.Main.ViewModels;
 using Synapic.Shared.Contracts;
 using Xunit;
 
+using Synapic.Core.Services;
 namespace Synapic.Main.Tests;
 
 /// <summary>

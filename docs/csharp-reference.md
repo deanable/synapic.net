@@ -382,7 +382,7 @@ One class, two operations. The constructor takes an `ImageMatchProfile`
 operation or the **Similar images** one: the scan, the review and the apply are
 the same code, and the profile picks only what has to differ — the starting
 threshold (`DefaultThresholdFor(profile, algorithm)`: `0.90` for duplicates and
-`0.85` for the similarity search under pHash — the other two fingerprints put
+`0.84` for the similarity search under pHash — the other two fingerprints put
 different pictures far closer together and carry their own tighter numbers in
 `AppSettingsRegistryStore.DedupThresholdDefaultFor` / `SimilarThresholdDefaultFor`;
 the store resolves that same default from a *saved* algorithm when no threshold
@@ -487,8 +487,9 @@ After grouping, `LoadThumbsAsync` decodes a preview bitmap per grouped item
 only, never cached) and hands them to the rows; previews are disposed when a
 rescan or an applied action removes their groups. Records
 a dedup telemetry count. `ApplyCommand` acts on the unchecked items:
-Tag/Move/Delete for a local source (Delete gated by the same `ConfirmAction`
-prompt), or — after that modal (null = fail closed) —
+Move/Delete for a local source (Delete gated by the same `ConfirmAction`
+prompt; the local combo's order is not the `DedupAction` enum's, so the mapping is
+explicit), or — after that modal (null = fail closed) —
 `DaminionApiClient.DeleteItemsAsync` for the catalog. Scan and apply are fully
 instrumented for post-mortem debugging: one line per scan with source/scope,
 algorithm and threshold, one per skipped item (download failure, unhashable
@@ -956,9 +957,10 @@ Reads XMP (including TIFF sidecars) plus IPTC/EXIF fallbacks.
   are two independent sets of nine values (`Dedup*` / `Similar*`), which is what
   keeps the two searches' algorithms, thresholds, keep-sets, actions and move
   destinations apart, with starting thresholds that belong to the fingerprint
-  rather than to the profile (`SimilarThresholdDefault` is `0.85` for pHash,
-  `0.91` for dHash and `0.94` for aHash; the duplicate scan's equivalents are
-  `0.90`, `0.97` and `0.99`). `Load()` returns
+  rather than to the profile (`SimilarThresholdDefault` is `0.84` for pHash,
+  `0.90` for dHash and `0.93` for aHash; the duplicate scan's equivalents are
+  `0.90`, `0.96` and `0.98`, chosen so the floored hamming budget keeps its
+  intended bit count). `Load()` returns
   `null` when nothing has been saved yet, `Defaults` is the shipped state the
   load-then-modify writers start from, and a one-time import maps an old
   `%APPDATA%\Synapic\config.json` into the key while it is still empty.

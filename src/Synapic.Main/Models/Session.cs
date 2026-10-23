@@ -1,5 +1,5 @@
-using Synapic.Main.Services.Daminion;
-using Synapic.Main.Services.Processing;
+using Synapic.Core.Services.Daminion;
+using Synapic.Core.Services.Processing;
 
 namespace Synapic.Main.Models;
 

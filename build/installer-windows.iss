@@ -57,7 +57,10 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 ; runtimeconfig.json the apphost treats the app as self-contained and fails
 ; to start). pdbs are dev artifacts; the staged runtime installer is excluded
 ; from the app payload and bundled into {tmp} below when present.
-Source: "{#ArtifactsDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "*.pdb,{#RuntimeExe}"
+; The setup exe lives in the same folder (OutputDir) and is excluded: a rebuild
+; would otherwise embed the previous installer into the new one, and ISCC cannot
+; read the file it is writing.
+Source: "{#ArtifactsDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "*.pdb,{#RuntimeExe},Synapic-Setup-*.exe"
 #ifexist ArtifactsDir + "\" + RuntimeExe
 #define BundleRuntime
 ; Bundled offline prerequisite — extracted to {tmp} and run silently when missing.
@@ -70,7 +73,16 @@ Name: "{group}\{cm:UninstallProgram,{#AppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
 
 [Run]
+; The indexer install is not here: Setup calls it from CurStepChanged so it can
+; read the exit code and say on the finish page whether the service started
+; (T-08-03). [Run] can start a program but cannot report what it returned.
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
+
+[UninstallRun]
+; Inno executes [UninstallRun] before it removes [Files]. --uninstall stops and
+; deletes the service but keeps %ProgramData%\Synapic (database, logs, config),
+; because an uninstall must not destroy an index or its log trail (D-11-32).
+Filename: "{app}\Synapic.Indexer.exe"; Parameters: "--uninstall"; RunOnceId: "RemoveSynapicIndexerService"; Flags: runhidden waituntilterminated
 
 [Code]
 const
@@ -82,6 +94,10 @@ const
 #else
   BundledRuntime = False;
 #endif
+
+var
+  IndexerInstallStarted: Boolean;
+  IndexerInstallExitCode: Integer;
 
 // Host-presence probe (official detection point, matches the in-app check):
 // HKLM\SOFTWARE\dotnet\Setup\InstalledVersions\x64\sharedhost → Version
@@ -147,6 +163,39 @@ begin
   else if ResultCode <> 0 then
     Result := 'The .NET 10 Desktop Runtime installer exited with code ' +
       IntToStr(ResultCode) + '.';
+end;
+
+// D-11-30: the indexer registers and starts itself, through the same code a
+// manual --install runs; the installer never constructs sc.exe arguments.
+// ssPostInstall fires after the payload and the runtime prerequisite are in
+// place and before [Run]; the exit code is kept for the finish page.
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep <> ssPostInstall then Exit;
+
+  WizardForm.StatusLabel.Caption := 'Installing the Synapic background indexer...';
+  IndexerInstallStarted := Exec(ExpandConstant('{app}\Synapic.Indexer.exe'), '--install', '',
+    SW_HIDE, ewWaitUntilTerminated, IndexerInstallExitCode);
+  Log('Synapic.Indexer.exe --install: started=' + IntToStr(Ord(IndexerInstallStarted)) +
+    ', exit code=' + IntToStr(IndexerInstallExitCode));
+end;
+
+// T-08-03: a service that could not be registered or started is reported here,
+// not swallowed. The common first-install case is a start that fails because no
+// configuration exists yet; the indexer's own log names the exact reason.
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if CurPageID <> wpFinished then Exit;
+
+  if not IndexerInstallStarted then
+    WizardForm.FinishedLabel.Caption := WizardForm.FinishedLabel.Caption + #13#10#13#10 +
+      'The Synapic background indexer service could not be registered. ' +
+      'Run Synapic.Indexer.exe --install from an elevated prompt to retry.'
+  else if IndexerInstallExitCode <> 0 then
+    WizardForm.FinishedLabel.Caption := WizardForm.FinishedLabel.Caption + #13#10#13#10 +
+      'The Synapic background indexer is installed but did not start (exit code ' +
+      IntToStr(IndexerInstallExitCode) + '). Write %ProgramData%\Synapic\indexer-config.json, ' +
+      'then run: sc.exe start SynapicIndexer';
 end;
 
 [UninstallDelete]

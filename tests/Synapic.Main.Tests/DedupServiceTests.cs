@@ -1,6 +1,6 @@
 using System.Numerics;
 using Synapic.Main.Services;
-using Synapic.Main.Services.Processing;
+using Synapic.Core.Services.Processing;
 using Xunit;
 
 namespace Synapic.Main.Tests;

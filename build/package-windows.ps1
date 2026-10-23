@@ -9,6 +9,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$repoRoot = Split-Path -Parent $PSScriptRoot
 
 # ISCC anchors relative paths to the script's own directory (not the CWD),
 # so hand it an absolute artifacts path; create the dir if missing.
@@ -18,7 +19,9 @@ $iscc = Get-Command ISCC.exe -ErrorAction SilentlyContinue
 if (-not $iscc) {
     $candidates = @(
         "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
-        "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
+        "$env:ProgramFiles\Inno Setup 6\ISCC.exe",
+        # Per-user install (/CURRENTUSER), which needs no elevation.
+        (Join-Path $env:LOCALAPPDATA "Programs\Inno Setup 6\ISCC.exe")
     )
     foreach ($c in $candidates) {
         if (Test-Path $c) { $iscc = $c; break }
@@ -43,6 +46,25 @@ if (-not (Test-Path $guardPython)) {
 & $guardPython (Join-Path $PSScriptRoot "check-installer-appid.py")
 if ($LASTEXITCODE -ne 0) {
     throw "Refusing to build: build/installer-windows.iss no longer matches the shipped AppId."
+}
+
+# D-11-28: the background indexer publishes into the SAME payload folder as the
+# app, not a subfolder. It finds synapic-inference.exe beside itself, and the
+# installer already harvests the whole directory, so one copy of the 226 MB
+# sidecar serves both. Publishing it here (after the app publish CI performs)
+# keeps the app's shared Microsoft.Extensions/Serilog assemblies authoritative
+# and puts the service in every installer built from this script.
+Write-Host "Publishing the background indexer into $ArtifactsDir..."
+& dotnet publish (Join-Path $repoRoot "src/Synapic.Indexer/Synapic.Indexer.csproj") `
+    -c Release -r $Rid --self-contained false -p:PublishSingleFile=false -o $ArtifactsDir
+if ($LASTEXITCODE -ne 0) { throw "dotnet publish of the indexer failed with exit code $LASTEXITCODE" }
+
+# A payload missing the service would produce an installer that silently omits
+# the feature this release is about, so every required file is checked by name.
+foreach ($required in @("Synapic.Indexer.exe", "Synapic.Core.dll", "synapic-inference.exe")) {
+    if (-not (Test-Path (Join-Path $ArtifactsDir $required))) {
+        throw "$ArtifactsDir\$required is missing - the installer would ship without the background indexer. Check the indexer publish above and build/build-sidecar.ps1 for the sidecar."
+    }
 }
 
 # Stage the .NET 10 Desktop Runtime installer next to the payload so the Inno

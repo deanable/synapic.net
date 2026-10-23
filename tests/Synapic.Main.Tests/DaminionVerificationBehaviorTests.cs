@@ -8,12 +8,13 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Synapic.Main.Models;
 using Synapic.Main.Services;
-using Synapic.Main.Services.Daminion;
-using Synapic.Main.Services.Processing;
+using Synapic.Core.Services.Daminion;
+using Synapic.Core.Services.Processing;
 using Synapic.Main.ViewModels.Steps;
 using Synapic.Main.Views.Wizard;
 using Xunit;
 
+using Synapic.Core.Services;
 namespace Synapic.Main.Tests;
 
 public sealed class DaminionVerificationBehaviorTests

@@ -1,11 +1,11 @@
 # Testing
 
-Four test projects, run from `Synapic.Net.sln` and pytest. The suites are
+Six test projects, run from `Synapic.Net.sln` and pytest. The suites are
 deliberately hermetic: nothing needs the network unless you opt in with
 environment variables, and the image fixtures are generated in temp folders.
 
 ```bash
-# Everything .NET (Avalonia + Shared + Integration)
+# Everything .NET (Core + Indexer + Main + Shared + Integration)
 dotnet test Synapic.Net.sln -c Release
 
 # Sidecar
@@ -20,6 +20,73 @@ python -m pytest tests/Synapic.Inference.Tests -q
 #          --with pillow --with huggingface_hub \
 #          python -m pytest tests/Synapic.Inference.Tests -q
 ```
+
+A test that cannot run on this machine says so instead of passing quietly:
+
+- **`Live`** — the opt-in catalog probes are `[SkippableFact]` and
+  `[Trait("Category", "Live")]`. They skip when `SYNAPIC_TEST_DAMINION_*` (or the
+  saved connection's credentials) are absent, when the server cannot be reached,
+  and when the live catalog does not contain the fixture items the comparison is
+  about. Filter them out for a hermetic run:
+  `dotnet test Synapic.Net.sln -c Release --filter "Category!=Live"`.
+- **Windows-only** — registry tests use the `[WindowsFact]` attribute
+  (`PlatformFacts.cs`), so off Windows they report as skipped with the reason
+  instead of a green that asserted nothing. The handful of `[AvaloniaFact]`
+  tests that touch the registry still return early, because Avalonia's fact
+  attribute is sealed and has no runtime skip.
+- The Python suite needs an interpreter with pytest; the bundled one works:
+  `build/_python/win-x64/python/python.exe -m pytest tests/Synapic.Inference.Tests -q`.
+  `uv build` in `src/Synapic.Inference` builds the sdist and wheel.
+
+---
+
+## `tests/Synapic.Core.Tests` (xUnit, headless)
+
+The engine's own suite: it references `Synapic.Core` and xunit only, with no
+Avalonia package and no desktop test host, so a Core type that grew a UI
+dependency would fail to compile here. A test belongs in this project when it
+needs no view model, no `Session` and no rendered control.
+
+| File | What it pins down |
+|------|-------------------|
+| `MetadataWriterTests` | The XMP write→read round trip field by field, the staged/validated/commit sequence, the read-only and symlink refusals, and TIFF sidecar handling. |
+| `DaminionBaseUrlTests`, `DaminionCatalogGuidTests`, `DaminionCaptureDateTests` | URL joining and normalization, the catalog guid a scan is bound to, and capture-date parsing edge cases. |
+| `DaminionDeleteRequestTests`, `DaminionFlagRequestTests`, `DaminionIndexedTagValuesRequestTests` | The exact Daminion request shapes (fields and envelopes) a wrong name would silently break. |
+| `DaminionLayoutParsingTests`, `DaminionTempDownloadTests` | Layout/tag-value parsing and the version-control temp download lifecycle. |
+| `TagFieldSelectionTests` | Which fields a run writes, over the real kernel with a capturing writer. |
+| `SidecarDeviceProviderTests` | The sidecar host launches for the device an `ISidecarDeviceProvider` reports and defaults to CPU without one — with no `Session` anywhere. |
+
+`TestData/sample.jpg` is this project's own fixture; the writer tests find it by
+walking up from the test output directory.
+
+---
+
+## `tests/Synapic.Indexer.Tests` (xUnit, Windows)
+
+The service host's suite: `net10.0-windows`, no Avalonia, and no real SCM. `sc.exe`
+and `icacls` are injected as function seams, so the command builders and the
+ProgramData grants are asserted as token lists rather than by changing the
+machine. The one real sidecar process (and real model) is the opt-in
+`RealSidecarKillTests`, which skips with its reason unless asked for.
+
+| File | What it pins down |
+|------|-------------------|
+| `IndexerConfigStoreTests` | Registry→JSON precedence value by value, malformed JSON as an error naming the file, unknown keys as warnings, the password save preserving unknown members, DPAPI LocalMachine round trip. |
+| `IndexerConfigValidatorTests` | Every rule with the dotted path it must name, watch paths absolute/present, Daminion connection fields, and all problems reported in one pass. |
+| `IndexerLoggingTests` | One daily `indexer-*.log` (never a second `synapic.log`), the configured level filtering it, and the Event Log guard that neither throws nor creates a source. |
+| `ShutdownBudgetTests` | A real `Host` with the worker stops inside 10 s and logs both the started and stopped lines. |
+| `SidecarSupervisorTests` | Readiness only after `/health` says ready, timeout, missing executable naming the searched paths, stop clears the pid record, restart, the idle rule (including pending work) and the orphan decision. |
+| `ServiceCommandLineTests`, `ProgramDataSetupTests` | Control-mode parsing (unknown flag cannot fall through to service mode, `--status` is its own mode), `sc.exe` token sequences, SID-based ACL grants, and the password command storing ciphertext without printing the secret. |
+| `JobStateMachineTests`, `IndexingQueueRepositoryTests` | All 25 state pairs (9 permitted, 16 forbidden), the enqueue matrix (Pending/InFlight no-op, Completed unchanged vs changed, Failed/Transient unchanged vs changed, mtime-only refresh, case-insensitive keys), due-retry promotion at claim time, `job_events` trails, recovery of InFlight rows, persistence across a reopened repository, activity from the queue, and eight parallel enqueues of one key producing one row. |
+| `LocalFolderScanSourceTests` | A real fixture tree: the five supported non-empty files enqueued once, a second scan with **zero** hash reads (proven by a counting hasher), a touch costing exactly one hash and no enqueue, one changed byte requeueing, nested roots yielding one row each, a missing root counted while the other scans, cancellation leaving no batch, a `FileShare.None` writer skipped, and non-recursive mode. |
+| `DebounceBufferTests`, `FileStabilityProbeTests`, `FolderWatcherTests` | Window extension per key, independent release, `ReArm` attempt counting, case-insensitive keys and 500 concurrent adds against drains; the probe under a held handle, a deleted file and a bad path; and real OS watcher events: one enqueue after the debounce, a writer-held file deferred until the handle closes, an unsupported extension ignored, recursion on and off, an overflow requesting a full scan, and stop releasing every root. |
+| `DaminionWorkSourceTests`, `ScanSchedulerTests`, `StatusCommandTests` | The selection (scope + untagged fields) reaching `FetchItemsAsync`, `daminion|<id>` keys with `srv:` fingerprints, an unreachable server leaving the queue untouched, id-less items skipped, missing/undecryptable passwords and unsupported scopes as typed configuration errors; immediate-then-interval scheduling with a failing source isolated; the queue-backed activity adapter and its 1 s cache; and `--status` printing every state plus the five newest failures, `no queue yet` when absent, and leaving the database mtime and directory contents unchanged — plus `--status --failed`, which lists more rows (up to 50, or `Failures: none`), each with its key, attempt count and a one-line error preview. |
+| `BatchExecutorTests`, `PipelineHarness` | The executor seam: two local images tagged once and `Completed` with the tags on disk, a failed metadata write retried in 60 s, a locked file classified transient rather than corrupt, the observed maximum parallelism equalling `maxConcurrentItems` (measured, not inferred), an empty queue as a no-op, and cancellation returning every claimed row to `Pending` — all over a real temp SQLite queue, real JPEG fixtures and a canned sidecar. |
+| `WriteBackPolicyTests` | `overwriteExistingTags` at the write seam: a fully tagged file completed with no `/tag` call and the `existing tags preserved` event, a partially tagged file filling only the empty selected fields, overwrite writing every selected field while keywords still merge (the pinned limitation), a disabled field never written, and the post-write fingerprint refresh that makes a rescan enqueue nothing. |
+| `JobOutcomeClassifierTests` | Every row of the spec's §8 table in one place: a missing error as transient, lock contention after 60 s, decode/corrupt/`InferenceApiException` as permanent, catalog network/timeout as a five-minute pause (catalog items only), an auth failure as permanent, a killed sidecar's `HttpRequestException` as a restart rather than a catalog pause, a live sidecar's timeout as transient, and the third unknown failure becoming permanent. |
+| `ResilienceTests` | The five §8 scenarios through the executor: a crash between items restarted with the affected row retried (`attempts == 2`), a sidecar that will not restart leaving rows transient with a five-minute due time, a file held open during the write retried after 60 s once released, a corrupt JPEG failed permanently on the first attempt while the batch continues, and an unreachable catalog (a real client on a closed port) pausing the run with every row back in `Pending` and no claim inside the window. |
+| `ParityTests` | TAG-04 over persisted metadata: one fixture image through the desktop's `RunAsync` and the indexer's `BatchExecutor` with the same template produces the same category, description and keyword set, and the same happens with `writeDescription=false`. |
+| `RealSidecarKillTests` | Opt-in (`SYNAPIC_TEST_REAL_KILL=1`): the production `InferenceSidecarService` launches the built bundle, the batch starts, the process is killed during the first in-flight `/tag`, and the supervisor restarts it (new pid) with every row `Completed`, at least one retried and the tags read back from disk. Skips with the reason when the bundle or cached model is absent. |
 
 ---
 
@@ -69,9 +136,9 @@ python -m pytest tests/Synapic.Inference.Tests -q
 | `DedupAlgorithmEquivalenceTests` | The optimised comparison against the definitions it replaced: grouping equals a pairwise union-find sweep for pHash at 0.50/0.85/0.90/0.97/0.99/1.00 and for 32-bit server hashes in hamming mode (group membership, order and per-item scores), a chained A–B–C group stays one group, a set whose fingerprints all share one region is still fully compared (the balanced pigeonhole split), and the shipped pHash equals a full 32×32 DCT reference on structured, gradient, edge, detail, portrait and small images. Plus the parallel local scan producing the same fingerprints and the same ordered groups as a serial one (an original and its copy grouped together), and a featureless image hashing stably with its copies still matching. |
 | `DedupGroupingScaleTests` | Grouping at catalog scale stays inside a time ceiling — 5,000 and 20,000 fingerprints at 0.90, and 20,000 byte-identical copies, the case a pairwise union made quadratic (measured 14.3 s before the bucketed search, 13 ms after). |
 | `DedupFingerprintRestoreTests` | The restart cache: a saved scan round-trips its hashes and row metadata, belongs to one operation and source, ignores a corrupt or other-version file instead of throwing, is deleted per source, and is pruned to the newest eight per operation. Through the view model: a new instance reopens the last scan with no second scan, restores the slider live and retunes from the saved hashes, refuses a scan saved under another algorithm or another folder, takes the slider away when the source moves, drops the file after Apply, and the shipped container resolving the shell hands the registered store to both searches (a saved scan reopens through the real DI wiring). |
-| `SimilarSearchTests` | The Similar images operation as its own thing: the two profiles over one implementation (each with its own key, title and wording), the looser 0.85 starting threshold — 10 of the 64 bits where duplicates allow 6, and the `BuildOptions` the scan actually runs with — the band between the two thresholds (fingerprints 10 bits apart group only under the similarity search, 12 bits apart under neither), transitive chaining (A-B and B-C is one group where the duplicate scan finds nothing), the per-fingerprint defaults behind those numbers (pHash 0.90/0.85, dHash 0.97/0.91, aHash 0.99/0.94 — measured over 220 same-photo and 462 different-photo pairs of real photographs), that an untouched threshold follows the algorithm it is switched to while a tuned one is left alone, and that a store holding a saved algorithm but no threshold falls back to *that* algorithm's default, and the two registry halves: each form restores its own algorithm, threshold, keep-set and move destination while leaving the other's at its defaults (those last two facts return early off Windows, where the store is a no-op). |
+| `SimilarSearchTests` | The Similar images operation as its own thing: the two profiles over one implementation (each with its own key, title and wording), the looser 0.84 starting threshold — 10 of the 64 bits where duplicates allow 6, and the `BuildOptions` the scan actually runs with — the band between the two thresholds (fingerprints 10 bits apart group only under the similarity search, 12 bits apart under neither), transitive chaining (A-B and B-C is one group where the duplicate scan finds nothing), the per-fingerprint defaults behind those numbers (pHash 0.90/0.84, dHash 0.96/0.90, aHash 0.98/0.93 — measured over 220 same-photo and 462 different-photo pairs of real photographs, with the budget floored so each default keeps its bit count), that an untouched threshold follows the algorithm it is switched to while a tuned one is left alone, and that a store holding a saved algorithm but no threshold falls back to *that* algorithm's default, and the two registry halves: each form restores its own algorithm, threshold, keep-set and move destination while leaving the other's at its defaults (those last two facts return early off Windows, where the store is a no-op). |
 | `MetadataWriterTests` | XMP write/read round-trips for JPEG and PNG. |
-| `EndToEndRoundTripTests` | Full path where the environment allows: real sidecar executable and/or a live Daminion (see below). |
+| `EndToEndRoundTripTests` | Full path where the environment allows: real sidecar executable and/or a live Daminion (see below). An absent or stale sidecar bundle is reported as a skip with the reason, not as a pass. |
 | `DaminionBaseUrlTests` | `DaminionApiClient.NormalizeBaseUrl` behaviour. |
 | `DaminionCatalogGuidTests` | `ExtractCatalogGuid` across every observed `GetCatalogGuid` shape (bare string, object key, Daminion 11 envelope, unusable payloads). |
 | `SidecarStalenessTests` | `InferenceSidecarService.DescribeStaleness` — flags an exe older than `src/Synapic.Inference`, ignores non-bundle files, reports "unknown" without a repo. |
@@ -80,12 +147,12 @@ python -m pytest tests/Synapic.Inference.Tests -q
 | `DaminionDeleteRequestTests` | The catalog delete posts to `/api/MediaItems/Remove` with `{ids, delete:false}` (never `ItemData/BatchChange`, which answers success without removing anything) and reports failure unless a follow-up `GetByIds` shows the ids gone. |
 | `DaminionFlagRequestTests` | "Reject in catalog" posts `ItemData/BatchChange` with the Flag tag's guid and the text value `Rejected` (`id:0`, `remove:false`), verifies via a `GetByIds` read-back that accepts the numeric and text flag forms, fails (no request) when the layout has no Flag tag, and no-ops on an empty id set. |
 | `StepDedupRejectActionTests` | The apply card's reject action over a connected stub: it offers delete + reject on a Daminion source, applies the reject without ever prompting (reversible, unlike delete), trims exactly the acted-on rows, drops groups reduced to a single image and keeps the rest, and reports `Rejected N item(s)…`. Plus `RunLogVisibilityTests`: the shared run bar's log-box visibility follows the first and later log lines (the grey strip under the action row is gone while nothing has been logged). |
-| `DaminionSelectionBehaviorTests` | The catalog selection and paging contract used by every workflow, over a loopback stub: saved-search filters, max-items across full and partial pages, process-all walking past a short page, the raw-page cursor for collection/saved-search scopes (a filtered-empty page is not the end), the repeated-page guard, the count and the pages sending one and the same status clause, an unfiltered walk sending no `*` search, a whole-scope walk taking its total from the scope count rather than a page `totalCount` that claims the whole catalog, the whole-scope walk dedup/similar use — 1,500 records requested through `FetchEntireScopeAsync` with `MaxItems = 100` and `AutoPaginate = false`, page progress reported at 500/1,000/1,500, the tagging path still capped, a page-serial server (page 0 answers, then only `index` as a page number does) still yielding the whole 1,500-record scope through the offset-then-serial switch — the one-shot retrieval diagnostics report (count, page total, pages, raw scanned and kept together; an empty scope still reporting zeroed numbers), the `ignoreScopeCount` re-walk mode (page totals steer the bar while the count is still reported), and the dedup screen itself grouping a pair that only exists on the second page, leaving the shared run bar on the hashing phase's final state and holding the last retrieval report — plus the re-walk action re-running the walk, switching the report to page totals, and reverting to the count on the next normal scan. |
+| `DaminionSelectionBehaviorTests` | The catalog selection and paging contract used by every workflow, over a loopback stub: saved-search filters, max-items across full and partial pages, process-all walking past a short page, the raw-page cursor for collection/saved-search scopes (a filtered-empty page is not the end), the repeated-page guard, the count and the pages sending one and the same status clause, an unfiltered walk sending no `*` search, a whole-scope walk taking its total from the scope count rather than a page `totalCount` that claims the whole catalog, the whole-scope walk dedup/similar use — 1,500 records requested through `FetchEntireScopeAsync` with `MaxItems = 100` and `AutoPaginate = false`, page progress reported at 500/1,000/1,500, the tagging path still capped, a page-serial server (page 0 answers, then only `index` as a page number does) still yielding the whole 1,500-record scope through the offset-then-serial switch — the one-shot retrieval diagnostics report (count, page total, pages, raw scanned and kept together; an empty scope still reporting zeroed numbers), the `ignoreScopeCount` re-walk mode (page totals steer the bar while the count is still reported), and the dedup screen itself grouping a pair that only exists on the second page, leaving the shared run bar on the hashing phase's final state and holding the last retrieval report — plus the re-walk action re-running the walk, switching the report to page totals, and reverting to the count on the next normal scan. Also the exact-hash result (slider hidden, "compared exactly" notice shown, a plain Scan still re-grouping instantly) and the scan-generation gate: a catalog whose guid changed under the same URL refuses the apply before any `MediaItems/Remove` is sent. |
 | `DaminionQueryLoggingTests` | The retrieval log a mismatch is diagnosed from: the count request carries the scope and text clauses and its response line carries the raw count/totalCount/data fields, every page request names its index, size, scope, search/queryLine/operators and its response reports raw/eligible/returned and the page's `totalCount`, and a page total that contradicts the scope count is logged as a warning instead of silently moving the progress bar. |
 | `DaminionTempDownloadTests` | The download folder never grows: a truncated download leaves no partial file, a successful one lands in the configured directory and is the caller's to delete, the stale sweep removes only files older than its cutoff (and the cutoff is longer than the HTTP timeout), and a missing directory is a no-op. |
 | `DaminionConnectionStoreTests` | Step 1 registry persistence incl. `ProcessAll` (Windows-only). |
 | `EngineSettingsStoreTests` | Step 2 registry persistence (Windows-only). |
-| `DaminionLiveSessionTests` | Opt-in live Daminion: login, filtered fetch, count, logout. |
+| `DaminionLiveSessionTests` | Opt-in live Daminion (`Category=Live`, `[SkippableFact]`): login, filtered fetch, count, logout — skipped with the reason when credentials are missing or the server is unreachable. |
 | `SynapicLogTests` | Logger initialisation, file sink, UI sink ring buffer, per-run rotation into `logs/archives` and pruning to `MaxArchivedLogs`. |
 | `CrashReporterTests` | Crash capture → report file + session-log snapshot. |
 | `TelemetryServiceTests` | Opt-in counters and the disabled no-op path. |
@@ -103,6 +170,7 @@ otherwise, so CI (ubuntu) stays green:
 |------|----------|
 | `DaminionLiveSessionTests`, `EndToEndRoundTripTests` (Daminion half) | `SYNAPIC_TEST_DAMINION_URL`, `SYNAPIC_TEST_DAMINION_USERNAME`, `SYNAPIC_TEST_DAMINION_PASSWORD` |
 | `EndToEndRoundTripTests` (sidecar half) | a built sidecar executable (`artifacts/<rid>/synapic-inference*` or bundled next to the app) |
+| `RealSidecarKillTests` | `SYNAPIC_TEST_REAL_KILL=1`, a built sidecar bundle and `LFM2.5-VL-1.6B` in `%LOCALAPPDATA%\Synapic\models`; loads the model twice |
 | `DaminionConnectionStoreTests`, `EngineSettingsStoreTests` | Windows (registry) |
 
 ---

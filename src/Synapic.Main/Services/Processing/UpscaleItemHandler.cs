@@ -1,7 +1,8 @@
-using Synapic.Main.Services.Daminion;
+using Synapic.Core.Services.Daminion;
 using Synapic.Shared.Contracts;
 
-namespace Synapic.Main.Services.Processing;
+using Synapic.Core.Services;
+namespace Synapic.Core.Services.Processing;
 
 /// <summary>
 /// The upscaling workflow's per-item operation — a port of the original app's

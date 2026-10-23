@@ -3,7 +3,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using Synapic.Main.Models;
-using Synapic.Main.Services.Daminion;
+using Synapic.Core.Services.Daminion;
 using Synapic.Main.ViewModels.Operations;
 using Synapic.Main.ViewModels.Steps;
 using Xunit;

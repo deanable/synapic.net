@@ -1,0 +1,2064 @@
+using System.Net;
+using System.Text.Json;
+using Refit;
+
+using Synapic.Core.Services;
+namespace Synapic.Core.Services.Daminion;
+
+/// <summary>Typed Daminion errors (ported from daminion_api.py exception hierarchy).</summary>
+public abstract class DaminionException : Exception
+{
+    protected DaminionException(string message, Exception? inner = null) : base(message, inner) { }
+}
+
+public sealed class DaminionAuthenticationException : DaminionException
+{
+    public DaminionAuthenticationException(string message, Exception? inner = null) : base(message, inner) { }
+}
+
+public sealed class DaminionNetworkException : DaminionException
+{
+    public DaminionNetworkException(string message, Exception? inner = null) : base(message, inner) { }
+}
+
+public sealed class DaminionRateLimitException : DaminionException
+{
+    public DaminionRateLimitException(string message, Exception? inner = null) : base(message, inner) { }
+}
+
+/// <summary>
+/// High-level Daminion client — port of ``daminion_client.py``: authentication,
+/// filtered item fetch with pagination contract (one ≤500-item batch per call;
+/// the caller advances the start index), metadata write via BatchChange tag
+/// operations, and thumbnail/preview/original download to temp files.
+/// </summary>
+public sealed class DaminionApiClient
+{
+    public const int PageSize = 500;
+
+    /// <summary>
+    /// Tag id used when "Saved Searches" cannot be resolved by name (observed
+    /// id on Daminion Server 11.0.0.3906; the earlier 39 was stale).
+    /// </summary>
+    public const int SavedSearchesTagFallbackId = 40;
+
+    private readonly string _baseUrl;
+    private readonly string _username;
+    private readonly string _password;
+    private readonly string _tempDirectory;
+    private readonly Dictionary<string, string> _tagGuidMap = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, int> _tagIdMap = new(StringComparer.OrdinalIgnoreCase);
+
+    private readonly IDaminionApi _api;
+    private bool _authenticated;
+    private readonly object _stateLock = new();
+
+    public DaminionApiClient(string baseUrl, string username, string password, double rateLimitSeconds = 0.1,
+        string? tempDirectory = null)
+    {
+        _baseUrl = NormalizeBaseUrl(baseUrl);
+        _username = username;
+        _password = password;
+        _tempDirectory = tempDirectory ?? DefaultTempDirectory;
+
+        // One owned client (the Refit proxy) for this object's lifetime. A
+        // throwaway per call would (a) leak an undisposed SocketsHttpHandler
+        // pool each time and (b) drop the login cookie, which is what replays
+        // the server session onto every call. The long timeout is deliberate:
+        // original-file downloads over slow LAN links otherwise die at
+        // HttpClient's 100 s default ("A task was canceled").
+        var handler = new SocketsHttpHandler
+        {
+            UseCookies = true,
+            CookieContainer = new CookieContainer(),
+            PooledConnectionLifetime = TimeSpan.FromMinutes(10),
+        };
+        _api = RestService.For<IDaminionApi>(new HttpClient(handler)
+        {
+            BaseAddress = new Uri(_baseUrl),
+            Timeout = TimeSpan.FromMinutes(15),
+        }, BuildSettings());
+    }
+
+    /// <summary>
+    /// Accept scheme-less host input ("damserver.local", "192.168.1.10:8080")
+    /// by defaulting to http://, trimming whitespace/trailing slashes, and
+    /// validating the result. Without this, <see cref="Uri"/> throws
+    /// "Invalid URI: The format of the URI could not be determined." at
+    /// connect time for the most natural user input.
+    /// </summary>
+    public static string NormalizeBaseUrl(string baseUrl)
+    {
+        var trimmed = (baseUrl ?? "").Trim().TrimEnd('/');
+        if (trimmed.Length == 0)
+            throw new ArgumentException("Daminion server URL is empty", nameof(baseUrl));
+        if (!trimmed.Contains("://"))
+            trimmed = "http://" + trimmed;
+        if (!Uri.TryCreate(trimmed, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps) ||
+            uri.HostNameType is not (UriHostNameType.Dns or UriHostNameType.IPv4 or UriHostNameType.IPv6))
+            throw new ArgumentException(
+                $"'{baseUrl}' is not a valid Daminion server URL (use e.g. http://damserver.local or damserver.local:8080)",
+                nameof(baseUrl));
+        return trimmed.TrimEnd('/');
+    }
+
+    private static RefitSettings BuildSettings() => new()
+    {
+        ContentSerializer = new SystemTextJsonContentSerializer(new JsonSerializerOptions(JsonSerializerDefaults.Web)),
+    };
+
+    // ── On-disk downloads (streamed, never cached) ────────────────────────
+
+    /// <summary>
+    /// Where originals, previews and thumbnails land while they are being
+    /// fetched: one file at a time, deleted by the caller as soon as it has
+    /// been hashed, read or rendered. This is <em>not</em> a cache — Synapic
+    /// keeps no downloaded image between scans, and previews are decoded
+    /// straight into memory.
+    /// </summary>
+    public static string DefaultTempDirectory => Path.Combine(Path.GetTempPath(), "synapic_daminion");
+
+    /// <summary>This client's download directory (overridable for tests).</summary>
+    public string TempDirectory => _tempDirectory;
+
+    /// <summary>Downloads older than this are considered leftovers of a crash
+    /// and are swept. The HTTP client times out after 15 minutes, so nothing
+    /// still being written can ever be this old — a second app instance's
+    /// in-flight download is safe.</summary>
+    public static readonly TimeSpan StaleDownloadAge = TimeSpan.FromHours(1);
+
+    /// <summary>
+    /// Delete downloads a crash or a power cut left behind. Called at startup
+    /// and before every dedup scan, because a scan is the one flow that pulls
+    /// whole originals (a leak there is megabytes per item, not kilobytes).
+    /// Returns how many files and how many bytes went away, for the log.
+    /// </summary>
+    public static (int Files, long Bytes) CleanupStaleDownloads(
+        TimeSpan? olderThan = null, string? directory = null)
+    {
+        var dir = directory ?? DefaultTempDirectory;
+        if (!Directory.Exists(dir)) return (0, 0);
+
+        var cutoff = DateTime.UtcNow - (olderThan ?? StaleDownloadAge);
+        var files = 0;
+        long bytes = 0;
+        try
+        {
+            foreach (var file in Directory.EnumerateFiles(dir))
+            {
+                try
+                {
+                    var info = new FileInfo(file);
+                    if (info.LastWriteTimeUtc > cutoff) continue; // still in use / fresh
+                    var length = info.Length;
+                    info.Delete();
+                    files++;
+                    bytes += length;
+                }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                {
+                    // Locked by a running scan — leave it for the next sweep.
+                    SynapicLog.Debug(nameof(DaminionApiClient), $"Stale download kept (in use): {file}");
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Warning(nameof(DaminionApiClient), $"Could not sweep '{dir}': {e.Message}");
+        }
+        return (files, bytes);
+    }
+
+    /// <summary>Current occupancy of the download directory — reported after a
+    /// scan so a non-zero value (a leak) is visible in the log.</summary>
+    public static (int Files, long Bytes) TempDirectoryUsage(string? directory = null)
+    {
+        var dir = directory ?? DefaultTempDirectory;
+        if (!Directory.Exists(dir)) return (0, 0);
+        var files = 0;
+        long bytes = 0;
+        try
+        {
+            foreach (var file in Directory.EnumerateFiles(dir))
+            {
+                try { var info = new FileInfo(file); files++; bytes += info.Length; }
+                catch (Exception) { /* racing delete */ }
+            }
+        }
+        catch (Exception) { /* directory vanished mid-sweep */ }
+        return (files, bytes);
+    }
+
+    public bool IsAuthenticated
+    {
+        get { lock (_stateLock) return _authenticated; }
+    }
+
+    public string BaseUrl => _baseUrl;
+
+    /// <summary>Diagnostics: number of tag GUIDs mapped from GetDefaultLayout.</summary>
+    public int MappedTagGuidCount
+    {
+        get { lock (_tagGuidMap) return _tagGuidMap.Count; }
+    }
+
+    // ── Auth ────────────────────────────────────────────────────────────────
+
+    public async Task AuthenticateAsync(CancellationToken ct = default)
+    {
+        var api = GetApi();
+        try
+        {
+            using var resp = await api.Login(_username, _password, ct).ConfigureAwait(false);
+            if (resp.StatusCode == HttpStatusCode.Unauthorized || resp.StatusCode == HttpStatusCode.Forbidden)
+                throw new DaminionAuthenticationException($"Authentication failed for '{_username}'");
+            if (resp.StatusCode == HttpStatusCode.TooManyRequests)
+                throw new DaminionRateLimitException("Rate limited by Daminion server");
+            if (!resp.IsSuccessStatusCode)
+                throw new DaminionNetworkException($"Login failed with HTTP {(int)resp.StatusCode}");
+
+            lock (_stateLock) _authenticated = true;
+
+            await LoadTagSchemaAsync(ct).ConfigureAwait(false);
+            SynapicLog.Info(nameof(DaminionApiClient), $"Successfully authenticated to {_baseUrl}");
+        }
+        catch (DaminionException)
+        {
+            throw;
+        }
+        catch (ApiException e)
+        {
+            throw new DaminionNetworkException($"Login failed: {e.Message}", e);
+        }
+        catch (HttpRequestException e)
+        {
+            throw new DaminionNetworkException($"Cannot reach Daminion server at {_baseUrl}: {e.Message}", e);
+        }
+    }
+
+    /// <summary>The one owned Refit proxy; server-session state lives in its cookie container.</summary>
+    private IDaminionApi GetApi() => _api;
+
+    /// <summary>
+    /// Run one authenticated API call, recovering from an expired server
+    /// session: the cookie expires while a long batch runs, and a 401/403 used
+    /// to fail every remaining item. On one of those statuses, re-authenticate
+    /// once and replay the call against the refreshed session. Other failures
+    /// propagate untouched.
+    /// </summary>
+    private async Task<T> WithSessionRecoveryAsync<T>(Func<IDaminionApi, Task<T>> call, CancellationToken ct)
+    {
+        var api = GetApi();
+        try
+        {
+            var result = await call(api).ConfigureAwait(false);
+            if (result is HttpResponseMessage httpResp &&
+                (int)httpResp.StatusCode is 401 or 403)
+            {
+                httpResp.Dispose();
+                SynapicLog.Warning(nameof(DaminionApiClient),
+                    $"Daminion session expired (HTTP {(int)httpResp.StatusCode}) — re-authenticating and retrying once");
+                await ReAuthenticateAsync(ct).ConfigureAwait(false);
+                return await call(GetApi()).ConfigureAwait(false);
+            }
+            return result;
+        }
+        catch (ApiException e) when ((int)e.StatusCode is 401 or 403)
+        {
+            SynapicLog.Warning(nameof(DaminionApiClient),
+                $"Daminion session expired (HTTP {(int)e.StatusCode}) — re-authenticating and retrying once");
+            await ReAuthenticateAsync(ct).ConfigureAwait(false);
+            return await call(GetApi()).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>Log out + log back in (LoadTagSchemaAsync refresh comes along).</summary>
+    private async Task ReAuthenticateAsync(CancellationToken ct)
+    {
+        lock (_stateLock) _authenticated = false;
+        await AuthenticateAsync(ct).ConfigureAwait(false);
+    }
+
+    private async Task LoadTagSchemaAsync(CancellationToken ct)
+    {
+        try
+        {
+            var layout = await GetApi().GetDefaultLayout(ct).ConfigureAwait(false);
+            lock (_tagGuidMap)
+            {
+                _tagGuidMap.Clear();
+                foreach (var (name, guid) in ExtractLayoutTagPairs(layout))
+                    _tagGuidMap[name] = guid;
+            }
+            SynapicLog.Info(nameof(DaminionApiClient), $"Loaded tag schema: {_tagGuidMap.Count} tags mapped");
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Warning(nameof(DaminionApiClient), $"Failed to load tag schema (metadata writes may degrade): {e.Message}");
+        }
+
+        // Tag *ids* drive the saved-search scope and counts (Settings/GetTags).
+        try
+        {
+            var tags = await GetApi().GetAllTags(ct).ConfigureAwait(false);
+            var entries = UnwrapCollection(tags, "tags", "items", "data");
+            lock (_tagIdMap)
+            {
+                _tagIdMap.Clear();
+                foreach (var element in entries)
+                {
+                    var name = element.TryGetProperty("name", out var n) ? n.GetString() : null;
+                    var id = element.TryGetProperty("id", out var idEl) && idEl.ValueKind == JsonValueKind.Number
+                        ? idEl.GetInt32() : (int?)null;
+                    if (!string.IsNullOrEmpty(name) && id is > 0)
+                        _tagIdMap[name] = id.Value;
+                }
+            }
+            SynapicLog.Info(nameof(DaminionApiClient), $"Loaded tag ids: {_tagIdMap.Count} tags");
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Warning(nameof(DaminionApiClient), $"Failed to load tag ids (saved searches fall back to id {SavedSearchesTagFallbackId}): {e.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Extract (name, guid) pairs from a GetDefaultLayout payload. Server 11.x
+    /// wraps entries in nested "properties" arrays and keys them
+    /// propertyName/propertyGuid; older builds returned a flat list keyed
+    /// name/guid. Walk the structure recursively and accept both conventions.
+    /// </summary>
+    public static IEnumerable<(string Name, string Guid)> ExtractLayoutTagPairs(JsonElement element)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Array:
+                foreach (var child in element.EnumerateArray())
+                    foreach (var pair in ExtractLayoutTagPairs(child))
+                        yield return pair;
+                break;
+            case JsonValueKind.Object:
+            {
+                var name = GetStringProperty(element, "name") ?? GetStringProperty(element, "propertyName");
+                var guid = GetStringProperty(element, "guid") ?? GetStringProperty(element, "propertyGuid");
+                if (!string.IsNullOrEmpty(name) && !string.IsNullOrEmpty(guid))
+                    yield return (name, guid!);
+                foreach (var child in element.EnumerateObject())
+                    if (child.Value.ValueKind is JsonValueKind.Array or JsonValueKind.Object)
+                        foreach (var pair in ExtractLayoutTagPairs(child.Value))
+                            yield return pair;
+                break;
+            }
+        }
+    }
+
+    private static string? GetStringProperty(JsonElement element, string property)
+        => element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
+
+    /// <summary>Resolve a tag's numeric id by name ("saved searches", "flag"…), with a fallback.</summary>
+    /// <remarks>
+    /// Fallback 40 observed on Daminion Server 11.0.0.3906 (damserver.local);
+    /// the previous 39 was stale for that build.
+    /// </remarks>
+    private async Task<int> GetTagIdAsync(string tagName, int fallback, CancellationToken ct = default)
+    {
+        lock (_tagIdMap)
+        {
+            if (_tagIdMap.TryGetValue(tagName, out var id)) return id;
+            if (_tagIdMap.TryGetValue(tagName.ToLowerInvariant(), out id)) return id;
+        }
+        try
+        {
+            var tags = await GetApi().GetAllTags(ct).ConfigureAwait(false);
+            foreach (var element in UnwrapCollection(tags, "tags", "items", "data"))
+            {
+                var name = element.TryGetProperty("name", out var n) ? n.GetString() : null;
+                if (string.IsNullOrEmpty(name) || !name.Equals(tagName, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                if (element.TryGetProperty("id", out var idEl) && idEl.ValueKind == JsonValueKind.Number)
+                {
+                    var id = idEl.GetInt32();
+                    lock (_tagIdMap) _tagIdMap[name] = id;
+                    return id;
+                }
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Warning(nameof(DaminionApiClient), $"Tag id lookup for '{tagName}' failed: {e.Message}");
+        }
+        return tagName.Equals("saved searches", StringComparison.OrdinalIgnoreCase) ? SavedSearchesTagFallbackId : fallback;
+    }
+
+    /// <summary>Unwrap a JSON payload that may be an array or wrapped in one of several container keys.</summary>
+    private static JsonElement[] UnwrapCollection(JsonElement json, params string[] containerKeys)
+    {
+        if (json.ValueKind == JsonValueKind.Array)
+            return json.EnumerateArray().ToArray();
+        if (json.ValueKind != JsonValueKind.Object)
+            return Array.Empty<JsonElement>();
+        foreach (var key in containerKeys)
+        {
+            if (json.TryGetProperty(key, out var inner) && inner.ValueKind == JsonValueKind.Array)
+                return inner.EnumerateArray().ToArray();
+        }
+        return Array.Empty<JsonElement>();
+    }
+
+    private static int? GetInt(JsonElement e, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            if (e.ValueKind != JsonValueKind.Object) break;
+            if (e.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.Number && v.TryGetInt32(out var i))
+                return i;
+        }
+        return null;
+    }
+
+    private static string? GetString(JsonElement e, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            if (e.ValueKind != JsonValueKind.Object) break;
+            if (e.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.String)
+                return v.GetString();
+        }
+        return null;
+    }
+
+    private string? GetTagGuid(params string[] names)
+    {
+        lock (_tagGuidMap)
+        {
+            foreach (var name in names)
+            {
+                if (_tagGuidMap.TryGetValue(name, out var guid)) return guid;
+                if (_tagGuidMap.TryGetValue(name.ToLowerInvariant(), out guid)) return guid;
+            }
+        }
+        return null;
+    }
+
+    // ── Item fetch (single batch per call — caller paginates) ───────────────
+
+    /// <summary>
+    /// Retrieve one batch (≤ <see cref="PageSize"/>) of filtered items.
+    /// Convenience wrapper over <see cref="GetItemsPageAsync"/> for callers that
+    /// only need the eligible items: an empty or partial batch signals the end
+    /// <em>only</em> when no client-side filter is in play. Callers that page
+    /// through a scope whose records Synapic filters locally (collections and
+    /// saved searches) must use <see cref="GetItemsPageAsync"/> and advance by
+    /// <see cref="DaminionItemPage.RawCount"/> — advancing by the eligible count
+    /// skips the raw records a filter dropped.
+    /// </summary>
+    public async Task<DaminionItem[]> GetItemsFilteredAsync(
+        string scope = "all",
+        int? savedSearchId = null,
+        int? collectionId = null,
+        string? searchTerm = null,
+        string[]? untaggedFields = null,
+        string statusFilter = "all",
+        int maxItems = 500,
+        int startIndex = 0,
+        CancellationToken ct = default)
+        => (await GetItemsPageAsync(
+            scope, savedSearchId, collectionId, searchTerm,
+            untaggedFields, statusFilter, maxItems, startIndex, ct).ConfigureAwait(false)).Items;
+
+    /// <summary>Fetch exact catalog records by ID, with the same session recovery used by paged reads.</summary>
+    public async Task<DaminionItem[]> GetItemsByIdsAsync(IEnumerable<int> itemIds, CancellationToken ct = default)
+    {
+        var ids = string.Join(",", itemIds.Distinct());
+        if (ids.Length == 0) return Array.Empty<DaminionItem>();
+        var response = await WithSessionRecoveryAsync(
+            api => api.GetItemsByIds(ids, ct), ct).ConfigureAwait(false);
+        return response.EffectiveItems;
+    }
+
+
+    /// <summary>
+    /// Retrieve one batch (≤ <see cref="PageSize"/>) along with the raw page the
+    /// server returned. At most one batch per call; callers advance
+    /// <paramref name="startIndex"/> by <see cref="DaminionItemPage.RawCount"/>
+    /// until a page comes back completely empty. Session-expiry recovery (one
+    /// re-auth + replay on 401/403) lives here — the fetch is the longest call
+    /// in a batch, so a session that dies mid-run would otherwise fail every
+    /// remaining item.
+    /// </summary>
+    public async Task<DaminionItemPage> GetItemsPageAsync(
+        string scope = "all",
+        int? savedSearchId = null,
+        int? collectionId = null,
+        string? searchTerm = null,
+        string[]? untaggedFields = null,
+        string statusFilter = "all",
+        int maxItems = 500,
+        int startIndex = 0,
+        CancellationToken ct = default)
+        => await WithSessionRecoveryAsync(api => GetItemsFilteredCoreAsync(
+            api,
+            scope, savedSearchId, collectionId, searchTerm,
+            untaggedFields, statusFilter, maxItems, startIndex, ct),
+            ct).ConfigureAwait(false);
+
+    /// <summary>Core fetch; issue calls through <see cref="GetItemsPageAsync"/> for 401/403 recovery.</summary>
+    private async Task<DaminionItemPage> GetItemsFilteredCoreAsync(
+        IDaminionApi api,
+        string scope = "all",
+        int? savedSearchId = null,
+        int? collectionId = null,
+        string? searchTerm = null,
+        string[]? untaggedFields = null,
+        string statusFilter = "all",
+        int maxItems = 500,
+        int startIndex = 0,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            var filters = BuildFilterClauses(statusFilter, untaggedFields);
+            var batch = maxItems > 0 && maxItems < PageSize ? maxItems : PageSize;
+            DaminionItem[] rawPage;
+            // The endpoint's own total for the scope; surfaced on the page so a
+            // caller walking a large catalog can say "1,500 of 47,851".
+            int? totalCount = null;
+            // The server applies the filters to the "all" and "search" queries, so
+            // their raw page is already eligible. Collection pages come back raw,
+            // and Synapic applies the status/untagged filters itself — the eligible
+            // subset can therefore be smaller than the server page. Saved searches
+            // get the same text clauses as `search` (so the server and the count
+            // agree) but keep the local pass as a safety net for builds that ignore
+            // them on a structured query.
+            var filtersLocally = false;
+
+            // Exactly what this request asked for, so the log line pairs a page
+            // with its query. The walk's "total" and the source panel's count are
+            // both only as trustworthy as knowing which query produced them.
+            var endpoint = "MediaItems/Get";
+            string? requestSearch = null;
+            string? requestQueryLine = null;
+            string[]? requestOperators = null;
+
+            async Task<DaminionItemsResponse> GetMediaItemsAsync(
+                string? search, string? queryLine, string[]? f)
+                => await api.GetItems(
+                    startIndex, batch, f: f, search: search, queryLine: queryLine,
+                    maxItemsCount: 100000, ct: ct).ConfigureAwait(false);
+
+            switch (scope)
+            {
+                case "search" when string.IsNullOrWhiteSpace(searchTerm):
+                    // An empty keyword box selects the whole (filtered) catalog in
+                    // the source panel's count; the walk must read the same set
+                    // instead of failing on a scope that has nothing to search for.
+                    goto case "all";
+                case "search":
+                    requestSearch = filters.Length > 0
+                        ? $"{QuoteSearchTerm(searchTerm!)} {string.Join(" ", filters)}"
+                        : QuoteSearchTerm(searchTerm!);
+                    goto case "all";
+                case "all":
+                {
+                    // No clauses means no search filter at all; a literal '*' is
+                    // not documented as "everything" and would make the page (and
+                    // its totalCount) depend on a wildcard the server may not honour.
+                    requestSearch ??= filters.Length > 0 ? string.Join(" ", filters) : null;
+                    var response = await GetMediaItemsAsync(requestSearch, null, null);
+                    rawPage = response.EffectiveItems;
+                    totalCount = response.TotalCount;
+                    break;
+                }
+                case "collection" when collectionId is not null:
+                {
+                    // Python parity: /api/SharedCollection/GetItems?id=… —
+                    // the /api/Collections/GetItems/{id} variant 404s on
+                    // server 11.0.0.3906 (damserver.local). The endpoint takes no
+                    // filter parameters, so this page is filtered on this side;
+                    // its totalCount is the collection's raw total.
+                    endpoint = "SharedCollection/GetItems";
+                    var response = await api.GetSharedCollectionItems(collectionId.Value, startIndex, batch, ct).ConfigureAwait(false);
+                    rawPage = response.EffectiveItems;
+                    totalCount = response.TotalCount;
+                    filtersLocally = true;
+                    break;
+                }
+                case "saved_search" when savedSearchId is not null:
+                {
+                    // Structured query: "tagId,valueId" + "tagId,any" operators,
+                    // mirroring the original saved-search lookup ("Saved Searches" tag).
+                    // The status/untagged text clauses ride along in `search` so the
+                    // server narrows the page the same way the count does; the local
+                    // filter below stays as a safety net for builds that ignore it.
+                    var tagId = await GetTagIdAsync("saved searches", fallback: SavedSearchesTagFallbackId, ct).ConfigureAwait(false);
+                    requestSearch = filters.Length > 0 ? string.Join(" ", filters) : null;
+                    requestOperators = new[] { $"{tagId},any" };
+                    requestQueryLine = $"{tagId},{savedSearchId}";
+                    var response = await GetMediaItemsAsync(requestSearch, requestQueryLine, requestOperators);
+                    rawPage = response.EffectiveItems;
+                    totalCount = response.TotalCount;
+                    filtersLocally = true;
+                    break;
+                }
+                default:
+                    throw new DaminionNetworkException($"Unsupported scope '{scope}' or missing scope id");
+            }
+
+            var eligible = filtersLocally && (statusFilter != "all" || (untaggedFields?.Length ?? 0) > 0)
+                ? rawPage.Where(i => PassesFilters(i, statusFilter, untaggedFields)).ToArray()
+                : rawPage;
+
+            // maxItems caps the eligible subset this call returns, never the page
+            // the server was asked for: the caller still advances by RawCount.
+            var items = maxItems > 0 ? eligible.Take(maxItems).ToArray() : eligible;
+
+            // One line per page request: the query, the page's size and the
+            // server's total. A wrong "N of M" or a missing page is diagnosed
+            // from this line and the matching [count] line, not guessed from
+            // the UI.
+            SynapicLog.Info(nameof(DaminionApiClient),
+                $"Page {endpoint}: index={startIndex} size={batch} scope={scope}" +
+                (savedSearchId is { } ss ? $" savedSearch={ss}" : "") +
+                (collectionId is { } coll ? $" collection={coll}" : "") +
+                $" search='{requestSearch}' queryLine='{requestQueryLine}' " +
+                $"f=[{string.Join(",", requestOperators ?? Array.Empty<string>())}]" +
+                $" -> raw={rawPage.Length} eligible={eligible.Length} returned={items.Length} " +
+                $"totalCount={(totalCount?.ToString() ?? "none")}" +
+                (rawPage.Length > 0 ? $" ids={rawPage[0].Id}..{rawPage[^1].Id}" : ""));
+
+            return new DaminionItemPage(items, rawPage, totalCount);
+        }
+        catch (DaminionException)
+        {
+            throw;
+        }
+        catch (ApiException e) when ((int)e.StatusCode is 401 or 403)
+        {
+            throw; // session-expiry recovery lives in WithSessionRecoveryAsync
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Error(nameof(DaminionApiClient), $"Failed to retrieve filtered items: {e.Message}");
+            throw new DaminionNetworkException($"Failed to retrieve filtered items: {e.Message}", e);
+        }
+    }
+
+    /// <summary>
+    /// The text clauses the fetch sends as its <c>search</c> query, and the same
+    /// clauses <see cref="GetFilteredItemCountAsync"/> counts with — the two
+    /// numbers a user compares ("counted N, walked M") have to be produced by
+    /// the same query, or the discrepancy is in the client, not the catalog.
+    /// Flag values are the tag's documented text representations
+    /// ("Approved"/"Rejected"/"Unassigned"), not the structured value ids: a
+    /// count built from one representation and pages from another cannot agree.
+    /// </summary>
+    private static string[] BuildFilterClauses(string statusFilter, string[]? untaggedFields)
+    {
+        var parts = new List<string>();
+        switch ((statusFilter ?? "all").ToLowerInvariant())
+        {
+            case "approved": parts.Add("flag:approved"); break;
+            case "rejected": parts.Add("flag:rejected"); break;
+            case "unassigned": parts.Add("flag:unassigned"); break;
+        }
+        foreach (var field in untaggedFields ?? Array.Empty<string>())
+        {
+            var name = NormalizeUntaggedField(field);
+            parts.Add($"{name}:none");
+        }
+        return parts.ToArray();
+    }
+
+    /// <summary>Daminion's search query uses the plural display names (daminion_client normalization port).</summary>
+    private static string NormalizeUntaggedField(string field) => field.Trim().ToLowerInvariant() switch
+    {
+        "category" or "categories" => "Categories",
+        "keyword" or "keywords" => "Keywords",
+        "description" => "Description",
+        _ => field,
+    };
+
+    /// <summary>
+    /// Quote a search term for Daminion's phrase syntax, doubling embedded
+    /// double quotes so a term containing '"' stays a single phrase instead of
+    /// terminating the quoted query early.
+    /// </summary>
+    private static string QuoteSearchTerm(string term) => $"\"{term.Replace("\"", "\"\"")}\"";
+
+    private static bool PassesFilters(DaminionItem item, string statusFilter, string[]? untaggedFields)
+    {
+        var sf = (statusFilter ?? "all").ToLowerInvariant();
+        if (sf != "all")
+        {
+            // A missing flag cannot be verified against the requested status —
+            // exclude rather than let the filter silently pass it.
+            if (item.Flag is not { } flag) return false;
+            var fv = flag.ToString().ToLowerInvariant();
+            if (sf == "approved" && fv is not ("1" or "approved" or "flagged")) return false;
+            if (sf == "rejected" && fv is not ("2" or "rejected")) return false;
+            if (sf == "unassigned" && fv is not ("0" or "unassigned" or "unflagged")) return false;
+        }
+
+        if (untaggedFields is not null &&
+            untaggedFields.Any(f => f.Trim().ToLowerInvariant() is "keywords" or "keyword"))
+        {
+            if (item.Keywords is { Length: > 0 }) return false;
+        }
+        if (untaggedFields is not null &&
+            untaggedFields.Any(f => f.Trim().ToLowerInvariant() is "categories" or "category"))
+        {
+            if (item.Categories is { Length: > 0 }) return false;
+        }
+        if (untaggedFields is not null &&
+            untaggedFields.Any(f => f.Trim().Equals("description", StringComparison.OrdinalIgnoreCase)))
+        {
+            if (!string.IsNullOrWhiteSpace(item.Description)) return false;
+        }
+        return true;
+    }
+
+    // ── Image download (temp files; caller cleans up) ───────────────────────
+
+    public async Task<string?> DownloadThumbnailAsync(int itemId, int width = 200, int height = 200, CancellationToken ct = default)
+        => await DownloadToTempAsync(itemId, $"thumb_{width}x{height}", api => api.GetThumbnail(itemId, width, height, ct), ct).ConfigureAwait(false);
+
+    public async Task<string?> DownloadPreviewAsync(int itemId, int width = 1000, int? height = null, CancellationToken ct = default)
+    {
+        int targetH;
+        if (height is { } explicitH)
+        {
+            targetH = explicitH;
+        }
+        else
+        {
+            var dims = await GetItemDimensionsAsync(itemId, ct).ConfigureAwait(false);
+            targetH = dims is { } d && d.H > 0 ? (int)(d.H * (double)width / d.W) : width;
+        }
+        return await DownloadToTempAsync(itemId, $"preview_{width}x{targetH}", api => api.GetPreview(itemId, width, targetH, ct), ct).ConfigureAwait(false);
+    }
+
+    public async Task<string?> DownloadOriginalAsync(int itemId, CancellationToken ct = default)
+        => await DownloadToTempAsync(itemId, "original", api => api.GetOriginal(itemId, ct), ct).ConfigureAwait(false);
+
+    private async Task<string?> DownloadToTempAsync(
+        int itemId, string kind, Func<IDaminionApi, Task<Stream>> fetch, CancellationToken ct)
+    {
+        string? tempFile = null;
+        try
+        {
+            // Session-expiry recovery: a large download is exactly the call a
+            // late batch item trips with a stale session cookie.
+            using var stream = await WithSessionRecoveryAsync(fetch, ct).ConfigureAwait(false);
+            if (stream is null)
+            {
+                SynapicLog.Warning(nameof(DaminionApiClient),
+                    $"No response body for {kind} of item {itemId} — skipping");
+                return null;
+            }
+
+            Directory.CreateDirectory(_tempDirectory);
+            tempFile = Path.Combine(_tempDirectory, $"{itemId}_{kind}");
+
+            await using (var fs = File.Create(tempFile))
+            {
+                await stream.CopyToAsync(fs, ct).ConfigureAwait(false);
+            }
+            var downloadedLength = new FileInfo(tempFile).Length;
+            if (downloadedLength == 0)
+            {
+                try { File.Delete(tempFile); } catch { /* best effort */ }
+                SynapicLog.Warning(nameof(DaminionApiClient),
+                    $"Empty {kind} downloaded for item {itemId} (0 bytes) — skipping");
+                return null;
+            }
+            SynapicLog.Debug(nameof(DaminionApiClient),
+                $"Downloaded {kind} for item {itemId} ({downloadedLength:N0} bytes) → {tempFile}");
+            return tempFile;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            if (tempFile is not null)
+            {
+                try { File.Delete(tempFile); }
+                catch (Exception) { /* best effort */ }
+            }
+            throw;
+        }
+        catch (Exception e)
+        {
+            // A truncated download would otherwise sit in the temp folder for
+            // ever: the caller only ever sees null and has no file to delete.
+            if (tempFile is not null)
+            {
+                try { File.Delete(tempFile); }
+                catch (Exception) { /* best effort — the sweep catches it later */ }
+            }
+            SynapicLog.Error(nameof(DaminionApiClient), $"Failed to download {kind} for item {itemId}: {e.Message}");
+            return null;
+        }
+    }
+
+    public async Task<(int W, int H)?> GetItemDimensionsAsync(int itemId, CancellationToken ct = default)
+    {
+        try
+        {
+            var ids = itemId.ToString();
+            var resp = await GetApi().GetItemsByIds(ids, ct).ConfigureAwait(false);
+            var item = resp.EffectiveItems.FirstOrDefault();
+            return item?.Dimensions;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    // ── Saved searches / collections / item counts (Step 1 pickers) ────────
+
+    /// <summary>
+    /// Saved searches via the "Saved Searches" indexed tag's values
+    /// (daminion_client.get_saved_searches port — no dedicated endpoint).
+    /// Names come straight from those tag values, so they match the Daminion
+    /// client. The structured-query sweep below is only a last resort for
+    /// builds that cannot enumerate the tag at all: it recovers value ids but
+    /// not names, so entries there are synthesized as "Saved Search #id".
+    /// </summary>
+    public async Task<IReadOnlyList<DaminionSavedSearch>> GetSavedSearchesAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            return await GetSavedSearchesCoreAsync(ct).ConfigureAwait(false);
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Warning(nameof(DaminionApiClient),
+                $"Saved-search enumeration unavailable on this server ({e.Message}) — trying structured-query discovery");
+        }
+
+        try
+        {
+            return await DiscoverSavedSearchesByQuerySweepAsync(ct).ConfigureAwait(false);
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Warning(nameof(DaminionApiClient),
+                $"Saved-search discovery failed ({e.Message}) — continuing without the saved-search scope");
+            return Array.Empty<DaminionSavedSearch>();
+        }
+    }
+
+    private async Task<IReadOnlyList<DaminionSavedSearch>> GetSavedSearchesCoreAsync(CancellationToken ct)
+    {
+        var tagId = await GetTagIdAsync("saved searches", fallback: SavedSearchesTagFallbackId, ct).ConfigureAwait(false);
+        var json = await GetApi().GetIndexedTagValues(tagId, ct: ct).ConfigureAwait(false);
+        var result = new List<DaminionSavedSearch>();
+        foreach (var value in UnwrapCollection(json, "values", "items", "data"))
+        {
+            var id = GetInt(value, "id", "valueId") ?? 0;
+            var text = GetString(value, "text", "value", "name") ?? "";
+            if (id > 0 && text.Length > 0)
+                result.Add(new DaminionSavedSearch(id, text, GetInt(value, "count") ?? 0));
+        }
+        SynapicLog.Info(nameof(DaminionApiClient), $"Retrieved {result.Count} saved searches (tag id {tagId})");
+        return result;
+    }
+
+    /// <summary>
+    /// Last-resort discovery for builds whose indexed-tag enumeration fails:
+    /// probe candidate value ids with structured queries (queryLine=tagId,N
+    /// + operators) — the same mechanism the saved-search FETCH scope uses —
+    /// and keep the ids that match at least one item. Enumeration cannot yield
+    /// names here, so entries fall back to "Saved Search #id". Capped at a
+    /// fixed probe range.
+    /// </summary>
+    private const int SavedSearchDiscoveryMaxId = 50;
+
+    private async Task<IReadOnlyList<DaminionSavedSearch>> DiscoverSavedSearchesByQuerySweepAsync(CancellationToken ct)
+    {
+        var tagId = await GetTagIdAsync("saved searches", fallback: SavedSearchesTagFallbackId).ConfigureAwait(false);
+        var found = new List<DaminionSavedSearch>();
+
+        for (var candidateId = 1; candidateId <= SavedSearchDiscoveryMaxId; candidateId++)
+        {
+            ct.ThrowIfCancellationRequested();
+            var resp = await GetApi().GetItems(
+                index: 0,
+                size: 1,
+                f: new[] { $"{tagId},any" },
+                queryLine: $"{tagId},{candidateId}",
+                maxItemsCount: 100000,
+                ct: ct).ConfigureAwait(false);
+
+            var count = resp.TotalCount ?? resp.EffectiveItems.Length;
+            if (count > 0)
+                found.Add(new DaminionSavedSearch(candidateId, $"Saved Search #{candidateId}", count));
+        }
+
+        SynapicLog.Info(nameof(DaminionApiClient),
+            $"Saved-search discovery: {found.Count} searches found via query sweep (tag id {tagId}, ids {string.Join(",", found.Select(s => s.Id))})");
+        return found;
+    }
+
+    /// <summary>Shared collections list (daminion_client.get_shared_collections port).</summary>
+    public async Task<IReadOnlyList<DaminionCollection>> GetSharedCollectionsAsync(CancellationToken ct = default)
+    {
+        var json = await GetApi().GetCollections(ct: ct).ConfigureAwait(false);
+        var result = new List<DaminionCollection>();
+        foreach (var coll in UnwrapCollection(json, "collections", "items", "data"))
+        {
+            var id = GetInt(coll, "id") ?? 0;
+            // Python parity: the shared-collection list has been seen keyed by
+            // name, title, or the public access code — use whichever is present
+            // rather than dropping the picker entry's label.
+            var name = GetString(coll, "name", "title", "accessCode", "caption") ?? "";
+            if (id > 0)
+                result.Add(new DaminionCollection(
+                    id, name, GetString(coll, "code") ?? "", GetInt(coll, "itemCount", "count") ?? 0));
+        }
+        SynapicLog.Info(nameof(DaminionApiClient), $"Retrieved {result.Count} shared collections");
+        return result;
+    }
+
+    /// <summary>
+    /// Count items matching the Step 1 filters (daminion_client.get_filtered_item_count port).
+    /// Returns -1 on failure (Python parity — callers must not treat it as a real count).
+    /// </summary>
+    /// <remarks>
+    /// The status, untagged and search conditions are the same text clauses the
+    /// item fetch sends (<see cref="BuildFilterClauses"/>), so the number shown
+    /// for a scope and the pages that scope is walked with are produced by one
+    /// query — a count built from different clauses reports a total the walk
+    /// can never match. Collection scope resolves the "shared collections" tag
+    /// (fallback 46); a count that equals the whole catalog despite active
+    /// filters is re-derived from a 1-item search; a zero text-search count
+    /// falls back to the keyword value id. Every request and response is logged
+    /// so a mismatch can be traced to the exact query.
+    /// </remarks>
+    public async Task<int> GetFilteredItemCountAsync(
+        string scope = "all",
+        int? savedSearchId = null,
+        int? collectionId = null,
+        string? searchTerm = null,
+        string[]? untaggedFields = null,
+        string statusFilter = "all",
+        CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        try
+        {
+            var qParts = new List<string>();
+            var fParts = new List<string>();
+            var searchParts = new List<string>();
+
+            // Status + untagged fields: the same text clauses the page fetch
+            // sends, so the count and the walk describe one query.
+            searchParts.AddRange(BuildFilterClauses(statusFilter, untaggedFields));
+
+            // Keyword search term (quoted phrase).
+            if (scope == "search" && !string.IsNullOrWhiteSpace(searchTerm))
+                searchParts.Add(QuoteSearchTerm(searchTerm!));
+
+            var combinedSearch = searchParts.Count > 0 ? string.Join(" ", searchParts) : null;
+
+            // Scope-specific structured clauses.
+            if (scope == "saved_search" && savedSearchId is not null)
+            {
+                var tagId = await GetTagIdAsync("saved searches", fallback: SavedSearchesTagFallbackId, ct).ConfigureAwait(false);
+                qParts.Add($"{tagId},{savedSearchId}");
+                fParts.Add($"{tagId},any");
+            }
+            else if (scope == "collection" && collectionId is not null)
+            {
+                var tagId = await GetCollectionTagIdAsync(ct).ConfigureAwait(false);
+                qParts.Add($"{tagId},{collectionId}");
+                fParts.Add($"{tagId},any");
+            }
+
+            var queryLine = qParts.Count > 0 ? string.Join(";", qParts) : null;
+            var operators = fParts.Count > 0 ? string.Join(";", fParts) : null;
+
+            SynapicLog.Info(nameof(DaminionApiClient),
+                $"Count request: scope={scope}" +
+                (savedSearchId is { } ss ? $" savedSearch={ss}" : "") +
+                (collectionId is { } coll ? $" collection={coll}" : "") +
+                $" search='{combinedSearch}' queryLine='{queryLine}' f='{operators}'");
+
+            var countResponse = await GetApi().GetCount(
+                search: combinedSearch,
+                queryLine: queryLine,
+                f: operators,
+                force: "false",
+                ct: ct).ConfigureAwait(false);
+            var count = countResponse.EffectiveCount;
+            SynapicLog.Info(nameof(DaminionApiClient),
+                $"Count response: count={countResponse.Count?.ToString() ?? "none"} " +
+                $"totalCount={countResponse.TotalCount?.ToString() ?? "none"} " +
+                $"data={countResponse.Data?.ToString() ?? "none"} -> {count} (scope={scope})");
+
+            // Sanity check (Python parity): a count that matches the whole
+            // catalog size despite active filters/scope is suspect — re-derive
+            // the total from a 1-item search whose totalCount the API reports
+            // accurately (up to maxItemsCount).
+            if ((combinedSearch is not null || queryLine is not null) && count > 0)
+            {
+                var catalogResponse = await GetApi().GetCount(ct: ct).ConfigureAwait(false);
+                var totalCatalog = catalogResponse.EffectiveCount;
+                SynapicLog.Info(nameof(DaminionApiClient),
+                    $"Count sanity check: filtered={count} catalog={totalCatalog} " +
+                    $"(count={catalogResponse.Count?.ToString() ?? "none"}, " +
+                    $"totalCount={catalogResponse.TotalCount?.ToString() ?? "none"}, " +
+                    $"data={catalogResponse.Data?.ToString() ?? "none"})");
+                if (count >= totalCatalog)
+                {
+                    SynapicLog.Warning(nameof(DaminionApiClient),
+                        $"Count {count} matches total catalog size despite filters — falling back to a 1-item search");
+                    var probe = await GetApi().GetItems(
+                        index: 0,
+                        size: 1,
+                        f: ParseQueryOperators(operators),
+                        search: combinedSearch,
+                        queryLine: queryLine,
+                        maxItemsCount: 100000,
+                        ct: ct).ConfigureAwait(false);
+                    count = probe.TotalCount ?? 0;
+                    SynapicLog.Info(nameof(DaminionApiClient),
+                        $"Count fallback (1-item search): totalCount={probe.TotalCount?.ToString() ?? "none"} " +
+                        $"items={probe.EffectiveItems.Length} -> {count}");
+                }
+            }
+
+            // Structured fallback when a text search returned zero (Python
+            // parity): match the keyword tag value id instead.
+            if (count <= 0 && scope == "search" && !string.IsNullOrWhiteSpace(searchTerm))
+            {
+                ct.ThrowIfCancellationRequested();
+                var kwId = await GetTagIdAsync("keywords", fallback: 0, ct).ConfigureAwait(false);
+                if (kwId > 0)
+                {
+                    var valueId = await FindTagValueIdAsync(kwId, searchTerm, ct).ConfigureAwait(false);
+                    if (valueId is { } vid)
+                    {
+                        count = (await GetApi().GetCount(
+                            queryLine: $"{kwId},{vid}",
+                            f: $"{kwId},any",
+                            ct: ct).ConfigureAwait(false)).EffectiveCount;
+                    }
+                }
+            }
+
+            SynapicLog.Info(nameof(DaminionApiClient),
+                $"Item count: {count} | scope: {scope} | query: '{combinedSearch}' " +
+                $"| queryLine: '{queryLine}' | f: '{operators}'");
+            return count;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Error(nameof(DaminionApiClient), $"Failed to get filtered count: {e.Message}");
+            return -1; // Python parity: failure sentinel, not a real count.
+        }
+    }
+
+    /// <summary>Resolve the "shared collections" tag id (fallback 46, Python parity).</summary>
+    private async Task<int> GetCollectionTagIdAsync(CancellationToken ct = default)
+    {
+        var id = await GetTagIdAsync("shared collections", fallback: 0, ct).ConfigureAwait(false);
+        if (id > 0) return id;
+        id = await GetTagIdAsync("collections", fallback: 0, ct).ConfigureAwait(false);
+        return id > 0 ? id : 46;
+    }
+
+    /// <summary>Split a ';'-joined operator string for the multi-value f= parameter.</summary>
+    private static string[]? ParseQueryOperators(string? operators) =>
+        string.IsNullOrEmpty(operators) ? null : operators.Split(';');
+
+    /// <summary>
+    /// Find a tag value's id by exact text (daminion_api.find_tag_values port,
+    /// including the /api/IndexedTagValues fallback route some builds serve).
+    /// </summary>
+    private async Task<int?> FindTagValueIdAsync(int tagId, string filterText, CancellationToken ct = default)
+    {
+        JsonElement json;
+        try
+        {
+            json = await GetApi().GetIndexedTagValues(tagId, filter: filterText, pageSize: 100, ct: ct).ConfigureAwait(false);
+        }
+        catch (ApiException)
+        {
+            ct.ThrowIfCancellationRequested();
+            // Fallback route (daminion_api.py parity): some builds only expose
+            // the bare /api/IndexedTagValues endpoint.
+            json = await GetApi().GetIndexedTagValuesFallback(tagId, filter: filterText, pageSize: 100, ct: ct).ConfigureAwait(false);
+        }
+
+        foreach (var value in UnwrapCollection(json, "values", "items", "data"))
+        {
+            var text = GetString(value, "text", "value", "name", "title") ?? "";
+            if (text.Equals(filterText, StringComparison.OrdinalIgnoreCase))
+                return GetInt(value, "id", "valueId");
+        }
+        return null;
+    }
+
+    // ── Metadata write (daminion_client.update_item_metadata port) ──────────
+
+    /// <summary>
+    /// Write category/keywords/description to a Daminion item via
+    /// /api/ItemData/BatchChange tag operations (value-id resolution not yet
+    /// cached; falls back to raw values which Daminion resolves server-side).
+    /// </summary>
+    public async Task<bool> UpdateItemMetadataAsync(
+        int itemId,
+        string? category = null,
+        IReadOnlyList<string>? keywords = null,
+        string? description = null,
+        CancellationToken ct = default)
+    {
+        var operations = new List<DaminionTagOperation>();
+
+        if (!string.IsNullOrEmpty(category))
+        {
+            var guid = GetTagGuid("category", "categories", "Categories");
+            if (guid is not null)
+                operations.Add(new DaminionTagOperation { Guid = guid, Value = category, Remove = false });
+        }
+
+        if (keywords is { Count: > 0 })
+        {
+            var guid = GetTagGuid("keywords", "Keywords");
+            if (guid is not null)
+            {
+                foreach (var keyword in keywords)
+                    operations.Add(new DaminionTagOperation { Guid = guid, Value = keyword, Remove = false });
+            }
+        }
+
+        if (!string.IsNullOrEmpty(description))
+        {
+            var guid = GetTagGuid("description", "caption", "Description");
+            if (guid is not null)
+                operations.Add(new DaminionTagOperation { Guid = guid, Value = description, Remove = false });
+        }
+
+        if (operations.Count == 0)
+        {
+            SynapicLog.Warning(nameof(DaminionApiClient), $"No metadata operations for item {itemId} (tag schema missing?)");
+            return false;
+        }
+
+        try
+        {
+            await WithSessionRecoveryAsync(api => api.BatchChange(new DaminionBatchChangeRequest
+            {
+                Ids = new[] { itemId },
+                Data = operations.ToArray(),
+                Delete = false,
+            }, ct), ct).ConfigureAwait(false);
+            SynapicLog.Info(nameof(DaminionApiClient), $"Updated metadata for item {itemId}");
+            return true;
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Error(nameof(DaminionApiClient), $"Failed to update metadata for item {itemId}: {e.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>Remove keywords from an item (BatchChange Remove=true) — used to undo test writes and by dedup tagging.</summary>
+    public async Task<bool> RemoveKeywordsAsync(int itemId, IEnumerable<string> keywords, CancellationToken ct = default)
+    {
+        var guid = GetTagGuid("keywords", "Keywords");
+        if (guid is null)
+        {
+            SynapicLog.Warning(nameof(DaminionApiClient), $"Cannot remove keywords from item {itemId} (keywords tag schema missing)");
+            return false;
+        }
+
+        try
+        {
+            await WithSessionRecoveryAsync(api => api.BatchChange(new DaminionBatchChangeRequest
+            {
+                Ids = new[] { itemId },
+                Data = keywords.Select(k => new DaminionTagOperation { Guid = guid, Value = k, Remove = true }).ToArray(),
+                Delete = false,
+            }, ct), ct).ConfigureAwait(false);
+            SynapicLog.Info(nameof(DaminionApiClient), $"Removed keywords from item {itemId}");
+            return true;
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Error(nameof(DaminionApiClient), $"Failed to remove keywords from item {itemId}: {e.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Items per flag-write batch. A very large id list in one BatchChange
+    /// call is exactly where the server applies a subset and answers
+    /// success:true — the "only a subset of the group was tagged" report. The
+    /// write goes out in modest batches with a read-back after each, so the
+    /// caller learns precisely which items got the flag and can retry the rest.
+    /// </summary>
+    public const int FlagWriteBatchSize = 200;
+
+    /// <summary>Set the Flag field on items via POST /api/ItemData/BatchChange
+    /// with the Flag tag's guid and its documented text value ("Approved"/
+    /// "Rejected"/"Unassigned", id 0 — the server resolves the text). The dedup
+    /// and similar pages write="Rejected" to mark identified items before a
+    /// manual review pass (marking is reversible; deleting catalog entries is
+    /// not, which is why delete gets the confirmation and this does not).
+    ///
+    /// Like <see cref="DeleteItemsAsync"/>, the call is only believed when it is
+    /// verified: the ids are read back with GetByIds and each batch counts as
+    /// done once every one of its ids answers with the requested flag (one
+    /// settle retry, for asynchronously indexing servers). A BatchChange
+    /// response of <c>{success:true}</c> alone proves nothing — that response
+    /// also happens on writes the server silently ignored.
+    /// </summary>
+    public Task<bool> SetItemsFlagAsync(
+        IReadOnlyCollection<int> itemIds,
+        DaminionFlagValue flag,
+        CancellationToken ct = default)
+        => SetItemsFlagDetailedAsync(itemIds, flag, ct).ContinueWith(t => t.Result.Success, ct);
+
+    /// <summary>The same write as <see cref="SetItemsFlagAsync"/>, but returning
+    /// which ids the read-back actually confirmed — so a partially applied
+    /// batch can be named (and its confirmed rows cleared from the review
+    /// list) instead of being reported as an all-or-nothing failure.
+    /// </summary>
+    public async Task<DaminionFlagWriteResult> SetItemsFlagDetailedAsync(
+        IReadOnlyCollection<int> itemIds,
+        DaminionFlagValue flag,
+        CancellationToken ct = default)
+    {
+        var ids = itemIds.ToArray();
+        if (ids.Length == 0) return new DaminionFlagWriteResult(0, 0, Array.Empty<int>());
+        var guid = GetTagGuid("flag", "Flag");
+        if (guid is null)
+        {
+            SynapicLog.Warning(nameof(DaminionApiClient),
+                $"Cannot set flag '{flag}' on {ids.Length} item(s) — the catalog's default layout did not include the Flag tag, so its guid is unknown");
+            return new DaminionFlagWriteResult(ids.Length, 0, Array.Empty<int>());
+        }
+        var valueText = flag.ToString();
+
+        var verified = new List<int>();
+        try
+        {
+            var batchTotal = (int)Math.Ceiling(ids.Length / (double)FlagWriteBatchSize);
+            for (var offset = 0; offset < ids.Length; offset += FlagWriteBatchSize)
+            {
+                var batch = ids[offset..Math.Min(offset + FlagWriteBatchSize, ids.Length)];
+                var batchNumber = offset / FlagWriteBatchSize + 1;
+
+                var resp = await WithSessionRecoveryAsync(api => api.BatchChange(new DaminionBatchChangeRequest
+                {
+                    Ids = batch,
+                    Data = new[] { new DaminionTagOperation { Guid = guid, Id = 0, Value = valueText, Remove = false } },
+                    Delete = false,
+                }, ct), ct).ConfigureAwait(false);
+
+                SynapicLog.Info(nameof(DaminionApiClient),
+                    $"POST /api/ItemData/BatchChange (batch {batchNumber}/{batchTotal}) ids=[{string.Join(",", batch)}] flag={valueText} → " +
+                    TruncateJson(resp));
+
+                verified.AddRange(await VerifyFlagBatchAsync(batch, flag, ct).ConfigureAwait(false));
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Error(nameof(DaminionApiClient),
+                $"Failed to set flag '{valueText}' on {ids.Length} item(s): {e.Message}");
+        }
+
+        var confirmed = ids.Where(verified.Contains).ToArray();
+        if (confirmed.Length == ids.Length)
+            SynapicLog.Info(nameof(DaminionApiClient),
+                $"Flag set to '{valueText}' on {ids.Length} item(s) (verified)" +
+                (ids.Length > FlagWriteBatchSize ? $" across {(int)Math.Ceiling(ids.Length / (double)FlagWriteBatchSize)} batches" : ""));
+        else
+            SynapicLog.Warning(nameof(DaminionApiClient),
+                $"Flag write partially verified: {confirmed.Length} of {ids.Length} id(s) report '{valueText}'" +
+                (confirmed.Length > 0 ? " — re-run Apply for the rest" : ""));
+        return new DaminionFlagWriteResult(ids.Length, confirmed.Length, confirmed);
+    }
+
+    /// <summary>Flag write read-back: return exactly which ids of the batch answer
+    /// with the requested value, with one settle retry for async indexing — the
+    /// same honesty the catalog delete applies.</summary>
+    private async Task<IReadOnlyList<int>> VerifyFlagBatchAsync(int[] ids, DaminionFlagValue expected, CancellationToken ct)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            DaminionItemsResponse? resp = null;
+            try
+            {
+                resp = await WithSessionRecoveryAsync(
+                    api => api.GetItemsByIds(string.Join(",", ids), ct), ct).ConfigureAwait(false);
+            }
+            catch (Exception e)
+            {
+                SynapicLog.Warning(nameof(DaminionApiClient),
+                    $"Flag read-back for {ids.Length} item(s) failed: {e.Message}");
+            }
+
+            if (resp is { } response)
+            {
+                var matching = response.EffectiveItems
+                    .Where(i => ids.Contains(i.Id) && FlagEquals(i, expected))
+                    .Select(i => i.Id)
+                    .Distinct()
+                    .ToList();
+                if (matching.Count == ids.Length)
+                {
+                    return matching;
+                }
+                SynapicLog.Info(nameof(DaminionApiClient),
+                    $"Flag read-back: {matching.Count} of {ids.Length} item(s) currently report '{expected}'");
+            }
+
+            if (attempt > 0)
+            {
+                return resp is null ? Array.Empty<int>() : resp.EffectiveItems
+                    .Where(i => ids.Contains(i.Id) && FlagEquals(i, expected))
+                    .Select(i => i.Id)
+                    .Distinct()
+                    .ToList();
+            }
+            await Task.Delay(750, ct).ConfigureAwait(false); // async-index settle, like Remove
+        }
+    }
+
+    /// <summary>True when the record's flag (numeric 0/1/2 or the text form)
+    /// matches the requested value.</summary>
+    private static bool FlagEquals(DaminionItem item, DaminionFlagValue expected)
+    {
+        if (item.Flag is not { } flag) return false;
+        return flag.ValueKind switch
+        {
+            JsonValueKind.Number => flag.GetInt32() == (int)expected,
+            JsonValueKind.String => string.Equals(flag.GetString(), expected.ToString(), StringComparison.OrdinalIgnoreCase),
+            _ => false,
+        };
+    }
+
+    /// <summary>
+    /// Remove catalog entries via POST /api/MediaItems/Remove — the call the
+    /// original Python client makes (<c>daminion_api.py delete_items</c>). The
+    /// files on the server's disk are not touched (delete:false), only the
+    /// catalog entries go.
+    ///
+    /// History: this used to post to /api/ItemData/BatchChange with delete:true.
+    /// That route only writes tag data — it answers <c>{success:true}</c> and
+    /// changes nothing, so dedup reported "Deleted N item(s)" while the very
+    /// next scan found the same duplicates. The response is therefore logged
+    /// and the ids are re-read with GetByIds before anything reports success.
+    /// Returns false when the server does not actually drop them.
+    /// </summary>
+    public async Task<bool> DeleteItemsAsync(IReadOnlyCollection<int> itemIds, CancellationToken ct = default)
+    {
+        if (itemIds.Count == 0) return true;
+
+        var ids = itemIds.ToArray();
+        try
+        {
+            var resp = await WithSessionRecoveryAsync(api => api.RemoveMediaItems(new DaminionRemoveRequest
+            {
+                Ids = ids,
+                Delete = false, // catalog entry only — never the file on disk
+            }, ct), ct).ConfigureAwait(false);
+
+            SynapicLog.Info(nameof(DaminionApiClient),
+                $"POST /api/MediaItems/Remove ids=[{string.Join(",", ids)}] delete=false → " +
+                $"success={resp.Success} errorCode={resp.ErrorCode} data={TruncateJson(resp.Data)}" +
+                (string.IsNullOrEmpty(resp.Error) ? "" : $" error={resp.Error}"));
+
+            if (!resp.Success)
+            {
+                SynapicLog.Error(nameof(DaminionApiClient),
+                    $"MediaItems/Remove refused {ids.Length} id(s) (errorCode {resp.ErrorCode})");
+                return false;
+            }
+
+            // Belt and braces: a 200 from this server proves nothing on its own,
+            // so ask for the ids back and report honestly if they are still there.
+            var remaining = await CountItemsByIdsAsync(ids, ct).ConfigureAwait(false);
+            if (remaining == 0)
+            {
+                SynapicLog.Info(nameof(DaminionApiClient), $"Removed {ids.Length} item(s) from the catalog (verified: GetByIds returns none of them)");
+                return true;
+            }
+
+            // Servers that index asynchronously can answer GetByIds from a stale
+            // snapshot right after the write — settle, then ask once more.
+            await Task.Delay(750, ct).ConfigureAwait(false);
+            remaining = await CountItemsByIdsAsync(ids, ct).ConfigureAwait(false);
+            if (remaining == 0)
+            {
+                SynapicLog.Info(nameof(DaminionApiClient), $"Removed {ids.Length} item(s) from the catalog (verified after a 750 ms settle)");
+                return true;
+            }
+
+            SynapicLog.Warning(nameof(DaminionApiClient),
+                $"MediaItems/Remove left {remaining} of {ids.Length} item(s) in the catalog — " +
+                "the server accepted the call but did not drop them (permissions or server build?)");
+            return false;
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Error(nameof(DaminionApiClient), $"Failed to remove {ids.Length} item(s): {e.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>How many of <paramref name="ids"/> the catalog still resolves —
+    /// the post-delete check behind <see cref="DeleteItemsAsync"/>.</summary>
+    private async Task<int> CountItemsByIdsAsync(int[] ids, CancellationToken ct)
+    {
+        if (ids.Length == 0) return 0;
+        // Session recovery like every other call: a stale cookie here would
+        // turn a successful delete into a reported failure.
+        var resp = await WithSessionRecoveryAsync(
+            api => api.GetItemsByIds(string.Join(",", ids), ct), ct).ConfigureAwait(false);
+        return resp.EffectiveItems.Length;
+    }
+
+    /// <summary>Compact, bounded rendering of a Remove response payload for the log.</summary>
+    private static string TruncateJson(JsonElement? data)
+    {
+        if (data is not { } element) return "null";
+        var text = element.ToString();
+        return text.Length <= 300 ? text : text[..300] + "…";
+    }
+
+    // ── Version control (checkout → enhance → check in new file version) ────
+
+    /// <summary>
+    /// Check out items for editing — POST /api/VersionControl/CheckOut with
+    /// <c>{"Ids":[…]}</c> (daminion_api.py <c>VersionControlAPI.checkout</c>).
+    /// The upscale flow checks an item out before replacing its file, exactly
+    /// like the original app: a checkout the server refuses skips the item.
+    /// </summary>
+    public async Task<bool> CheckOutItemsAsync(IReadOnlyCollection<int> itemIds, CancellationToken ct = default)
+    {
+        if (itemIds.Count == 0) return true;
+        var ids = itemIds.ToArray();
+        try
+        {
+            using var resp = await WithSessionRecoveryAsync(api =>
+                api.CheckOutItems(new DaminionVersionIdsRequest { Ids = ids }, ct), ct).ConfigureAwait(false);
+            var body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            string? envelopeDetail = null;
+            var ok = resp.IsSuccessStatusCode && IsVersionControlEnvelopeAccepted(body, ids, out envelopeDetail);
+            SynapicLog.Info(nameof(DaminionApiClient),
+                $"POST /api/VersionControl/CheckOut ids=[{string.Join(",", ids)}] → HTTP {(int)resp.StatusCode}" +
+                (ok ? "" : $" {(envelopeDetail ?? TruncateText(body))}"));
+            return ok;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Error(nameof(DaminionApiClient),
+                $"CheckOut failed for ids [{string.Join(",", ids)}]: {e.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Undo a checkout — POST /api/VersionControl/UndoCheckOut (daminion_api.py
+    /// <c>VersionControlAPI.undo_checkout</c>). Best-effort: used to roll an item
+    /// back when the new version could not be checked in, so a failed upscale
+    /// does not leave the item locked in the catalog.
+    /// </summary>
+    public async Task<bool> UndoCheckOutItemsAsync(IReadOnlyCollection<int> itemIds, CancellationToken ct = default)
+    {
+        if (itemIds.Count == 0) return true;
+        var ids = itemIds.ToArray();
+        try
+        {
+            using var resp = await WithSessionRecoveryAsync(api =>
+                api.UndoCheckOutItems(new DaminionVersionIdsRequest { Ids = ids }, ct), ct).ConfigureAwait(false);
+            var body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            string? envelopeDetail = null;
+            var ok = resp.IsSuccessStatusCode && IsVersionControlEnvelopeAccepted(body, ids, out envelopeDetail);
+            SynapicLog.Info(nameof(DaminionApiClient),
+                $"POST /api/VersionControl/UndoCheckOut ids=[{string.Join(",", ids)}] → HTTP {(int)resp.StatusCode}" +
+                (ok ? "" : $" {(envelopeDetail ?? TruncateText(body))}"));
+            return ok;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Warning(nameof(DaminionApiClient),
+                $"UndoCheckOut failed for ids [{string.Join(",", ids)}]: {e.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Check in a new file version — multipart POST /api/VersionControl/CheckIn
+    /// with <c>id</c>, <c>file</c> and (first try) <c>comment</c>
+    /// (daminion_api.py <c>VersionControlAPI.checkin</c>). The original client
+    /// documents the comment field as unsupported on some server versions and
+    /// retries without it; the same fallback applies here. Returns false when
+    /// the server refuses the upload — the caller then undoes the checkout.
+    /// </summary>
+    public async Task<bool> CheckInItemAsync(
+        int itemId,
+        string filePath,
+        string? message = null,
+        CancellationToken ct = default,
+        string? uploadFileName = null)
+    {
+        if (!File.Exists(filePath))
+        {
+            SynapicLog.Error(nameof(DaminionApiClient), $"CheckIn: file not found: {filePath}");
+            return false;
+        }
+
+        var ids = new[] { itemId };
+        try
+        {
+            // With comment first (the informative form), then without it.
+            if (!string.IsNullOrWhiteSpace(message))
+            {
+                using var withComment = await WithSessionRecoveryAsync(api =>
+                    SendCheckInAsync(api, itemId, filePath, message, uploadFileName, ct), ct).ConfigureAwait(false);
+                var commentBody = await withComment.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+                string? commentDetail = null;
+                if (withComment.IsSuccessStatusCode && IsVersionControlEnvelopeAccepted(commentBody, ids, out commentDetail))
+                {
+                    SynapicLog.Info(nameof(DaminionApiClient),
+                        $"CheckIn item {itemId} (with comment, {new FileInfo(filePath).Length:N0} bytes) → HTTP {(int)withComment.StatusCode}");
+                    return true;
+                }
+                SynapicLog.Warning(nameof(DaminionApiClient),
+                    $"CheckIn with comment rejected for item {itemId} (HTTP {(int)withComment.StatusCode}" +
+                    (commentDetail is null ? "" : $", {commentDetail}") +
+                    ") — retrying without comment");
+            }
+
+            using var resp = await WithSessionRecoveryAsync(api =>
+                SendCheckInAsync(api, itemId, filePath, null, uploadFileName, ct), ct).ConfigureAwait(false);
+            var body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            string? detail = null;
+            if (resp.IsSuccessStatusCode && IsVersionControlEnvelopeAccepted(body, ids, out detail))
+            {
+                SynapicLog.Info(nameof(DaminionApiClient),
+                    $"CheckIn item {itemId} ({new FileInfo(filePath).Length:N0} bytes) → HTTP {(int)resp.StatusCode}");
+                return true;
+            }
+
+            SynapicLog.Error(nameof(DaminionApiClient),
+                $"CheckIn refused for item {itemId} (HTTP {(int)resp.StatusCode}) {detail ?? TruncateText(body)}");
+            return false;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Error(nameof(DaminionApiClient), $"CheckIn failed for item {itemId}: {e.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Inspects a Daminion version-control response body so an HTTP 200 carrying
+    /// an application-level refusal (<c>{"success":false,"error":"..."}</c>,
+    /// non-zero <c>errorCode</c>, or a per-id status of <c>-1</c>/<c>false</c>)
+    /// is treated as a refusal rather than a silent success. Empty or non-JSON
+    /// 2xx bodies are accepted for server builds that answer with a bare 200.
+    /// </summary>
+    internal static bool IsVersionControlEnvelopeAccepted(string? body, IReadOnlyCollection<int> requestedIds, out string? failureDetail)
+    {
+        failureDetail = null;
+        if (string.IsNullOrWhiteSpace(body)) return true;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            var root = doc.RootElement;
+            if (root.ValueKind is JsonValueKind.True or JsonValueKind.False)
+            {
+                if (root.ValueKind == JsonValueKind.False)
+                {
+                    failureDetail = "response=false";
+                    return false;
+                }
+                return true;
+            }
+
+            if (root.ValueKind != JsonValueKind.Object)
+                return true;
+
+            foreach (var prop in root.EnumerateObject())
+            {
+                if (prop.Name.Equals("success", StringComparison.OrdinalIgnoreCase) &&
+                    prop.Value.ValueKind == JsonValueKind.False)
+                {
+                    var err = GetString(root, "error", "Error", "message", "Message");
+                    failureDetail = string.IsNullOrWhiteSpace(err) ? "success=false" : $"success=false ({err})";
+                    return false;
+                }
+
+                if (prop.Name.Equals("errorCode", StringComparison.OrdinalIgnoreCase) &&
+                    prop.Value.ValueKind == JsonValueKind.Number &&
+                    prop.Value.TryGetInt32(out var code) && code != 0)
+                {
+                    var err = GetString(root, "error", "Error", "message", "Message");
+                    failureDetail = string.IsNullOrWhiteSpace(err) ? $"errorCode={code}" : $"errorCode={code} ({err})";
+                    return false;
+                }
+
+                if ((prop.Name.Equals("error", StringComparison.OrdinalIgnoreCase) ||
+                     prop.Name.Equals("Error", StringComparison.Ordinal)) &&
+                    prop.Value.ValueKind == JsonValueKind.String)
+                {
+                    var errText = prop.Value.GetString();
+                    if (!string.IsNullOrWhiteSpace(errText))
+                    {
+                        failureDetail = $"error={errText}";
+                        return false;
+                    }
+                }
+            }
+
+            foreach (var dataKey in new[] { "data", "Data" })
+            {
+                if (!root.TryGetProperty(dataKey, out var data)) continue;
+                if (data.ValueKind == JsonValueKind.False)
+                {
+                    failureDetail = "data=false";
+                    return false;
+                }
+                if (data.ValueKind == JsonValueKind.Object)
+                {
+                    foreach (var id in requestedIds)
+                    {
+                        if (!data.TryGetProperty(id.ToString(), out var idStatus)) continue;
+                        if (idStatus.ValueKind == JsonValueKind.False ||
+                            (idStatus.ValueKind == JsonValueKind.Number &&
+                             idStatus.TryGetInt32(out var statusNum) && statusNum < 0))
+                        {
+                            failureDetail = $"item {id} status={idStatus}";
+                            return false;
+                        }
+                    }
+                }
+            }
+
+            return true;
+        }
+        catch (JsonException)
+        {
+            return true;
+        }
+    }
+
+    /// <summary>One multipart send; the file stream is opened per attempt
+    /// because session recovery replays the whole lambda.</summary>
+    private static async Task<HttpResponseMessage> SendCheckInAsync(
+        IDaminionApi api, int itemId, string filePath, string? comment, string? uploadFileName, CancellationToken ct)
+    {
+        var partFileName = !string.IsNullOrWhiteSpace(uploadFileName)
+            ? Path.GetFileName(uploadFileName)
+            : Path.GetFileName(filePath);
+        await using var stream = File.OpenRead(filePath);
+        var file = new StreamPart(stream, partFileName, "application/octet-stream");
+        return comment is null
+            ? await api.CheckInItem(itemId, file, ct).ConfigureAwait(false)
+            : await api.CheckInItemWithComment(itemId, comment, file, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>Bound a raw response body for a log line.</summary>
+    private static string TruncateText(string text)
+        => text.Length <= 300 ? text : text[..300] + "…";
+
+    /// <summary>
+    /// Re-read an item via /api/ItemData/GetAll/{id} and check the expected
+    /// tags landed (Step 4 “Verify Daminion writes”). Field matching is
+    /// tolerant: tag keys are located case-insensitively anywhere in the
+    /// payload since Daminion's layout varies between versions.
+    /// </summary>
+    public async Task<DaminionVerifyResult> VerifyItemMetadataAsync(
+        int itemId,
+        string? category = null,
+        IReadOnlyList<string>? keywords = null,
+        string? description = null,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            var payload = await WithSessionRecoveryAsync(
+                api => api.GetItemDataAll(itemId, ct), ct).ConfigureAwait(false);
+            var found = new List<(string Key, string Value)>();
+            CollectKeyValuePairs(payload, found);
+
+            var missing = new List<string>();
+
+            if (!string.IsNullOrEmpty(category) &&
+                !found.Any(kv => kv.Key.Contains("categor", StringComparison.OrdinalIgnoreCase) &&
+                                 kv.Value.Contains(category, StringComparison.OrdinalIgnoreCase)))
+            {
+                missing.Add($"category '{category}'");
+            }
+
+            if (keywords is { Count: > 0 })
+            {
+                var stored = found
+                    .Where(kv => kv.Key.Contains("keyword", StringComparison.OrdinalIgnoreCase))
+                    .Select(kv => kv.Value)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var absent = keywords.Where(k => !stored.Contains(k)).ToList();
+                if (absent.Count > 0)
+                    missing.Add($"keywords {string.Join(", ", absent.Select(k => $"'{k}'"))}");
+            }
+
+            if (!string.IsNullOrEmpty(description) &&
+                !found.Any(kv =>
+                    (kv.Key.Contains("description", StringComparison.OrdinalIgnoreCase) ||
+                     kv.Key.Contains("caption", StringComparison.OrdinalIgnoreCase)) &&
+                    kv.Value.Contains(description[..Math.Min(description.Length, 40)], StringComparison.OrdinalIgnoreCase)))
+            {
+                missing.Add("description");
+            }
+
+            return missing.Count == 0
+                ? new DaminionVerifyResult(true, $"Item {itemId} verified")
+                : new DaminionVerifyResult(false, $"Item {itemId}: not found — {string.Join("; ", missing)}");
+        }
+        catch (OperationCanceledException)
+        {
+            // Cancellation is a caller decision, not a catalog mismatch. Let the
+            // report command stop promptly and preserve its cancelled outcome.
+            throw;
+        }
+        catch (Exception e)
+        {
+            return new DaminionVerifyResult(false, $"Item {itemId}: verify failed — {e.Message}");
+        }
+    }
+
+    /// <summary>
+    /// The item's capture date, read from its catalog metadata — or null when the
+    /// item carries no date-shaped tag this reader recognises.
+    /// </summary>
+    /// <remarks>
+    /// The dedup/similar scan fingerprints a catalog item from the server's
+    /// preview rather than its original, because a perceptual hash is a 32×32
+    /// grid and the preview is a quarter of the bytes. A preview carries no EXIF,
+    /// though, so the capture date the review list's "keep oldest/newest" rules
+    /// need has to come from somewhere: the media-item record does not carry one
+    /// (the API documents id/hashCode/name/fileName/mediaFormat/version state/
+    /// colorLabel/width/height/fileSize/formatType/expirationDate and no date),
+    /// so it is read from <c>ItemData/GetAll</c>. That is one small JSON call per
+    /// *grouped* row — a handful in a normal scan — not per catalog item, which
+    /// would put the request count back where downloading originals left it.
+    /// </remarks>
+    public async Task<DateTime?> GetItemCaptureDateAsync(int itemId, CancellationToken ct = default)
+    {
+        try
+        {
+            var payload = await WithSessionRecoveryAsync(
+                api => api.GetItemDataAll(itemId, ct), ct).ConfigureAwait(false);
+            return ParseCaptureDate(TagPairsFromItemData(payload));
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Debug(nameof(DaminionApiClient),
+                $"No capture date read for item {itemId}: {e.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Flatten <c>ItemData/GetAll</c> into (tag name, value) pairs. The payload
+    /// nests them (observed on server 11.x):<br/>
+    /// <c>{ properties: [ { name, id, properties: [ { propertyName,
+    /// propertyGuid, propertyValue, values, isMultiplyValues, propertyType } ] } ] }</c><br/>
+    /// so the tag name lives in <c>propertyName</c> and the value either in
+    /// <c>propertyValue</c> or, for a multi-value tag, in the <c>values</c> array.
+    /// Reading the JSON's own property names instead (as the metadata *verify*
+    /// helper does) would only ever find the words "propertyName"/"propertyValue"
+    /// and never a caption date. Internal so the shape is pinned by a test built
+    /// from a real payload rather than guessed at.
+    /// </summary>
+    internal static List<(string Key, string Value)> TagPairsFromItemData(JsonElement payload)
+    {
+        var pairs = new List<(string Key, string Value)>();
+        CollectTagPairs(payload, pairs);
+        return pairs;
+    }
+
+    private static void CollectTagPairs(JsonElement node, List<(string Key, string Value)> found)
+    {
+        switch (node.ValueKind)
+        {
+            case JsonValueKind.Object:
+            {
+                string? name = null;
+                if (node.TryGetProperty("propertyName", out var nameElement)
+                    && nameElement.ValueKind == JsonValueKind.String)
+                    name = nameElement.GetString();
+
+                if (!string.IsNullOrWhiteSpace(name))
+                {
+                    var added = false;
+                    if (node.TryGetProperty("propertyValue", out var valueElement)
+                        && valueElement.ValueKind == JsonValueKind.String
+                        && valueElement.GetString() is { Length: > 0 } single)
+                    {
+                        found.Add((name, single));
+                        added = true;
+                    }
+                    if (!added && node.TryGetProperty("values", out var values)
+                        && values.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var item in values.EnumerateArray())
+                        {
+                            if (item.ValueKind == JsonValueKind.String && item.GetString() is { Length: > 0 } multi)
+                                found.Add((name, multi));
+                        }
+                    }
+                }
+
+                foreach (var property in node.EnumerateObject())
+                    CollectTagPairs(property.Value, found);
+                break;
+            }
+            case JsonValueKind.Array:
+                foreach (var element in node.EnumerateArray())
+                    CollectTagPairs(element, found);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Pick the capture date out of an item's tag pairs. Tag names are
+    /// matched after normalising case and separators, because the layout calls it
+    /// "Date Taken" on one server and "DateTimeOriginal"/"Created" on another;
+    /// a modification or expiry date is deliberately never used as a capture date
+    /// (it says when the file was touched, not when the picture was taken).
+    /// Internal so the rule is testable without a server.
+    /// </summary>
+    internal static DateTime? ParseCaptureDate(IEnumerable<(string Key, string Value)> pairs)
+    {
+        // Most-specific first: a catalog that carries both "Created" (import
+        // time) and "Date Taken" must answer with the shutter time.
+        string[] preference =
+        {
+            "datetaken", "datetimeoriginal", "originaldate", "taken",
+            "datecreated", "creationdate", "created", "filecreated",
+        };
+
+        var byKey = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (key, value) in pairs)
+        {
+            if (string.IsNullOrWhiteSpace(value)) continue;
+            var normalized = NormalizeTagKey(key);
+            // First non-empty value wins: values repeat across the payload's
+            // nested shapes and they describe the same tag.
+            byKey.TryAdd(normalized, value);
+        }
+
+        foreach (var wanted in preference)
+        {
+            foreach (var (key, value) in byKey)
+            {
+                if (!key.Contains(wanted, StringComparison.Ordinal)) continue;
+                if (key.Contains("modif", StringComparison.Ordinal)
+                    || key.Contains("expir", StringComparison.Ordinal)
+                    || key.Contains("print", StringComparison.Ordinal)) continue;
+                if (TryParseDateValue(value, out var parsed)) return parsed;
+            }
+        }
+        return null;
+    }
+
+    private static string NormalizeTagKey(string key) =>
+        new string(key.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
+
+    /// <summary>
+    /// Parse the date strings catalog tags carry. Daminion's own rendering is
+    /// dotted and has no culture equivalent — a live catalog returns
+    /// <c>2025.12.27.11.23.52</c> — so that shape is matched exactly first;
+    /// ISO-8601 (with or without a zone) and culture-shaped values follow. A
+    /// value with no offset is wall-clock time and is read as local, then stored
+    /// as UTC — the same convention
+    /// <see cref="Processing.DedupService.ReadImageDateUtc"/> uses for EXIF, so
+    /// rows sort together whichever source filled them in.
+    /// </summary>
+    private static bool TryParseDateValue(string value, out DateTime result)
+    {
+        string[] dotted =
+        {
+            "yyyy.MM.dd.HH.mm.ss", "yyyy.MM.dd.HH.mm", "yyyy.MM.dd", "yyyy.MM.dd HH:mm:ss",
+        };
+        if (DateTime.TryParseExact(value.Trim(), dotted,
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AllowWhiteSpaces, out var dottedParsed))
+        {
+            result = DateTime.SpecifyKind(dottedParsed, DateTimeKind.Local).ToUniversalTime();
+            return true;
+        }
+
+        var styles = System.Globalization.DateTimeStyles.AllowWhiteSpaces;
+        foreach (var culture in new[]
+                 {
+                     System.Globalization.CultureInfo.InvariantCulture,
+                     System.Globalization.CultureInfo.CurrentCulture,
+                 })
+        {
+            if (DateTimeOffset.TryParse(value, culture, styles, out var withOffset))
+            {
+                result = withOffset.UtcDateTime;
+                return true;
+            }
+            if (DateTime.TryParse(value, culture, styles, out var bare))
+            {
+                result = bare.Kind switch
+                {
+                    DateTimeKind.Utc => bare,
+                    DateTimeKind.Local => bare.ToUniversalTime(),
+                    _ => DateTime.SpecifyKind(bare, DateTimeKind.Local).ToUniversalTime(),
+                };
+                return true;
+            }
+        }
+        result = default;
+        return false;
+    }
+
+    private static void CollectKeyValuePairs(JsonElement node, List<(string Key, string Value)> found)
+    {
+        switch (node.ValueKind)
+        {
+            case JsonValueKind.Object:
+                foreach (var property in node.EnumerateObject())
+                {
+                    if (property.Value.ValueKind is JsonValueKind.String or JsonValueKind.Number)
+                        found.Add((property.Name, property.Value.ToString()));
+                    CollectKeyValuePairs(property.Value, found);
+                }
+                break;
+            case JsonValueKind.Array:
+                foreach (var element in node.EnumerateArray())
+                    CollectKeyValuePairs(element, found);
+                break;
+        }
+    }
+
+    public async Task LogoutAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            await GetApi().Logout().ConfigureAwait(false);
+        }
+        catch
+        {
+            // best-effort
+        }
+        lock (_stateLock) _authenticated = false;
+    }
+
+    /// <summary>
+    /// The GUID of the catalog this session is bound to, or null when the
+    /// server cannot report one. The catalog is selected by the server URL, so
+    /// this is how the UI names the one the login actually landed on. The
+    /// response shape is not documented, so it is read defensively (a bare
+    /// string, or an object wrapping the GUID) and the raw payload is logged
+    /// when unreadable.
+    /// </summary>
+    public async Task<string?> GetCatalogGuidAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            var json = await GetApi().GetCatalogGuid().ConfigureAwait(false);
+            var guid = ExtractCatalogGuid(json);
+
+            if (guid is null)
+                SynapicLog.Warning(nameof(DaminionApiClient),
+                    $"Catalog guid: no usable value in response (raw: {Truncate(json.ToString(), 200)})");
+            else
+                SynapicLog.Info(nameof(DaminionApiClient), $"Catalog guid: {guid}");
+
+            return guid;
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Warning(nameof(DaminionApiClient), $"Catalog guid lookup failed: {e.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Pull the catalog GUID out of a <c>Settings/GetCatalogGuid</c> payload.
+    /// The shape is undocumented and differs between server builds, so three
+    /// forms are accepted: a bare string, an object carrying the GUID under a
+    /// well-known key, and the standard envelope
+    /// <c>{"data":"&lt;guid&gt;","error":null,"success":true,"errorCode":0}</c>
+    /// that Daminion 11 answers with - the last one used to be rejected and
+    /// logged as "no usable value" on every connect.
+    /// </summary>
+    public static string? ExtractCatalogGuid(JsonElement json)
+    {
+        switch (json.ValueKind)
+        {
+            case JsonValueKind.String:
+                return NonEmpty(json.GetString());
+
+            case JsonValueKind.Object:
+                var direct = GetString(
+                    json, "guid", "Guid", "catalogGuid", "CatalogGuid",
+                    "catalogGUID", "value", "Value", "result", "Result");
+                if (direct is not null) return direct;
+
+                foreach (var key in new[] { "data", "Data" })
+                {
+                    if (!json.TryGetProperty(key, out var data)) continue;
+                    if (data.ValueKind == JsonValueKind.String) return NonEmpty(data.GetString());
+                    if (data.ValueKind == JsonValueKind.Object)
+                    {
+                        var nested = ExtractCatalogGuid(data);
+                        if (nested is not null) return nested;
+                    }
+                }
+                return null;
+
+            default:
+                return null;
+        }
+    }
+
+    private static string? NonEmpty(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value;
+
+    private static string Truncate(string value, int max) =>
+        value.Length <= max ? value : value[..max] + "...";
+}

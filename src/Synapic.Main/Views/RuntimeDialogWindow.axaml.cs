@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Synapic.Main.Services;
 
+using Synapic.Core.Services;
 namespace Synapic.Main.Views;
 
 /// <summary>

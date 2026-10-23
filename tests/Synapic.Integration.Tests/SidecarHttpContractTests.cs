@@ -5,6 +5,7 @@ using Synapic.Main.Services;
 using Synapic.Shared.Contracts;
 using Xunit;
 
+using Synapic.Core.Services;
 namespace Synapic.Integration.Tests;
 
 /// <summary>

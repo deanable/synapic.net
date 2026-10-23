@@ -30,8 +30,10 @@ public class UpscaleRouteTests
         return session;
     }
 
+    // The server is running: an upscale run is gated on it, and these tests are
+    // about the view wiring, not the server lifecycle.
     private static MainWindowViewModel Shell(Session session) =>
-        new(new FakeSidecar(), session, () => null, null, null, _ => null);
+        new(new FakeSidecar { IsRunning = true }, session, () => null, null, null, _ => null);
 
     private static bool EffectivelyVisible(Control control) =>
         control.IsVisible &&
@@ -68,7 +70,7 @@ public class UpscaleRouteTests
         Assert.True(vm.Operations.Upscale.SourceReady);
         Assert.Contains(folder, vm.Operations.Upscale.SourceSummary, StringComparison.Ordinal);
 
-        // With a source and a sidecar there is no gate left.
+        // With an existing folder and a running server there is no gate left.
         Assert.True(vm.UpscaleOperation.IsRunEnabled);
         Assert.Null(vm.UpscaleOperation.RunDisabledReason);
     }

@@ -1,0 +1,1041 @@
+using System.Diagnostics;
+using System.IO;
+using System.Net.Http;
+using System.Runtime.InteropServices;
+using Synapic.Shared;
+using Synapic.Shared.Contracts;
+
+namespace Synapic.Core.Services;
+
+/// <summary>Sidecar lifecycle state shown in the UI server indicator (spec §2).</summary>
+public enum SidecarStatus
+{
+    Stopped,
+    Starting,
+    Ready,
+    Error,
+}
+
+public sealed class SidecarStatusChangedEventArgs : EventArgs
+{
+    public SidecarStatus Status { get; }
+    public string? Message { get; }
+
+    public SidecarStatusChangedEventArgs(SidecarStatus status, string? message = null)
+    {
+        Status = status;
+        Message = message;
+    }
+}
+
+/// <summary>
+/// Launches and manages the PyInstaller sidecar process (spec §5.3):
+/// auto-launched with the app by default (`ui.autoLaunchSidecar=false` opts
+/// out to manual Start/Stop), orphan-free shutdown either way.
+/// </summary>
+public interface IInferenceSidecar : IAsyncDisposable
+{
+    SidecarStatus CurrentStatus { get; }
+    int SidecarPort { get; }
+    bool IsRunning { get; }
+
+    /// <summary>
+    /// OS process id of the running child, or null when nothing is running. A
+    /// headless host records it so a crash leftover can be identified on the
+    /// next start; defaulted so the desktop's test fakes need no change.
+    /// </summary>
+    int? ProcessId => null;
+
+    event EventHandler<SidecarStatusChangedEventArgs>? StatusChanged;
+    event Action<string>? LogReceived;
+
+    Task StartAsync(CancellationToken ct = default);
+    Task StopAsync(TimeSpan? gracefulTimeout = null);
+    Task<TagResponse> TagAsync(TagRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// POST /upscale: the sidecar's Swin2SR/Lanczos upscale (the original app's
+    /// upscaler). Defaulted (error result) so the sidecar-only test fakes need
+    /// no change; the upscale route wires a real implementation.
+    /// </summary>
+    Task<UpscaleResponse> UpscaleAsync(UpscaleRequest request, CancellationToken ct = default)
+        => Task.FromException<UpscaleResponse>(new NotSupportedException("This sidecar fake does not implement /upscale."));
+
+    /// <summary>
+    /// PUT /config with the device the run should use. The sidecar builds its
+    /// /tag pipeline from its session device, which is otherwise only set at
+    /// launch, so a change made while the server is already running has to be
+    /// pushed. Defaulted (no-op) so the sidecar-only test fakes need no change;
+    /// only a running server is contacted.
+    /// </summary>
+    Task SetDeviceAsync(string? device, CancellationToken ct = default) => Task.CompletedTask;
+    Task<ModelInfo[]> ListModelsAsync(CancellationToken ct = default);
+    Task DownloadModelAsync(string modelId, CancellationToken ct = default);
+    Task<HealthResponse> GetHealthAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// GET /prompt: the built-in tag instruction, so Step 2 can offer the shipped
+    /// wording as a starting point instead of keeping its own copy of it.
+    /// Defaulted (empty result) so the sidecar-only test fakes need no change.
+    /// </summary>
+    Task<PromptDefaultsDto> GetPromptDefaultsAsync(CancellationToken ct = default)
+        => Task.FromResult(new PromptDefaultsDto());
+
+    /// <summary>
+    /// Non-null while the launched exe is older than the sidecar source (dev
+    /// checkouts only), so the status bar can say the build is stale instead of
+    /// that only showing up in the log. Defaulted so test fakes need no change.
+    /// </summary>
+    string? StaleBuildNotice => null;
+}
+
+public sealed class InferenceSidecarService : IInferenceSidecar
+{
+    private const string PortFileEnvVar = "SYNAPIC_PORT_FILE";
+    private static readonly TimeSpan HealthTimeout = TimeSpan.FromSeconds(120);
+
+    private HttpClient _httpClient;
+    private InferenceApiClient _api;
+    private readonly object _gate = new();
+
+    /// <summary>
+    /// Snapshot of the API client read under the gate: ConfigurePort swaps the
+    /// client while requests may be in flight (the UI health poll runs during
+    /// the port discovery window), so reads are serialized rather than racing
+    /// the field swap.
+    /// </summary>
+    private InferenceApiClient Api { get { lock (_gate) return _api; } }
+
+    private Process? _process;
+    private SidecarStatus _status = SidecarStatus.Stopped;
+    private int _port;
+    private CancellationTokenSource? _livenessCts;
+    private readonly SidecarLaunchOptions _options;
+
+    public event EventHandler<SidecarStatusChangedEventArgs>? StatusChanged;
+    public event Action<string>? LogReceived;
+
+    public InferenceSidecarService(HttpClient? httpClient = null, SidecarLaunchOptions? options = null)
+    {
+        _httpClient = httpClient ?? new HttpClient();
+        _api = new InferenceApiClient(_httpClient);
+        _options = options ?? new SidecarLaunchOptions();
+    }
+
+    /// <summary>
+    /// The compute device the run is configured for (Step 2's Device combo,
+    /// persisted in the session). It decides which variant gets launched and is
+    /// handed to the sidecar in <see cref="DeviceEnvVar"/>, so selecting CUDA is
+    /// what makes the CUDA build run instead of only being recorded in
+    /// config.json.
+    /// </summary>
+    public string DeviceSelection => NormalizeDevice(_options.DeviceProvider?.DeviceSelection);
+
+    /// <summary>
+    /// Canonical form of a device name, whitelisted because the value comes from
+    /// a config file and ends up in a command line: anything unrecognized is
+    /// CPU.
+    /// </summary>
+    public static string NormalizeDevice(string? device) => (device ?? "").Trim().ToLowerInvariant() switch
+    {
+        "cuda" => "cuda",
+        "mps" => "mps",
+        _ => "cpu",
+    };
+
+    /// <summary>
+    /// RIDs to try, in order, for a requested device. CUDA is a Windows-only
+    /// packaging variant (<c>win-x64-cuda</c>) that otherwise shares this
+    /// machine's RID, and it is only preferred when CUDA was actually asked for:
+    /// the CPU build is the safe default everywhere else.
+    /// </summary>
+    public static IReadOnlyList<string> VariantPreferenceForDevice(string? device)
+    {
+        var preferred = PreferredRid();
+        // Same platform gate as BuildableRids: -cuda only exists for Windows.
+        if (!OperatingSystem.IsWindows())
+            return new[] { preferred };
+        if (!string.Equals(NormalizeDevice(device), "cuda", StringComparison.Ordinal))
+            return new[] { preferred };
+        return new[] { preferred + "-cuda", preferred };
+    }
+
+    /// <summary>
+    /// Environment variable carrying the device to the sidecar it launches.
+    ///
+    /// Deliberately not a command-line argument: an executable built before the
+    /// sidecar learned the flag would refuse to start at all (argparse rejects
+    /// unknown arguments), and an older sidecar must keep working - the app and
+    /// the server are updated independently. An unknown environment variable is
+    /// simply ignored, so the device reaches a current build at boot (the
+    /// warm-up then loads the right model once) and an older one right after via
+    /// <see cref="SetDeviceAsync"/>.
+    /// </summary>
+    public const string DeviceEnvVar = "SYNAPIC_DEVICE";
+
+    public SidecarStatus CurrentStatus
+    {
+        get { lock (_gate) return _status; }
+    }
+
+    public int SidecarPort
+    {
+        get { lock (_gate) return _port; }
+    }
+
+    public bool IsRunning
+    {
+        get
+        {
+            lock (_gate)
+            {
+                var p = _process;
+                return p is { HasExited: false };
+            }
+        }
+    }
+
+    public int? ProcessId
+    {
+        get
+        {
+            lock (_gate)
+            {
+                var p = _process;
+                return p is { HasExited: false } ? p.Id : null;
+            }
+        }
+    }
+
+    private void SetStatus(SidecarStatus status, string? message = null)
+    {
+        bool changed;
+        lock (_gate)
+        {
+            changed = _status != status;
+            _status = status;
+        }
+        SynapicLog.Info(nameof(InferenceSidecarService), $"Sidecar status: {status}{(message is null ? "" : $" — {message}")}");
+        if (changed) StatusChanged?.Invoke(this, new SidecarStatusChangedEventArgs(status, message));
+    }
+
+    /// <summary>
+    /// Locates the sidecar executable: bundled next to the app executable, or
+    /// in a dev checkout's artifacts output (found by walking up to the repo
+    /// root). Returns null when no executable exists yet.
+    /// </summary>
+    /// <summary>Sidecar executable file name for this platform.</summary>
+    public static string ExeName => OperatingSystem.IsWindows() ? "synapic-inference.exe" : "synapic-inference";
+
+    /// <summary>The RID whose output this machine runs by default.</summary>
+    public static string PreferredRid()
+    {
+        var arm64 = RuntimeInformation.ProcessArchitecture == Architecture.Arm64;
+        return OperatingSystem.IsWindows() ? "win-x64"
+            : OperatingSystem.IsMacOS() ? (arm64 ? "osx-arm64" : "osx-x64")
+            : (arm64 ? "linux-arm64" : "linux-x64");
+    }
+
+    /// <summary>
+    /// RIDs this machine can build a sidecar for, most recommended first.
+    /// CUDA is a Windows-only packaging variant - it shares the win-x64
+    /// interpreter and differs only in which torch wheels are installed and
+    /// bundled (see build/install-python-deps.ps1).
+    /// </summary>
+    public static IReadOnlyList<string> BuildableRids()
+    {
+        if (OperatingSystem.IsWindows())
+            return new[] { "win-x64", "win-x64-cuda" };
+        return new[] { PreferredRid() };
+    }
+
+    /// <summary>Friendly platform name for a RID, e.g. "CPU" or "CUDA".</summary>
+    public static string VariantDisplayName(string rid) =>
+        rid.EndsWith("-cuda", StringComparison.OrdinalIgnoreCase) ? "CUDA (NVIDIA GPU)" : "CPU";
+
+    /// <summary>
+    /// Locates the built sidecar for one specific RID. A packaged install
+    /// bundles a single executable next to the app, which satisfies whichever
+    /// RID matches this machine; downloaded variants live per RID in the user's
+    /// writable sidecar directory; dev checkouts look in artifacts/&lt;rid&gt;.
+    /// </summary>
+    public static string? FindExecutableForRid(string rid)
+    {
+        if (string.Equals(rid, PreferredRid(), StringComparison.OrdinalIgnoreCase))
+        {
+            var bundled = Path.Combine(AppContext.BaseDirectory, ExeName);
+            if (File.Exists(bundled)) return bundled;
+        }
+
+        // A download the user fetched (anything an installed app picked up from
+        // the release page) lands in the per-user directory, which is writable
+        // for an ordinary user where the app folder (Program Files) is not.
+        var userPath = Path.Combine(UserSidecarRoot(), rid, ExeName);
+        if (File.Exists(userPath)) return userPath;
+
+        var repoRoot = FindRepoRoot();
+        if (repoRoot is null) return null;
+
+        var path = Path.Combine(repoRoot, "artifacts", rid, ExeName);
+        return File.Exists(path) ? path : null;
+    }
+
+    /// <summary>
+    /// Root of the per-user sidecar directory: <c>%LOCALAPPDATA%\Synapic\sidecars</c>
+    /// on Windows (writable for an ordinary user, unlike the app's own folder),
+    /// <c>$XDG_DATA_HOME</c>/<c>~/.local/share</c> elsewhere. One folder per RID
+    /// beneath it, so the CPU and CUDA variants can coexist even though every
+    /// executable is named the same. <c>SYNAPIC_SIDECAR_ROOT</c> overrides the
+    /// root - the seam tests and custom installs use to relocate it.
+    /// </summary>
+    /// <summary>Environment variable relocating the per-user sidecar directory
+    /// (tests and custom installs).</summary>
+    public const string UserSidecarRootEnvVar = "SYNAPIC_SIDECAR_ROOT";
+
+    public static string UserSidecarRoot()
+    {
+        var overrideRoot = Environment.GetEnvironmentVariable(UserSidecarRootEnvVar);
+        if (!string.IsNullOrWhiteSpace(overrideRoot)) return overrideRoot;
+
+        if (OperatingSystem.IsWindows())
+        {
+            return Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Synapic", "sidecars");
+        }
+
+        var dataHome = Environment.GetEnvironmentVariable("XDG_DATA_HOME");
+        var baseDir = string.IsNullOrEmpty(dataHome)
+            ? Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                ".local", "share")
+            : dataHome;
+        return Path.Combine(baseDir, "Synapic", "sidecars");
+    }
+
+    /// <summary>
+    /// Where a <em>downloaded</em> sidecar for <paramref name="rid"/> belongs:
+    /// a per-RID folder under the user's writable sidecar directory. Always the
+    /// user directory, in a dev checkout too — the build button's artifacts
+    /// output and the bundled installer executable stay where they are, and a
+    /// download must never collide with a checkout's own build output. Per-RID
+    /// folders keep the CPU and CUDA variants from overwriting each other
+    /// (code review R11); <see cref="FindExecutableForRid"/> looks here first.
+    /// </summary>
+    public static string SidecarInstallPath(string rid) =>
+        Path.Combine(UserSidecarRoot(), rid, ExeName);
+
+    /// <summary>
+    /// Set while the launched exe is older than the sidecar source (dev
+    /// checkouts only - installed apps have no source tree to compare against).
+    /// A stale build is refused at launch, so this is set at the moment the
+    /// run is blocked - not merely a status-bar hint.
+    /// </summary>
+    public string? StaleBuildNotice { get; private set; }
+
+    /// <summary>
+    /// Compares the sidecar exe's timestamp with the newest file it is built
+    /// from (<c>src/Synapic.Inference</c>), returning a description when the
+    /// exe predates the source and null when it is current or unknowable
+    /// (no repo root, no source tree, unreadable timestamps).
+    /// </summary>
+    public static string? DescribeStaleness(string sidecarPath, string? repoRoot)
+    {
+        try
+        {
+            if (repoRoot is null || !File.Exists(sidecarPath)) return null;
+
+            var sourceDir = Path.Combine(repoRoot, "src", "Synapic.Inference");
+            if (!Directory.Exists(sourceDir)) return null;
+
+            var newest = Directory
+                .EnumerateFiles(sourceDir, "*", SearchOption.AllDirectories)
+                .Where(IsSidecarSourceFile)
+                .Select(File.GetLastWriteTimeUtc)
+                .DefaultIfEmpty(DateTime.MinValue)
+                .Max();
+            if (newest == DateTime.MinValue) return null;
+
+            var built = File.GetLastWriteTimeUtc(sidecarPath);
+            if (built >= newest) return null;
+
+            return $"exe built {built:yyyy-MM-dd HH:mm}Z but the sidecar source changed {newest:yyyy-MM-dd HH:mm}Z";
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The user-facing reason a stale executable is refused, or null when the
+    /// executable is current. A run is hard-blocked rather than served from
+    /// bytes older than the source, so the message names the exact fix (the
+    /// Build/Download pair in the setup panel). Pure so it is directly testable.
+    /// </summary>
+    public static string? DescribeStaleLaunchBlock(string sidecarPath, string? repoRoot)
+    {
+        var staleness = DescribeStaleness(sidecarPath, repoRoot);
+        return staleness is null ? null : FormatStaleLaunchBlock(staleness);
+    }
+
+    /// <summary>Wraps a staleness description (from <see cref="DescribeStaleness"/>)
+    /// in the instructions that unblock the run.</summary>
+    public static string FormatStaleLaunchBlock(string staleness) =>
+        $"The inference server is out of date and will not be started: {staleness}. " +
+        "Use Download to fetch the latest prebuilt executable in the Settings view's " +
+        "Inference tab - then start the server again.";
+
+    private static bool IsSidecarSourceFile(string path)
+    {
+        var name = Path.GetFileName(path);
+        return path.EndsWith(".py", StringComparison.OrdinalIgnoreCase)
+            || path.EndsWith(".spec", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("requirements.txt", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("pyproject.toml", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static string? FindExecutable()
+    {
+        var bundled = Path.Combine(AppContext.BaseDirectory, ExeName);
+        if (File.Exists(bundled)) return bundled;
+
+        // Downloaded variants first (an installed app's only source of them),
+        // then the dev checkout's artifacts. Preferred RID before any other.
+        var userRoot = UserSidecarRoot();
+        var userPreferred = Path.Combine(userRoot, PreferredRid(), ExeName);
+        if (File.Exists(userPreferred)) return userPreferred;
+        if (Directory.Exists(userRoot))
+        {
+            foreach (var dir in Directory.EnumerateDirectories(userRoot))
+            {
+                var candidate = Path.Combine(dir, ExeName);
+                if (File.Exists(candidate)) return candidate;
+            }
+        }
+
+        var repoRoot = FindRepoRoot();
+        if (repoRoot is null) return null;
+
+        var artifactsDir = Path.Combine(repoRoot, "artifacts");
+        if (!Directory.Exists(artifactsDir)) return null;
+
+        // Prefer the output matching this machine's RID, then any other.
+        var preferred = Path.Combine(artifactsDir, PreferredRid(), ExeName);
+        if (File.Exists(preferred)) return preferred;
+
+        foreach (var dir in Directory.EnumerateDirectories(artifactsDir))
+        {
+            var candidate = Path.Combine(dir, ExeName);
+            if (File.Exists(candidate)) return candidate;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Locates the executable to launch for one device: the CUDA build when CUDA
+    /// was selected and one exists, otherwise the same executable
+    /// <see cref="FindExecutable"/> would have picked. A dev checkout with both
+    /// variants built is the case that matters - it holds both files, and the
+    /// plain lookup below always returns the CPU one.
+    /// </summary>
+    /// <summary>
+    /// The host's explicit executable (a service's bundled sidecar) wins when it
+    /// exists; otherwise discovery is unchanged from the desktop's behavior.
+    /// </summary>
+    private string? ResolveSidecarPath(string device)
+    {
+        var overridePath = _options.ExecutablePathOverride;
+        if (!string.IsNullOrWhiteSpace(overridePath))
+            return File.Exists(overridePath) ? overridePath : null;
+        return FindExecutableForDevice(device);
+    }
+
+    public static string? FindExecutableForDevice(string? device)
+    {
+        foreach (var rid in VariantPreferenceForDevice(device))
+        {
+            var exe = FindExecutableForRid(rid);
+            if (exe is not null) return exe;
+        }
+        return FindExecutable();
+    }
+
+    /// <summary>
+    /// Says so when CUDA is selected but the executable that will run is
+    /// plainly a CPU build. Only the repo checkout can be judged from the path
+    /// (artifacts/&lt;rid&gt;); a bundled executable has no RID in its name, and the
+    /// truth for it comes from the device the server reports - which the status
+    /// bar shows.
+    /// </summary>
+    private static void WarnIfDeviceCannotBeHonoured(string device, string sidecarPath)
+    {
+        if (!string.Equals(device, "cuda", StringComparison.Ordinal)) return;
+
+        var repoRoot = FindRepoRoot();
+        if (repoRoot is null) return;
+
+        var artifactsDir = Path.Combine(repoRoot, "artifacts") + Path.DirectorySeparatorChar;
+        if (!sidecarPath.StartsWith(artifactsDir, StringComparison.OrdinalIgnoreCase)) return;
+
+        var rid = Path.GetFileName(Path.GetDirectoryName(sidecarPath) ?? "");
+        if (rid.EndsWith("-cuda", StringComparison.OrdinalIgnoreCase)) return;
+
+        SynapicLog.Warning(nameof(InferenceSidecarService),
+            $"CUDA is selected in Step 2 but '{sidecarPath}' ({rid}) is a CPU build - " +
+            "tagging will run on the CPU. Download the CUDA variant in the setup panel.");
+    }
+
+    /// <summary>
+    /// Walks up from the app directory to the repository root (dev checkouts
+    /// only; installed apps carry no .sln).
+    /// </summary>
+    public static string? FindRepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        for (var i = 0; i < 12 && dir is not null; i++, dir = dir.Parent)
+        {
+            if (File.Exists(Path.Combine(dir.FullName, "Synapic.Net.sln")))
+                return dir.FullName;
+        }
+        return null;
+    }
+
+    public async Task StartAsync(CancellationToken ct = default)
+    {
+        SynapicLog.Info(nameof(InferenceSidecarService), $"StartAsync requested (current status: {CurrentStatus})");
+        lock (_gate)
+        {
+            if (_status is SidecarStatus.Starting or SidecarStatus.Ready)
+            {
+                SynapicLog.Info(nameof(InferenceSidecarService), "StartAsync ignored - sidecar already starting/ready");
+                return;
+            }
+            if (_process is { HasExited: false })
+            {
+                SynapicLog.Info(nameof(InferenceSidecarService), "StartAsync ignored - sidecar process alive");
+                SetStatus(SidecarStatus.Ready);
+                return;
+            }
+        }
+
+        var device = DeviceSelection;
+        var sidecarPath = ResolveSidecarPath(device);
+        if (sidecarPath is null)
+        {
+            var exeName = OperatingSystem.IsWindows() ? "synapic-inference.exe" : "synapic-inference";
+            SynapicLog.Error(nameof(InferenceSidecarService),
+                $"Sidecar executable not found. Searched bundled: {Path.Combine(AppContext.BaseDirectory, exeName)} and artifacts/ under repo root: {FindRepoRoot() ?? "<repo root not found>"}");
+            SetStatus(SidecarStatus.Error, "Sidecar executable not found - build it first");
+            throw new FileNotFoundException("Sidecar executable not found. Download a variant in Settings first.");
+        }
+
+        WarnIfDeviceCannotBeHonoured(device, sidecarPath);
+
+        // Hard block: never run an executable older than the sidecar source. The
+        // old behaviour merely warned and launched anyway, so a stale binary kept
+        // silently reproducing bugs that were already fixed - the running binary,
+        // not the source, was the bug. Refuse, say exactly how to fix it, and let
+        // the setup panel (already surfaced for a stale variant) do the rebuild.
+        // A packaged host owns the binary it ships and cannot offer a rebuild, so
+        // it asks for this check to be skipped; the desktop keeps it.
+        StaleBuildNotice = _options.EnforceSourceStaleness
+            ? DescribeStaleness(sidecarPath, FindRepoRoot())
+            : null;
+        if (StaleBuildNotice is not null)
+        {
+            var block = FormatStaleLaunchBlock(StaleBuildNotice);
+            SynapicLog.Error(nameof(InferenceSidecarService), block);
+            SetStatus(SidecarStatus.Error, block);
+            throw new InvalidOperationException(block);
+        }
+
+        SweepStalePortFiles();
+        SetStatus(SidecarStatus.Starting);
+
+        var portFile = Path.Combine(Path.GetTempPath(), $"synapic_port_{Environment.ProcessId}.txt");
+        File.Delete(portFile);
+
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = sidecarPath,
+            Arguments = "--port=0",
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+        startInfo.EnvironmentVariables[PortFileEnvVar] = portFile;
+        startInfo.EnvironmentVariables[DeviceEnvVar] = device;
+        // Model cache location (spec §6.2): the sidecar's HF_HOME points at
+        // the Synapic-managed models directory.
+        startInfo.EnvironmentVariables["HF_HOME"] = ModelsRoot();
+
+        var process = new Process { StartInfo = startInfo };
+        process.OutputDataReceived += (_, e) =>
+        {
+            if (e.Data is not null)
+            {
+                SynapicLog.Debug(nameof(InferenceSidecarService), $"[sidecar] {e.Data}");
+                LogReceived?.Invoke(e.Data);
+            }
+        };
+        process.ErrorDataReceived += (_, e) =>
+        {
+            if (e.Data is not null)
+            {
+                SynapicLog.Debug(nameof(InferenceSidecarService), $"[sidecar:err] {e.Data}");
+                LogReceived?.Invoke(e.Data);
+            }
+        };
+
+        try
+        {
+            if (!process.Start())
+                throw new InvalidOperationException("Failed to start sidecar process");
+        }
+        catch (Exception e)
+        {
+            process.Dispose();
+            SetStatus(SidecarStatus.Error, e.Message);
+            throw;
+        }
+
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+
+        lock (_gate)
+        {
+            _process = process;
+            _livenessCts = new CancellationTokenSource();
+        }
+
+        _ = WatchProcessExitAsync(process, _livenessCts!.Token);
+
+        SynapicLog.Info(nameof(InferenceSidecarService),
+            $"Sidecar launched for device '{device}': pid {process.Id}, exe {sidecarPath}, args '{startInfo.Arguments}', port file {portFile}, HF_HOME {startInfo.EnvironmentVariables["HF_HOME"]}");
+
+        // Tie the sidecar's lifetime to this app's (spec §2 orphan-free
+        // shutdown): when the app exits - even by crash or kill - the OS
+        // terminates the sidecar. This is the root fix for the app finding a
+        // leftover server "already running" on the next launch.
+        ProcessJob.AssignChild(process);
+
+        try
+        {
+            var port = await ReadPortFileAsync(sidecarPath, portFile, ct).ConfigureAwait(false);
+            ConfigurePort(port);
+            SynapicLog.Info(nameof(InferenceSidecarService), $"Port file read: port {port}");
+
+            // State the device over HTTP as well, which is how a sidecar built
+            // before the environment variable still learns it. The port file is
+            // written before uvicorn starts, so this lands well inside the
+            // warm-up's grace period. Bounded and non-fatal: a server that
+            // cannot be configured still serves (on the CPU), and the device it
+            // reports is what the status bar shows.
+            using (var devicePush = CancellationTokenSource.CreateLinkedTokenSource(ct))
+            {
+                devicePush.CancelAfter(TimeSpan.FromSeconds(5));
+                await SetDeviceAsync(device, devicePush.Token).ConfigureAwait(false);
+            }
+
+            await WaitUntilReadyAsync(ct).ConfigureAwait(false);
+            SetStatus(SidecarStatus.Ready);
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Error(nameof(InferenceSidecarService), "Sidecar startup failed", e);
+            SetStatus(SidecarStatus.Error, e.Message);
+            await StopAsync().ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Deletes leftover port files whose sidecar pid is dead (from crashed
+    /// sessions). Pure hygiene: stale files can no longer be adopted, but
+    /// removing them keeps the temp directory and logs meaningful.
+    /// </summary>
+    private static void SweepStalePortFiles()
+    {
+        try
+        {
+            foreach (var file in Directory.GetFiles(Path.GetTempPath(), "synapic_port_*.txt"))
+            {
+                try
+                {
+                    var lines = File.ReadAllLines(file).Where(l => !string.IsNullOrWhiteSpace(l)).ToArray();
+                    if (lines.Length >= 2 && int.TryParse(lines[1].Trim(), out var pid) && IsPidAlive(pid))
+                        continue; // still-running sidecar - leave it alone
+                    File.Delete(file);
+                    SynapicLog.Debug(nameof(InferenceSidecarService), $"Removed stale port file: {file}");
+                }
+                catch (Exception)
+                {
+                    // Best effort.
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Debug(nameof(InferenceSidecarService), $"Port file sweep skipped: {e.Message}");
+        }
+    }
+
+    private static bool IsPidAlive(int pid)
+    {
+        try
+        {
+            using var process = Process.GetProcessById(pid);
+            return !process.HasExited;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public static string ModelsRoot()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            return Path.Combine(localAppData, "Synapic", "models");
+        }
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        return Path.Combine(home, ".cache", "synapic", "models");
+    }
+
+    private static async Task<int> ReadPortFileAsync(string sidecarPath, string portFile, CancellationToken ct)
+    {
+        SynapicLog.Debug(nameof(InferenceSidecarService), $"Waiting for port file: {portFile}");
+
+        // PyInstaller onefile unpack dominates cold starts: the 227 MB CPU bundle
+        // measured ~25 s to its port file, and the 2.7 GB CUDA bundle is roughly
+        // 12x that - under real startup load (Defender scanning a just-downloaded
+        // 2.7 GB exe, disk contention with the app itself booting) the first
+        // launch after a fresh download can need several minutes. So this budget
+        // scales with the bundle: ~25 s base + ~3 s per 100 MB, clamped, and the
+        // /health poll afterwards keeps the flat 120 s because by then the
+        // unpack is done and the server is up.
+        var elapsed = Stopwatch.StartNew();
+        var timeout = PortFileTimeoutFor(sidecarPath);
+        var deadline = DateTime.UtcNow + timeout;
+        SynapicLog.Info(nameof(InferenceSidecarService),
+            $"Port-file wait budget: {timeout.TotalSeconds:F0}s (exe {PortFileTimeoutExeSize(sidecarPath)} bytes)");
+        const int pollMs = 200;
+        var nextReportMs = 2000;
+        while (DateTime.UtcNow < deadline)
+        {
+            if (elapsed.ElapsedMilliseconds >= nextReportMs)
+            {
+                SynapicLog.Debug(nameof(InferenceSidecarService),
+                    $"Still waiting for port file ({nextReportMs / 1000} of {timeout.TotalSeconds:F0}s)... (sidecar unpacking/booting)");
+                nextReportMs += 2000;
+            }
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                if (File.Exists(portFile))
+                {
+                    var content = await File.ReadAllTextAsync(portFile, ct).ConfigureAwait(false);
+                    var lines = content.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                    if (lines.Length >= 1 && int.TryParse(lines[0].Trim(), out var port) && port > 0)
+                    {
+                        // Validate PID liveness when present (port file protocol).
+                        if (lines.Length >= 2 && int.TryParse(lines[1].Trim(), out var pid))
+                        {
+                            try
+                            {
+                                using var proc = Process.GetProcessById(pid);
+                            }
+                            catch (ArgumentException e)
+                            {
+                                throw new InvalidOperationException($"Sidecar pid {pid} is not alive", e);
+                            }
+                        }
+                        return port;
+                    }
+                }
+            }
+            catch (InvalidOperationException)
+            {
+                throw;
+            }
+            catch (Exception)
+            {
+                // File may be mid-write; retry.
+            }
+            await Task.Delay(pollMs, ct).ConfigureAwait(false);
+        }
+        throw new TimeoutException(
+            $"Timed out waiting for the sidecar port file after {timeout.TotalSeconds:F0}s "
+            + $"(elapsed {elapsed.Elapsed.TotalSeconds:F0}s)");
+    }
+
+    /// <summary>
+    /// Wait budget for the port file, scaled to the size of the launched exe.
+    /// PyInstaller onefile bootloaders unpack to a temp dir before the program
+    /// runs, and that unpack is the whole of a cold start. Measured here
+    /// (2026-10-14, cold cache with Defender scanning): the 226 MB CPU bundle
+    /// took ~130 s to its port file — the old 25 s base + 3 s per 100 MB
+    /// formula bottoms out at the 40 s floor for every bundle under 500 MB
+    /// and declares a healthy boot dead. Budget = 25 s base + 0.5 s per MB,
+    /// clamped to [180 s, 10 min]: a warm start still returns the moment the
+    /// file lands, so a patient budget only costs a longer wait, never a slow
+    /// boot (the UI stays on Starting with “unpacking/booting” log lines
+    /// every 2 s meanwhile).
+    /// </summary>
+    private static TimeSpan PortFileTimeoutFor(string sidecarPath)
+    {
+        var megaBytes = PortFileTimeoutExeSize(sidecarPath) / (1024.0 * 1024.0);
+        var seconds = Math.Clamp(25.0 + megaBytes * 0.5, 180.0, 600.0);
+        return TimeSpan.FromSeconds(seconds);
+    }
+
+    private static long PortFileTimeoutExeSize(string sidecarPath)
+    {
+        try
+        {
+            return new FileInfo(sidecarPath).Length;
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    private async Task WaitUntilReadyAsync(CancellationToken ct)
+    {
+        SynapicLog.Debug(nameof(InferenceSidecarService), $"Polling /health until ready (max {HealthTimeout.TotalSeconds:F0}s)");
+        var deadline = DateTime.UtcNow + HealthTimeout;
+        var attempts = 0;
+        while (DateTime.UtcNow < deadline)
+        {
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                var health = await Api.GetHealthAsync(ct).ConfigureAwait(false);
+                attempts++;
+                if (string.Equals(health.Status, "ready", StringComparison.OrdinalIgnoreCase))
+                {
+                    SynapicLog.Info(nameof(InferenceSidecarService), $"/health ready after {attempts} poll(s)");
+                    return;
+                }
+                // Log progress periodically so slow boots are visible in the log.
+                if (attempts % 20 == 1)
+                    SynapicLog.Debug(nameof(InferenceSidecarService),
+                        $"/health attempt {attempts}: status={health.Status} model={health.Model}");
+                if (string.Equals(health.Status, "error", StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException(health.Error ?? "Sidecar reported error state");
+            }
+            catch (InvalidOperationException)
+            {
+                throw;
+            }
+            catch (Exception)
+            {
+                // Connection refused while uvicorn boots — keep polling.
+                if (++attempts % 20 == 1)
+                    SynapicLog.Debug(nameof(InferenceSidecarService), $"/health attempt {attempts}: connection refused (server booting)");
+            }
+            await Task.Delay(500, ct).ConfigureAwait(false);
+        }
+        throw new TimeoutException($"Sidecar did not become ready within {HealthTimeout.TotalSeconds}s");
+    }
+
+    private async Task WatchProcessExitAsync(Process process, CancellationToken ct)
+    {
+        try
+        {
+            await process.WaitForExitAsync(ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return; // deliberate stop
+        }
+        catch (Exception)
+        {
+            // WaitForExitAsync can throw when the process handle detaches.
+        }
+
+        lock (_gate)
+        {
+            if (!ReferenceEquals(_process, process)) return; // replaced by a newer launch
+            _process = null;
+        }
+
+        try
+        {
+            SynapicLog.Info(nameof(InferenceSidecarService), $"Sidecar process exited (pid {process.Id}, exit code {process.ExitCode})");
+        }
+        catch
+        {
+            SynapicLog.Info(nameof(InferenceSidecarService), "Sidecar process exited (exit code unavailable)");
+        }
+
+        if (CurrentStatus is SidecarStatus.Ready or SidecarStatus.Starting)
+        {
+            SynapicLog.Warning(nameof(InferenceSidecarService), "Sidecar process exited unexpectedly");
+            SetStatus(SidecarStatus.Error, "Server stopped unexpectedly");
+        }
+    }
+
+    public async Task StopAsync(TimeSpan? gracefulTimeout = null)
+    {
+        var timeout = gracefulTimeout ?? TimeSpan.FromSeconds(5);
+        Process? process;
+        CancellationTokenSource? livenessCts;
+        lock (_gate)
+        {
+            process = _process;
+            livenessCts = _livenessCts;
+            _process = null;
+            _livenessCts = null;
+        }
+
+        SetStatus(SidecarStatus.Stopped);
+
+        if (process is null)
+        {
+            SynapicLog.Info(nameof(InferenceSidecarService), "StopAsync: no sidecar process to stop");
+            return;
+        }
+
+        livenessCts?.Cancel();
+
+        try
+        {
+            if (!process.HasExited)
+            {
+                if (SidecarPort > 0)
+                {
+                    using var shutdownCts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+                    await Api.ShutdownAsync(shutdownCts.Token).ConfigureAwait(false);
+                }
+                else
+                {
+                    SynapicLog.Debug(nameof(InferenceSidecarService), "Port never became known - skipping graceful shutdown POST, killing directly");
+                }
+                await process.WaitForExitAsync(new CancellationTokenSource(timeout).Token).ConfigureAwait(false);
+            }
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Warning(nameof(InferenceSidecarService), $"Graceful shutdown failed ({e.Message}); killing process tree");
+        }
+        finally
+        {
+            try
+            {
+                if (!process.HasExited)
+                    process.Kill(entireProcessTree: true);
+            }
+            catch
+            {
+                // Already exited.
+            }
+            process.Dispose();
+        }
+
+        try
+        {
+            var ownPortFile = Path.Combine(Path.GetTempPath(), $"synapic_port_{Environment.ProcessId}.txt");
+            if (File.Exists(ownPortFile)) File.Delete(ownPortFile);
+        }
+        catch
+        {
+            // Best effort.
+        }
+
+        SynapicLog.Info(nameof(InferenceSidecarService), "Sidecar stopped");
+    }
+
+    private void ConfigurePort(int port)
+    {
+        // HttpClient forbids changing BaseAddress after its first request -
+        // and the UI health poll during "Starting" marks the original
+        // instance as started. Recreate the client (and API wrapper) bound
+        // to the port instead of mutating the existing one; the swap is
+        // serialized with readers under _gate so a request racing the rebind
+        // cannot take a half-swapped client pair.
+        var newClient = new HttpClient
+        {
+            BaseAddress = new Uri($"http://127.0.0.1:{port}/"),
+            Timeout = Timeout.InfiniteTimeSpan,
+        };
+        var newApi = new InferenceApiClient(newClient);
+        HttpClient oldClient;
+        lock (_gate)
+        {
+            _port = port;
+            oldClient = _httpClient;
+            _api = newApi;
+            _httpClient = newClient;
+        }
+        // The pre-rebind client has no BaseAddress, so it can only fail
+        // requests; disposing it just releases those resources early.
+        oldClient.Dispose();
+        SynapicLog.Debug(nameof(InferenceSidecarService), $"API client bound to http://127.0.0.1:{port}/");
+    }
+
+    public async Task<HealthResponse> GetHealthAsync(CancellationToken ct = default) => await Api.GetHealthAsync(ct).ConfigureAwait(false);
+
+    /// <summary>
+    /// PUT /config: tell a running server which device the next /tag should use.
+    /// The launch argument already sets the device for a server this app
+    /// started, so this covers a device changed while it runs - the sidecar
+    /// rebuilds its pipeline on the next tag (its cache is keyed by device).
+    /// A stopped server is not contacted: nothing is running to configure, and
+    /// the next launch passes the device on the command line.
+    /// </summary>
+    public async Task SetDeviceAsync(string? device, CancellationToken ct = default)
+    {
+        if (!IsRunning || SidecarPort <= 0) return;
+
+        var requested = NormalizeDevice(device);
+        try
+        {
+            await Api.UpdateConfigAsync(new ConfigDto { Device = requested }, ct).ConfigureAwait(false);
+            SynapicLog.Info(nameof(InferenceSidecarService),
+                $"Sidecar session device set to '{requested}' - the next /tag loads the model there");
+        }
+        catch (Exception e)
+        {
+            SynapicLog.Warning(nameof(InferenceSidecarService),
+                $"Could not set the sidecar device to '{requested}': {e.Message}");
+        }
+    }
+
+    public async Task<TagResponse> TagAsync(TagRequest request, CancellationToken ct = default)
+    {
+        return await Api.TagAsync(request, ct).ConfigureAwait(false);
+    }
+
+    public async Task<UpscaleResponse> UpscaleAsync(UpscaleRequest request, CancellationToken ct = default)
+    {
+        return await Api.UpscaleAsync(request, ct).ConfigureAwait(false);
+    }
+
+    public async Task<ModelInfo[]> ListModelsAsync(CancellationToken ct = default)
+    {
+        return await Api.ListModelsAsync(ct).ConfigureAwait(false);
+    }
+
+    public async Task<PromptDefaultsDto> GetPromptDefaultsAsync(CancellationToken ct = default)
+    {
+        return await Api.GetPromptDefaultsAsync(ct).ConfigureAwait(false);
+    }
+
+    public async Task DownloadModelAsync(string modelId, CancellationToken ct = default)
+    {
+        await Api.DownloadModelAsync(modelId, "main", ct).ConfigureAwait(false);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await StopAsync().ConfigureAwait(false);
+        _httpClient.Dispose();
+        GC.SuppressFinalize(this);
+    }
+}

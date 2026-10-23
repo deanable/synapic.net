@@ -1,0 +1,97 @@
+Phase 6 acceptance — work detection and the durable queue
+Date: 2026-10-22
+Host: this machine, Synapic.Indexer.exe (Release, net10.0-windows), --console
+Config used for the run (restored afterwards):
+  schedule = IntervalAndWatch, intervalMinutes = 1, watchPaths = <TEMP>\synapic-phase6-fixture,
+  watchRecursive = true, engine.device = cpu
+Fixture: alpha.jpg, Beta.JPEG, sub/gamma.tiff, notes.txt, empty.jpg (0 bytes)
+
+--------------------------------------------------------------------------
+1. Interval scan at startup — supported files only, exactly once
+--------------------------------------------------------------------------
+2026-10-22 22:51:42.422 [INF] IndexerWorkerService: Indexer service started (schedule IntervalAndWatch, every 1 min, max 4 concurrent, device cpu).
+2026-10-22 22:51:42.423 [INF] ScanScheduler: Interval detection every 1 min (local).
+2026-10-22 22:51:42.425 [INF] FolderWatcher: Watching C:\Users\Dean\AppData\Local\Temp\synapic-phase6-fixture (recursive: True, debounce: 5 s).
+2026-10-22 22:51:42.446 [INF] WorkIntake: Enqueued 3 of 3 candidate(s); 0 already queued or unchanged.
+2026-10-22 22:51:42.446 [INF] ScanScheduler: scan: source=local found=3 enqueued=3 skipped=0 errors=0
+
+notes.txt and the zero-length empty.jpg produced no rows. The sidecar became ready
+independently (port 50937) — detection does not wait for the model.
+
+--------------------------------------------------------------------------
+2. Watch mode — one debounced enqueue, then an idempotent interval tick
+--------------------------------------------------------------------------
+22:52:30  wrote delta.png into the watched root
+2026-10-22 22:52:34.575 [INF] WorkIntake: Enqueued 1 of 1 candidate(s); 0 already queued or unchanged.
+2026-10-22 22:52:42.462 [INF] ScanScheduler: scan: source=local found=4 enqueued=0 skipped=4 errors=0
+
+The file was queued once, ~5 s after the write (the debounce window), and the next
+interval scan found all four files already owned by the queue (four hash-free skips).
+
+--------------------------------------------------------------------------
+3. --status while the service is running (read-only, read-write WAL present)
+--------------------------------------------------------------------------
+> Synapic.Indexer.exe --status
+queue: C:\ProgramData\Synapic\state\indexer.db
+Pending 4
+InFlight 0
+Completed 0
+TransientFailure 0
+Failed 0
+Recent failures:
+  none
+exit=0
+
+--------------------------------------------------------------------------
+4. Crash mid-batch — InFlight row recovered on the next start
+--------------------------------------------------------------------------
+Forced kill of the console process tree (taskkill /T /F). No synapic-inference.exe
+remained: "INFO: No tasks are running which match the specified criteria."
+
+Seeded the crash state directly (the executor that would set InFlight arrives in phase 7):
+  update jobs set state='InFlight', attempts=attempts+1 where id=1
+  insert into job_events ... ('Pending','InFlight','simulated crash mid-batch')
+  -> [(1, 'InFlight', 1), (2, 'Pending', 0), (3, 'Pending', 0), (4, 'Pending', 0)]
+
+Restart:
+2026-10-22 22:53:36.521 [WRN] IndexerQueue: Recovered 1 InFlight job(s) left by the previous run; they are Pending again.
+2026-10-22 22:53:36.592 [INF] ScanScheduler: scan: source=local found=4 enqueued=0 skipped=4 errors=0
+
+> Synapic.Indexer.exe --status
+Pending 4
+InFlight 0
+
+job_events for job 1:
+  (None, 'Pending', 'detected')
+  ('Pending', 'InFlight', 'simulated crash mid-batch')
+  ('InFlight', 'Pending', 'service restart')
+
+No duplicate rows were created: the recovery turned the one crashed row back into
+Pending and the following scan enqueued nothing.
+
+--------------------------------------------------------------------------
+5. --status after shutdown (no writer, WAL companion still present)
+--------------------------------------------------------------------------
+> Synapic.Indexer.exe --status
+queue: C:\ProgramData\Synapic\state\indexer.db
+Pending 4
+InFlight 0
+Completed 0
+TransientFailure 0
+Failed 0
+Recent failures:
+  none
+exit=0
+
+State directory before the run: empty. After the run it held indexer.db, its WAL/SHM
+companions (SQLite's own, not the service's) and sidecar.pid. All were removed after
+the transcript was captured, and the dev config was restored from a backup.
+
+--------------------------------------------------------------------------
+6. What this transcript does NOT prove
+--------------------------------------------------------------------------
+- The real mid-batch kill of a running batch: there is no executor until phase 7, so
+  the InFlight state above was seeded. 07-03/08-03 repeat this with a live batch.
+- The Daminion path: no catalog is reachable from this machine. It is covered by
+  DaminionWorkSourceTests with a fake fetch seam (mapping, unavailable server,
+  credential failures, unsupported scope).

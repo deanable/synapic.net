@@ -36,5 +36,13 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools]
 packages = ["synapic_inference"]
 
+# The modules live at this directory's root, but the distribution ships them as
+# the `synapic_inference` package (the entry point is synapic_inference.service,
+# and the tests import them bare). Mapping the package onto "." gives both the
+# same file set; without it setuptools looks for a literal ./synapic_inference
+# directory and `uv build` fails (review R21).
+[tool.setuptools.package-dir]
+synapic_inference = "."
+
 [tool.pytest.ini_options]
 testpaths = ["../../tests/Synapic.Inference.Tests"]

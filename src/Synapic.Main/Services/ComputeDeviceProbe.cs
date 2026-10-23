@@ -1,5 +1,6 @@
 using System.IO;
 
+using Synapic.Core.Services;
 namespace Synapic.Main.Services;
 
 /// <summary>

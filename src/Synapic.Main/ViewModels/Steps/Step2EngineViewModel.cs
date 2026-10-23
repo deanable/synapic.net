@@ -4,9 +4,10 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Synapic.Main.Models;
 using Synapic.Main.Services;
-using Synapic.Main.Services.Processing;
+using Synapic.Core.Services.Processing;
 using Synapic.Shared.Contracts;
 
+using Synapic.Core.Services;
 namespace Synapic.Main.ViewModels.Steps;
 
 /// <summary>

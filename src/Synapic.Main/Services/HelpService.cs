@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Security.Cryptography;
 using System.Text.Json;
 
+using Synapic.Core.Services;
 namespace Synapic.Main.Services;
 
 /// <summary>

@@ -1,9 +1,10 @@
 using Microsoft.Extensions.DependencyInjection;
 using Synapic.Main.Models;
-using Synapic.Main.Services.Processing;
+using Synapic.Core.Services.Processing;
 using Synapic.Main.ViewModels.Steps;
 using Xunit;
 
+using Synapic.Core.Services;
 namespace Synapic.Main.Tests;
 
 /// <summary>
@@ -266,8 +267,10 @@ public class DedupFingerprintRestoreTests
             Assert.Single(first.Groups);
             Assert.Single(Directory.GetFiles(cacheDir.Path, "dedup-*.json.gz"));
 
-            // Tag is reversible, so it needs no confirmation; one copy is kept and
-            // the other is acted on.
+            // Delete the acted-on copy (confirmed), so one copy is kept and the
+            // other is really gone — the case the saved scan must not survive.
+            first.SelectedAction = 1; // Delete from disk
+            first.ConfirmAction = _ => Task.FromResult(true);
             first.Groups[0].Items[1].IsChecked = false;
             await first.ApplyCommand.ExecuteAsync(null);
 
@@ -479,8 +482,8 @@ public class DedupFingerprintRestoreTests
             session.Datasource.LocalPath = folder;
 
             var services = new ServiceCollection();
-            services.AddSingleton<Synapic.Main.Services.IInferenceSidecar,
-                Synapic.Main.Services.InferenceSidecarService>();
+            services.AddSingleton<Synapic.Core.Services.IInferenceSidecar,
+                Synapic.Core.Services.InferenceSidecarService>();
             services.AddSingleton(session);
             services.AddSingleton(cache);
             services.AddSingleton<Synapic.Main.ViewModels.MainWindowViewModel>();

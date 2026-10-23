@@ -15,6 +15,7 @@ using Synapic.Main.ViewModels;
 using Synapic.Main.Views;
 using Xunit;
 
+using Synapic.Core.Services;
 namespace Synapic.Main.Tests;
 
 /// <summary>

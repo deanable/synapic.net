@@ -1,6 +1,7 @@
 using Synapic.Main.Services;
 using Synapic.Shared.Contracts;
 
+using Synapic.Core.Services;
 namespace Synapic.Main.Tests;
 
 /// <summary>In-memory IInferenceSidecar for view-model tests.</summary>

@@ -1,9 +1,9 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using Synapic.Main.Services;
-using Synapic.Main.Services.Daminion;
-using Synapic.Main.Services.Processing;
+using Synapic.Core.Services;
+using Synapic.Core.Services.Daminion;
+using Synapic.Core.Services.Processing;
 using Synapic.Shared.Contracts;
 using Xunit;
 using Xunit.Abstractions;
@@ -12,10 +12,10 @@ namespace Synapic.Main.Tests;
 
 /// <summary>
 /// The upscale flow's catalog dance (daminion_api.py VersionControlAPI port):
-/// CheckOut/UndoCheckOut must post {"Ids":[…]} to /api/VersionControl/…, and
+/// CheckOut/UndoCheckOut must post {"Ids":[â€¦]} to /api/VersionControl/â€¦, and
 /// CheckIn must be multipart (id + comment + file), retrying without the
 /// comment when the server rejects it. A wrong field name here makes Daminion
-/// silently ignore the call, so the request shape is what this asserts —
+/// silently ignore the call, so the request shape is what this asserts â€”
 /// not just the response envelope.
 /// </summary>
 public class DaminionVersionControlRequestTests
@@ -112,7 +112,7 @@ public class DaminionVersionControlRequestTests
             var checkIns = server.Snapshot().Where(r => r.Path == "/api/VersionControl/CheckIn").ToList();
             Assert.Equal(2, checkIns.Count);
             // First attempt carries the comment; the fallback drops it but still
-            // uploads the file — exactly what daminion_api.py does.
+            // uploads the file â€” exactly what daminion_api.py does.
             Assert.Contains("name=comment", checkIns[0].Body, StringComparison.Ordinal);
             Assert.DoesNotContain("name=comment", checkIns[1].Body, StringComparison.Ordinal);
             Assert.Contains("name=id", checkIns[1].Body, StringComparison.Ordinal);
@@ -384,7 +384,7 @@ public class DaminionVersionControlRequestTests
 
     /// <summary>Tiny HTTP/1.1 responder over TcpListener (no http.sys, no URL ACL)
     /// that records every version-control request and answers with configurable
-    /// status codes — the comment-fallback path needs both.</summary>
+    /// status codes â€” the comment-fallback path needs both.</summary>
     private sealed class VersionStub : IDisposable
     {
         public sealed record Record(string Path, string Body, string? ContentType);
@@ -406,7 +406,7 @@ public class DaminionVersionControlRequestTests
         public int DownloadStatus { get; set; } = 200;
         public byte[] OriginalBytes { get; set; } = Encoding.UTF8.GetBytes("STUB-ORIGINAL");
 
-        /// <summary>attempt (1-based) → HTTP status for CheckIn.</summary>
+        /// <summary>attempt (1-based) â†’ HTTP status for CheckIn.</summary>
         public Func<int, int> CheckInStatus { get; set; } = _ => 200;
         public Func<int, string> CheckInBody { get; set; } = _ => "{}";
 
@@ -498,7 +498,7 @@ public class DaminionVersionControlRequestTests
             }
             catch
             {
-                // Client went away mid-request — irrelevant to the assertions.
+                // Client went away mid-request â€” irrelevant to the assertions.
             }
         }
 
@@ -588,7 +588,7 @@ public class DaminionVersionControlRequestTests
                     break;
                 pos = lineEnd + 2;
                 if (size == 0) break;                       // terminal chunk
-                if (pos + size > raw.Length) break;         // truncated — keep what we have
+                if (pos + size > raw.Length) break;         // truncated â€” keep what we have
                 result.Append(raw, pos, size);
                 pos += size + 2;                            // skip the chunk's trailing CRLF
             }

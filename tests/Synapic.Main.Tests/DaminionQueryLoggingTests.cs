@@ -1,7 +1,7 @@
 using System.Text.Json;
-using Synapic.Main.Services;
-using Synapic.Main.Services.Daminion;
-using Synapic.Main.Services.Processing;
+using Synapic.Core.Services;
+using Synapic.Core.Services.Daminion;
+using Synapic.Core.Services.Processing;
 using Xunit;
 
 namespace Synapic.Main.Tests;
@@ -32,7 +32,7 @@ public class DaminionQueryLoggingTests : IDisposable
                 // The page claims the whole catalog; the count says 7.
                 totalCount = 47_851,
             }),
-            // A filtered count is 7; the unfiltered catalog count is 47,851 —
+            // A filtered count is 7; the unfiltered catalog count is 47,851 â€”
             // exactly the pair that used to leave the progress bar tiny.
             countBody: path => path.Contains("search=", StringComparison.Ordinal)
                 ? "{\"count\":7}"

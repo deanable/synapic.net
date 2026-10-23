@@ -1,10 +1,11 @@
 using System.Diagnostics;
 using Synapic.Main.Services;
-using Synapic.Main.Services.Daminion;
-using Synapic.Main.Services.Processing;
+using Synapic.Core.Services.Daminion;
+using Synapic.Core.Services.Processing;
 using Synapic.Shared.Contracts;
 using Xunit;
 
+using Synapic.Core.Services;
 namespace Synapic.Main.Tests;
 
 /// <summary>
@@ -39,18 +40,22 @@ public class EndToEndRoundTripTests
     /// JPEG on disk ends up with the tags the model produced (write path proven,
     /// not just the HTTP hop). Skips when the sidecar exe has not been built.
     /// </summary>
-    [Fact]
+    [SkippableFact]
     public async Task Local_round_trip_via_real_sidecar_writes_metadata()
     {
         var exe = InferenceSidecarService.FindExecutable();
-        if (exe is null)
-        {
-            // Sidecar not built in this environment — nothing to verify here.
-            return;
-        }
+        // An absent bundle is an environment fact, not a pass: report it as a
+        // skip so a run without a built sidecar cannot look like coverage.
+        Skip.If(exe is null, "The sidecar executable has not been built in this environment.");
         var sample = FindSampleImage();
-        if (sample is null)
+        Skip.If(sample is null, "TestData/sample.jpg is missing.");
+
+        // A bundle older than the sidecar source is refused on purpose, and that
+        // guard has its own tests (SidecarStalenessTests); starting it here would
+        // exercise stale code and call a correct refusal a failure.
+        if (InferenceSidecarService.DescribeStaleness(exe!, InferenceSidecarService.FindRepoRoot()) is { } stale)
         {
+            Skip.If(true, $"The sidecar bundle is out of date ({stale}) — rebuild it to run the round trip.");
             return;
         }
 

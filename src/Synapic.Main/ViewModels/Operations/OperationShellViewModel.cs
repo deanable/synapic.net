@@ -3,9 +3,10 @@ using System.ComponentModel;
 using System.Threading.Tasks;
 using Synapic.Main.Models;
 using Synapic.Main.Services;
-using Synapic.Main.Services.Processing;
+using Synapic.Core.Services.Processing;
 using Synapic.Main.ViewModels.Steps;
 
+using Synapic.Core.Services;
 namespace Synapic.Main.ViewModels.Operations;
 
 /// <summary>
@@ -88,6 +89,14 @@ public partial class OperationShellViewModel : ViewModelBase
         TagParameters.PropertyChanged += OnTagParametersChanged;
         TagRun.PropertyChanged += OnRunStateChanged;
         Upscale.PropertyChanged += OnRunStateChanged;
+        // The two matching searches are runs too: a scan or apply in flight locks
+        // navigation like a batch does, so a second operation cannot be opened
+        // and started over the same source mid-pass.
+        Dedup.PropertyChanged += OnRunStateChanged;
+        Similar.PropertyChanged += OnRunStateChanged;
+        // Report work (retry, verify) writes to the source too, so it is part of
+        // the same activity lock.
+        TagReport.PropertyChanged += OnRunStateChanged;
     }
 
     /// <summary>Region A — the one shared source, for every mode (D4).</summary>
@@ -116,11 +125,16 @@ public partial class OperationShellViewModel : ViewModelBase
     public StepUpscaleViewModel Upscale { get; }
 
     /// <summary>
-    /// True while a batch is running (ui-design §6.3 run lock): the shell uses
-    /// this to lock leaving the open mode, exactly as the wizard's navigation
-    /// lock did before the collapse.
+    /// True while any operation is doing work (ui-design §6.3 run lock): a batch,
+    /// an upscale run, or a matching scan/apply. The shell uses this to lock
+    /// leaving the open mode — and because every mode is locked out together, it
+    /// is also what keeps two operations from running over one source at once.
     /// </summary>
-    public bool IsRunning => TagRun.IsRunning || Upscale.IsRunning;
+    public bool IsRunning =>
+        TagRun.IsRunning || Upscale.IsRunning ||
+        Dedup.IsScanning || Dedup.IsApplying ||
+        Similar.IsScanning || Similar.IsApplying ||
+        TagReport.HasActiveWork;
 
     /// <summary>Raised when <see cref="IsRunning"/> changes, so the shell can re-read it.</summary>
     public event EventHandler? NavigationLockChanged;
@@ -214,16 +228,21 @@ public partial class OperationShellViewModel : ViewModelBase
     {
         if (e.PropertyName is nameof(Step2EngineViewModel.TagKeywords)
             or nameof(Step2EngineViewModel.TagCategories)
-            or nameof(Step2EngineViewModel.TagDescription))
+            or nameof(Step2EngineViewModel.TagDescription)
+            or nameof(Step2EngineViewModel.ManualModelId)
+            or nameof(Step2EngineViewModel.SelectedLfmVariant))
         {
-            TagRun.StartCommand.NotifyCanExecuteChanged();
+            TagRun.NotifyStartGateChanged();
         }
     }
 
     private void OnRunStateChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(Step3ProcessViewModel.IsRunning)
-            or nameof(StepUpscaleViewModel.IsRunning))
+            or nameof(StepUpscaleViewModel.IsRunning)
+            or nameof(StepDedupViewModel.IsScanning)
+            or nameof(StepDedupViewModel.IsApplying)
+            or nameof(Step4ResultsViewModel.IsBusy))
         {
             NavigationLockChanged?.Invoke(this, EventArgs.Empty);
         }

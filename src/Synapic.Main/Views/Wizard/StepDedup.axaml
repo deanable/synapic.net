@@ -49,6 +49,14 @@
           </WrapPanel>
           <TextBlock Classes="hint" Text="{Binding RetuneHint}" TextWrapping="Wrap" />
         </StackPanel>
+
+        <!-- A catalog result built from the server's exact hashes has no
+             perceptual set to re-filter: the slider is hidden (CanRetune is
+             false) and this says why, instead of leaving a hole where the
+             control used to be. -->
+        <TextBlock x:Name="ExactHashScanNotice" Classes="hint"
+                   Text="{Binding ExactHashScanHint}"
+                   IsVisible="{Binding IsExactHashOnlyScan}" TextWrapping="Wrap" />
         <!-- Retained fingerprints only re-group; this walks and hashes every
              file again — the escape when source files changed or the last scan
              was trimmed. Hidden while nothing is retained (a scan then hashes

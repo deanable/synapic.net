@@ -1,0 +1,134 @@
+﻿=== acceptance run 2026-10-22T21:52:18.2495897+02:00 ===
+--- config under test ---
+{
+  "version": 1,
+  "service": {
+    "logLevel": "Information",
+    "idleSidecarTimeoutMinutes": 30
+  },
+  "schedule": {
+    "mode": "Interval",
+    "intervalMinutes": 15
+  },
+  "engine": {
+    "modelId": "LiquidAI/LFM2.5-VL-1.6B",
+    "device": "cpu"
+  }
+}
+--- Synapic.Indexer.exe --install ---
+
+Synapic.Indexer.exe --install exit code: 0
+--- sc.exe query (after install) ---
+
+SERVICE_NAME: SynapicIndexer 
+        TYPE               : 10  WIN32_OWN_PROCESS  
+        STATE              : 1  STOPPED 
+        WIN32_EXIT_CODE    : 1077  (0x435)
+        SERVICE_EXIT_CODE  : 0  (0x0)
+        CHECKPOINT         : 0x0
+        WAIT_HINT          : 0x0
+sc.exe query (after install) exit code: 0
+--- sc.exe start ---
+
+SERVICE_NAME: SynapicIndexer 
+        TYPE               : 10  WIN32_OWN_PROCESS  
+        STATE              : 2  START_PENDING 
+                                (NOT_STOPPABLE, NOT_PAUSABLE, IGNORES_SHUTDOWN)
+        WIN32_EXIT_CODE    : 0  (0x0)
+        SERVICE_EXIT_CODE  : 0  (0x0)
+        CHECKPOINT         : 0x0
+        WAIT_HINT          : 0x7d0
+        PID                : 27756
+        FLAGS              :
+sc.exe start exit code: 0
+service status after start: Running
+--- waiting for readiness (max 240 s) ---
+readiness reached: True (waited 97.9 s)
+--- file log (start of this run) ---
+2026-10-22 21:49:32.176 [INF] SidecarSupervisor: Starting sidecar 'C:\Users\Dean\source\repos\Synapic.NET\artifacts\win-x64\synapic-inference.exe' for device cpu.
+2026-10-22 21:49:32.178 [INF] InferenceSidecarService: StartAsync requested (current status: Stopped)
+2026-10-22 21:49:32.179 [INF] InferenceSidecarService: Sidecar status: Starting
+2026-10-22 21:49:32.198 [INF] InferenceSidecarService: Sidecar launched for device 'cpu': pid 42012, exe C:\Users\Dean\source\repos\Synapic.NET\artifacts\win-x64\synapic-inference.exe, args '--port=0', port file C:\WINDOWS\SystemTemp\synapic_port_48780.txt, HF_HOME C:\WINDOWS\system32\config\systemprofile\AppData\Local\Synapic\models
+2026-10-22 21:49:32.201 [INF] InferenceSidecarService: Port-file wait budget: 180s (exe 227438621 bytes)
+2026-10-22 21:51:37.257 [ERR] InferenceSidecarService: Sidecar startup failed
+   at Synapic.Core.Services.InferenceSidecarService.ReadPortFileAsync(String sidecarPath, String portFile, CancellationToken ct) in C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Core\Services\InferenceSidecarService.cs:line 769
+   at Synapic.Core.Services.InferenceSidecarService.StartAsync(CancellationToken ct) in C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Core\Services\InferenceSidecarService.cs:line 626
+2026-10-22 21:51:37.268 [INF] InferenceSidecarService: Sidecar status: Error â€” A task was canceled.
+2026-10-22 21:51:37.269 [INF] InferenceSidecarService: Sidecar status: Stopped
+2026-10-22 21:51:42.282 [WRN] InferenceSidecarService: Graceful shutdown failed (A task was canceled.); killing process tree
+2026-10-22 21:51:42.328 [INF] InferenceSidecarService: Sidecar stopped
+2026-10-22 21:51:42.336 [INF] InferenceSidecarService: Sidecar status: Stopped
+2026-10-22 21:51:42.336 [INF] InferenceSidecarService: StopAsync: no sidecar process to stop
+2026-10-22 21:51:42.786 [INF] SynapicLog: Synapic log started - directory: C:\ProgramData\Synapic\Logs (host-supplied sinks)
+2026-10-22 21:52:18.359 [INF] SynapicLog: Synapic log started - directory: C:\ProgramData\Synapic\Logs (host-supplied sinks)
+2026-10-22 21:52:18.673 [INF] SynapicLog: Synapic log started - directory: C:\ProgramData\Synapic\Logs (host-supplied sinks)
+2026-10-22 21:52:18.771 [INF] IndexerWorkerService: Indexer service started (schedule Interval, every 15 min, max 4 concurrent, device cpu).
+2026-10-22 21:52:18.772 [INF] SidecarSupervisor: Starting sidecar 'C:\Users\Dean\source\repos\Synapic.NET\artifacts\win-x64\synapic-inference.exe' for device cpu.
+2026-10-22 21:52:18.773 [INF] InferenceSidecarService: StartAsync requested (current status: Stopped)
+2026-10-22 21:52:18.774 [INF] InferenceSidecarService: Sidecar status: Starting
+2026-10-22 21:52:18.791 [INF] InferenceSidecarService: Sidecar launched for device 'cpu': pid 31984, exe C:\Users\Dean\source\repos\Synapic.NET\artifacts\win-x64\synapic-inference.exe, args '--port=0', port file C:\WINDOWS\SystemTemp\synapic_port_27756.txt, HF_HOME C:\WINDOWS\system32\config\systemprofile\AppData\Local\Synapic\models
+2026-10-22 21:52:18.794 [INF] InferenceSidecarService: Port-file wait budget: 180s (exe 227438621 bytes)
+2026-10-22 21:53:56.635 [INF] InferenceSidecarService: Port file read: port 50709
+2026-10-22 21:53:56.818 [INF] InferenceSidecarService: Sidecar session device set to 'cpu' - the next /tag loads the model there
+2026-10-22 21:53:56.827 [INF] InferenceSidecarService: /health ready after 1 poll(s)
+2026-10-22 21:53:56.827 [INF] InferenceSidecarService: Sidecar status: Ready
+2026-10-22 21:53:56.831 [INF] SidecarSupervisor: Sidecar ready on port 50709 (idle timeout 30 min).
+2026-10-22 21:53:56.831 [INF] IndexerWorkerService: Indexer ready; no work detection in this build (phase 6 adds the scheduler and queue).
+--- Application log entries from source SynapicIndexer ---
+
+TimeCreated         LevelDisplayName Message                                                                                                                                                            
+-----------         ---------------- -------                                                                                                                                                            
+2026/10/22 21:52:18 Information      Service started successfully.                                                                                                                                      
+2026/10/22 21:51:42 Information      Service stopped successfully.                                                                                                                                      
+2026/10/22 21:51:42 Warning          Graceful shutdown failed (A task was canceled.); killing process tree                                                                                              
+                                                                                                                                                                                                        
+2026/10/22 21:51:37 Error            Sidecar startup failed                                                                                                                                             
+                                     System.Threading.Tasks.TaskCanceledException: A task was canceled.                                                                                                 
+                                        at Synapic.Core.Services.InferenceSidecarService.ReadPortFileAsync(String sidecarPath, String portFile, CancellationToken ct) in                                
+                                     C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Core\Services\InferenceSidecarService.cs:line 769                                                               
+                                        at Synapic.Core.Services.InferenceSidecarService.StartAsync(CancellationToken ct) in                                                                            
+                                     C:\Users\Dean\source\repos\Synapic.NET\src\Synapic.Core\Services\InferenceSidecarService.cs:line 626                                                               
+                                                                                                                                                                                                        
+2026/10/22 21:49:32 Information      Service started successfully.                                                                                                                                      
+
+
+
+--- sc.exe stop (timed to STOPPED) ---
+
+SERVICE_NAME: SynapicIndexer 
+        TYPE               : 10  WIN32_OWN_PROCESS  
+        STATE              : 3  STOP_PENDING 
+                                (STOPPABLE, NOT_PAUSABLE, ACCEPTS_SHUTDOWN)
+        WIN32_EXIT_CODE    : 0  (0x0)
+        SERVICE_EXIT_CODE  : 0  (0x0)
+        CHECKPOINT         : 0x0
+        WAIT_HINT          : 0x0
+service status after stop: Stopped
+stop elapsed seconds: 4.87
+--- log lines written during the stop ---
+2026-10-22 21:52:18.774 [INF] InferenceSidecarService: Sidecar status: Starting
+2026-10-22 21:52:18.791 [INF] InferenceSidecarService: Sidecar launched for device 'cpu': pid 31984, exe C:\Users\Dean\source\repos\Synapic.NET\artifacts\win-x64\synapic-inference.exe, args '--port=0', port file C:\WINDOWS\SystemTemp\synapic_port_27756.txt, HF_HOME C:\WINDOWS\system32\config\systemprofile\AppData\Local\Synapic\models
+2026-10-22 21:52:18.794 [INF] InferenceSidecarService: Port-file wait budget: 180s (exe 227438621 bytes)
+2026-10-22 21:53:56.635 [INF] InferenceSidecarService: Port file read: port 50709
+2026-10-22 21:53:56.818 [INF] InferenceSidecarService: Sidecar session device set to 'cpu' - the next /tag loads the model there
+2026-10-22 21:53:56.827 [INF] InferenceSidecarService: /health ready after 1 poll(s)
+2026-10-22 21:53:56.827 [INF] InferenceSidecarService: Sidecar status: Ready
+2026-10-22 21:53:56.831 [INF] SidecarSupervisor: Sidecar ready on port 50709 (idle timeout 30 min).
+2026-10-22 21:53:56.831 [INF] IndexerWorkerService: Indexer ready; no work detection in this build (phase 6 adds the scheduler and queue).
+2026-10-22 21:53:57.513 [INF] SidecarSupervisor: Stopping the sidecar.
+2026-10-22 21:53:57.514 [INF] InferenceSidecarService: Sidecar status: Stopped
+2026-10-22 21:54:02.281 [INF] InferenceSidecarService: Sidecar stopped
+2026-10-22 21:54:02.282 [INF] IndexerWorkerService: Indexer service stopped.
+2026-10-22 21:54:02.286 [INF] InferenceSidecarService: Sidecar status: Stopped
+2026-10-22 21:54:02.286 [INF] InferenceSidecarService: StopAsync: no sidecar process to stop
+--- orphan check ---
+no synapic-inference processes
+--- Synapic.Indexer.exe --uninstall ---
+
+Synapic.Indexer.exe --uninstall exit code: 0
+--- sc.exe query (after uninstall; 1060 = not installed) ---
+[SC] EnumQueryServicesStatus:OpenService FAILED 1060:
+
+The specified service does not exist as an installed service.
+sc.exe query (after uninstall; 1060 = not installed) exit code: 1060
+=== done 2026-10-22T21:54:02.6277026+02:00 ===

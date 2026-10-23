@@ -76,13 +76,21 @@ if (-not $SkipPublish) {
     & dotnet publish (Join-Path $repoRoot "src/Synapic.Main/Synapic.Main.csproj") `
         -c Release -r $Rid --self-contained false -p:PublishSingleFile=false -o $ArtifactsDir
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed with exit code $LASTEXITCODE" }
+
+    # D-11-28/D-11-29: the indexer shares the app's payload folder (it finds the
+    # sidecar beside itself) and is published second, so the app's shared
+    # assemblies stay the ones the desktop was built against.
+    Write-Host "Publishing the background indexer into the same payload..."
+    & dotnet publish (Join-Path $repoRoot "src/Synapic.Indexer/Synapic.Indexer.csproj") `
+        -c Release -r $Rid --self-contained false -p:PublishSingleFile=false -o $ArtifactsDir
+    if ($LASTEXITCODE -ne 0) { throw "dotnet publish of the indexer failed with exit code $LASTEXITCODE" }
 }
 
 # A payload that is not a publish would produce an installer that installs
 # nothing useful, and MSBuild is happy to leave an output directory untouched.
-foreach ($required in @("Synapic.exe", "Synapic.runtimeconfig.json")) {
+foreach ($required in @("Synapic.exe", "Synapic.runtimeconfig.json", "Synapic.Indexer.exe", "Synapic.Core.dll")) {
     if (-not (Test-Path (Join-Path $ArtifactsDir $required))) {
-        throw "$ArtifactsDir\$required is missing - that directory is not a Synapic publish. Run build/build-server.ps1 first, or let this script publish for you."
+        throw "$ArtifactsDir\$required is missing - that directory is not a complete Synapic publish (app + background indexer). Run build/build-server.ps1 first, or let this script publish for you."
     }
 }
 
@@ -199,6 +207,12 @@ foreach ($file in @($msi, $bundle)) {
     Write-Host "  $file ($([math]::Round((Get-Item $file).Length / 1MB, 1)) MB)"
 }
 Write-Host "`nThe MSI is installable on its own and refuses to install without .NET $runtimeMajor. The bundle installs the runtime first and then the MSI."
+# D-11-31: the MSI ships the background indexer's files but does not register
+# the service. --install owns service creation, recovery, the event source and
+# the ProgramData ACLs; a second implementation here is how two channels start
+# disagreeing. The operator command is documented in docs/indexer-operations.md.
+Write-Host "The MSI does not register the background indexer. After installing, run (elevated):"
+Write-Host "  `"$ArtifactsDir\Synapic.Indexer.exe`" --install"
 # Advisory, not part of the build: it always reports ICE61 for the same-version
 # upgrade above, which is expected, and a warning on every build trains people to
 # ignore the checks that matter.

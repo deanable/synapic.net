@@ -6,8 +6,8 @@ using System.Text.Json;
 using Synapic.Shared.Contracts;
 using Synapic.Main.Models;
 using Synapic.Main.Services;
-using Synapic.Main.Services.Daminion;
-using Synapic.Main.Services.Processing;
+using Synapic.Core.Services.Daminion;
+using Synapic.Core.Services.Processing;
 using Synapic.Main.ViewModels.Steps;
 using Synapic.Main.Views.Wizard;
 using Avalonia.Controls;
@@ -16,6 +16,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Xunit;
 
+using Synapic.Core.Services;
 namespace Synapic.Main.Tests;
 
 /// <summary>Behavioral checks for the filtered catalog selection used by Step 1 and all workflows.</summary>
@@ -470,7 +471,7 @@ public sealed class DaminionSelectionBehaviorTests
     [Fact]
     public void Daminion_similarity_requires_pixel_hashing()
     {
-        var options = new Synapic.Main.Services.Processing.DedupOptions(UseServerHashes: false);
+        var options = new Synapic.Core.Services.Processing.DedupOptions(UseServerHashes: false);
         Assert.False(options.UseServerHashes);
     }
 
@@ -646,7 +647,8 @@ public sealed class DaminionSelectionBehaviorTests
         Assert.True(source.IsDaminionConnected, source.ConnectionMessage);
 
         var vm = new StepDedupViewModel(step1: source);
-        var window = new Window { Content = new StepDedup { DataContext = vm }, Width = 1000, Height = 900 };
+        var view = new StepDedup { DataContext = vm };
+        var window = new Window { Content = view, Width = 1000, Height = 900 };
         window.Show();
         try
         {
@@ -654,6 +656,20 @@ public sealed class DaminionSelectionBehaviorTests
             Dispatcher.UIThread.RunJobs();
 
             Assert.Equal(2, server.GetIndexes.Length); // page 0 and the empty page after it
+
+            // This scope came entirely from the server's content hashes, so there
+            // is nothing for a threshold to move: the slider is gone and a line
+            // says why, instead of offering a control that cannot change the
+            // result (review A3).
+            Assert.True(vm.IsExactHashOnlyScan);
+            Assert.False(vm.CanRetune);
+            Assert.True(vm.HasRetainedScan); // …while a plain Scan still re-groups it
+            var slider = view.GetVisualDescendants().OfType<Slider>()
+                .Single(s => s.Name == "RetuneThresholdSlider");
+            Assert.False(slider.IsEffectivelyVisible); // its group is collapsed
+            Assert.Contains(view.GetVisualDescendants().OfType<TextBlock>(), text =>
+                text.Name == "ExactHashScanNotice" && text.IsEffectivelyVisible &&
+                text.Text?.Contains("compared exactly", StringComparison.Ordinal) == true);
             Assert.True(vm.HasRetrievalMismatch);
             Assert.Equal(5, vm.LastRetrieval!.ScopeCount);
             Assert.Equal(2, vm.LastRetrieval.Kept);
@@ -688,6 +704,62 @@ public sealed class DaminionSelectionBehaviorTests
             window.Close();
             source.DisconnectCommand.Execute(null);
         }
+    }
+
+    /// <summary>
+    /// The destructive half of R03: a scan's rows carry catalog ids, and a
+    /// catalog rebuilt behind the same URL reuses them, so an id can name a
+    /// different image by the time Apply runs. The write therefore re-checks the
+    /// catalog generation first and refuses, leaving the review list untouched —
+    /// a rescan is cheap, deleting the wrong image is not.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Catalog_apply_refuses_when_the_server_now_reports_another_catalog()
+    {
+        using var server = new CatalogServer(index => index == 0
+            ? JsonSerializer.Serialize(new
+            {
+                items = new[]
+                {
+                    new { id = 11, fileName = "copy-a.jpg", hashCode = 4242, fileSize = 1024 },
+                    new { id = 12, fileName = "copy-b.jpg", hashCode = 4242, fileSize = 2048 },
+                },
+                totalCount = 2,
+            })
+            : "{}");
+        var session = new Session();
+        session.Datasource.Type = "daminion";
+        var source = new Step1DatasourceViewModel(session)
+        {
+            DaminionUrl = server.BaseUrl,
+            DaminionUser = "test",
+            DaminionPass = "test",
+        };
+        await source.ConnectCommand.ExecuteAsync(null);
+        Assert.True(source.IsDaminionConnected, source.ConnectionMessage);
+        Assert.Equal("test-catalog", source.ActiveCatalog);
+
+        var vm = new StepDedupViewModel(step1: source);
+        await vm.ScanCommand.ExecuteAsync(null);
+        Assert.Single(vm.Groups);
+        Assert.Single(vm.Groups[0].Items, i => !i.IsChecked);
+
+        // The catalog is rebuilt behind the same URL while the review list stays
+        // on screen; the ids now name other records.
+        server.CatalogGuid = "rebuilt-catalog";
+        var prompts = 0;
+        vm.ConfirmAction = _ => { prompts++; return Task.FromResult(true); };
+        vm.SelectedAction = 0; // "Delete from catalog"
+
+        await vm.ApplyCommand.ExecuteAsync(null);
+
+        Assert.Contains("Catalog changed since this scan", vm.ScanSummary, StringComparison.Ordinal);
+        Assert.Contains("rebuilt-catalog", vm.ScanSummary, StringComparison.Ordinal);
+        Assert.Single(vm.Groups); // nothing left the review list
+        Assert.DoesNotContain(server.Routes, route =>
+            route.Contains("MediaItems/Remove", StringComparison.Ordinal));
+        // The gate sits between the user's confirmation and the write itself.
+        Assert.Equal(1, prompts);
     }
 
     /// <summary>
@@ -925,6 +997,13 @@ public sealed class DaminionSelectionBehaviorTests
         public string BaseUrl { get; }
         public int[] GetIndexes => _indexes.ToArray();
 
+        /// <summary>
+        /// The catalog guid this stub reports. A test can swap it to stand in for
+        /// a catalog that was rebuilt behind the same URL — the case where item
+        /// ids are reused and a scan's ids stop naming the reviewed images.
+        /// </summary>
+        public string CatalogGuid { get; set; } = "test-catalog";
+
         public CatalogServer(Func<int, string> items, Action<int>? thumbnailOverride = null,
             Func<int, string>? collectionItems = null, Func<string, string>? countBody = null)
         {
@@ -991,7 +1070,7 @@ public sealed class DaminionSelectionBehaviorTests
                 }
                 else if (route == "/api/Settings/GetCatalogGuid")
                 {
-                    body = "{\"guid\":\"test-catalog\"}";
+                    body = $"{{\"guid\":\"{CatalogGuid}\"}}";
                 }
                 else if (route == "/api/Settings/GetTags")
                 {

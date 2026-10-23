@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- Overrides Directory.Build.props: the service host, DPAPI and the Event
+         Log sink are Windows-only by design, and the TFM makes that explicit
+         instead of relying on runtime checks. -->
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RootNamespace>Synapic.Indexer</RootNamespace>
+    <AssemblyName>Synapic.Indexer</AssemblyName>
+    <RuntimeIdentifier></RuntimeIdentifier>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.12" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.12" />
+    <PackageReference Include="Serilog" Version="$(SerilogVersion)" />
+    <PackageReference Include="Serilog.Sinks.EventLog" Version="4.0.0" />
+    <PackageReference Include="System.Diagnostics.EventLog" Version="10.0.12" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Synapic.Indexer.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Synapic.Core\Synapic.Core.csproj" />
+    <ProjectReference Include="..\Synapic.Shared\Synapic.Shared.csproj" />
+  </ItemGroup>
+
+</Project>

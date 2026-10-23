@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text;
 
+using Synapic.Core.Services;
 namespace Synapic.Main.Services;
 
 /// <summary>One captured crash: the exception plus the environment context.</summary>

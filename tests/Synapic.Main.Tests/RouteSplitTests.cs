@@ -314,7 +314,7 @@ public class RouteSplitTests
 
             // No source yet: the *run* is what is blocked, and it says why.
             Assert.False(vm.DedupOperation.IsRunEnabled);
-            Assert.Equal("Choose a folder to scan", vm.DedupOperation.RunDisabledReason);
+            Assert.Equal("Choose a folder to scan in Settings", vm.DedupOperation.RunDisabledReason);
 
             vm.StartDedupRouteCommand.Execute(null);
             Assert.Same(vm.DedupOperation, vm.Shell.Current);

@@ -3,6 +3,7 @@ using System.Text;
 using Microsoft.Win32;
 using Synapic.Shared;
 
+using Synapic.Core.Services;
 namespace Synapic.Main.Services;
 
 /// <summary>Per-user Daminion connection parameters (Step 1 convenience).</summary>

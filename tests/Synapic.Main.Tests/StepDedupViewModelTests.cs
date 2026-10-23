@@ -4,13 +4,14 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Synapic.Main.Models;
 using Synapic.Main.Services;
-using Synapic.Main.Services.Processing;
+using Synapic.Core.Services.Processing;
 using Synapic.Main.ViewModels;
 using Synapic.Main.ViewModels.Operations;
 using Synapic.Main.ViewModels.Steps;
 using Synapic.Main.Views.Wizard;
 using Xunit;
 
+using Synapic.Core.Services;
 namespace Synapic.Main.Tests;
 
 /// <summary>
@@ -95,6 +96,86 @@ public class StepDedupViewModelTests
         }
     }
 
+    [Fact]
+    public async Task Apply_is_disabled_when_the_source_moved_since_the_scan()
+    {
+        var folder = Directory.CreateTempSubdirectory("synapic-apply-source-").FullName;
+        var other = Directory.CreateTempSubdirectory("synapic-apply-other-").FullName;
+        try
+        {
+            var a = Path.Combine(folder, "a.jpg");
+            var b = Path.Combine(folder, "b.jpg");
+            File.WriteAllText(a, "x");
+            File.WriteAllText(b, "y");
+
+            var fake = new FakeDedup();
+            fake.Hashes[a] = 0UL;
+            fake.Hashes[b] = 0b111UL;
+            var vm = new StepDedupViewModel(dedup: fake)
+            {
+                FolderPath = folder,
+                Threshold = 0.95,
+                SelectedAction = 1, // Delete: no destination needed for the gate
+            };
+            await vm.ScanCommand.ExecuteAsync(null);
+            Assert.Single(vm.Groups);
+            Assert.True(vm.ApplyCommand.CanExecute(null));
+
+            // The rows name files in the scanned folder; another folder is a
+            // different result set, so Apply must wait for a new scan.
+            vm.FolderPath = other;
+            Assert.False(vm.ApplyCommand.CanExecute(null));
+
+            // Pointing it back at the scanned folder restores the same rows.
+            vm.FolderPath = folder;
+            Assert.True(vm.ApplyCommand.CanExecute(null));
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+            Directory.Delete(other, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Local_scan_follows_the_recursive_scope_setting()
+    {
+        var root = Directory.CreateTempSubdirectory("synapic-scope-").FullName;
+        try
+        {
+            var image = FindSampleImage() ?? throw new InvalidOperationException("TestData/sample.jpg not found");
+            File.Copy(image, Path.Combine(root, "top.jpg"));
+            var nested = Directory.CreateDirectory(Path.Combine(root, "nested")).FullName;
+            File.Copy(image, Path.Combine(nested, "deep.jpg"));
+
+            var session = new Session();
+            session.Datasource.Type = "local";
+            var source = new Step1DatasourceViewModel(session)
+            {
+                LocalPath = root,
+                LocalRecursive = false,
+            };
+            var vm = new StepDedupViewModel(step1: source);
+
+            // Top-level only: the nested copy is outside the chosen scope, so the
+            // one image found has nothing to group with.
+            await vm.ScanCommand.ExecuteAsync(null);
+            Assert.Empty(vm.Groups);
+            Assert.Contains("1 images", vm.ScanSummary);
+
+            // Widening the scope is a source change: the next scan reads the
+            // subfolder too and groups the two identical copies.
+            source.LocalRecursive = true;
+            await vm.ScanCommand.ExecuteAsync(null);
+            var group = Assert.Single(vm.Groups);
+            Assert.Equal(2, group.Items.Count);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     [AvaloniaFact]
     public async Task Unreadable_images_show_no_duplicate_groups_in_the_visible_scan_summary()
     {
@@ -117,7 +198,7 @@ public class StepDedupViewModelTests
                 Assert.Empty(vm.Groups);
                 Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(),
                     text => text.Text == guidance && text.IsVisible);
-                Assert.Contains(Synapic.Main.Services.SynapicLog.UiSink.Snapshot(), entry =>
+                Assert.Contains(Synapic.Core.Services.SynapicLog.UiSink.Snapshot(), entry =>
                     entry.RenderedMessage.Contains("Could not hash '" + Path.Combine(folder, "broken.jpg") + "'", StringComparison.Ordinal));
             }
             finally
@@ -694,7 +775,9 @@ public class StepDedupViewModelTests
 
         Assert.True(vm.IsLocalSelected);
         Assert.False(vm.IsDaminionSelected);
-        Assert.Equal(new[] { "Tag", "Move to folder…", "Delete from disk" }, vm.Actions);
+        // No "Tag" for a folder: there is no catalog metadata to write, so the
+        // entry only ever wrote a log line.
+        Assert.Equal(new[] { "Move to folder…", "Delete from disk" }, vm.Actions);
 
         vm.IsDaminionSelected = true;
 
@@ -705,7 +788,7 @@ public class StepDedupViewModelTests
         Assert.Equal(0, vm.SelectedAction); // clamped back to the new list
 
         vm.IsLocalSelected = true;
-        Assert.Equal(new[] { "Tag", "Move to folder…", "Delete from disk" }, vm.Actions);
+        Assert.Equal(new[] { "Move to folder…", "Delete from disk" }, vm.Actions);
     }
 
     [Fact]
@@ -717,6 +800,7 @@ public class StepDedupViewModelTests
         // A Daminion source without a connection can never apply either:
         vm.IsDaminionSelected = false;
         vm.Groups.Add(Group(Item("a.jpg"), Item("b.jpg"))); // b unchecked → target
+        vm.SelectedAction = 1; // Delete: no destination needed, the prompt is the gate
         Assert.True(vm.ApplyCommand.CanExecute(null));
 
         vm.IsDaminionSelected = true;
@@ -767,7 +851,7 @@ public class StepDedupViewModelTests
         var (dir, dup) = MakeDuplicatePair();
         try
         {
-            var vm = VmTargeting(dup, action: 2); // Delete, ConfirmAction null
+            var vm = VmTargeting(dup, action: 1); // Delete, ConfirmAction null
             Assert.Null(vm.ConfirmAction);
             Assert.True(vm.ApplyCommand.CanExecute(null));
 
@@ -788,7 +872,7 @@ public class StepDedupViewModelTests
         var (dir, dup) = MakeDuplicatePair();
         try
         {
-            var vm = VmTargeting(dup, action: 2);
+            var vm = VmTargeting(dup, action: 1);
             var prompts = 0;
             vm.ConfirmAction = message =>
             {
@@ -817,7 +901,7 @@ public class StepDedupViewModelTests
     }
 
     [Fact]
-    public async Task LocalTagAndMove_NeverPrompt()
+    public async Task Local_move_is_the_default_and_never_prompts_but_needs_a_destination()
     {
         var vm = new StepDedupViewModel();
         var prompted = false;
@@ -827,13 +911,16 @@ public class StepDedupViewModelTests
             return Task.FromResult(true);
         };
 
-        // Tag only logs — a nonexistent path is safe and side-effect free.
+        // Move is the default action and needs a destination, so a scan on its
+        // own leaves Apply closed — no silent deletion, no no-op action.
         vm.Groups.Add(Group(Item("/nonexistent/a.jpg"), Item("/nonexistent/b.jpg")));
-        vm.SelectedAction = 0; // Tag
+        Assert.Equal(0, vm.SelectedAction);
+        Assert.False(vm.ApplyCommand.CanExecute(null));
         await vm.ApplyCommand.ExecuteAsync(null);
         Assert.False(prompted);
+        vm.Groups.Clear();
 
-        // Move with a real file: reversible, so it must not prompt either.
+        // With a real file and a destination: reversible, so it must not prompt.
         var (dir, dup) = MakeDuplicatePair();
         try
         {
@@ -843,9 +930,10 @@ public class StepDedupViewModelTests
                     IsChecked = true,
                 },
                 new DedupItemViewModel(dup, "dup.jpg")));
-            vm.SelectedAction = 1; // Move
             var dest = System.IO.Path.Combine(dir, "go-here");
+            System.IO.Directory.CreateDirectory(dest);
             vm.MoveDestinationFolder = dest;
+            Assert.True(vm.ApplyCommand.CanExecute(null));
             await vm.ApplyCommand.ExecuteAsync(null);
 
             Assert.False(prompted);

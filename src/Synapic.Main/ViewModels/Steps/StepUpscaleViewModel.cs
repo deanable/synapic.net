@@ -1,10 +1,11 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Synapic.Main.Services;
-using Synapic.Main.Services.Processing;
+using Synapic.Core.Services.Processing;
 using Synapic.Main.ViewModels.Operations;
 using Synapic.Shared.Contracts;
 
+using Synapic.Core.Services;
 namespace Synapic.Main.ViewModels.Steps;
 
 /// <summary>
@@ -37,14 +38,17 @@ public partial class StepUpscaleViewModel : RunStateViewModel
         LoadPersistedState();
 
         // The source can be re-picked (or re-connected) while this step shows:
-        // re-evaluate Start and the source line on any Step 1 change.
+        // re-evaluate Start and the source line on any Step 1 change. The server
+        // is the other half of the gate, so its status does the same.
         if (_step1 is not null)
             _step1.PropertyChanged += (_, _) =>
             {
-                StartCommand.NotifyCanExecuteChanged();
+                NotifyStartGateChanged();
                 OnPropertyChanged(nameof(SourceSummary));
                 OnPropertyChanged(nameof(SourceReady));
             };
+        if (_sidecar is not null)
+            _sidecar.StatusChanged += (_, _) => NotifyStartGateChanged();
     }
 
     // ── Settings (the parameters that differ from the other workflows) ─────
@@ -287,7 +291,25 @@ public partial class StepUpscaleViewModel : RunStateViewModel
         StopCommand.NotifyCanExecuteChanged();
     }
 
-    protected override bool CanStart() => !IsRunning && _sidecar is not null && SourceReady;
+    /// <summary>
+    /// Upscaling needs a runnable source and a live inference server (the run
+    /// calls POST /upscale per item); the same property is the reason the shared
+    /// bar shows while Start is disabled.
+    /// </summary>
+    public override string? StartBlockedReason
+    {
+        get
+        {
+            if (IsRunning) return null;   // the bar hides Start while a run is in flight
+            if (_sidecar is null) return "No inference sidecar is available";
+            if (!SourceReady)
+                return "Choose an existing folder or connect to Daminion in Settings";
+            if (!_sidecar.IsRunning) return "Start the inference server in Settings";
+            return null;
+        }
+    }
+
+    protected override bool CanStart() => !IsRunning && StartBlockedReason is null;
 
     protected override async Task StartCoreAsync(CancellationToken ct)
     {

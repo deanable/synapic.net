@@ -5,16 +5,17 @@ using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Synapic.Main.Services;
-using Synapic.Main.Services.Daminion;
-using Synapic.Main.Services.Processing;
+using Synapic.Core.Services.Daminion;
+using Synapic.Core.Services.Processing;
 using Synapic.Main.ViewModels.Operations;
 
+using Synapic.Core.Services;
 namespace Synapic.Main.ViewModels.Steps;
 
 /// <summary>
 /// One image inside a duplicate group. The checkbox is the keep-set: a checked
-/// item survives, unchecked items are what Apply acts on (Tag/Move/Delete for a
-/// local source, catalog delete for Daminion). The box can be toggled by hand
+/// item survives, unchecked items are what Apply acts on (Move/Delete for a
+/// local source, catalog delete or reject for Daminion). The box can be toggled by hand
 /// or driven automatically by the step's oldest/newest/smallest/largest rule
 /// checkboxes (rule changes recompute the whole selection — hand tweaks stick
 /// until a rule is toggled again).
@@ -250,7 +251,7 @@ public partial class StepDedupViewModel : RunStateViewModel
     /// anything is restored from the registry. pHash — the default algorithm —
     /// ships strict for duplicates (0.90: at most six of the 64 hash bits differ)
     /// and loose enough for the similarity search to catch re-encodes, crops and
-    /// light edits (0.85: at most ten bits). The other two fingerprints carry
+    /// light edits (0.84: at most ten bits). The other two fingerprints carry
     /// their own numbers, because the scale is not shared; see
     /// <see cref="AppSettingsRegistryStore.DedupThresholdDefaultFor"/> for the
     /// measurements behind them. An absent algorithm resolves to pHash's.
@@ -335,6 +336,9 @@ public partial class StepDedupViewModel : RunStateViewModel
             case nameof(Step1DatasourceViewModel.LocalPath):
                 OnPropertyChanged(nameof(FolderPath));
                 break;
+            case nameof(Step1DatasourceViewModel.LocalRecursive):
+                OnPropertyChanged(nameof(CanRetune));
+                break;
         }
         ScanCommand.NotifyCanExecuteChanged();
         ApplyCommand.NotifyCanExecuteChanged();
@@ -359,6 +363,10 @@ public partial class StepDedupViewModel : RunStateViewModel
             or nameof(Step1DatasourceViewModel.ScopeIndex))) return;
 
         OnPropertyChanged(nameof(CanRetune));
+        // A filter change moves the catalog's item set (and therefore which ids
+        // the scan's rows name), so Apply re-evaluates with the scan gate.
+        ScanCommand.NotifyCanExecuteChanged();
+        ApplyCommand.NotifyCanExecuteChanged();
         ScheduleRestore();
     }
 
@@ -411,7 +419,7 @@ public partial class StepDedupViewModel : RunStateViewModel
 
     /// <summary>What this profile's threshold means, shown beside the picker.</summary>
     public string ThresholdHint => IsSimilar
-        ? "How close two images have to be to count as similar (0.85 = clearly alike; lower groups more loosely)."
+        ? "How close two images have to be to count as similar (0.84 = clearly alike; lower groups more loosely)."
         : "How close two images have to be to count as duplicates (0.90 = near-identical).";
 
     /// <summary>The keep-set explanation under the rule checkboxes, in this profile's words.</summary>
@@ -458,11 +466,29 @@ public partial class StepDedupViewModel : RunStateViewModel
             SelectSmallest = IsSimilar ? s.SimilarSelectSmallest : s.DedupSelectSmallest;
             SelectLargest = IsSimilar ? s.SimilarSelectLargest : s.DedupSelectLargest;
             MoveDestinationFolder = IsSimilar ? s.SimilarMoveDestination : s.DedupMoveDestination;
+            SelectedAction = RestoreActionIndex(IsSimilar ? s.SimilarSelectedAction : s.DedupSelectedAction);
         }
         finally
         {
             _hydratingDedup = false;
         }
+    }
+
+    /// <summary>
+    /// Translate a stored action value into this build's combo index. Catalog
+    /// actions kept their 0/1 encoding; local actions use 10/11, and the retired
+    /// encoding (0 Tag, 1 Move, 2 Delete) is folded into Move/Delete without ever
+    /// turning a saved Move into a Delete.
+    /// </summary>
+    private int RestoreActionIndex(int stored)
+    {
+        if (IsDaminion) return Math.Clamp(stored, 0, 1);
+        return stored switch
+        {
+            PersistedLocalDelete => 1,
+            2 => 1,   // the old "Delete from disk"
+            _ => 0,   // 10 = Move; 0/1 = retired Tag / old Move
+        };
     }
 
     private bool _hydratingDedup;
@@ -477,7 +503,9 @@ public partial class StepDedupViewModel : RunStateViewModel
             var existing = _appSettingsStore.Load() ?? _appSettingsStore.Defaults;
             var algorithm = Algorithms[Math.Clamp(SelectedAlgorithm, 0, Algorithms.Length - 1)];
             var serverHash = ServerHashMatches[Math.Clamp(SelectedServerHashMatch, 0, ServerHashMatches.Length - 1)];
-            var action = Math.Clamp(SelectedAction, 0, Math.Max(Actions.Length - 1, 0));
+            var action = IsLocal
+                ? SelectedAction == 1 ? PersistedLocalDelete : PersistedLocalMove
+                : Math.Clamp(SelectedAction, 0, 1);
 
             // The profile picks the half of the state this form owns: writing the
             // other half too would let the similar search overwrite the duplicate
@@ -1018,12 +1046,25 @@ public partial class StepDedupViewModel : RunStateViewModel
         }
     }
 
-    public string[] LocalActions { get; } = { "Tag", "Move to folder…", "Delete from disk" };
+    /// <summary>
+    /// The local actions, in index order. There is deliberately no "Tag": a
+    /// local file has no catalog metadata to write, so that entry only wrote a
+    /// log line while looking like an operation (review R14). Moving is
+    /// reversible and therefore the default; deleting is confirmed.
+    /// </summary>
+    public string[] LocalActions { get; } = { "Move to folder…", "Delete from disk" };
+
+    // Persisted local actions. The catalog's 0/1 encoding is unchanged; local
+    // actions are written as 10/11 because an older build stored 0 = Tag,
+    // 1 = Move and 2 = Delete — reusing 0/1 would turn a saved "Move" into
+    // "Delete" the first time this build read it.
+    private const int PersistedLocalMove = 10;
+    private const int PersistedLocalDelete = 11;
 
     /// <summary>Actions offered per source. Catalog items can go two ways:
     /// deleted from the catalog (destructive, confirmed), or marked rejected so
     /// the identified files can be gone through by hand in Daminion first —
-    /// a reversible flag write, no confirmation. Local files get tag/move/delete.
+    /// a reversible flag write, no confirmation. Local files get move/delete.
     /// </summary>
     public string[] Actions => IsDaminion
         ? ["Delete from catalog", "Reject in catalog"]
@@ -1039,15 +1080,16 @@ public partial class StepDedupViewModel : RunStateViewModel
     [NotifyPropertyChangedFor(nameof(IsMoveActionAvailable))]
     private string _moveDestinationFolder = "";
 
-    public bool IsMoveActionAvailable => IsLocal && SelectedAction == 1 && !string.IsNullOrWhiteSpace(MoveDestinationFolder);
+    public bool IsMoveActionAvailable => IsLocal && SelectedAction == 0 && !string.IsNullOrWhiteSpace(MoveDestinationFolder);
 
     /// <summary>Whether the action combo currently has "Move to folder…" selected
     /// (local source only) — drives the destination picker's visibility.</summary>
-    public bool IsMoveActionSelected => IsLocal && SelectedAction == 1;
+    public bool IsMoveActionSelected => IsLocal && SelectedAction == 0;
 
     partial void OnSelectedActionChanged(int value)
     {
         OnPropertyChanged(nameof(IsMoveActionAvailable));
+        OnPropertyChanged(nameof(IsMoveActionSelected));
         UpdateSummary();
         PersistState();
     }
@@ -1201,7 +1243,29 @@ public partial class StepDedupViewModel : RunStateViewModel
         ServerHashMatch: ServerHashMatch,
         UseServerHashes: !IsSimilar);
 
-    private bool CanScan() => !IsScanning && (IsLocal ? !string.IsNullOrWhiteSpace(FolderPath) : DaminionReady);
+    /// <summary>
+    /// Why the scan cannot start right now, or null when it can — the source must
+    /// exist and no other pass may be touching the rows. The run bar's hint and
+    /// the button's gate both read this property, so they cannot disagree. Null
+    /// while a scan runs: the bar hides Start then.
+    /// </summary>
+    public override string? StartBlockedReason
+    {
+        get
+        {
+            if (IsScanning) return null;
+            if (IsApplying) return "An apply is in progress";
+            if (IsRetuning) return "Re-grouping the last scan…";
+            if (!IsLocal)
+                return DaminionReady ? null : "Connect to Daminion in Settings, then pick a scope";
+            if (string.IsNullOrWhiteSpace(FolderPath)) return "Choose a folder to scan in Settings";
+            // A typed path only counts once it resolves — hashing a folder that is
+            // not there would report "no matches" for a typo.
+            return Directory.Exists(FolderPath) ? null : $"The folder no longer exists — {FolderPath}";
+        }
+    }
+
+    private bool CanScan() => !IsScanning && StartBlockedReason is null;
 
     // ── Persisted scan (fingerprint cache) ──────────────────────────────────
 
@@ -1226,7 +1290,8 @@ public partial class StepDedupViewModel : RunStateViewModel
         if (string.IsNullOrEmpty(folder)) return null;
         try { folder = System.IO.Path.GetFullPath(folder); }
         catch { /* keep the text as typed — it still names one source */ }
-        return "local|" + folder;
+        var recursiveSuffix = _step1 is { LocalRecursive: true } ? "|recursive" : "";
+        return "local|" + folder + recursiveSuffix;
     }
 
     /// <summary>The selected fingerprint, lowercase — the same spelling
@@ -1262,6 +1327,14 @@ public partial class StepDedupViewModel : RunStateViewModel
     /// <summary>The source key the current results (or restored ones) belong to.
     /// Null while nothing has been scanned here.</summary>
     private string? _scanSourceKey;
+
+    /// <summary>
+    /// The catalog the review list came from, as the server named it when the
+    /// scan (or its restore) ran — the scan generation Apply re-checks before it
+    /// mutates anything. Null when the server cannot report one or the source is
+    /// local; the source key is then the only identity available.
+    /// </summary>
+    private string? _scanCatalogGuid;
 
     /// <summary>
     /// Load this operation's saved scan for the current source and render it, so
@@ -1384,6 +1457,7 @@ public partial class StepDedupViewModel : RunStateViewModel
             return;
         }
         _scanSourceKey = sourceKey;
+        _scanCatalogGuid = IsDaminion ? _step1?.ActiveCatalog : null;
         AttachGroups(result, thumbs);
         ApplyAutoSelection();
 
@@ -1457,7 +1531,10 @@ public partial class StepDedupViewModel : RunStateViewModel
     [RelayCommand(CanExecute = nameof(CanScan))]
     private async Task ScanAsync(CancellationToken ct)
     {
-        if (CanRetune)
+        // Not CanRetune: that also requires a perceptual set, and a catalog scan
+        // grouped from the server's content hashes has fingerprints worth
+        // reusing even though no threshold applies to them.
+        if (HasReusableScan)
         {
             var version = Interlocked.Increment(ref _retuneVersion);
             await RetuneAsync(CancellationToken.None, version);
@@ -1492,6 +1569,9 @@ public partial class StepDedupViewModel : RunStateViewModel
         // Remember which source these fingerprints will describe, before the
         // rows are dropped — the cache is keyed by it and Apply invalidates it.
         _scanSourceKey = CurrentSourceKey();
+        // And which catalog generation the ids will name, so a write can prove
+        // they still mean what the user reviewed (see VerifyCatalogIdentityAsync).
+        _scanCatalogGuid = IsDaminion ? _step1?.ActiveCatalog : null;
         ClearScanResults();
         // A rescan starts from zero on the shared run bar: the previous scan's
         // percentage, file name and ETA would otherwise describe work already done.
@@ -1608,6 +1688,7 @@ public partial class StepDedupViewModel : RunStateViewModel
         _pendingDaminionItems = null;
         _lastScan = null;
         OnPropertyChanged(nameof(CanRetune));
+        OnPropertyChanged(nameof(IsExactHashOnlyScan));
     }
 
     private IEnumerable<DedupItemViewModel> AllScannedItems() =>
@@ -1670,14 +1751,16 @@ public partial class StepDedupViewModel : RunStateViewModel
 
     private async Task<DedupResult> ScanLocalAsync(DedupOptions opts, CancellationToken ct)
     {
-        var files = System.IO.Directory.EnumerateFiles(
-                FolderPath, "*.*", System.IO.SearchOption.AllDirectories)
-            .Where(f =>
-            {
-                var ext = System.IO.Path.GetExtension(f).ToLowerInvariant();
-                return ext is ".jpg" or ".jpeg" or ".png" or ".tif" or ".tiff";
-            })
-            .ToArray();
+        var recursive = _step1?.LocalRecursive ?? true;
+        var searchOption = recursive
+            ? System.IO.SearchOption.AllDirectories
+            : System.IO.SearchOption.TopDirectoryOnly;
+        var scopeLabel = recursive ? "recursive" : "top-level only";
+
+        var files = await Task.Run(() =>
+            System.IO.Directory.EnumerateFiles(FolderPath, "*.*", searchOption)
+                .Where(WorkflowRunner.IsLocalImage)
+                .ToArray(), ct);
 
         // An empty folder looks exactly like "no duplicates found" in the UI,
         // so say which one it was before the hashing starts.
@@ -1686,8 +1769,8 @@ public partial class StepDedupViewModel : RunStateViewModel
 
         SynapicLog.Info(nameof(StepDedupViewModel),
             files.Length == 0
-                ? $"No .jpg/.jpeg/.png/.tif/.tiff files found under '{FolderPath}' (recursive) — nothing to compare"
-                : $"Enumerated {files.Length} image file(s) under '{FolderPath}' (recursive)");
+                ? $"No .jpg/.jpeg/.png/.tif/.tiff files found under '{FolderPath}' ({scopeLabel}) — nothing to compare"
+                : $"Enumerated {files.Length} image file(s) under '{FolderPath}' ({scopeLabel})");
 
         // Local hashing drives the same run bar as the catalog walk: a scan of a
         // folder used to leave the bar reading "Idle" for its whole duration.
@@ -1758,9 +1841,10 @@ public partial class StepDedupViewModel : RunStateViewModel
         ProgressText = $"Scanning {items.Count:N0} item(s)…";
         CurrentFile = "";
         EtaText = "";
-        var serverHashCount = items.Count(i => i.ServerHashCode != 0);            SynapicLog.Info(nameof(StepDedupViewModel),
-                $"{OperationTitle} fetch: {items.Count} item(s) in scope ({ScopeIdForLog()})" +
-                (_preferPageTotalForScan ? " [re-walk: page totals steer the bar]" : "") + " — " +
+        var serverHashCount = items.Count(i => i.ServerHashCode != 0);
+        SynapicLog.Info(nameof(StepDedupViewModel),
+            $"{OperationTitle} fetch: {items.Count} item(s) in scope ({ScopeIdForLog()})" +
+            (_preferPageTotalForScan ? " [re-walk: page totals steer the bar]" : "") + " — " +
             (serverHashCount > 0
                 ? $"{serverHashCount} carry a server hash (grouped without download), " +
                   $"{items.Count - serverHashCount} need a download to hash"
@@ -1835,11 +1919,33 @@ public partial class StepDedupViewModel : RunStateViewModel
     /// </summary>
     public bool CanRetune => !IsScanning && !IsApplying && HasRetunableScan;
 
-    private bool HasRetunableScan => _lastScan is { } last &&
+    private bool HasRetunableScan => HasReusableScan && _lastScan!.PerceptualHashes.Count > 0;
+
+    /// <summary>
+    /// True when the retained scan still describes the current source and
+    /// algorithm — enough to re-group without walking or hashing anything. A
+    /// catalog scan grouped from the server's content hashes qualifies even
+    /// though it has no threshold to move (see <see cref="HasRetunableScan"/>).
+    /// </summary>
+    private bool HasReusableScan => _lastScan is { } last &&
         string.Equals(last.Algorithm, SelectedAlgorithmName(), StringComparison.Ordinal) &&
         // The fingerprints describe one source; a folder/scope change leaves the
         // old groups on screen but must not re-filter them as if they were new.
         string.Equals(_scanSourceKey, CurrentSourceKey(), StringComparison.Ordinal);
+
+    /// <summary>
+    /// True when the last scan grouped only the catalog's content hashes. The
+    /// results page shows <see cref="ExactHashScanHint"/> instead of the threshold
+    /// slider: the hashes are compared exactly, so moving the threshold would
+    /// promise a change that cannot happen.
+    /// </summary>
+    public bool IsExactHashOnlyScan =>
+        _lastScan is { } last && last.PerceptualHashes.Count == 0 && last.ExactHashes.Count > 0;
+
+    /// <summary>Why this result has no threshold to tune. See <see cref="IsExactHashOnlyScan"/>.</summary>
+    public string ExactHashScanHint => IsSimilar
+        ? "Grouped from the catalog's own content hashes, compared exactly — the similarity threshold does not apply to this result."
+        : "Grouped from the catalog's own content hashes, compared exactly — the threshold does not apply to this result.";
 
     /// <summary>The line under the slider: what moving it costs, and what it does.</summary>
     public string RetuneHint => IsSimilar
@@ -1855,7 +1961,13 @@ public partial class StepDedupViewModel : RunStateViewModel
     [ObservableProperty]
     private bool _isRetuning;
 
-    partial void OnIsRetuningChanged(bool value) => ApplyCommand.NotifyCanExecuteChanged();
+    partial void OnIsRetuningChanged(bool value)
+    {
+        ApplyCommand.NotifyCanExecuteChanged();
+        ScanCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(StartBlockedReason));
+        OnPropertyChanged(nameof(HasStartBlockedReason));
+    }
 
     private void ScheduleRetune()
     {
@@ -2032,16 +2144,24 @@ public partial class StepDedupViewModel : RunStateViewModel
                 ScanSummary = "Rendering previews…";
                 var decoded = await Task.Run(() =>
                 {
-                    var found = new Dictionary<string, Bitmap>(keys.Length);
+                    var found = new System.Collections.Concurrent.ConcurrentDictionary<string, Bitmap>();
                     try
                     {
-                        foreach (var key in keys)
+                        Parallel.ForEach(keys, new ParallelOptions
+                        {
+                            MaxDegreeOfParallelism = DedupService.LocalHashingParallelism,
+                            CancellationToken = ct,
+                        }, key =>
                         {
                             ct.ThrowIfCancellationRequested();
                             if (DedupService.CreateThumbnail(key, ThumbSize) is { } bytes &&
                                 DecodeThumb(bytes) is { } bitmap)
-                                found[key] = bitmap;
-                        }
+                            {
+                                // Keys are distinct today; TryAdd keeps a repeated
+                                // key from overwriting (and leaking) a decoded bitmap.
+                                if (!found.TryAdd(key, bitmap)) bitmap.Dispose();
+                            }
+                        });
                         return found;
                     }
                     catch
@@ -2121,6 +2241,8 @@ public partial class StepDedupViewModel : RunStateViewModel
         // the ones for the current results.
         _lastScan = result;
         OnPropertyChanged(nameof(CanRetune));
+        OnPropertyChanged(nameof(IsExactHashOnlyScan));
+        OnPropertyChanged(nameof(ExactHashScanHint));
         UpdateSummary();
     }
 
@@ -2181,6 +2303,10 @@ public partial class StepDedupViewModel : RunStateViewModel
     {
         ApplyCommand.NotifyCanExecuteChanged();
         StopApplyCommand.NotifyCanExecuteChanged();
+        // A scan must not start while an apply is deleting or moving its rows.
+        ScanCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(StartBlockedReason));
+        OnPropertyChanged(nameof(HasStartBlockedReason));
         // Retuning while an Apply is deleting/moving files would re-group rows
         // whose files are disappearing under it.
         OnPropertyChanged(nameof(CanRetune));
@@ -2192,18 +2318,32 @@ public partial class StepDedupViewModel : RunStateViewModel
         !IsRetuning &&
         Groups.Count > 0 &&
         SelectedForActionCount > 0 &&
+        // The review list belongs to the source that produced it. If the folder,
+        // catalog or scope moved, the rows (and above all the Daminion ids) no
+        // longer name what the form would act on: rescan rather than apply to
+        // records from another catalog (review R03).
+        ScanMatchesCurrentSource() &&
         (IsDaminion ? DaminionReady : IsMoveActionUsable);
 
     /// <summary>
-    /// The local Apply's extra gate: "Move to folder…" needs a destination, and
-    /// it must not be inside the scanned source folder (moving a copy of a
-    /// duplicate into the very folder the scan reads would grow the scan). Tag
-    /// and Delete need nothing more.
+    /// True when the scan still describes the source now configured. A form with
+    /// no retained source key (groups added directly by a host or test) is not
+    /// restricted; a real scan always sets one.
+    /// </summary>
+    private bool ScanMatchesCurrentSource() =>
+        _scanSourceKey is null ||
+        string.Equals(_scanSourceKey, CurrentSourceKey(), StringComparison.Ordinal);
+
+    /// <summary>
+    /// The local Apply's extra gate: "Move to folder…" (index 0) needs a
+    /// destination, and it must not be inside the scanned source folder (moving a
+    /// copy of a duplicate into the very folder the scan reads would grow the
+    /// scan). Delete needs nothing more.
     /// </summary>
     private bool IsMoveActionUsable =>
         SelectedAction switch
         {
-            1 => !string.IsNullOrWhiteSpace(MoveDestinationFolder) &&
+            0 => !string.IsNullOrWhiteSpace(MoveDestinationFolder) &&
                  Directory.Exists(MoveDestinationFolder) &&
                  !IsSameOrSubPath(MoveDestinationFolder, FolderPath),
             _ => true,
@@ -2239,6 +2379,32 @@ public partial class StepDedupViewModel : RunStateViewModel
         if (IsRunning) CancelRun();
     }
 
+    /// <summary>
+    /// Re-checks the catalog immediately before a write: the rows were grouped
+    /// from a scan, and a catalog that has since been rebuilt (or replaced behind
+    /// the same URL) reuses item ids, so the same id can name a different image.
+    /// Returns the refusal to show when the server now reports another catalog,
+    /// or null when the write may proceed.
+    ///
+    /// The check never invents an identity: a scan that could not read a catalog
+    /// guid, or a server that cannot report one now, leaves the existing
+    /// source-key check as the only guard rather than blocking writes outright.
+    /// </summary>
+    private async Task<string?> CatalogIdentityChangedAsync(
+        DaminionApiClient client, CancellationToken ct)
+    {
+        if (_scanCatalogGuid is null) return null;
+
+        var current = await client.GetCatalogGuidAsync(ct);
+        if (ct.IsCancellationRequested) return null; // the write below observes it
+        // A server that cannot name its catalog is not evidence of a change.
+        if (string.IsNullOrEmpty(current)) return null;
+        if (string.Equals(current, _scanCatalogGuid, StringComparison.OrdinalIgnoreCase)) return null;
+
+        return $"Catalog changed since this scan — the server now reports {current}, "
+             + $"but the review list came from {_scanCatalogGuid}. Nothing was changed; rescan before applying.";
+    }
+
     [RelayCommand(CanExecute = nameof(CanApply))]
     private async Task ApplyAsync(CancellationToken ct)
     {
@@ -2251,9 +2417,10 @@ public partial class StepDedupViewModel : RunStateViewModel
         if (IsDaminion && client is null) return;
 
         // Index into Actions: catalog item index 1 is "Reject in catalog" (and
-        // is only offered on a Daminion source), local index 1 is the move-to
-        // folder action. Resolved here because both the pre-apply log and the
-        // confirmation gate below name the chosen action before anything runs.
+        // is only offered on a Daminion source), local index 0 is "Move to
+        // folder…" and index 1 is "Delete from disk". Resolved here because both
+        // the pre-apply log and the confirmation gate name the chosen action
+        // before anything runs.
         var rejecting = client is not null && SelectedAction == 1;
 
         // Say what is about to happen before any destructive call goes out —
@@ -2267,7 +2434,9 @@ public partial class StepDedupViewModel : RunStateViewModel
         var ids = client is not null
             ? targets.Where(t => t.DaminionId is not null).Select(t => t.DaminionId!.Value).ToList()
             : new List<int>();
-        var action = (DedupAction)Math.Clamp(SelectedAction, 0, LocalActions.Length - 1);
+        // The local combo's order (Move, Delete) is not the enum's (Tag, Move,
+        // Delete): the retired Tag entry is exactly why this mapping is explicit.
+        var action = SelectedAction == 1 ? DedupAction.Delete : DedupAction.Move;
 
         // The prompts are the user's decision, not the operation: they settle
         // before the busy state starts, so the bar measures the work itself (and
@@ -2284,16 +2453,18 @@ public partial class StepDedupViewModel : RunStateViewModel
             }
         }
         // Local delete is as permanent as the catalog one (no Recycle Bin), so it
-        // gets the same fail-closed gate: no prompt wired = no delete. Tag and
-        // Move are reversible and never prompt.
-        else if (action == DedupAction.Delete &&
+        // gets the same fail-closed gate: no prompt wired = no delete. Move is
+        // reversible and never prompts.
+        else if (client is null && action == DedupAction.Delete &&
                  (ConfirmAction is null ||
                   !await ConfirmAction($"Permanently delete {targets.Count} duplicate file(s)? This cannot be undone.")))
         {
             ScanSummary = "Delete cancelled";
             SynapicLog.Info(nameof(StepDedupViewModel), "Local duplicate delete cancelled");
             return;
-        }        bool ok;
+        }
+
+        bool ok;
         string summary;
         // The catalog reject reports which ids the read-back confirmed, so a
         // partially applied batch is visible instead of failing wholesale.
@@ -2311,6 +2482,18 @@ public partial class StepDedupViewModel : RunStateViewModel
         {
             if (client is not null)
             {
+                // The rows carry ids a scan captured. A catalog that was rebuilt
+                // or swapped under the same URL reuses those ids, so the ids alone
+                // no longer prove these rows are the images the user reviewed:
+                // confirm the server is still the catalog the scan read before
+                // anything is deleted or flagged (review B1).
+                if (await CatalogIdentityChangedAsync(client, ct) is { } refusal)
+                {
+                    ScanSummary = refusal;
+                    SynapicLog.Warning(nameof(StepDedupViewModel), refusal);
+                    return;
+                }
+
                 if (rejecting)
                 {
                     flagWrite = await client.SetItemsFlagDetailedAsync(ids, DaminionFlagValue.Rejected, ct);
@@ -2407,12 +2590,13 @@ public partial class StepDedupViewModel : RunStateViewModel
                 _lastScan = null;
                 if (_scanSourceKey is not null) _fingerprintCache?.Delete(OperationKey, _scanSourceKey);
                 OnPropertyChanged(nameof(CanRetune));
+                OnPropertyChanged(nameof(IsExactHashOnlyScan));
             }
         }
         UpdateSummary();
     }
 
-    /// <summary>Human label of the local action for log lines (Tag/Move/Delete).</summary>
+    /// <summary>Human label of the local action for log lines (Move/Delete).</summary>
     private string SelectedActionLabel() =>
         LocalActions[Math.Clamp(SelectedAction, 0, LocalActions.Length - 1)];
 
@@ -2439,9 +2623,11 @@ public partial class StepDedupViewModel : RunStateViewModel
     /// <summary>The bar's primary action is this mode's scan, under its own name.</summary>
     public override string RunActionLabel => "Scan";
 
-    /// <summary>Exposed for tests: the retained-fingerprint fast rescan used the
-    /// automatic restore's method without touching the source.</summary>
-    public bool HasRetainedScan => _lastScan is not null && HasRetunableScan;
+    /// <summary>Whether a retained fingerprint set exists for this source, so the
+    /// fast rescan (and "Re-hash from disk", which is its escape) has something
+    /// to re-use. A catalog result from server hashes counts: it re-groups
+    /// instantly even though no threshold applies to it.</summary>
+    public bool HasRetainedScan => _lastScan is not null && HasReusableScan;
 
     /// <summary>
     /// The scan's Stop, on the shared bar. It cancels whichever entry point

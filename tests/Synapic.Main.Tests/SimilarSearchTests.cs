@@ -5,7 +5,7 @@ using Avalonia.VisualTree;
 using Microsoft.Win32;
 using Synapic.Main.Models;
 using Synapic.Main.Services;
-using Synapic.Main.Services.Processing;
+using Synapic.Core.Services.Processing;
 using Synapic.Main.ViewModels;
 using Synapic.Main.ViewModels.Operations;
 using Synapic.Main.ViewModels.Steps;
@@ -146,10 +146,10 @@ public class SimilarSearchTests : IDisposable
 
         Assert.Equal(0.90, duplicates.Threshold, 6);
         Assert.Equal(AppSettingsRegistryStore.SimilarThresholdDefault, similar.Threshold, 6);
-        Assert.Equal(0.85, similar.Threshold, 6);
+        Assert.Equal(0.84, similar.Threshold, 6);
 
         // The threshold is a hamming budget: 0.90 of 64 bits allows six to differ,
-        // 0.85 allows ten. That difference is the whole feature.
+        // 0.84 allows ten. That difference is the whole feature.
         Assert.Equal(6, DedupService.MaxHammingDistance(duplicates.BuildOptions().Threshold));
         Assert.Equal(10, DedupService.MaxHammingDistance(similar.BuildOptions().Threshold));
     }
@@ -193,7 +193,8 @@ public class SimilarSearchTests : IDisposable
     public void Similar_pairs_chain_into_one_group_where_the_duplicate_scan_finds_nothing()
     {
         // a≈b (9 bits) and b≈c (9 bits), a and c 18 apart. Union-find joins all
-        // three at 0.85 and none at 0.90 — the chained group the help topic warns
+        // three at the similarity default (10 bits) and none at 0.90 — the
+        // chained group the help topic warns
         // about, and the reason the group list is read before anything is applied.
         var hashes = new Dictionary<string, ulong>
         {
@@ -223,26 +224,32 @@ public class SimilarSearchTests : IDisposable
         // groups — and duplicates are moved or deleted.
         Assert.Equal(AppSettingsRegistryStore.DedupThresholdDefault,
             StepDedupViewModel.DefaultThresholdFor(ImageMatchProfile.Duplicates, "PHash"), 6);
-        Assert.Equal(0.97, StepDedupViewModel.DefaultThresholdFor(ImageMatchProfile.Duplicates, "DHash"), 6);
-        Assert.Equal(0.99, StepDedupViewModel.DefaultThresholdFor(ImageMatchProfile.Duplicates, "AHash"), 6);
+        Assert.Equal(0.96, StepDedupViewModel.DefaultThresholdFor(ImageMatchProfile.Duplicates, "DHash"), 6);
+        Assert.Equal(0.98, StepDedupViewModel.DefaultThresholdFor(ImageMatchProfile.Duplicates, "AHash"), 6);
 
         Assert.Equal(AppSettingsRegistryStore.SimilarThresholdDefault,
             StepDedupViewModel.DefaultThresholdFor(ImageMatchProfile.Similar, "PHash"), 6);
-        Assert.Equal(0.91, StepDedupViewModel.DefaultThresholdFor(ImageMatchProfile.Similar, "DHash"), 6);
-        Assert.Equal(0.94, StepDedupViewModel.DefaultThresholdFor(ImageMatchProfile.Similar, "AHash"), 6);
+        Assert.Equal(0.90, StepDedupViewModel.DefaultThresholdFor(ImageMatchProfile.Similar, "DHash"), 6);
+        Assert.Equal(0.93, StepDedupViewModel.DefaultThresholdFor(ImageMatchProfile.Similar, "AHash"), 6);
 
         // An algorithm this build does not know resolves to pHash's default
         // rather than to one of the stricter ones.
         Assert.Equal(AppSettingsRegistryStore.DedupThresholdDefault,
             StepDedupViewModel.DefaultThresholdFor(ImageMatchProfile.Duplicates, "NoSuchAlgorithm"), 6);
 
-        // The calibration unit is the hamming budget, so that is what these
-        // numbers have to mean: 2 bits for dHash, 1 for aHash, where pHash gets
-        // 6. Coarser fingerprints get tighter budgets, never looser ones.
-        Assert.Equal(2, DedupService.MaxHammingDistance(0.97));
-        Assert.Equal(1, DedupService.MaxHammingDistance(0.99));
-        Assert.Equal(6, DedupService.MaxHammingDistance(0.91));
-        Assert.Equal(4, DedupService.MaxHammingDistance(0.94));
+        // The calibration unit is the hamming budget, and the budget is floored
+        // (never rounded up), so the defaults are chosen to keep it: 2 bits for
+        // dHash, 1 for aHash, where pHash gets 6. Coarser fingerprints get
+        // tighter budgets, never looser ones.
+        Assert.Equal(2, DedupService.MaxHammingDistance(0.96));
+        Assert.Equal(1, DedupService.MaxHammingDistance(0.98));
+        Assert.Equal(6, DedupService.MaxHammingDistance(0.90));
+        Assert.Equal(4, DedupService.MaxHammingDistance(0.93));
+
+        // The floor is what makes the label truthful: 0.99 states 0.64 of a bit,
+        // so it admits no differing bit at all; 0.85 states 9.6 and admits 9.
+        Assert.Equal(0, DedupService.MaxHammingDistance(0.99));
+        Assert.Equal(9, DedupService.MaxHammingDistance(0.85));
     }
 
     [Fact]
@@ -254,9 +261,9 @@ public class SimilarSearchTests : IDisposable
         // Still on a shipped default: it follows the fingerprint. Leaving dHash
         // at pHash's 0.90 is the configuration this exists to prevent.
         vm.SelectedAlgorithm = 1; // DHash
-        Assert.Equal(0.97, vm.Threshold, 6);
+        Assert.Equal(0.96, vm.Threshold, 6);
         vm.SelectedAlgorithm = 2; // AHash
-        Assert.Equal(0.99, vm.Threshold, 6);
+        Assert.Equal(0.98, vm.Threshold, 6);
         Assert.Equal(1, DedupService.MaxHammingDistance(vm.BuildOptions().Threshold));
 
         // Once the number has been moved it is the user's, and switching
@@ -275,9 +282,9 @@ public class SimilarSearchTests : IDisposable
         Assert.Equal(AppSettingsRegistryStore.SimilarThresholdDefault, vm.Threshold, 6);
 
         vm.SelectedAlgorithm = 1; // DHash
-        Assert.Equal(0.91, vm.Threshold, 6);
+        Assert.Equal(0.90, vm.Threshold, 6);
         vm.SelectedAlgorithm = 2; // AHash
-        Assert.Equal(0.94, vm.Threshold, 6);
+        Assert.Equal(0.93, vm.Threshold, 6);
         // The two profiles keep their own numbers for the same algorithm.
         Assert.NotEqual(
             StepDedupViewModel.DefaultThresholdFor(ImageMatchProfile.Duplicates, "AHash"),
@@ -286,11 +293,12 @@ public class SimilarSearchTests : IDisposable
 
     // ── Stored rules: the two searches cannot overwrite each other ──────────
 
-    [Fact]
+    [WindowsFact]
     public void Each_search_restores_its_own_saved_rules()
     {
-        if (!OperatingSystem.IsWindows()) return; // the store is a no-op elsewhere
-
+        // The attribute reports the skip; this keeps the registry calls
+        // provably Windows-only for the platform analyzer (CA1416).
+        if (!OperatingSystem.IsWindows()) return;
         var duplicates = new StepDedupViewModel(appSettingsStore: _store);
         var similar = new StepDedupViewModel(appSettingsStore: _store, profile: ImageMatchProfile.Similar);
 
@@ -323,15 +331,16 @@ public class SimilarSearchTests : IDisposable
 
         // Which is what the scan actually builds its options from: widening the
         // similarity search left the duplicate scan strict.
-        Assert.Equal(2, DedupService.MaxHammingDistance(reloadedDuplicates.BuildOptions().Threshold));
-        Assert.Equal(18, DedupService.MaxHammingDistance(reloadedSimilar.BuildOptions().Threshold));
+        Assert.Equal(1, DedupService.MaxHammingDistance(reloadedDuplicates.BuildOptions().Threshold));
+        Assert.Equal(17, DedupService.MaxHammingDistance(reloadedSimilar.BuildOptions().Threshold));
     }
 
-    [Fact]
+    [WindowsFact]
     public void The_two_search_settings_survive_a_fresh_store_read()
     {
+        // The attribute reports the skip; this keeps the registry calls
+        // provably Windows-only for the platform analyzer (CA1416).
         if (!OperatingSystem.IsWindows()) return;
-
         // Only the similarity form is ever touched: the duplicate half of the
         // store must come back at its defaults rather than inheriting these.
         var similar = new StepDedupViewModel(appSettingsStore: _store, profile: ImageMatchProfile.Similar);
@@ -348,11 +357,12 @@ public class SimilarSearchTests : IDisposable
         Assert.True(reloadedSimilar.SelectNewest);
     }
 
-    [Fact]
+    [WindowsFact]
     public void A_store_without_a_saved_threshold_uses_the_saved_algorithms_default()
     {
+        // The attribute reports the skip; this keeps the registry calls
+        // provably Windows-only for the platform analyzer (CA1416).
         if (!OperatingSystem.IsWindows()) return;
-
         // A registry that names dHash and aHash but carries no threshold — what
         // an older build, or a hand-edited key, leaves behind. The fallback has
         // to be the saved algorithm's own default; falling back to pHash's 0.90
@@ -367,8 +377,8 @@ public class SimilarSearchTests : IDisposable
         var loaded = _store.Load();
 
         Assert.NotNull(loaded);
-        Assert.Equal(0.97, loaded!.DedupThreshold, 6);
-        Assert.Equal(0.94, loaded.SimilarThreshold, 6);
+        Assert.Equal(0.96, loaded!.DedupThreshold, 6);
+        Assert.Equal(0.93, loaded.SimilarThreshold, 6);
     }
 
     // ── The scan the similarity view actually runs ────────────────────────
@@ -399,7 +409,7 @@ public class SimilarSearchTests : IDisposable
 
             await similar.ScanCommand.ExecuteAsync(null);
 
-            // The options the scan really built are the profile's: PHash at 0.85.
+            // The options the scan really built are the profile's: PHash at 0.84.
             Assert.NotNull(similarEngine.Seen);
             Assert.Equal(HashAlgorithm.PHash, similarEngine.Seen!.Algorithm);
             Assert.Equal(AppSettingsRegistryStore.SimilarThresholdDefault, similarEngine.Seen.Threshold, 6);

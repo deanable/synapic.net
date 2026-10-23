@@ -4,7 +4,8 @@ using System.Security.Cryptography;
 using MetadataExtractor.Formats.Exif;
 using NetVips;
 
-namespace Synapic.Main.Services.Processing;
+using Synapic.Core.Services;
+namespace Synapic.Core.Services.Processing;
 
 /// <summary>
 /// Hash algorithms (spec §5.3 DedupService). Every option is a real 64-bit
@@ -483,7 +484,9 @@ public sealed class DedupService : IDedupService
     {
         using var small = gray.Resize(8.0 / gray.Width, vscale: 8.0 / gray.Height);
         var pixels = small.WriteToMemory<byte>();
-        var avg = pixels.Average(p => (double)p);
+        var sum = 0;
+        for (var i = 0; i < 64; i++) sum += pixels[i];
+        var avg = sum / 64.0;
         ulong hash = 0;
         for (var i = 0; i < 64; i++)
             if (pixels[i] > avg) hash |= 1UL << (63 - i);
@@ -543,7 +546,7 @@ public sealed class DedupService : IDedupService
         var pixels = small.WriteToMemory<byte>();
 
         // Pass 1: for every row, the 8 low-frequency horizontal coefficients.
-        var rows = new double[32 * 8];
+        Span<double> rows = stackalloc double[32 * 8];
         for (var y = 0; y < 32; y++)
         {
             var offset = y * 32;
@@ -557,16 +560,17 @@ public sealed class DedupService : IDedupService
         }
 
         // Pass 2: combine those rows vertically into the 8x8 block.
-        var flats = new double[64];
+        Span<double> flats = stackalloc double[64];
+        var invSqrt2 = 1.0 / Math.Sqrt(2.0);
         for (var v = 0; v < 8; v++)
         {
-            var cv = v == 0 ? 1.0 / Math.Sqrt(2.0) : 1.0;
+            var cv = v == 0 ? invSqrt2 : 1.0;
             for (var u = 0; u < 8; u++)
             {
                 var sum = 0.0;
                 for (var y = 0; y < 32; y++)
                     sum += rows[y * 8 + u] * PhashCos[y, v];
-                var cu = u == 0 ? 1.0 / Math.Sqrt(2.0) : 1.0;
+                var cu = u == 0 ? invSqrt2 : 1.0;
                 flats[v * 8 + u] = 0.25 * cu * cv * sum;
             }
         }
@@ -583,16 +587,18 @@ public sealed class DedupService : IDedupService
         // duplicates. Rounding noise is the lesser evil: identical pixels still
         // produce an identical hash, so real copies are still found, while two
         // different featureless images stay apart.
-        var median = Median(flats.Skip(1).ToArray());
+        var median = Median(flats.Slice(1));
         ulong hash = 0;
         for (var i = 0; i < 64; i++)
             if (flats[i] > median) hash |= 1UL << (63 - i);
         return hash;
     }
 
-    private static double Median(double[] values)
+    private static double Median(ReadOnlySpan<double> values)
     {
-        var sorted = values.OrderBy(v => v).ToArray();
+        Span<double> sorted = stackalloc double[values.Length];
+        values.CopyTo(sorted);
+        sorted.Sort();
         var mid = sorted.Length / 2;
         return sorted.Length % 2 == 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2.0;
     }
@@ -673,6 +679,7 @@ public sealed class DedupService : IDedupService
                 var distinctValues = new ulong[distinct.Count];
                 for (var i = 0; i < distinct.Count; i++) distinctValues[i] = values[distinct[i]];
                 var nextInBucket = new int[distinct.Count];
+                var head = new Dictionary<ulong, int>(distinctValues.Length);
 
                 foreach (var mask in BitGroupMasks(distinctValues, bits, maxDistance + 1))
                 {
@@ -680,7 +687,7 @@ public sealed class DedupService : IDedupService
                     // List per bucket would allocate one list per distinct
                     // fingerprint per group (140,000 of them at catalog scale)
                     // and dominate the grouping cost it exists to avoid.
-                    var head = new Dictionary<ulong, int>(distinctValues.Length);
+                    head.Clear();
                     Array.Fill(nextInBucket, -1);
                     for (var i = 0; i < distinctValues.Length; i++)
                     {
@@ -702,11 +709,15 @@ public sealed class DedupService : IDedupService
                         for (var x = start; x >= 0; x = nextInBucket[x])
                         {
                             var a = distinct[x];
+                            var hashA = values[a];
                             for (var y = nextInBucket[x]; y >= 0; y = nextInBucket[y])
                             {
                                 var b = distinct[y];
-                                if (HammingDistance(values[a], values[b]) <= maxDistance)
+                                if (components.Find(a) != components.Find(b) &&
+                                    HammingDistance(hashA, values[b]) <= maxDistance)
+                                {
                                     components.Union(a, b);
+                                }
                             }
                         }
                     }
@@ -870,6 +881,12 @@ public sealed class DedupService : IDedupService
     /// <c>int</c>), so a budget derived from 64 bits would allow twice the share
     /// of the hash a threshold promises.
     /// </summary>
+    /// <remarks>
+    /// The budget is floored, never rounded: a 0.99 threshold states that at most
+    /// 0.64 of a 64-bit fingerprint may differ, and rounding up would admit a
+    /// differing bit the label does not promise. (The per-algorithm defaults are
+    /// chosen so their intended bit budgets survive the floor.)
+    /// </remarks>
     public static int MaxHammingDistance(double threshold, int bits = 64) =>
-        (int)Math.Round(bits * (1.0 - threshold));
+        Math.Clamp((int)Math.Floor(bits * (1.0 - threshold)), 0, bits);
 }

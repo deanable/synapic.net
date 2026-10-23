@@ -90,15 +90,13 @@ public sealed class TagOperationViewModel : IOperationViewModel
 
     public bool IsRunEnabled => _step.StartCommand.CanExecute(null);
 
-    /// <summary>Both conditions of the step's own CanStart predicate, spelled out.</summary>
+    /// <summary>The step's own start gate, in words — one source with the button.</summary>
     public string? RunDisabledReason
     {
         get
         {
             if (IsRunEnabled) return null;
-            return _step.IsRunning
-                ? "A batch is already running"
-                : "Select at least one tag field in the tagging settings";
+            return _step.IsRunning ? "A batch is already running" : _step.StartBlockedReason;
         }
     }
 
@@ -154,17 +152,15 @@ public sealed class DedupOperationViewModel : IOperationViewModel
 
     public bool IsRunEnabled => _scan.ScanCommand.CanExecute(null);
 
-    /// <summary>The two branches of the step's own CanScan predicate, one sentence each.</summary>
+    /// <summary>The step's own scan gate, in words — one source with the button.</summary>
     public string? RunDisabledReason
     {
         get
         {
             if (IsRunEnabled) return null;
-            return _scan.IsScanning
-                ? "A scan is already running"
-                : _scan.IsLocal
-                    ? "Choose a folder to scan"
-                    : "Connect to Daminion and pick a scope";
+            if (_scan.IsScanning) return "A scan is already running";
+            if (_scan.IsApplying) return "An apply is in progress";
+            return _scan.StartBlockedReason;
         }
     }
 
@@ -207,16 +203,13 @@ public sealed class UpscaleOperationViewModel : IOperationViewModel
 
     public bool IsRunEnabled => _upscale.StartCommand.CanExecute(null);
 
-    /// <summary>The three clauses of the step's own CanStart predicate.</summary>
+    /// <summary>The step's own start gate, in words — one source with the button.</summary>
     public string? RunDisabledReason
     {
         get
         {
             if (IsRunEnabled) return null;
-            if (_upscale.IsRunning) return "An upscale run is already running";
-            return _upscale.SourceReady
-                ? "The inference sidecar is not available"
-                : "Choose a datasource in the source step";
+            return _upscale.IsRunning ? "An upscale run is already running" : _upscale.StartBlockedReason;
         }
     }
 

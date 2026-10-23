@@ -24,11 +24,12 @@ public class EngineSettingsStoreTests : IDisposable
 
     public void Dispose() => _store.Clear();
 
-    [Fact]
+    [WindowsFact]
     public void Save_then_Load_round_trips_all_engine_fields()
     {
+        // The attribute reports the skip; this keeps the registry calls
+        // provably Windows-only for the platform analyzer (CA1416).
         if (!OperatingSystem.IsWindows()) return;
-
         _store.Save(new EngineSettingsParams(
             ModelId: "LiquidAI/LFM2.5-VL-450M",
             Task: "image-text-to-text",
@@ -74,11 +75,12 @@ public class EngineSettingsStoreTests : IDisposable
     /// under the other culture, and a value already in the registry from a build
     /// that wrote comma decimals still reads as that number.
     /// </summary>
-    [Fact]
+    [WindowsFact]
     public void Saved_thresholds_survive_a_culture_change()
     {
+        // The attribute reports the skip; this keeps the registry calls
+        // provably Windows-only for the platform analyzer (CA1416).
         if (!OperatingSystem.IsWindows()) return;
-
         var original = CultureInfo.CurrentCulture;
         try
         {
@@ -123,19 +125,21 @@ public class EngineSettingsStoreTests : IDisposable
         }
     }
 
-    [Fact]
+    [WindowsFact]
     public void Load_returns_null_when_nothing_saved()
     {
+        // The attribute reports the skip; this keeps the registry calls
+        // provably Windows-only for the platform analyzer (CA1416).
         if (!OperatingSystem.IsWindows()) return;
-
         Assert.Null(_store.Load());
     }
 
-    [Fact]
+    [WindowsFact]
     public void Load_defaults_missing_fields_to_Session_defaults()
     {
+        // The attribute reports the skip; this keeps the registry calls
+        // provably Windows-only for the platform analyzer (CA1416).
         if (!OperatingSystem.IsWindows()) return;
-
         // Save a bare-bones params (only model id non-empty; everything else is
         // either empty string / zero bool so the loader treats it as "not set").
         _store.Save(new EngineSettingsParams(
@@ -168,11 +172,12 @@ public class EngineSettingsStoreTests : IDisposable
         Assert.False(loaded.TagDescription);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Step2_engine_fields_hydrate_from_store()
     {
+        // The attribute reports the skip; this keeps the registry calls
+        // provably Windows-only for the platform analyzer (CA1416).
         if (!OperatingSystem.IsWindows()) return;
-
         _store.Save(new EngineSettingsParams(
             ModelId: "org/model-v2",
             Task: "image-text-to-text",
@@ -207,11 +212,12 @@ public class EngineSettingsStoreTests : IDisposable
         Assert.False(vm.TagDescription);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Load_treats_a_missing_user_prompt_as_the_built_in_one()
     {
+        // The attribute reports the skip; this keeps the registry calls
+        // provably Windows-only for the platform analyzer (CA1416).
         if (!OperatingSystem.IsWindows()) return;
-
         // Anyone upgrading from a build without the editable tag instruction has
         // no UserPrompt value at all: it must load as blank ("use the built-in
         // instruction"), not crash and not invent a prompt.
@@ -252,11 +258,12 @@ public class EngineSettingsStoreTests : IDisposable
         Assert.True(vm.TagDescription);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Save_to_store_after_session_push_round_trips()
     {
+        // The attribute reports the skip; this keeps the registry calls
+        // provably Windows-only for the platform analyzer (CA1416).
         if (!OperatingSystem.IsWindows()) return;
-
         // Hydration path: store -> VM -> user nudges a value -> SaveToStore -> reload.
         var vm = new Step2EngineViewModel(new Session(), new FakeSidecar(), _store,
             null, () => new ComputeAvailability(Cuda: true, Mps: false));
@@ -291,11 +298,12 @@ public class EngineSettingsStoreTests : IDisposable
         Assert.False(loaded.TagDescription);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Clear_removes_saved_engine_settings()
     {
+        // The attribute reports the skip; this keeps the registry calls
+        // provably Windows-only for the platform analyzer (CA1416).
         if (!OperatingSystem.IsWindows()) return;
-
         _store.Save(new EngineSettingsParams(
             ModelId: "m", Task: "image-text-to-text", Device: "cpu",
             ConfidenceThreshold: 0.3, ProbabilityMode: "both",

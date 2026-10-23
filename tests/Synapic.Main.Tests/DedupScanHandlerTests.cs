@@ -1,7 +1,9 @@
 using System.IO;
-using Synapic.Main.Services.Processing;
+using Synapic.Core.Services.Processing;
 using Xunit;
 
+using Synapic.Core.Services;
+using Synapic.Core.Services.Daminion;
 namespace Synapic.Main.Tests;
 
 /// <summary>
@@ -213,10 +215,10 @@ public class DedupScanHandlerTests
             CancellationToken.None);
 
         // 100 ^ 200 = 5 bits. The server hash is 32 bits wide, so 0.90 allows
-        // only round(32 × 0.10) = 3; 0.85 allows 5 and bridges the pair. That is
+        // only floor(32 × 0.10) = 3; 0.84 allows 5 and bridges the pair. That is
         // the opt-in rule the user picks when the server hash turns out to be
         // perceptual — measured on the hash's own width, not on 64 bits.
-        var hamming = Options with { ServerHashMatch = ServerHashMatchMode.Hamming, Threshold = 0.85 };
+        var hamming = Options with { ServerHashMatch = ServerHashMatchMode.Hamming, Threshold = 0.84 };
         var result = new DedupService().GroupFromHashes(
             handler.PerceptualHashes, handler.ExactHashes, hamming);
 
@@ -415,7 +417,7 @@ public class DedupScanHandlerTests
     public void ServerHashCode_PopulatedInProcessWorkItem_FromDaminionItem()
     {
         // Verify the shape: DaminionItem with hashCode → ProcessWorkItem with ServerHashCode.
-        var daminionItem = new Services.Daminion.DaminionItem
+        var daminionItem = new Synapic.Core.Services.Daminion.DaminionItem
         {
             Id = 42,
             FileName = "test.jpg",
@@ -437,7 +439,7 @@ public class DedupScanHandlerTests
     [Fact]
     public void ServerHashCode_NullInDaminionItem_BecomesZeroInWorkItem()
     {
-        var daminionItem = new Services.Daminion.DaminionItem
+        var daminionItem = new Synapic.Core.Services.Daminion.DaminionItem
         {
             Id = 42,
             FileName = "test.jpg",

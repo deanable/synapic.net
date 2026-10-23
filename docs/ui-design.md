@@ -40,7 +40,7 @@
 >   logging, defaults, about).
 > - **Deduplication** and **Similar images** are one mechanism under two profiles
 >   (`ImageMatchProfile` on `StepDedupViewModel`): the same perceptual-hash scan,
->   review and apply, with their own threshold (0.90 for copies, 0.85 for the
+>   review and apply, with their own threshold (0.90 for copies, 0.84 for the
 >   visibly alike), their own route, settings tab and help topic. Similar images
 >   is the row directly below Deduplication because it is that search's looser
 >   sibling — not a mode of it.
@@ -370,7 +370,7 @@ Everything in `ui-redesign-proposal.md` §4 remains in scope; this table fixes
 | Processing limits (resize, thumbnail) | Tag → Parameters |
 | Results grid, CSV export, retry, verify Daminion | Tag → Output |
 | Hash algorithm, threshold, server-hash match, auto-select keep rule | Dedup → Parameters |
-| Duplicate group review, bulk Tag/Move/Delete, catalog removal | Dedup → Output |
+| Duplicate group review, bulk Move/Delete, catalog delete/reject | Dedup → Output |
 | Upscale workflows (quality / balanced / fast), scale, precision, format, JPEG/WEBP quality, balanced denoise, sharpen, overwrite | Upscale → Parameters |
 | Upscale batch progress + output files | Upscale → Output |
 | Start/Stop/Build server, variants, health, fallback warning | Settings → Inference server (+ status in shell) |

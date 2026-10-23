@@ -5,6 +5,7 @@ using Synapic.Main.ViewModels;
 using Synapic.Main.ViewModels.Steps;
 using Xunit;
 
+using Synapic.Core.Services;
 namespace Synapic.Main.Tests;
 
 /// <summary>
@@ -38,7 +39,9 @@ public class SidecarDeviceSelectionTests
         var session = new Session();
         session.Engine.Device = "cuda";
         services.AddSingleton(session);
-        services.AddSingleton<IInferenceSidecar, InferenceSidecarService>();
+        // The production registration path, not a copy of it: App.axaml.cs calls
+        // the same extension, so a wiring regression fails this fact.
+        services.AddSynapicEngine();
         // The service is IAsyncDisposable only, so the container is too.
         await using var provider = services.BuildServiceProvider();
 

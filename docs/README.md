@@ -15,7 +15,9 @@ phase plan that tracked it.
 | [`sidecar-concurrency.md`](sidecar-concurrency.md) | Concurrency deep dive: what runs concurrently, what gets serialized, and where each limit lives when multiple calls hit the sidecar. |
 | [`sidecar-protocol.md`](sidecar-protocol.md) | The HTTP/JSON contract between the two processes. **Generated** from the live FastAPI schema + the C# DTOs (`python build/generate-protocol-doc.py`); CI fails if it goes stale. |
 | [`testing.md`](testing.md) | Test projects, what each suite pins down, and how to run them. |
-| [`packaging.md`](packaging.md) | Installers, signing, bundle layout, upgrade path. |
+| [`packaging.md`](packaging.md) | Installers, signing, bundle layout, upgrade path, and the background indexer's place in the payload. |
+| [`windows-indexer.md`](windows-indexer.md) | The background indexer's component specification: architecture, configuration schema, failure modes, acceptance criteria. |
+| [`indexer-operations.md`](indexer-operations.md) | **Operators start here.** Install/upgrade/uninstall the Windows service, every configuration key with its default and range, Daminion credentials, service accounts, `--status`, logs, and a troubleshooting table. |
 | [`migration-checklist.md`](migration-checklist.md) | File-by-file porting map from the original Python app. |
 | [`help/`](help/README.md) | The **user and administrator help** itself: HTML topics compiled into `Synapic.chm` by `docs/help/build-chm.ps1` (HTML Help Workshop). Separate from this developer documentation set, and checked by `docs/help/check-help.py`. |
 

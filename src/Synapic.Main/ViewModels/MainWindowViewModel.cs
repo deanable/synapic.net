@@ -7,11 +7,12 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Synapic.Main.Models;
 using Synapic.Main.Services;
-using Synapic.Main.Services.Processing;
+using Synapic.Core.Services.Processing;
 using Synapic.Main.ViewModels.Operations;
 using Synapic.Main.ViewModels.Steps;
 using Synapic.Shared.Contracts;
 
+using Synapic.Core.Services;
 namespace Synapic.Main.ViewModels;    /// <summary>
     /// User-facing state of the inference server, shown by the always-visible
     /// sidebar indicator: black = not detected (no sidecar executable), red =

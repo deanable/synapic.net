@@ -49,7 +49,8 @@
         <!-- The scope the run works on: one shared selection, chosen where the run
              happens (D10). The same view model instance the Settings view's Data
              source form binds, so it is a second surface, not a second setting. -->
-        <op:ScopeSelectionPanel DataContext="{Binding #OperationLayoutRoot.SharedSource}" />
+        <op:ScopeSelectionPanel DataContext="{Binding #OperationLayoutRoot.SharedSource}"
+                                IsEnabled="{Binding #OperationLayoutRoot.IsSourceEditable}" />
 
         <TextBlock Classes="hint" TextWrapping="Wrap"
                    Text="The folder or server the images come from, and the model and every rule, are set on the Settings view — this view runs with what is set there, on the scope chosen above." />

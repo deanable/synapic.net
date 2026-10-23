@@ -41,6 +41,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Synapic.Shared\Synapic.Shared.csproj" />
+    <ProjectReference Include="..\Synapic.Core\Synapic.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

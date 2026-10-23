@@ -2,6 +2,7 @@ using Synapic.Main.Services;
 using Synapic.Main.Views;
 using Xunit;
 
+using Synapic.Core.Services;
 namespace Synapic.Main.Tests;
 
 /// <summary>

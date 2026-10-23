@@ -2,6 +2,7 @@ using Microsoft.Win32;
 using System.IO;
 using System.Text.Json;
 
+using Synapic.Core.Services;
 namespace Synapic.Main.Services;
 
 /// <summary>
@@ -111,12 +112,12 @@ public sealed class AppSettingsRegistryStore
     private const string MigratedValue = "_MigratedFromJson";
 
     /// <summary>
-    /// The similarity search starts looser than the duplicate scan: 0.85 lets
-    /// roughly ten of the 64 hash bits differ, which is the band a re-encode, a
-    /// crop or a light edit lands in, where 0.90 would still call them different
-    /// pictures. Public so the settings panel and its tests name one default.
+    /// The similarity search starts looser than the duplicate scan: 0.84 lets
+    /// ten of the 64 hash bits differ, which is the band a re-encode, a crop or a
+    /// light edit lands in, where 0.90 would still call them different pictures.
+    /// Public so the settings panel and its tests name one default.
     /// </summary>
-    public const double SimilarThresholdDefault = 0.85;
+    public const double SimilarThresholdDefault = 0.84;
 
     /// <summary>The duplicate scan's starting threshold for pHash (0.90: at most
     /// six of the 64 bits differ).</summary>
@@ -133,6 +134,11 @@ public sealed class AppSettingsRegistryStore
     // merges at no budget below 1.0 at all. Each number below is the loosest
     // setting that measured no false merges, or — for aHash, whose measured
     // zero-error budget was 0 bits — the tightest useful one.
+    //
+    // The budget is floored (see DedupService.MaxHammingDistance), so a default
+    // written as the measured percentage would lose a bit to the floor. The
+    // numbers below are chosen to keep the intended budget: 0.96 → 2 bits,
+    // 0.98 → 1 bit, 0.90 → 6, 0.84 → 10, 0.93 → 4.
 
     /// <summary>The starting threshold for <paramref name="algorithm"/>, which is
     /// the one the duplicate scan should use when the profile has no saved
@@ -140,8 +146,8 @@ public sealed class AppSettingsRegistryStore
     /// selected algorithm still resolves the right default.</summary>
     public static double DedupThresholdDefaultFor(string? algorithm) => algorithm switch
     {
-        "DHash" => 0.97, //  2 bits:  0% of different pairs merged, 78.2% caught
-        "AHash" => 0.99, //  1 bit:   tightest useful; first false merge at 4 bits
+        "DHash" => 0.96, //  2 bits:  0% of different pairs merged, 78.2% caught
+        "AHash" => 0.98, //  1 bit:   tightest useful; first false merge at 4 bits
         _ => DedupThresholdDefault,
     };
 
@@ -151,8 +157,8 @@ public sealed class AppSettingsRegistryStore
     /// moved or deleted file.</summary>
     public static double SimilarThresholdDefaultFor(string? algorithm) => algorithm switch
     {
-        "DHash" => 0.91, //  6 bits: 0.87% of different pairs merged, 91.8% caught
-        "AHash" => 0.94, //  4 bits: 1.30% merged, 96.8% caught
+        "DHash" => 0.90, //  6 bits: 0.87% of different pairs merged, 91.8% caught
+        "AHash" => 0.93, //  4 bits: 1.30% merged, 96.8% caught
         _ => SimilarThresholdDefault,
     };
 

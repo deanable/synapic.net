@@ -1,13 +1,25 @@
-# Roadmap: Synapic.NET — UI Refactor (Dashboard + Operation Template)
+# Roadmap: Synapic.NET
+
+## Milestones
+
+- 🚧 **v1.0 UI Refactor** — Phases 1–3 (Phase 3 executed; §10 criteria 6 and 8 still open — not shipped)
+- ✅ **v1.1 Windows Indexer Service** — Phases 4–8 (shipped 2026-10-23, 31/31 requirements)
 
 ## Overview
 
-Reorganize the Synapic desktop UI around the approved design in `docs/ui-design.md`: the app
+v1.0 reorganizes the desktop UI around the approved design in `docs/ui-design.md`: the app
 starts on a 4-panel dashboard (Settings, Tag, Dedup, Upscale) and every mode renders one shared
-operation layout (Data source → Parameters → Output/Report). The roadmap implements
+operation layout (Data source → Parameters → Output/Report). It implements
 `docs/ui-refactor-plan.md` in three strangler phases — extract the duplicated run machinery
 behind an `IOperationViewModel` contract, build the shared template + dashboard, then collapse
-the legacy navigation. Each phase keeps the app shippable and ends at a hard verification gate.
+the legacy navigation. Phases 1 and 2 are complete; Phase 3 is executed but its gate left two
+criteria open, so the milestone has not shipped.
+
+v1.1 added the unattended half of the product: a Windows Service that consumes the same engine
+without a desktop. It lifted the engine out of the Avalonia project into `Synapic.Core` (phase 4),
+built the service host and configuration (5), work detection and a durable job queue (6), the
+tagging pipeline with write-back and resilience (7), and packaging plus an unattended acceptance
+run (8). All five phases shipped and were archived to `milestones/v1.1-ROADMAP.md` on 2026-10-23.
 
 **Phase Numbering:**
 
@@ -16,11 +28,31 @@ the legacy navigation. Each phase keeps the app shippable and ends at a hard ver
 
 ## Phases
 
-- [x] **Phase 1: Extract run state and operation contract** - Pull the copy-pasted run machinery into a shared base; no visible change
-- [x] **Phase 2: Add operation template and dashboard** - One shared three-region layout + 4-panel dashboard the app boots to (5/5 plans — gate sweep green: all five success criteria ✓)
-- [ ] **Phase 3: Collapse navigation and retire settings dialogs** - Delete the legacy wizard chrome; inline parameters; busy-state fix (03-05 gate incomplete: §10 criteria 6 and 8 remain open; criterion 7 now has cross-route F1 evidence)
+<details>
+<summary>✅ v1.1 Windows Indexer Service (Phases 4–8) — SHIPPED 2026-10-23</summary>
 
-## Phase Details
+- [x] Phase 4: Extract headless engine core (4/4 plans) — completed 2026-10-22
+- [x] Phase 5: Indexer service host and configuration (4/4 plans) — completed 2026-10-22
+- [x] Phase 6: Work detection and durable job queue (4/4 plans) — completed 2026-10-22
+- [x] Phase 7: Tagging pipeline and write-back (4/4 plans) — completed 2026-10-22
+- [x] Phase 8: Packaging, install and unattended acceptance (3/3 plans) — completed 2026-10-23
+
+</details>
+
+Full detail: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md) ·
+requirements: [milestones/v1.1-REQUIREMENTS.md](milestones/v1.1-REQUIREMENTS.md) ·
+entry: [MILESTONES.md](MILESTONES.md)
+
+### v1.0 remaining phases
+
+- [x] **Phase 1: Extract run state and operation contract** - Pull the copy-pasted run machinery into a shared base; no visible change (4/4 plans — gate sweep green: all five success criteria ✓)
+- [x] **Phase 2: Add operation template and dashboard** - One shared three-region layout + 4-panel dashboard the app boots to (5/5 plans — gate sweep green: all five success criteria ✓)
+- [ ] **Phase 3: Collapse navigation and retire settings dialogs** - Delete the legacy wizard chrome; inline parameters; busy-state fix (5/5 plans executed, gate incomplete: §10 criteria 6 and 8 remain open; criterion 7 has cross-route F1 evidence)
+
+**Settings view (§5)** — delivered during Phase 3, adopted by plan `03-04`, verified by `03-05`; two
+§5 rows recorded ✗ (a health-details surface, the wide section-nav layout). Detail below.
+
+## 🚧 v1.0 UI Refactor (In Progress)
 
 ### Phase 1: Extract run state and operation contract
 
@@ -153,3 +185,21 @@ Plans:
   places, per-section reach, persistence). 03-05 verifies that record rather than sweeping unplanned work as
   an extra item. Two §5 rows are recorded ✗ in the record: a health-details surface and §5's wide
   section-nav layout do not exist.
+
+## Progress
+
+| Phase | Milestone | Plans Complete | Status | Completed |
+|-------|-----------|----------------|--------|-----------|
+| 1. Extract run state and operation contract | v1.0 | 4/4 | Complete | 2026-10-08 |
+| 2. Add operation template and dashboard | v1.0 | 5/5 | Complete | 2026-10-09 |
+| 3. Collapse navigation and retire settings dialogs | v1.0 | 5/5 | Executed — gate 2 criteria open | — |
+| 4. Extract headless engine core | v1.1 | 4/4 | Complete | 2026-10-22 |
+| 5. Indexer service host and configuration | v1.1 | 4/4 | Complete | 2026-10-22 |
+| 6. Work detection and durable job queue | v1.1 | 4/4 | Complete | 2026-10-22 |
+| 7. Tagging pipeline and write-back | v1.1 | 4/4 | Complete | 2026-10-22 |
+| 8. Packaging, install and unattended acceptance | v1.1 | 3/3 | Complete | 2026-10-23 |
+
+**v1.0 remaining work:** close §10 criteria 6 (empty-state branches lack behavioral evidence —
+zero-result Daminion and all-failed Upscale) and 8 (the 37-row preservation map still has 12 partial and
+2 unsupported entries), then re-run the 03-05 gate. See
+`.planning/phases/03-collapse-navigation-and-retire-settings-dialogs/03-05-SUMMARY.md`.

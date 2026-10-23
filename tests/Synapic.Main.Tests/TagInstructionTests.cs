@@ -3,6 +3,7 @@ using Synapic.Main.Services;
 using Synapic.Main.ViewModels.Steps;
 using Xunit;
 
+using Synapic.Core.Services;
 namespace Synapic.Main.Tests;
 
 /// <summary>
@@ -132,11 +133,12 @@ public class TagInstructionTests
             vm.BuildTagRequest().Options!.UserPrompt);
     }
 
-    [Fact]
+    [WindowsFact]
     public void StoreRoundTrip_KeepsTheInstruction()
     {
+        // The attribute reports the skip; this keeps the registry calls
+        // provably Windows-only for the platform analyzer (CA1416).
         if (!OperatingSystem.IsWindows()) return;
-
         var keyPath = $@"Software\Synapic\Tests_TagInstruction_{Guid.NewGuid():N}";
         var store = new EngineSettingsStore(keyPath);
 

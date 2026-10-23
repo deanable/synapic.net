@@ -8,6 +8,7 @@ using Synapic.Main.Views.Operation;
 using Synapic.Main.Views.Wizard;
 using Xunit;
 
+using Synapic.Core.Services;
 namespace Synapic.Main.Tests;
 
 /// <summary>
@@ -27,7 +28,7 @@ public class StepUpscaleViewModelTests
         return session;
     }
 
-    private static StepUpscaleViewModel VmForFolder(string folder, Synapic.Main.Services.IInferenceSidecar? sidecar = null)
+    private static StepUpscaleViewModel VmForFolder(string folder, Synapic.Core.Services.IInferenceSidecar? sidecar = null)
         => new(new Step1DatasourceViewModel(LocalSession(folder)), sidecar);
 
     // ── BuildOptions: the parameters that differ between workflows ─────────
@@ -149,7 +150,7 @@ public class StepUpscaleViewModelTests
     // ── Command gating ──────────────────────────────────────────────────────
 
     [Fact]
-    public void Start_requires_both_a_usable_source_and_a_sidecar()
+    public void Start_requires_a_usable_source_a_sidecar_and_a_running_server()
     {
         var folder = Directory.CreateTempSubdirectory("synapic-upscale-vm-").FullName;
         try
@@ -157,15 +158,32 @@ public class StepUpscaleViewModelTests
             // Ready source, but no sidecar → cannot start.
             var noSidecar = VmForFolder(folder, sidecar: null);
             Assert.False(noSidecar.StartCommand.CanExecute(null));
+            Assert.Equal("No inference sidecar is available", noSidecar.StartBlockedReason);
             Assert.False(noSidecar.StopCommand.CanExecute(null));
 
             // Sidecar, but no folder → cannot start.
             var noSource = VmForFolder(Path.Combine(Path.GetTempPath(), $"synapic-gone-{Guid.NewGuid():N}"),
-                sidecar: new FakeSidecar());
+                sidecar: new FakeSidecar { IsRunning = true });
             Assert.False(noSource.StartCommand.CanExecute(null));
+            Assert.Contains("folder", noSource.StartBlockedReason);
 
-            // Both present → start is offered.
-            var ready = VmForFolder(folder, sidecar: new FakeSidecar());
+            // Source and executable, but the server is stopped → cannot start.
+            var stopped = VmForFolder(folder, sidecar: new FakeSidecar());
+            Assert.False(stopped.StartCommand.CanExecute(null));
+            Assert.Equal("Start the inference server in Settings", stopped.StartBlockedReason);
+
+            // Both present and the server running → start is offered.
+            var runningSidecar = new FakeSidecar { IsRunning = true };
+            var ready = VmForFolder(folder, sidecar: runningSidecar);
+            Assert.True(ready.StartCommand.CanExecute(null));
+            Assert.Null(ready.StartBlockedReason);
+
+            // The gate follows the server's status, not just its first reading.
+            runningSidecar.IsRunning = false;
+            runningSidecar.RaiseStatus(Synapic.Core.Services.SidecarStatus.Stopped);
+            Assert.False(ready.StartCommand.CanExecute(null));
+            runningSidecar.IsRunning = true;
+            runningSidecar.RaiseStatus(Synapic.Core.Services.SidecarStatus.Ready);
             Assert.True(ready.StartCommand.CanExecute(null));
         }
         finally
@@ -353,20 +371,20 @@ public class StepUpscaleViewModelTests
         return null;
     }
 
-    private sealed class UpscaleTestSidecar : Synapic.Main.Services.IInferenceSidecar
+    private sealed class UpscaleTestSidecar : Synapic.Core.Services.IInferenceSidecar
     {
         public int UpscaleCalls { get; private set; }
         public Func<Synapic.Shared.Contracts.UpscaleRequest, Task<Synapic.Shared.Contracts.UpscaleResponse>>? UpscaleResult { get; set; }
         public Func<CancellationToken, Task<Synapic.Shared.Contracts.UpscaleResponse>>? CancellableUpscaleResult { get; set; }
         public List<Synapic.Shared.Contracts.UpscaleRequest> UpscaleRequests { get; } = new();
-        public Synapic.Main.Services.SidecarStatus CurrentStatus => Synapic.Main.Services.SidecarStatus.Ready;
+        public Synapic.Core.Services.SidecarStatus CurrentStatus => Synapic.Core.Services.SidecarStatus.Ready;
         public int SidecarPort => 0;
         public bool IsRunning => true;
         public int ListModelsCalls { get; private set; }
         public int DownloadCalls { get; private set; }
         public Synapic.Shared.Contracts.ModelInfo[] Models { get; set; } = Array.Empty<Synapic.Shared.Contracts.ModelInfo>();
 #pragma warning disable CS0067
-        public event EventHandler<Synapic.Main.Services.SidecarStatusChangedEventArgs>? StatusChanged;
+        public event EventHandler<Synapic.Core.Services.SidecarStatusChangedEventArgs>? StatusChanged;
         public event Action<string>? LogReceived;
 #pragma warning restore CS0067
         public Task StartAsync(CancellationToken ct = default) => Task.CompletedTask;

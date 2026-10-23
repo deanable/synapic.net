@@ -18,6 +18,7 @@ using Synapic.Main.Views.Settings;
 using Synapic.Main.Views.Wizard;
 using Xunit;
 
+using Synapic.Core.Services;
 namespace Synapic.Main.Tests;
 
 /// <summary>

@@ -1,6 +1,6 @@
 using Synapic.Main.Models;
 using Synapic.Main.Services;
-using Synapic.Main.Services.Processing;
+using Synapic.Core.Services.Processing;
 using Synapic.Main.ViewModels.Steps;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;

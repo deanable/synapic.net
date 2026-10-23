@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text.Json;
 
+using Synapic.Core.Services;
 namespace Synapic.Main.Services;
 
 /// <summary>The file shape: a JSON object holding the prompt list.</summary>

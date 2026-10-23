@@ -58,9 +58,11 @@ public partial class MainLayout : UserControl
             // summary reads identically everywhere and never edits it — the
             // source form itself lives on the Settings view now.
             OperationHost.SharedSource = vm.Operations.Source;
+            OperationHost.IsSourceEditable = !vm.IsNavigationLocked;
             ApplyModeContent();
 
             vm.Shell.PropertyChanged += OnShellPropertyChanged;
+            vm.PropertyChanged += OnShellPropertyChanged;
             vm.LogEntries.CollectionChanged += OnLogEntriesChanged;
         };
     }
@@ -69,6 +71,11 @@ public partial class MainLayout : UserControl
     {
         if (e.PropertyName is nameof(ShellViewModel.Current))
             ApplyModeContent();
+        // The scope is chosen where the run happens, so it is locked there for
+        // the duration of the run: the pass works on the selection it started
+        // with, and moving the controls would describe a different source.
+        if (e.PropertyName is nameof(MainWindowViewModel.IsNavigationLocked))
+            OperationHost.IsSourceEditable = !_vm!.IsNavigationLocked;
     }
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
@@ -130,6 +137,7 @@ public partial class MainLayout : UserControl
     {
         if (_vm is null) return;
         _vm.Shell.PropertyChanged -= OnShellPropertyChanged;
+        _vm.PropertyChanged -= OnShellPropertyChanged;
         _vm.LogEntries.CollectionChanged -= OnLogEntriesChanged;
         _vm = null;
     }

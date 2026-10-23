@@ -3,7 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using Synapic.Main.Services.Processing;
+using Synapic.Core.Services.Processing;
 using Synapic.Main.ViewModels.Steps;
 using Synapic.Main.Views.Wizard;
 using Xunit;
@@ -24,7 +24,9 @@ public class ApplyBusyStateTests
 
     private static StepDedupViewModel VmWithTargets(IDedupService dedup, int items = 2)
     {
-        var vm = new StepDedupViewModel(dedup: dedup);
+        // Move is the local default, and it needs a destination: the folder the
+        // fake service is told about satisfies the gate without touching disk.
+        var vm = new StepDedupViewModel(dedup: dedup) { MoveDestinationFolder = Path.GetTempPath() };
         vm.Groups.Add(new DuplicateGroupViewModel(
             Enumerable.Range(0, items).Select(i => Item($"dup{i}.jpg")).ToArray(), "phash", 0.90));
         return vm;
@@ -109,7 +111,7 @@ public class ApplyBusyStateTests
         Assert.False(vm.IsApplying);
         Assert.False(vm.StopApplyCommand.CanExecute(null));
         Assert.Equal(1, dedup.ApplyCalls);
-        Assert.Contains("Tag applied to", vm.ScanSummary);
+        Assert.Contains("Moved 2 duplicate(s)", vm.ScanSummary);
     }
 
     [Fact]

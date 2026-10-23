@@ -25,11 +25,12 @@ public class DaminionConnectionStoreTests : IDisposable
 
     public void Dispose() => _store.Clear();
 
-    [Fact]
+    [WindowsFact]
     public void Save_then_Load_round_trips_all_connection_fields()
     {
-        if (!OperatingSystem.IsWindows()) return; // registry is Windows-only
-
+        // The attribute reports the skip; this keeps the registry calls
+        // provably Windows-only for the platform analyzer (CA1416).
+        if (!OperatingSystem.IsWindows()) return;
         _store.Save(new DaminionConnectionParams(
             "http://damserver.local/daminion", "admin", "s3cret!",
             "all", "", "", "", "all", false, false, false, 100, 100, false));
@@ -42,19 +43,21 @@ public class DaminionConnectionStoreTests : IDisposable
         Assert.Equal("s3cret!", loaded.Password);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Load_returns_null_when_nothing_saved()
     {
+        // The attribute reports the skip; this keeps the registry calls
+        // provably Windows-only for the platform analyzer (CA1416).
         if (!OperatingSystem.IsWindows()) return;
-
         Assert.Null(_store.Load());
     }
 
-    [Fact]
+    [WindowsFact]
     public void Password_is_not_stored_as_plain_text()
     {
+        // The attribute reports the skip; this keeps the registry calls
+        // provably Windows-only for the platform analyzer (CA1416).
         if (!OperatingSystem.IsWindows()) return;
-
         _store.Save(new DaminionConnectionParams(
             "http://damserver.local/daminion", "admin", "s3cret!",
             "all", "", "", "", "all", false, false, false, 100, 100, false));
@@ -69,11 +72,12 @@ public class DaminionConnectionStoreTests : IDisposable
         Assert.DoesNotContain("s3cret!", asText);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Load_survives_a_corrupted_password_blob()
     {
+        // The attribute reports the skip; this keeps the registry calls
+        // provably Windows-only for the platform analyzer (CA1416).
         if (!OperatingSystem.IsWindows()) return;
-
         _store.Save(new DaminionConnectionParams(
             "http://damserver.local/daminion", "admin", "s3cret!",
             "all", "", "", "", "all", false, false, false, 100, 100, false));
@@ -94,11 +98,12 @@ public class DaminionConnectionStoreTests : IDisposable
         Assert.Equal("", loaded.Password);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Empty_password_clears_the_stored_secret()
     {
+        // The attribute reports the skip; this keeps the registry calls
+        // provably Windows-only for the platform analyzer (CA1416).
         if (!OperatingSystem.IsWindows()) return;
-
         _store.Save(new DaminionConnectionParams(
             "http://damserver.local/daminion", "admin", "s3cret!",
             "all", "", "", "", "all", false, false, false, 100, 100, false));
@@ -113,11 +118,12 @@ public class DaminionConnectionStoreTests : IDisposable
         Assert.Equal("admin", loaded.Username);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Clear_removes_everything()
     {
+        // The attribute reports the skip; this keeps the registry calls
+        // provably Windows-only for the platform analyzer (CA1416).
         if (!OperatingSystem.IsWindows()) return;
-
         _store.Save(new DaminionConnectionParams(
             "http://damserver.local/daminion", "admin", "s3cret!",
             "all", "", "", "", "all", false, false, false, 100, 100, false));
@@ -126,11 +132,12 @@ public class DaminionConnectionStoreTests : IDisposable
         Assert.Null(_store.Load());
     }
 
-    [Fact]
+    [WindowsFact]
     public void Save_then_Load_round_trips_every_Step1_field()
     {
+        // The attribute reports the skip; this keeps the registry calls
+        // provably Windows-only for the platform analyzer (CA1416).
         if (!OperatingSystem.IsWindows()) return;
-
         // Exercise the full form: non-default scope, search term, saved search +
         // collection ids, status filter, all three untagged flags, max items, a
         // mid-range resize scale, and the thumbnail override.
@@ -169,11 +176,12 @@ public class DaminionConnectionStoreTests : IDisposable
         Assert.True(loaded.UseThumbnailOverride);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Load_defaults_missing_optional_fields_to_form_defaults()
     {
+        // The attribute reports the skip; this keeps the registry calls
+        // provably Windows-only for the platform analyzer (CA1416).
         if (!OperatingSystem.IsWindows()) return;
-
         // Only the connection params saved — scope/filter/limit fields should
         // fall back to the form defaults (all / "" / all / 100 / 100 / false).
         _store.Save(new DaminionConnectionParams(
@@ -196,11 +204,12 @@ public class DaminionConnectionStoreTests : IDisposable
         Assert.False(loaded.UseThumbnailOverride);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Step1_hydrates_every_Step1_field_from_the_store()
     {
+        // The attribute reports the skip; this keeps the registry calls
+        // provably Windows-only for the platform analyzer (CA1416).
         if (!OperatingSystem.IsWindows()) return;
-
         _store.Save(new DaminionConnectionParams(
             ServerUrl: "http://damserver.local/daminion",
             Username: "admin",
@@ -235,11 +244,12 @@ public class DaminionConnectionStoreTests : IDisposable
         Assert.True(vm.UseThumbnailOverride);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Step1_preserves_non_default_scope_and_filters()
     {
+        // The attribute reports the skip; this keeps the registry calls
+        // provably Windows-only for the platform analyzer (CA1416).
         if (!OperatingSystem.IsWindows()) return;
-
         // Hydration passes every field through, including non-default ScopeIndex /
         // StatusFilterIndex values (they round-trip via the string form).
         _store.Save(new DaminionConnectionParams(

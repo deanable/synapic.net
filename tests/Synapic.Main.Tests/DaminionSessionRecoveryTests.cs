@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using Synapic.Main.Services.Daminion;
+using Synapic.Core.Services.Daminion;
 using Xunit;
 
 namespace Synapic.Main.Tests;

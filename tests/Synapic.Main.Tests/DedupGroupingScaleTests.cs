@@ -1,5 +1,5 @@
 using System.Diagnostics;
-using Synapic.Main.Services.Processing;
+using Synapic.Core.Services.Processing;
 using Xunit;
 using Xunit.Abstractions;
 

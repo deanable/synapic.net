@@ -1,6 +1,7 @@
 using System.Globalization;
 using Microsoft.Win32;
 
+using Synapic.Core.Services;
 namespace Synapic.Main.Services;
 
 /// <summary>Step 2 engine settings (model id, device, thresholds, prompt, tag-field checkboxes).</summary>

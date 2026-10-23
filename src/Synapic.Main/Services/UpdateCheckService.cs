@@ -2,6 +2,7 @@ using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 
+using Synapic.Core.Services;
 namespace Synapic.Main.Services;
 
 /// <summary>Result of an update check against GitHub Releases.</summary>

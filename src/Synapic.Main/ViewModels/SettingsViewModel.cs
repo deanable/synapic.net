@@ -9,6 +9,7 @@ using CommunityToolkit.Mvvm.Input;
 using Synapic.Main.Models;
 using Synapic.Main.Services;
 
+using Synapic.Core.Services;
 namespace Synapic.Main.ViewModels;
 
 /// <summary>One choice in a settings selector: what it reads, and what it stores.</summary>

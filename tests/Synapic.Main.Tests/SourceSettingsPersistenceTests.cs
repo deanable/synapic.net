@@ -45,11 +45,12 @@ public class SourceSettingsPersistenceTests : IDisposable
         return new Step1DatasourceViewModel(session, countLocalImages: NoCount, appSettingsStore: store);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Store_round_trips_the_active_source_and_its_folder()
     {
-        if (!OperatingSystem.IsWindows()) return; // registry is Windows-only
-
+        // The attribute reports the skip; this keeps the registry calls
+        // provably Windows-only for the platform analyzer (CA1416).
+        if (!OperatingSystem.IsWindows()) return;
         var folder = Path.GetTempPath();
         _store.Save(_store.Defaults with
         {
@@ -69,11 +70,12 @@ public class SourceSettingsPersistenceTests : IDisposable
         Assert.True(session.Datasource.LocalRecursive);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Missing_source_value_falls_back_to_the_folder_tab()
     {
+        // The attribute reports the skip; this keeps the registry calls
+        // provably Windows-only for the platform analyzer (CA1416).
         if (!OperatingSystem.IsWindows()) return;
-
         _store.Save(_store.Defaults with { DatasourceType = "daminion" });
         using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(_keyPath, writable: true))
         {
@@ -89,8 +91,9 @@ public class SourceSettingsPersistenceTests : IDisposable
     [AvaloniaFact]
     public void Choosing_a_folder_is_remembered_for_the_next_launch()
     {
+        // Avalonia's fact attribute is sealed and has no runtime skip,
+        // so this one still reports as passed off Windows (see D2).
         if (!OperatingSystem.IsWindows()) return;
-
         var folder = Path.Combine(Path.GetTempPath(), "synapic-source-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(folder);
         try
@@ -118,8 +121,9 @@ public class SourceSettingsPersistenceTests : IDisposable
     [AvaloniaFact]
     public void Choosing_the_catalog_is_remembered_for_the_next_launch()
     {
+        // Avalonia's fact attribute is sealed and has no runtime skip,
+        // so this one still reports as passed off Windows (see D2).
         if (!OperatingSystem.IsWindows()) return;
-
         var vm = new Step1DatasourceViewModel(
             new Session(), countLocalImages: NoCount, appSettingsStore: _store);
         vm.DatasourceType = "daminion";
@@ -135,8 +139,9 @@ public class SourceSettingsPersistenceTests : IDisposable
     [AvaloniaFact]
     public void Switching_back_to_the_folder_tab_wins_the_next_launch()
     {
+        // Avalonia's fact attribute is sealed and has no runtime skip,
+        // so this one still reports as passed off Windows (see D2).
         if (!OperatingSystem.IsWindows()) return;
-
         var vm = new Step1DatasourceViewModel(
             new Session(), countLocalImages: NoCount, appSettingsStore: _store);
         vm.DatasourceType = "daminion";   // last session ended on the catalog…
@@ -153,8 +158,9 @@ public class SourceSettingsPersistenceTests : IDisposable
     [AvaloniaFact]
     public void Shell_wiring_persists_the_source_through_the_registry_store()
     {
+        // Avalonia's fact attribute is sealed and has no runtime skip,
+        // so this one still reports as passed off Windows (see D2).
         if (!OperatingSystem.IsWindows()) return;
-
         var shell = new MainWindowViewModel(
             new FakeSidecar(), new Session(),
             () => "x.exe", null, null, _ => null,
