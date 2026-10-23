@@ -17,6 +17,22 @@ queue, and writing back while nobody is at the desk.
 Pick a source and get correct, reviewable results written back — without the user ever fighting the
 UI, and without anyone needing to be at the desk for the routine tagging to happen.
 
+## Current Milestone: v1.2 Release Integrity
+
+**Goal:** Close the three gaps v1.1 left unproven — the MSI channel, the live Daminion path, and v1.0's own
+gate — and finally ship v1.0. No new product capability.
+
+**Target features:**
+- MSI and Burn bundle rebuilt with the indexer payload and verified end to end: silent install, in-place
+  upgrade, uninstall, service parity with the Inno path, documented role (phase 9)
+- A live Daminion round trip on the provided server: connect, tag an untagged scope, check in, read back,
+  no duplicate keywords on re-run, and a real outage that pauses and resumes (phase 10)
+- §10 criterion 6 restated as a finitely checkable claim, backed by an inventory whose every row names an
+  existing test, plus the missing Tag cancellation/fetch-failure evidence and a clean 03-05 re-run (phase 11)
+- The six pending v1.0 UAT scenarios executed on the installed build, then v1.0 archived and tagged (phase 12)
+
+Requirements: [REQUIREMENTS.md](REQUIREMENTS.md) (16 requirements, MSI/DAM/GATE/UAT).
+
 ## Current State
 
 **Shipped:** v1.1 Windows Indexer Service (2026-10-23) — 5 phases, 19 plans, 31/31 requirements.
@@ -38,19 +54,14 @@ Avalonia UI test per run, each passing alone — so gates record the serial run.
 left `docs/ui-design.md` §10 criteria 6 and 8 open. That debt stays against Phase 3 and is not
 absorbed into v1.1.
 
-## Next Milestone Goals
+## Candidates After v1.2
 
-Not yet scoped — `/gsd:new-milestone` settles them. Candidate work, in the order the evidence
-suggests:
+Not scoped. The evidence suggests, in order:
 
-- **Close v1.0.** Give §10 criteria 6 and 8 behavioral evidence (zero-result Daminion, all-failed
-  Upscale; the 37-row preservation map) and re-run the 03-05 gate. Small, and it retires two open
-  criteria that have been carried across a whole milestone.
-- **Verify what the acceptance could not.** Build and exercise the MSI channel (never built on the
-  gate machine), and run the Daminion fault paths against a live catalog instead of the fake seam.
-- **v1.2 background operations.** BG-01/BG-02 (dedup and upscale on the same scheduler and queue),
-  which the indexer's detection, queue and batch seams were built to accept.
+- **Background operations (BG-01/BG-02).** Dedup and upscale on the indexer's scheduler and queue — the
+  seams were built for it in Phases 6–7, and nothing of it exists yet.
 - **Operator surface.** UI-01 (indexer status/history in the app) and DIST-01 (indexer self-update).
+- **Installer signing.** Needs a certificate and a key-management decision the project has not made.
 
 ## Requirements
 
@@ -67,9 +78,13 @@ suggests:
 ### Active
 
 - **v1.0 UI refactor** per `docs/ui-design.md` (SSOT) — dashboard-first, one shared operation layout.
-  Phases 1 and 2 complete; **Phase 3 open on §10 criteria 6 and 8**.
-  - Criterion 6: empty-state branches lack behavioral evidence (zero-result Daminion, all-failed Upscale).
-  - Criterion 8: the 37-row preservation map still has 12 partial and 2 unsupported entries.
+  Phases 1 and 2 complete; **Phase 3 open on §10 criterion 6**, to be closed by v1.2 Phases 11–12.
+  - Criterion 6: its "exhaustive" wording is not finitely verifiable; restating it as an inventory plus
+    named-test claim is v1.2 phase 11.
+  - Criterion 8: **✓** — closed by the 2026-10-13 addendum (37/37 supported or explicitly remapped). The
+    "12 partial, 2 unsupported" figure in older planning text predates that addendum.
+- **v1.2 Release Integrity** — MSI channel (MSI-01..05), live Daminion (DAM-01..04), gate closure
+  (GATE-01..04) and v1.0 release (UAT-01..03).
 - **Help corpus naming:** the compiled help still names the old wizard steps
   (`HelpTopics.ForStepIndex` maps 0–5). A docs pass, not a phase.
 
@@ -164,4 +179,4 @@ Full record: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md).
 
 ---
 
-*Last updated: 2026-10-23 after the v1.1 milestone close.*
+*Last updated: 2026-10-23 — milestone v1.2 Release Integrity started.*

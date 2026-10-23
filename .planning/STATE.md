@@ -1,43 +1,36 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: Windows Indexer Service
-status: milestone_complete
-stopped_at: Milestone v1.1 archived on 2026-10-23 — 5/5 phases, 19/19 plans, 31/31 requirements
-last_updated: "2026-10-23"
+milestone: v1.2
+milestone_name: Release Integrity
+status: planning
+last_updated: "2026-10-23T05:32:59.469Z"
 last_activity: 2026-10-23
 progress:
-  total_phases: 5
-  completed_phases: 5
-  total_plans: 19
-  completed_plans: 19
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: [PROJECT.md](PROJECT.md) (updated 2026-10-23, after the v1.1 close)
+See: [PROJECT.md](PROJECT.md) (updated 2026-10-23 — v1.2 started)
 
 **Core value:** Pick a source and get correct, reviewable tags written back — without fighting the UI,
 and without needing to be at the desk for routine tagging.
 
-**Current focus:** Planning the next milestone (`/gsd:new-milestone`). v1.1 is shipped and archived;
-v1.0 is still open on Phase 3's two remaining criteria.
+**Current focus:** Milestone v1.2 Release Integrity — close v1.1's unproven claims (MSI channel, live
+Daminion) and finally ship v1.0. Requirements: [REQUIREMENTS.md](REQUIREMENTS.md); phases 9–12.
 
 ## Current Position
 
-**Milestone v1.1 — complete and archived.** Phases 4–8, 19/19 plans, 31/31 requirements.
-
-- Archive: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md) ·
-  [milestones/v1.1-REQUIREMENTS.md](milestones/v1.1-REQUIREMENTS.md)
-- Release history: [MILESTONES.md](MILESTONES.md)
-- Suite at the gate: **981 passed, 4 skipped, 0 failed** (`dotnet test Synapic.Net.sln -c Release -m:1`),
-  Release build **0/0**
-
-**Milestone v1.0 — in progress, Phase 3 open.** Phases 1 and 2 complete; Phase 3 executed all five
-plans but its gate left `docs/ui-design.md` §10 criteria 6 and 8 open (see Carried debt).
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-10-23 — Milestone v1.2 started
 
 ## Deferred Items
 
@@ -47,11 +40,24 @@ Items acknowledged and deferred at the v1.1 milestone close on 2026-10-23:
 |----------|------|--------|
 | uat_gap | phase 03 — `03-UAT.md` | testing (6 pending scenarios) |
 
-This item belongs to **v1.0 / Phase 3**, which remains open; it was acknowledged rather than resolved
-because resolving it is v1.0 work, not part of closing v1.1. It is tracked in
-`.planning/phases/03-collapse-navigation-and-retire-settings-dialogs/03-UAT.md` and in Carried debt below.
+This item belongs to **v1.0 / Phase 3**. It was acknowledged rather than resolved at the v1.1 close —
+resolving it is v1.0 work. It is now **claimed by v1.2 Phase 12** (requirement UAT-01) and tracked in
+`.planning/phases/03-collapse-navigation-and-retire-settings-dialogs/03-UAT.md`.
 
-## Milestone v1.1 at a glance
+## Milestone v1.2 at a glance
+
+| Phase | Name | Requirements | Plans |
+|-------|------|--------------|-------|
+| 9 | MSI and bundle as a supported channel | MSI-01..05 | TBD |
+| 10 | Live Daminion round trip | DAM-01..04 | TBD |
+| 11 | Close the UI-refactor gate | GATE-01..04 | TBD |
+| 12 | UI acceptance and release | UAT-01..03 | TBD |
+
+Dependency shape: 9, 10 and 11 are independent; 12 needs 9 (installed build) and 11 (gate green).
+The Daminion target is a real server the user provides; credentials stay in `SYNAPIC_TEST_DAMINION_*`
+variables or the saved Windows credential, never in the repository.
+
+## Milestone v1.1 (shipped 2026-10-23)
 
 | Phase | Name | Requirements | Plans | Gate |
 |-------|------|--------------|-------|------|
@@ -80,12 +86,16 @@ Also carried: the compiled help corpus still names the old wizard steps (`HelpTo
 Stated as not-exercised, never as passed:
 
 - The **MSI channel** was not built or exercised (WiX absent on the gate machine); only the Inno path was.
-- **Daminion** fault paths ran against fake network seams, not a live catalog.
+  **Being closed in v1.2 Phase 9** — WiX 7 is installed as a dotnet tool and `build/wix` builds.
+- **Daminion** fault paths ran against fake network seams, not a live catalog. **Being closed in v1.2
+  Phase 10** — a real server is available.
 - **Parity** used the desktop's kernel with the real model, not the GUI (`Synapic.Main.exe` has no
   headless processing entry).
+
 - A **fresh install ends stopped** until `indexer-config.json` exists (finish page and docs say so).
 - The **parallel solution test run** is unstable here (one differing Avalonia UI test per run, each
   passing alone); `-m:1` is the recorded command.
+
 - `overwriteExistingTags:true` merges rather than replacing keywords — documented, pinned by a test.
 
 ## Performance Metrics
@@ -103,14 +113,37 @@ not recorded for this milestone.
 - 2026-10-22: **Milestone v1.1 added** from `docs/windows-indexer.md`. Phase numbering continues at 4.
 - 2026-10-22: **Phases 4–7 executed and gated** — Core extracted, service host standing, detection and
   queue durable, pipeline with write-back and resilience green.
+
 - 2026-10-23: **Phase 8 executed and v1.1 closed.** The acceptance run found two defects no unit test
   could (LocalSystem instead of LocalService; a swallowed install-start failure), both fixed and
   re-verified. Live-model parity recorded with identical tags on both paths.
+
 - 2026-10-23: **Milestone v1.1 archived.** Roadmap and requirements moved to `milestones/`; ROADMAP.md
   collapsed v1.1 into a `<details>` block; `REQUIREMENTS.md` removed for the next milestone. Phase 3
   remains open and is now the oldest outstanding work in the project.
+- 2026-10-23: **Milestone v1.2 Release Integrity planned** (phases 9–12, 16 requirements). Three findings
+  shaped it: WiX 7 is installed now and `artifacts/msi` holds Oct-4/Oct-14 packages that predate the
+  indexer — the exact stale-installer root cause `03-UAT.md` recorded for "no dashboard on launch"; a live
+  Daminion server is reachable, so the fault table can be proven for real; and Phase 3's blocker is
+  criterion 6's wording, not missing tests — criterion 8 was already closed by the 2026-10-13 addendum
+  while ROADMAP/STATE still quoted the older "12 partial" figure.
 
 ### Decisions
+
+**v1.2 decisions locked at planning:**
+
+- **D-12-01: The MSI becomes a supported channel, not a side channel.** The Inno EXE remains the default
+  download, but the MSI and its Burn bundle are rebuilt with the indexer payload, verified through silent
+  install / in-place upgrade / uninstall, and documented with their exact commands and parity. A package
+  older than the app is the recorded cause of the v1.0 UAT failure, so "it builds" is not enough.
+- **D-12-02: Daminion is verified against a real server.** The user provides one; the run is opt-in and
+  credential-gated (`SYNAPIC_TEST_DAMINION_URL`/`_USERNAME`/`_PASSWORD` or the saved credential), and skips
+  with a reason when absent. Credentials are never written to the repository.
+- **D-12-03: §10 criterion 6 is restated, not abandoned.** "Exhaustive future-proof enumeration" cannot be
+  proven; the replacement claim — every reachable empty-result/report branch is inventoried and named by a
+  behavioral test, enforced by a drift check — is checkable and stronger than the informal evidence it
+  replaces. Criterion 8 needs no code work: it is ✓ as of the 2026-10-13 addendum and only the record needs
+  reconciling.
 
 The v1.1 decision table (D-11-01…08, D-11-23, D-11-28/29, D-11-31) with outcomes lives in
 [PROJECT.md](PROJECT.md#key-decisions); the full rationale for each is in
@@ -121,6 +154,8 @@ Decisions for v1.0 are recorded in the Phase 1–3 summaries.
 
 ### Open questions
 
-- **What is the next milestone?** Not yet scoped. Candidates in PROJECT.md → Next Milestone Goals:
-  close v1.0's two criteria, verify the MSI channel and a live Daminion catalog, v1.2 background
-  dedup/upscale, or the indexer operator surface (UI-01/DIST-01).
+- **After v1.2:** background dedup/upscale on the indexer queue (BG-01/02), the operator surface
+  (UI-01/DIST-01), or installer signing. Not scoped; see PROJECT.md → Candidates After v1.2.
+- **MSI service registration:** whether the package registers the indexer itself or ships the one
+  documented elevated `--install` command is Phase 9's first task; D-11-31 chose the latter for v1.1, and
+  MSI-03 allows either as long as the acceptance runs and verifies what ships.
