@@ -191,7 +191,21 @@ advance PROJECT.md and STATE.md.
   2. The dashboard-on-launch complaint is closed with the installed build as its evidence
   3. v1.0 has an archive, a MILESTONES entry and tag `v1.0`, and PROJECT.md/STATE.md name the next milestone
 
-**Plans:** TBD
+**Plans:** 1/1 executed — UAT half complete
+
+| Plan | What it did | Summary |
+|------|-------------|---------|
+| 12-01 | UI acceptance executed against the installed build | [12-01-SUMMARY.md](phases/12-ui-acceptance-and-release/12-01-SUMMARY.md) · transcript: [12-ACCEPTANCE.md](phases/12-ui-acceptance-and-release/12-ACCEPTANCE.md) |
+
+**Outcome (criteria 1 and 2):** all seven `03-UAT.md` rows carry a recorded result with quoted
+observations — executed 2026-10-24 by Windows UI Automation against the installed build launched from
+the Start-menu shortcut (`artifacts/phase-12/uat-sweep.ps1`), not inferred. The dashboard-on-launch
+complaint is closed with the installed build as its evidence: the shortcut resolves to the exe built
+from this tree (2026-10-23T23:59:34), the cold start lands on the dashboard/Settings view, and the
+service comes up RUNNING as LocalService. Criterion 3 (archive, MILESTONES entry, tag `v1.0`,
+PROJECT/STATE advanced) is the remaining ship step. The phase also retired a recorded residual: the
+release workflow's MSI leg dropped its `continue-on-error` guard after the local dry run produced both
+artifacts.
 
 ## 🚧 v1.0 UI Refactor (In Progress)
 

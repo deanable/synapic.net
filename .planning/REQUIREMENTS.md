@@ -41,8 +41,8 @@ Three gaps motivated this milestone, each recorded honestly in the v1.1 archive 
 
 ### Shipping v1.0 (UAT)
 
-- [ ] **UAT-01**: The six pending `03-UAT.md` scenarios are executed against the installed build and recorded pass/fail with what was observed, replacing the `[pending]` placeholders
-- [ ] **UAT-02**: The original complaint is closed on the record: the installed application opens on the dashboard, and the stale-artifact root cause (an installer older than the UI) is retired by the MSI phase
+- [x] **UAT-01**: The six pending `03-UAT.md` scenarios are executed against the installed build and recorded pass/fail with what was observed, replacing the `[pending]` placeholders. Done 2026-10-24: all seven scenarios (the six pending plus the re-run of the failed first one) executed by Windows UI Automation against the installed build launched from the Start-menu shortcut — `artifacts/phase-12/uat-sweep.ps1`, transcript in [12-ACCEPTANCE.md](phases/12-ui-acceptance-and-release/12-ACCEPTANCE.md), results and quoted observations written back to `03-UAT.md` (7 passed / 0 pending; the original major gap marked closed with its evidence)
+- [x] **UAT-02**: The original complaint is closed on the record: the installed application opens on the dashboard, and the stale-artifact root cause (an installer older than the UI) is retired by the MSI phase. Done 2026-10-24: the app launched from the Start-menu shortcut (target `C:\Program Files\Synapic\Synapic.exe`, built from this tree 2026-10-23T23:59:34) opened on the dashboard/Settings view with every operation route and no retired chrome; the service came up RUNNING as LocalService with recovery actions; the `03-UAT.md` gap record carries the closure
 - [ ] **UAT-03**: v1.0 ships — phases 1–3 archived to `.planning/milestones/`, a MILESTONES.md entry, tag `v1.0`, and PROJECT.md/STATE.md advanced to the next milestone
 
 ## Deferred (carried forward, not in this milestone)
@@ -79,8 +79,8 @@ Three gaps motivated this milestone, each recorded honestly in the v1.1 archive 
 | GATE-02 | Phase 11 | Complete |
 | GATE-03 | Phase 11 | Complete |
 | GATE-04 | Phase 11 | Complete |
-| UAT-01 | Phase 12 | Pending |
-| UAT-02 | Phase 12 | Pending |
+| UAT-01 | Phase 12 | Complete |
+| UAT-02 | Phase 12 | Complete |
 | UAT-03 | Phase 12 | Pending |
 
 **Coverage:** 16 total, 16 mapped, 0 unmapped.

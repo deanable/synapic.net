@@ -37,8 +37,13 @@ empty-report wording to populated reports); the §10 matrix records criterion 6 
 verdict is PASSED. Full evidence, including the 2026-10-23 build and suite numbers, in
 `.planning/phases/03-collapse-navigation-and-retire-settings-dialogs/03-05-SUMMARY.md` (Phase 11
 section) and `.planning/phases/11-close-the-ui-refactor-gate/11-01-SUMMARY.md`.
-Next: Phase 12 — execute the seven `03-UAT.md` scenarios against the installed build (results recorded
-with observations, not inferred), then ship v1.0 (archive, MILESTONES entry, tag `v1.0`).
+Next: Phase 12 — UAT-01 and UAT-02 are complete (2026-10-24: all seven `03-UAT.md` scenarios executed
+against the installed build by `artifacts/phase-12/uat-sweep.ps1`, observations recorded; the
+dashboard-on-launch complaint closed on the record). Remaining: UAT-03 — ship v1.0 (archive phases 1–3,
+MILESTONES entry, tag `v1.0`, PROJECT/STATE advanced).
+Last activity: 2026-10-24 — Phase 12 UAT executed: MSI dry run from the current tree (guard dropped on
+the release workflow's MSI leg — the residual is retired), silent elevated install exit 0, service
+RUNNING as LocalService with recovery actions, seven scenarios passed with quoted observations.
 
 ## Deferred Items
 
@@ -46,11 +51,12 @@ Items acknowledged and deferred at the v1.1 milestone close on 2026-10-23:
 
 | Category | Item | Status |
 |----------|------|--------|
-| uat_gap | phase 03 — `03-UAT.md` | testing (6 pending scenarios) |
+| uat_gap | phase 03 — `03-UAT.md` | **resolved 2026-10-24 (v1.2 Phase 12, UAT-01):** all seven scenarios executed against the installed build with recorded observations; the original dashboard gap closed with its evidence |
 
-This item belongs to **v1.0 / Phase 3**. It was acknowledged rather than resolved at the v1.1 close —
-resolving it is v1.0 work. It is now **claimed by v1.2 Phase 12** (requirement UAT-01) and tracked in
-`.planning/phases/03-collapse-navigation-and-retire-settings-dialogs/03-UAT.md`.
+This item belonged to **v1.0 / Phase 3**. It was acknowledged rather than resolved at the v1.1 close;
+v1.2 Phase 12 (UAT-01/UAT-02) has now resolved it — see
+`.planning/phases/03-collapse-navigation-and-retire-settings-dialogs/03-UAT.md` (results) and
+`.planning/phases/12-ui-acceptance-and-release/12-ACCEPTANCE.md` (transcript).
 
 ## Milestone v1.2 at a glance
 
@@ -59,7 +65,7 @@ resolving it is v1.0 work. It is now **claimed by v1.2 Phase 12** (requirement U
 | 9 | MSI and bundle as a supported channel | MSI-01..05 | 5/5 — 5/5 ✓ (silent install 0, service LocalService/Auto/restart×3, upgrade over a second ProductCode, uninstall 1060 with ProgramData kept, installed dashboard PASS) |
 | 10 | Live Daminion round trip | DAM-01..04 | 4/4 — 4/4 ✓ (DAM-01 scope reported on both catalogs, DAM-02 exact-once round trip on items 26-50, DAM-03 real firewall outage paused then resumed six rows to completion, DAM-04 transcript + procedure) |
 | 11 | Close the UI-refactor gate | GATE-01..04 | 1/1 — gate re-verified 2026-10-23: criterion 6 restated as the drift-checked inventory, matrix records 6 ✓ and 8 ✓, 03-05 verdict PASSED |
-| 12 | UI acceptance and release | UAT-01..03 | In progress — 03-UAT.md scenarios to be executed against the installed build, then archive/tag `v1.0` |
+| 12 | UI acceptance and release | UAT-01..03 | 1/1 — UAT-01 ✓ UAT-02 ✓ (seven scenarios executed on the installed build, observations recorded, dashboard complaint closed); UAT-03 (ship) remains |
 
 Dependency shape: 9, 10 and 11 are independent; 12 needs 9 (installed build) and 11 (gate green).
 The Daminion target is a real server the user provides; credentials stay in `SYNAPIC_TEST_DAMINION_*`
@@ -96,9 +102,12 @@ Stated as not-exercised, never as passed:
 
 - The **MSI channel** was not built or exercised (WiX absent on the gate machine); only the Inno path was.
   **Closed in v1.2 Phase 9** — rebuilt with the indexer payload and verified install → reinstall →
-  upgrade → uninstall, with the transcripts in `artifacts/phase-9/`. Residual: the bundle compiled but
+  upgrade → uninstall, with the transcripts in `artifacts/phase-9/`. ~~Residual: the bundle compiled but
   was not installed, registration rollback was not induced, and the release workflow's MSI leg is still
-  `continue-on-error` because no runner has produced it.
+  `continue-on-error` because no runner has produced it.~~ **The release-workflow guard was dropped
+  2026-10-24** after a local dry run of `build/package-windows-msi.ps1` from a clean payload produced
+  both artifacts (MSI 234.5 MB, bundle 292.8 MB, 87 payload files verified). Still not exercised:
+  bundle install on a clean machine and registration rollback.
 - **Daminion** fault paths ran against fake network seams, not a live catalog. **Closed in v1.2 Phase 10**
   — a live catalog round trip and a real firewall outage ran; what is still only modelled is the server
   process stopping (the outage is this machine losing the route, which is what the client can see).
