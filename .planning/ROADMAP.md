@@ -121,20 +121,26 @@ as the acceptance transcript.
   3. Stopping the server mid-batch pauses the run with nothing dropped or permanently failed; restarting it lets the queue complete, and the log names the pause and the resume
   4. With credentials absent the test skips with a stated reason rather than passing silently, and the procedure plus its transcript are committed
 
-**Plans:** 3/4 executed — DAM-03's live fact is blocked on the catalog's network (2026-10-23)
+**Plans:** 4/4 executed (2026-10-23)
 
 | Plan | What it did | Summary |
 |------|-------------|---------|
 | 10-01 | A live run that knows what it is connected to | [10-01-SUMMARY.md](phases/10-live-daminion-round-trip/10-01-SUMMARY.md) |
 | 10-02 | Tag a real catalog, read it back, and do it twice | [10-02-SUMMARY.md](phases/10-live-daminion-round-trip/10-02-SUMMARY.md) |
-| 10-03 | A real outage pauses the run, and it resumes by itself | [10-03-SUMMARY.md](phases/10-live-daminion-round-trip/10-03-SUMMARY.md) — code and hermetic facts complete; live fact not yet run |
+| 10-03 | A real outage pauses the run, and it resumes by itself | [10-03-SUMMARY.md](phases/10-live-daminion-round-trip/10-03-SUMMARY.md) |
 | 10-04 | The evidence, and the record left true | [10-04-SUMMARY.md](phases/10-live-daminion-round-trip/10-04-SUMMARY.md) |
 
-**Outcome so far:** criteria 1, 2 and 4 met against `researchserver.juicefilm.local` (items 26-50 written
-twice; exact-once keywords, pre-existing values preserved). Criterion 3 is not proven: the catalog stopped
-answering at 14:39 and the outage fact needs it reachable either side of the block. Three product defects
-were found and fixed by the run: the metadata verifier read JSON member names instead of tag names, the tag
-reader ignored object-shaped multi-values, and a repeated raw-value write duplicated keywords.
+**Outcome:** all four criteria met. Criteria 1, 2 and 4 against `researchserver.juicefilm.local` (items
+26-50 written twice; exact-once keywords, pre-existing values preserved); criterion 3 against
+`damserver.local` after the first catalog went offline at 14:39 — a real firewall block paused a six-item
+run with nothing failed or dropped, and it resumed by itself to completion, with both transitions named in
+the log. Three product defects were found and fixed by the live run: the metadata verifier read JSON member
+names instead of tag names, the tag reader ignored object-shaped multi-values, and a repeated raw-value
+write duplicated keywords. The DAM-03 attempt then found two holes in the evidence itself: the outage
+helper blocked only the IPv4 address while the host also answered on a link-local IPv6 address (so the
+first attempt's "block" did not hold for the client, and the fact refused to pass on it), and a catalog
+can carry a saved search under the requested id that holds no records (so scope resolution now takes a
+saved search only once a page of it comes back non-empty).
 
 ### Phase 11: Close the UI-refactor gate
 

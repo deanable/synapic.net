@@ -208,11 +208,14 @@ find what this one wrote; the tags stay, because tagging is the product's output
 not test residue.
 
 The scope is resolved against what the server holds, not trusted from a constant:
-the named saved search if the server enumerates it, then a saved search by name,
-then the catalog. The fallback is printed with the reason — a structured
-saved-search query that names an id the server does not have can quietly answer
-with the whole catalog, and a run on the whole catalog must not be reported as a
-run on the scope it was asked for.
+the named saved search if the server enumerates it **and it yields records**,
+then a saved search by name, then the catalog. The fallback is printed with the
+reason — a structured saved-search query that names an id the server does not
+have can quietly answer with the whole catalog, and a saved search with the
+right number can be an unrelated one that holds nothing (one catalog has a
+saved search 16 of its own, "No Description", with zero records). Either way a
+run on the whole catalog is never reported as a run on the scope it was asked
+for.
 
 The round trip does not require items that are already empty. On the server this
 was built against, `keywords:none` is ignored by both the item endpoint and the
@@ -235,6 +238,13 @@ fails, writes `block.ack`, waits for `unblock.request`, proves the server answer
 again, removes the rule in a `finally` and writes `unblock.ack`. Without
 `SYNAPIC_TEST_DAMINION_BLOCK_DIR` pointing at that directory the outage fact
 skips, naming the helper — it will not pretend a closed port is an outage.
+
+The rule covers **every address the name resolves to, both families**, and the
+proof is a connect *by hostname*: a host that answers on IPv6 as well stays
+reachable through the address the rule left alone. The helper records
+`open_addresses_after_apply=` so a partial block shows up in the ack instead of
+being inferred, and the fact itself re-proves the outage with a fresh client
+before it touches the queue.
 
 The transcript of the acceptance run is committed at
 [`.planning/phases/10-live-daminion-round-trip/10-ACCEPTANCE.md`](../.planning/phases/10-live-daminion-round-trip/10-ACCEPTANCE.md).

@@ -4,10 +4,14 @@
 > are written by `build/acceptance-daminion.ps1` and are deliberately not committed: `artifacts/` is
 > ignored. This file is the record; the command in each section regenerates the raw output.
 Run date: 2026-10-23, from the development machine (Windows, .NET 10).
-Server:   http://researchserver.juicefilm.local/daminion (192.168.60.7)
-Account:  the saved Windows connection in HKCU\Software\Synapic\Daminion (user "dean", DPAPI);
-          build/acceptance-daminion.ps1 unprotected it and handed it to the test process's
-          environment only. No secret appears in this file or in any captured log.
+Servers:  http://researchserver.juicefilm.local/daminion (192.168.60.7) — DAM-01, DAM-02
+          http://damserver.local/daminion (192.168.0.60) — DAM-01 re-check, DAM-03
+          The first went offline at 14:39 and never came back; the outage fact was run
+          against the second, which is the same product path on a different catalog.
+Account:  researchserver: the saved Windows connection in HKCU\Software\Synapic\Daminion
+          (user "dean", DPAPI), unprotected by build/acceptance-daminion.ps1 and handed to the
+          test process's environment only; damserver: the credentials the operator supplied on
+          the command line. Neither secret appears in this file or in any captured log.
 
 How the run is made:
   pwsh build/acceptance-daminion.ps1 -Filter "FullyQualifiedName~Live_..."
@@ -42,6 +46,18 @@ What the scope probe established:
 Consequence (recorded as D-13-07/08 in 10-CONTEXT.md): the scope is resolved against what the server
 holds and printed with the reason; and the round trip does not depend on pre-empty items — it
 snapshots the items it writes to and asserts against that.
+
+Re-check on the second catalog (damserver.local, run for DAM-03):
+
+  catalog GUID:  0aa3fe82-f8a5-4878-bb38-dd4e3b4db6b8
+  saved searches enumerated: 17     items in scope: 51,759
+  saved search 16 exists on this server as "No Description" but resolves to no records; it is not
+  "city street" and cannot carry this acceptance.
+  no saved search on this server is the requested scope ... Falling back to the catalog ...
+
+That catalog does have a saved search numbered 16 — an unrelated default ("No Description") that
+holds nothing. Existence of the id is therefore not enough to accept it as the scope; the resolution
+now takes a saved search only once a page of it comes back non-empty.
 
 ## DAM-02 — tag, read back, run again; nothing duplicated, nothing lost
 Evidence: artifacts/phase-10/dam-02-round-trip.txt
@@ -96,33 +112,76 @@ place — deleting catalog values to tidy a test is the more destructive mistake
 the record of it. The acceptance's own items are 26-50.
 
 ## DAM-03 — a real outage pauses the run and the queue completes by itself
-STATUS: NOT YET PROVEN on this run.
+Evidence: artifacts/phase-10/dam-03-damserver.txt, artifacts/phase-10/block/{block,unblock}.ack
+STATUS: proven 2026-10-23 15:58 against http://damserver.local/daminion.
 
-The catalog became unreachable at 14:39 (network, not a firewall rule: `netsh advfirewall firewall
-show rule name="Synapic live outage"` reports no rule, and the machine has no route to 192.168.60.7
-from 192.168.0.181). The outage fact needs the server reachable immediately before and after the
-block, so it could not be executed. Every other part of the fact is in place and hermetically
-verified (ResilienceTests: pause → advance → resume counters and log wording; the unit suite is
-green).
+Run:
 
-To run it when the catalog is reachable:
+  # elevated shell (adds one outbound rule per resolved address, removes them in a finally)
+  build/block-daminion.ps1 -WorkDir artifacts/phase-10/block -ServerUrl http://damserver.local/daminion -TimeoutSeconds 900
 
-  # 1) elevated shell (it adds and removes one outbound firewall rule)
-  build/block-daminion.ps1 -WorkDir artifacts/phase-10/block -TimeoutSeconds 900
+  # second shell
+  SYNAPIC_TEST_DAMINION_URL=http://damserver.local/daminion \
+  SYNAPIC_TEST_DAMINION_USERNAME=... SYNAPIC_TEST_DAMINION_PASSWORD=... \
+  SYNAPIC_TEST_DAMINION_BLOCK_DIR=artifacts/phase-10/block \
+    dotnet test tests/Synapic.Indexer.Tests -c Release --filter "FullyQualifiedName~Live_outage"
 
-  # 2) the acceptance (it starts in ~3 minutes: selection reads each candidate's metadata)
-  build/acceptance-daminion.ps1 -Filter "FullyQualifiedName~Live_outage" -BlockDir artifacts/phase-10/block
+  saved search 16 exists on this server as "No Description" but resolves to no records; it is
+  not "city street" and cannot carry this acceptance.
+  no saved search on this server is the requested scope: it enumerates 17 saved searches, none
+  usable for "city street". Falling back to the catalog ...
+  selection: 6 item(s) from catalog (17 saved searches, none usable for the requested scope)
+             (skipped 0 already carrying synapic-live-2026-10-23)
 
-The fact proves, in this order: the block applied (`blocked_after_apply=True`), a fresh client cannot
-authenticate, the run pauses with no row Failed and none InFlight, the block is removed
-(`reachable_after_unblock=True`), a fresh client authenticates again, and the queue completes every
-row after the clock passes the pause window (also asserted: the log names "the run is paused" and
-"resumes after being paused").
+  block ack:
+    blocked_at=2026-10-23T15:58:35.9547911+02:00
+    host=damserver.local
+    port=80
+    addresses=192.168.0.60,fe80::80a3:f2e4:29ab:5a30
+    reachable_before_block=True
+    blocked_after_apply=True
+    open_addresses_after_apply=
+    rule=Synapic live outage
+  outage proven: a fresh client cannot reach the catalog.
+  during the outage: finished=0 paused=True pending=6 transient=0 failed=0 inflight=0 completed=0
+
+  unblock ack:
+    unblocked_at=2026-10-23T15:58:36.3210914+02:00
+    host=damserver.local
+    reachable_after_unblock=True
+  recovery proven: a fresh client authenticates again.
+
+  after the outage: completed=6 transient=0 failed=0 pending=0 inflight=0 pauses=1 resumes=1
+  log: 15:58:36.147 [WARN] BatchExecutor: Catalog unavailable; the run is paused until 2026-01-01 09:05:00Z.
+  log: 15:58:37.004 [INFO] BatchExecutor: The catalog is available again; the run resumes after being paused 6,0 minutes.
+
+What the fact asserted, in this order: the block applied (`blocked_after_apply=True`), a fresh
+client with no session cannot authenticate, the run pauses with nothing Failed and nothing InFlight
+and every row accounted for, the block is removed (`reachable_after_unblock=True`), a fresh client
+authenticates again, and every row completes after the clock passes the pause window — plus the two
+log lines naming the pause and the resume. Nothing was dropped or permanently failed.
+
+A finding the first attempt produced, now fixed in the helper: the first run reported
+`blocked_after_apply=True` and then a fresh client authenticated anyway. The server answers on a
+link-local IPv6 address as well (`fe80::…`), and the rule only covered the IPv4 address, so the
+client — which resolves both families — went over IPv6. The helper now resolves every address,
+adds one rule per address, proves the block by connecting **by hostname**, and records
+`open_addresses_after_apply=` so a partial block is visible in the ack. The acceptance itself
+refused to call that attempt an outage (`A fresh client still authenticated after the block was
+reported applied, so the outage never reached this machine`) rather than passing on a rule that
+did not hold. Earlier, the same fact skipped while the catalog was simply unreachable, and refused
+to run at all: an outage must be a block that lifts, not a network that happens to be down.
 
 ## Limits of this transcript
   * One catalog's server build (the shapes observed: nested ItemData tags, value objects for
     multi-value tags, duplicate on repeat raw add, `field:none` clauses ignored).
   * The outage is modelled as this machine losing the route to the catalog — the same client-visible
     failure the indexer handles — not as the server process stopping.
-  * damserver.local (admin) was also checked: reachable, authenticates, catalog EMPTY (0 items), so
-    it cannot host a write round trip until something is imported into it.
+  * DAM-03 ran on the second catalog (damserver.local, 51,759 items, 17 saved searches). Its scope
+    resolved to the catalog fallback for the same reason as the first: no saved search there is
+    "city street" and the one numbered 16 is an unrelated, empty one. The two catalogs disagree
+    about saved-search numbering, which is exactly why the id is verified against records and not
+    trusted.
+  * An earlier note in this file said damserver.local's catalog was empty. That note was wrong: it
+    came from a one-off shell probe, not the client. The client counts 51,759 items there, which is
+    what the DAM-01 re-check and DAM-03 both ran against.

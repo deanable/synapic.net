@@ -32,13 +32,13 @@ public sealed class DaminionLiveAcceptanceTests
     private const int SavedSearchId = 16;
 
     /// <summary>
-    /// What the scope is called when it cannot be resolved on this server. The
-    /// milestone named saved search 16, but the catalog this runs against does
-    /// not have it: it enumerates 47 saved searches, none numbered 16, and its
-    /// structured query answers an unknown id with the whole catalog instead of
-    /// refusing it. The selection then falls back to the same set the desktop
-    /// uses when no scope is picked — the catalog, filtered to items whose
-    /// keywords, category and description are all empty — and says so.
+    /// What the scope is called when the id cannot be used. Catalogs differ: one
+    /// enumerates 47 saved searches with none numbered 16 and answers an unknown
+    /// id with the whole catalog instead of refusing it; another has a saved
+    /// search 16 of its own ("No Description") that resolves to no records. Both
+    /// cases end in the same place — the same selection the desktop makes when no
+    /// scope is picked, the catalog filtered to items whose keywords, category and
+    /// description are all empty — and the resolution says which one it took.
     /// </summary>
     private const string FallbackScopeName = "city street";
 
@@ -107,7 +107,7 @@ public sealed class DaminionLiveAcceptanceTests
         }
 
         Skip.If(page.Length == 0,
-            $"Saved search {SavedSearchId} resolved to no records even though the server counted {scopeCount}.");
+            $"The resolved scope ({scope.Description}) returned no records even though the server counted {scopeCount}.");
 
         // Read-only probe: which scopes does this server actually narrow? A saved
         // search answered with item 1 of the catalog means the structured query
@@ -165,39 +165,58 @@ public sealed class DaminionLiveAcceptanceTests
     private sealed record ResolvedScope(string Scope, int? SavedSearchId, string Description, bool RequestedMissing);
 
     /// <summary>
-    /// The scope to run against, resolved by what the server actually holds. The
-    /// milestone named saved search 16; this catalog does not have it and the
-    /// server answers an unknown saved-search id with the whole catalog, so the
-    /// id is never trusted on its own. Order: the named saved search if the
-    /// server enumerates it, then a saved search by name, then the catalog
+    /// The scope to run against, resolved by what the server actually holds and
+    /// by what that scope actually resolves to. The milestone named saved search
+    /// 16 ("city street"); a catalog may not have it, and one this acceptance ran
+    /// against does have an unrelated saved search numbered 16 that holds no
+    /// records. So an id — or a name — is only accepted once a page of it comes
+    /// back non-empty; otherwise the selection falls through to the catalog
     /// filtered to items whose three fields are empty (the desktop's selection
-    /// when no scope is chosen).
+    /// when no scope is chosen) and says why.
     /// </summary>
     private async Task<ResolvedScope> ResolveScopeAsync(
         DaminionApiClient client, IReadOnlyList<DaminionSavedSearch> searches)
     {
         var byId = searches.FirstOrDefault(s => s.Id == SavedSearchId);
-        if (byId is not null)
+        if (byId is not null && await YieldsRecordsAsync(client, byId.Id))
             return new ResolvedScope("saved_search", byId.Id, $"saved search {byId.Id} \"{byId.Name}\"", false);
+
+        if (byId is not null)
+        {
+            _output.WriteLine(
+                $"saved search {SavedSearchId} exists on this server as \"{byId.Name}\" but resolves to no records; " +
+                $"it is not \"{FallbackScopeName}\" and cannot carry this acceptance.");
+        }
 
         var byName = searches.FirstOrDefault(s =>
             s.Name.Contains(FallbackScopeName, StringComparison.OrdinalIgnoreCase));
-        if (byName is not null)
+        if (byName is not null && await YieldsRecordsAsync(client, byName.Id))
         {
             _output.WriteLine(
-                $"saved search {SavedSearchId} is not on this server; using {byName.Id} \"{byName.Name}\" for \"{FallbackScopeName}\".");
+                $"saved search {SavedSearchId} is not usable on this server; using {byName.Id} \"{byName.Name}\" for \"{FallbackScopeName}\".");
             return new ResolvedScope("saved_search", byName.Id, $"saved search {byName.Id} \"{byName.Name}\"", true);
         }
 
         _output.WriteLine(
-            $"saved search {SavedSearchId} (\"{FallbackScopeName}\") is not on this server: " +
-            $"it enumerates {searches.Count} saved searches, none with that id, and its structured " +
-            "query answers an unknown id with the whole catalog. Falling back to the catalog " +
-            "filtered to items whose keywords, category and description are all empty — the same " +
-            "selection the desktop makes when no scope is chosen.");
+            $"no saved search on this server is the requested scope: it enumerates {searches.Count} saved searches, " +
+            $"none usable for \"{FallbackScopeName}\". Falling back to the catalog filtered to items whose keywords, " +
+            "category and description are all empty — the same selection the desktop makes when no scope is chosen.");
 
         return new ResolvedScope("all", null,
-            $"catalog ({searches.Count} saved searches, none matching the requested scope)", true);
+            $"catalog ({searches.Count} saved searches, none usable for the requested scope)", true);
+    }
+
+    /// <summary>
+    /// A saved search is only a scope if the server hands over at least one
+    /// record for it. The server's own item count is not used for this: a build
+    /// that reports 0 for every saved search still answers the query, and one that
+    /// answers an unknown id with the whole catalog would otherwise look usable.
+    /// </summary>
+    private async Task<bool> YieldsRecordsAsync(DaminionApiClient client, int savedSearchId)
+    {
+        var page = await client.GetItemsPageAsync(
+            scope: "saved_search", savedSearchId: savedSearchId, maxItems: 1, startIndex: 0);
+        return page.Items.Length > 0;
     }
 
     /// <summary>The scope every live fact runs against; resolved once per fact.</summary>

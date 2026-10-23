@@ -24,6 +24,7 @@ catalog and commits the transcript.
 | Scope | saved search 16 (`city street`), items with empty keywords, category and description |
 | Writes | 25 items (DAM-02), then a small outage batch (DAM-03) |
 | After | tags stay in the catalog — the tags are the product's output, not test residue to erase |
+| Second server | `http://damserver.local/daminion` (192.168.0.60, 51,759 items, 17 saved searches), used when the first stopped answering at 14:39: DAM-01 re-check and DAM-03 |
 
 ## Decisions
 
@@ -75,6 +76,18 @@ These were discovered by running, and each has a decision because the plan assum
 - **D-13-10 — the read-back must read the server's value shape.** A multi-value tag lists its values as
   objects (`{text,id,tagName,…}`), a single-value tag as a string. The reader accepts both, and keeps the
   flat pre-11 member-name shape as a fallback so the fix for 11.x did not break older payloads.
+- **D-13-11 — a saved search is a scope only if it returns records.** The second catalog *does* enumerate
+  a saved search 16, and it is an unrelated default ("No Description") holding zero records. Existence of
+  the id therefore is not evidence of the scope, exactly as an unknown id answering with the whole catalog
+  is not. Resolution takes an id or a name only after a one-item page of it comes back non-empty, and
+  prints each rejection.
+- **D-13-12 — the outage must cover every address the name resolves to.** The first block covered the A
+  record only; the host also answers on a link-local IPv6 address, and the client — which resolves both
+  families — reached the catalog while the helper reported `blocked_after_apply=True`. The helper now adds
+  one rule per resolved address (both families), proves the block by connecting by hostname (what the
+  client does), and records `open_addresses_after_apply=` so a partial block is visible rather than
+  inferred. The fact itself refused the first attempt, which is the behaviour that kept this from being
+  recorded as a proven outage.
 
 ## Scope fence
 

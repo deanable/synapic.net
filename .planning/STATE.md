@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Release Integrity
 status: executing
-last_updated: "2026-10-23T15:20:00.000Z"
+last_updated: "2026-10-23T16:05:00.000Z"
 last_activity: 2026-10-23
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 9
-  completed_plans: 8
-  percent: 33
+  completed_plans: 9
+  percent: 50
 ---
 
 # Project State
@@ -27,15 +27,19 @@ Daminion) and finally ship v1.0. Requirements: [REQUIREMENTS.md](REQUIREMENTS.md
 
 ## Current Position
 
-Phase: 10 of 12 — Live Daminion round trip — **executing, blocked on DAM-03**
-Plan: 3 of 4 executed (10-01, 10-02, 10-04 complete; 10-03 code and hermetic facts complete)
-Status: DAM-01, DAM-02 and DAM-04 proven against `researchserver.juicefilm.local`; DAM-03's live outage
-fact has not run — the catalog stopped answering at 14:39 and the fact needs it reachable either side
-of the block. The command to finish it is in
+Phase: 10 of 12 — Live Daminion round trip — **complete** (DAM-01..04)
+Plan: 4 of 4 executed (10-01, 10-02, 10-03, 10-04)
+Status: all four requirements proven against real catalogs. DAM-01, DAM-02 and DAM-04 on
+`researchserver.juicefilm.local` (items 26–50 written twice, exact-once keywords, pre-existing values
+kept); DAM-01 re-checked and DAM-03 proven on `damserver.local` after the first server went away at
+14:39 — a real firewall outage paused the six-item run with nothing failed or dropped, and it resumed
+by itself, completing every row. Transcript:
 `.planning/phases/10-live-daminion-round-trip/10-ACCEPTANCE.md`
 Last activity: 2026-10-23 — Phase 10 executed: live scope reported, 25 items written twice with exact-once
 keywords and pre-existing values preserved; three product defects found and fixed (verifier tag-name
-read, object-shaped multi-values, non-idempotent catalog write)
+read, object-shaped multi-values, non-idempotent catalog write); DAM-03 closed on the second catalog,
+which also showed the outage helper blocking only the IPv4 address while the server answered on IPv6,
+and a saved search numbered 16 that existed but held nothing (both fixed)
 
 ## Deferred Items
 
@@ -54,7 +58,7 @@ resolving it is v1.0 work. It is now **claimed by v1.2 Phase 12** (requirement U
 | Phase | Name | Requirements | Plans |
 |-------|------|--------------|-------|
 | 9 | MSI and bundle as a supported channel | MSI-01..05 | 5/5 — 5/5 ✓ (silent install 0, service LocalService/Auto/restart×3, upgrade over a second ProductCode, uninstall 1060 with ProgramData kept, installed dashboard PASS) |
-| 10 | Live Daminion round trip | DAM-01..04 | 3/4 executed — 3/4 ✓ (DAM-01 scope reported, DAM-02 exact-once round trip on items 26-50, DAM-04 transcript + procedure; DAM-03 live fact blocked: catalog unreachable) |
+| 10 | Live Daminion round trip | DAM-01..04 | 4/4 — 4/4 ✓ (DAM-01 scope reported on both catalogs, DAM-02 exact-once round trip on items 26-50, DAM-03 real firewall outage paused then resumed six rows to completion, DAM-04 transcript + procedure) |
 | 11 | Close the UI-refactor gate | GATE-01..04 | TBD |
 | 12 | UI acceptance and release | UAT-01..03 | TBD |
 
@@ -95,8 +99,9 @@ Stated as not-exercised, never as passed:
   upgrade → uninstall, with the transcripts in `artifacts/phase-9/`. Residual: the bundle compiled but
   was not installed, registration rollback was not induced, and the release workflow's MSI leg is still
   `continue-on-error` because no runner has produced it.
-- **Daminion** fault paths ran against fake network seams, not a live catalog. **Being closed in v1.2
-  Phase 10** — a real server is available.
+- **Daminion** fault paths ran against fake network seams, not a live catalog. **Closed in v1.2 Phase 10**
+  — a live catalog round trip and a real firewall outage ran; what is still only modelled is the server
+  process stopping (the outage is this machine losing the route, which is what the client can see).
 - **Parity** used the desktop's kernel with the real model, not the GUI (`Synapic.Main.exe` has no
   headless processing entry).
 
@@ -135,6 +140,13 @@ not recorded for this milestone.
   Daminion server is reachable, so the fault table can be proven for real; and Phase 3's blocker is
   criterion 6's wording, not missing tests — criterion 8 was already closed by the 2026-10-13 addendum
   while ROADMAP/STATE still quoted the older "12 partial" figure.
+
+- 2026-10-23: **Phase 10 executed and closed.** The live catalog run proved the write path and found
+  three defects no seam test could (verifier read payload names, object-shaped multi-values, a
+  non-idempotent catalog add that doubled keywords on a re-run). The first server went offline mid-phase;
+  DAM-03 was proven against a second live catalog, where the attempt exposed two more holes: an outage
+  helper that blocked only IPv4 while the host answered on a link-local IPv6 address, and a saved search
+  that existed under the requested id but held no records.
 
 - 2026-10-23: **Phase 9 executed and gated.** The MSI now carries the indexer and registers its service
   through the indexer's own `--install`/`--uninstall`. The phase found a payload drift that would have
