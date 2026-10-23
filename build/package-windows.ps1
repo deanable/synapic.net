@@ -48,6 +48,14 @@ if ($LASTEXITCODE -ne 0) {
     throw "Refusing to build: build/installer-windows.iss no longer matches the shipped AppId."
 }
 
+# Both installers glob the same payload folder, so their exclusion lists have to
+# agree - see check-installer-payloads.py. The MSI path runs the same guard, so
+# whichever script is used, the two manifests are compared before compiling.
+& $guardPython (Join-Path $PSScriptRoot "check-installer-payloads.py")
+if ($LASTEXITCODE -ne 0) {
+    throw "Refusing to build: the Inno and MSI payload definitions have drifted apart."
+}
+
 # D-11-28: the background indexer publishes into the SAME payload folder as the
 # app, not a subfolder. It finds synapic-inference.exe beside itself, and the
 # installer already harvests the whole directory, so one copy of the 226 MB

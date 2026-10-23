@@ -37,12 +37,17 @@ an unattended install:
 Start-Process -Wait -FilePath .\Synapic-Setup-win-x64.exe -ArgumentList '/VERYSILENT','/NORESTART'
 ```
 
-**MSI.** The MSI ships exactly the same files but **does not register the
-service**. After installing, run once from an elevated prompt:
+**MSI.** The MSI ships the same files and registers the same service: its
+install runs `Synapic.Indexer.exe --install` as a deferred, elevated custom
+action, and its uninstall runs `--uninstall`. For an unattended install:
 
 ```powershell
-& "C:\Program Files\Synapic\Synapic.Indexer.exe" --install
+Start-Process -Wait msiexec.exe -ArgumentList '/i','.\Synapic-win-x64.msi','/qn','/norestart'
 ```
+
+The bundle (`Synapic-Setup-win-x64-msi.exe`) installs the .NET runtime first and
+then runs this MSI. If a registration fails during the MSI install, the install
+rolls back rather than leaving the app beside no service.
 
 **From an unpacked payload** (development or a manual deployment): copy
 `artifacts\win-x64` to the target and run:
@@ -313,9 +318,10 @@ The desktop app's uninstaller separately removes the per-user model cache
 
 ## Limitations in v1.1
 
-- **The MSI does not register the service.** Run `--install` once after an MSI
-  install; the Inno installer does it for you. Native WiX service registration is
-  a v2 item.
+- **The MSI needs elevation at install time** (as any perMachine package does),
+  because registering the service, the Event Log source and the ProgramData ACLs
+  all require administrator rights. A non-elevated `msiexec` fails with the
+  Windows Installer elevation prompt or exit code 1603, not a partial install.
 - **Keywords merge; they are never deleted.** `tagging.overwriteExistingTags:
   true` means "write the model's values", not "remove what is already there".
   Category and description are replaced (the writer does not merge those).

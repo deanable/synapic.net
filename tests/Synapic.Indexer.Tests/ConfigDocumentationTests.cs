@@ -50,11 +50,20 @@ public sealed class ConfigDocumentationTests
     }
 
     [Fact]
-    public void The_guide_does_not_claim_the_msi_registers_the_service_or_that_uninstall_deletes_data()
+    public void The_guide_says_the_msi_registers_the_service_and_that_uninstall_keeps_data()
     {
         var doc = File.ReadAllText(FindDoc());
 
-        Assert.Contains("does not register the service", doc, StringComparison.OrdinalIgnoreCase);
+        // The MSI runs Synapic.Indexer.exe --install / --uninstall as deferred custom
+        // actions (build/wix/Synapic.Msi.wxs). Until that existed the guide had to
+        // send an MSI user to one manual elevated --install; stale wording would send
+        // them to run it a second time, and would advertise a missing feature.
+        Assert.Contains("registers the same service", doc, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("--uninstall", doc, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("does not register the service", doc, StringComparison.OrdinalIgnoreCase);
+
+        // The uninstaller leaves the configuration and state behind, and the guide
+        // has to say so - an operator who assumes otherwise deletes them by accident.
         Assert.Contains("kept", doc, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("uninstall removes the data", doc, StringComparison.OrdinalIgnoreCase);
     }

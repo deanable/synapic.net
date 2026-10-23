@@ -19,11 +19,11 @@ Three gaps motivated this milestone, each recorded honestly in the v1.1 archive 
 
 ### MSI as a supported channel (MSI)
 
-- [ ] **MSI-01**: The MSI and its Burn bundle build from one command against a freshly published `win-x64` payload, and the build fails by name if that payload is missing `Synapic.Indexer.exe`, `Synapic.Core.dll` or `synapic-inference.exe` (the Inno path's existing check, applied to this one)
-- [ ] **MSI-02**: A silent MSI install (`msiexec /i … /qn`) produces a working install whose launched app opens on the dashboard, with its shortcut resolving to the installed executable rather than an older publish
-- [ ] **MSI-03**: The installed service state matches the Inno path — registered as `NT AUTHORITY\LocalService` with auto-start and the restart-on-failure recovery actions — either performed by the MSI or by one documented elevated command that the acceptance runs and verifies
-- [ ] **MSI-04**: Upgrade over an existing install replaces it in place at the same product version (no second Programs entry, no side-by-side copy), and uninstall removes files and service while leaving `%ProgramData%\Synapic` and its queue intact
-- [ ] **MSI-05**: `docs/packaging.md` and the release documentation state the MSI's role, its exact commands, and its parity with (and differences from) the Inno channel; a check fails if the MSI payload drifts from the Inno payload
+- [x] **MSI-01**: The MSI and its Burn bundle build from one command against a freshly published `win-x64` payload, and the build fails by name if that payload is missing `Synapic.Indexer.exe`, `Synapic.Core.dll` or `synapic-inference.exe` (the Inno path's existing check, applied to this one)
+- [x] **MSI-02**: A silent MSI install (`msiexec /i … /qn`) produces a working install whose launched app opens on the dashboard, with its shortcut resolving to the installed executable rather than an older publish
+- [x] **MSI-03**: The installed service state matches the Inno path — registered as `NT AUTHORITY\LocalService` with auto-start and the restart-on-failure recovery actions — either performed by the MSI or by one documented elevated command that the acceptance runs and verifies
+- [x] **MSI-04**: Upgrade over an existing install replaces it in place at the same product version (no second Programs entry, no side-by-side copy), and uninstall removes files and service while leaving `%ProgramData%\Synapic` and its queue intact
+- [x] **MSI-05**: `docs/packaging.md` and the release documentation state the MSI's role, its exact commands, and its parity with (and differences from) the Inno channel; a check fails if the MSI payload drifts from the Inno payload
 
 ### Live Daminion verification (DAM)
 
@@ -66,11 +66,11 @@ Three gaps motivated this milestone, each recorded honestly in the v1.1 archive 
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MSI-01 | Phase 9 | Pending |
-| MSI-02 | Phase 9 | Pending |
-| MSI-03 | Phase 9 | Pending |
-| MSI-04 | Phase 9 | Pending |
-| MSI-05 | Phase 9 | Pending |
+| MSI-01 | Phase 9 | Complete |
+| MSI-02 | Phase 9 | Complete |
+| MSI-03 | Phase 9 | Complete |
+| MSI-04 | Phase 9 | Complete |
+| MSI-05 | Phase 9 | Complete |
 | DAM-01 | Phase 10 | Pending |
 | DAM-02 | Phase 10 | Pending |
 | DAM-03 | Phase 10 | Pending |

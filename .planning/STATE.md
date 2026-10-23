@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Release Integrity
-status: planning
-last_updated: "2026-10-23T05:32:59.469Z"
+status: executing
+last_updated: "2026-10-23T08:20:00.000Z"
 last_activity: 2026-10-23
 progress:
-  total_phases: 0
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  total_phases: 4
+  completed_phases: 1
+  total_plans: 5
+  completed_plans: 5
+  percent: 25
 ---
 
 # Project State
@@ -27,10 +27,11 @@ Daminion) and finally ship v1.0. Requirements: [REQUIREMENTS.md](REQUIREMENTS.md
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-10-23 — Milestone v1.2 started
+Phase: 9 of 12 — MSI and bundle as a supported channel — **complete**
+Plan: 5 of 5 complete (09-01 … 09-05)
+Status: Phase 9 gated; next is Phase 10 (live Daminion), which needs the user's server and credentials
+Last activity: 2026-10-23 — Phase 9 executed: MSI rebuilt with the indexer, silent install / in-place
+reinstall / major upgrade / uninstall / dashboard / service parity verified on this machine
 
 ## Deferred Items
 
@@ -48,7 +49,7 @@ resolving it is v1.0 work. It is now **claimed by v1.2 Phase 12** (requirement U
 
 | Phase | Name | Requirements | Plans |
 |-------|------|--------------|-------|
-| 9 | MSI and bundle as a supported channel | MSI-01..05 | TBD |
+| 9 | MSI and bundle as a supported channel | MSI-01..05 | 5/5 — 5/5 ✓ (silent install 0, service LocalService/Auto/restart×3, upgrade over a second ProductCode, uninstall 1060 with ProgramData kept, installed dashboard PASS) |
 | 10 | Live Daminion round trip | DAM-01..04 | TBD |
 | 11 | Close the UI-refactor gate | GATE-01..04 | TBD |
 | 12 | UI acceptance and release | UAT-01..03 | TBD |
@@ -86,7 +87,10 @@ Also carried: the compiled help corpus still names the old wizard steps (`HelpTo
 Stated as not-exercised, never as passed:
 
 - The **MSI channel** was not built or exercised (WiX absent on the gate machine); only the Inno path was.
-  **Being closed in v1.2 Phase 9** — WiX 7 is installed as a dotnet tool and `build/wix` builds.
+  **Closed in v1.2 Phase 9** — rebuilt with the indexer payload and verified install → reinstall →
+  upgrade → uninstall, with the transcripts in `artifacts/phase-9/`. Residual: the bundle compiled but
+  was not installed, registration rollback was not induced, and the release workflow's MSI leg is still
+  `continue-on-error` because no runner has produced it.
 - **Daminion** fault paths ran against fake network seams, not a live catalog. **Being closed in v1.2
   Phase 10** — a real server is available.
 - **Parity** used the desktop's kernel with the real model, not the GUI (`Synapic.Main.exe` has no
@@ -127,6 +131,13 @@ not recorded for this milestone.
   Daminion server is reachable, so the fault table can be proven for real; and Phase 3's blocker is
   criterion 6's wording, not missing tests — criterion 8 was already closed by the 2026-10-13 addendum
   while ROADMAP/STATE still quoted the older "12 partial" figure.
+
+- 2026-10-23: **Phase 9 executed and gated.** The MSI now carries the indexer and registers its service
+  through the indexer's own `--install`/`--uninstall`. The phase found a payload drift that would have
+  shipped a 302 MB copy of the Inno setup exe inside the MSI; both installers now share one payload
+  definition, enforced by `build/check-installer-payloads.py` and by a File-table read-back of the
+  compiled package. Verified on this machine: install, dashboard, in-place reinstall, upgrade over a
+  second ProductCode, and uninstall.
 
 ### Decisions
 

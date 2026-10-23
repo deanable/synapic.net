@@ -133,14 +133,24 @@
       folder, which is what puts the topics in <app>\help where
       HelpService.TopicDirectories looks for them.
 
-      Exclusions are the Inno installer's, word for word ("*.pdb, runtime exe"):
-      the two installers must not disagree about what the payload is. The staged
-      runtime installer is a bundle input, not an app file.
+      Exclusions are the Inno installer's, word for word ("*.pdb, runtime exe,
+      Synapic-Setup-*.exe"): the two installers must not disagree about what the
+      payload is. The staged runtime installer is a bundle input, not an app file;
+      pdbs are dev artifacts; and the Inno setup exe is written into this same
+      payload folder by package-windows.ps1, so without its exclusion a rebuild
+      would embed the previous 300 MB installer into Program Files. That drift
+      went unnoticed until v1.2 Phase 9 because the MSI had never been built
+      against a payload that contained the Inno output.
+
+      build/check-installer-payloads.py refuses to build if this list and the
+      .iss's Excludes stop matching, so the rule has one guard rather than two
+      comments that agree today.
     -->
     <ComponentGroup Id="ApplicationFiles" Directory="INSTALLFOLDER">
       <Files Include="$(var.PayloadDir)\**">
         <Exclude Files="$(var.PayloadDir)\**\*.pdb" />
         <Exclude Files="$(var.PayloadDir)\windowsdesktop-runtime-win-x64.exe" />
+        <Exclude Files="$(var.PayloadDir)\Synapic-Setup-*.exe" />
       </Files>
     </ComponentGroup>
 
@@ -177,6 +187,51 @@
       <ComponentGroupRef Id="ApplicationFiles" />
       <ComponentGroupRef Id="Shortcuts" />
     </Feature>
+
+    <!--
+      The background indexer's service, registered by the package itself.
+
+      D-11-31 originally left this to one documented elevated command, because a
+      second implementation of create → recovery → start would drift from the
+      first. The resolution is not to re-implement it: both custom actions run
+      Synapic.Indexer.exe's own install and uninstall commands, exactly the code
+      the Inno installer and an operator run. What changes is only who invokes
+      it, so there is still exactly one implementation.
+
+      Directory + ExeCommand is a type-34 action: Windows runs the command line
+      with the install folder as its working directory, which avoids needing a
+      FileRef for an element the payload glob already generates.
+
+      Deferred and Impersonate="no" because sc.exe, icacls and the Event Log
+      source all need elevation; the package is perMachine, so an install that
+      reaches this point is already elevated. Return="check" on install means a
+      registration failure rolls the install back instead of leaving an app that
+      looks installed and a service that is not there - the failure mode the v1.1
+      acceptance found in the Inno path. Uninstall is Return="ignore": removing
+      the product must not fail because the service was already gone (D-11-32).
+    -->
+    <CustomAction Id="InstallIndexerService"
+                  Directory="INSTALLFOLDER"
+                  ExeCommand="&quot;[INSTALLFOLDER]Synapic.Indexer.exe&quot; --install"
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="check" />
+
+    <CustomAction Id="UninstallIndexerService"
+                  Directory="INSTALLFOLDER"
+                  ExeCommand="&quot;[INSTALLFOLDER]Synapic.Indexer.exe&quot; --uninstall"
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="ignore" />
+
+    <InstallExecuteSequence>
+      <!-- NOT Installed: a fresh install, or the new product in a major upgrade.
+           A repair does not re-run it; the service is already registered and
+           ARPNOREPAIR above keeps the app's own Update from being undone. -->
+      <Custom Action="InstallIndexerService" After="InstallFiles" Condition="NOT Installed" />
+      <!-- Before RemoveFiles, so the executable still exists when it runs. -->
+      <Custom Action="UninstallIndexerService" Before="RemoveFiles" Condition="REMOVE~=&quot;ALL&quot;" />
+    </InstallExecuteSequence>
 
     <!--
       The runtime check. RollForward="major" accepts 11 and later, which is the

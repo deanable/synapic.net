@@ -107,11 +107,15 @@ whole directory - one 226 MB sidecar serves both programs.
   the recovery actions, creates the `SynapicIndexer` Event Log source, grants
   the ProgramData ACLs and starts the service. The `.iss` contains no `sc.exe`
   logic.
-- **The MSI does not register the service** (D-11-31). It ships the same files;
-  WiX `ServiceInstall` cannot express the recovery actions, account and Event
-  Log rules that `--install` owns, and a second implementation would drift from
-  the first. After an MSI install, run once from an elevated prompt:
-  `"C:\Program Files\Synapic\Synapic.Indexer.exe" --install`.
+- **The MSI registers the service too** (D-12-04, replacing D-11-31). It does
+  not re-implement registration: two deferred custom actions run the installed
+  `Synapic.Indexer.exe` with `--install` after `InstallFiles` and `--uninstall`
+  before `RemoveFiles`, so the same code that creates the account, recovery
+  actions, Event Log source and ProgramData ACLs runs for both channels. The
+  install action is `Return="check"`: a registration failure rolls the install
+  back instead of leaving an app that looks installed beside a service that is
+  not there. Uninstall is `Return="ignore"`, because removal must not fail on an
+  already-removed service (D-11-32).
 - **Uninstall keeps `%ProgramData%\Synapic`** (D-11-32). The service and its
   binaries go; the queue database, logs and configuration stay until someone
   removes them deliberately. An uninstall must not destroy an index or its log
@@ -147,12 +151,28 @@ the installer identity guard, and compiles the MSI and then the bundle.
 used to be a hand-maintained static file list, so a dependency added to the app
 appears in the installer with no regeneration step. It also closed a hole: the
 Visual Studio project never listed the 226 MB inference sidecar, so the MSI it
-produced shipped an application with no inference engine and said nothing. The
-two exclusions are the Inno installer's, word for word - `*.pdb` and the staged
-runtime installer - because the two installers should not disagree about what the
-payload is. The packaging script also refuses to build if
-`synapic-inference.exe` is not in the payload, for the same reason; the Visual
-Studio path never had that.
+produced shipped an application with no inference engine and said nothing.
+
+The three exclusions are the Inno installer's, word for word: `*.pdb`, the staged
+runtime installer, and `Synapic-Setup-*.exe`. That last one is not cosmetic -
+`package-windows.ps1` writes the Inno setup exe into the same payload folder, so
+without it a rebuild after a release embeds the previous 300 MB installer into
+Program Files. The MSI source lacked it for as long as the MSI had never been
+built against a payload that contained an Inno output.
+
+**One payload definition, one guard.** `build/check-installer-payloads.py` runs
+in both packaging scripts before anything compiles: it compares the folder each
+manifest globs, the exclusion patterns as sets, and that both scripts name
+`Synapic.Indexer.exe`, `Synapic.Core.dll` and `synapic-inference.exe`. The
+packaging scripts also refuse to build when one of those files is missing from
+the payload, for the same reason; the Visual Studio path never had that.
+
+**What the package carries is read back, not assumed.** After `wix build`, the
+script opens the MSI read-only through the Windows Installer COM API and compares
+its `File` table with the payload folder minus the exclusions. It fails by name
+on a missing required file, on a forbidden one (a pdb, the runtime installer, an
+Inno setup exe), and on any file in one place and not the other - the glob
+stopping at 87 files instead of 88 is the kind of failure that otherwise ships.
 
 Requires the WiX Toolset as a dotnet tool:
 `dotnet tool install --global wix --version 7.0.0` - the same version the release
@@ -293,13 +313,19 @@ $v = $db.OpenView('SELECT `Directory`,`Directory_Parent`,`DefaultDir` FROM `Dire
 while ($r = $v.Fetch()) { "$($r.StringData(1)) <- $($r.StringData(2)) [$($r.StringData(3))]" }
 ```
 
-A healthy package has 75 `File` rows - 46 application files, 27 help topics,
-`synapic-inference.exe` and one stray `smoke.log` (see the limitations) - a
-`Synapic | help` directory under the `ProgramFiles64Folder` row, and two
-`LaunchCondition` rows: the runtime check above, plus WiX's own
-`NOT WIX_DOWNGRADE_DETECTED` from `MajorUpgrade`. Long file names appear in the
-`File` table in the `shortname|longname` form Windows Installer uses, so search
-for the long half.
+A healthy package built from the current payload has 87 `File` rows - the
+application, its native dependencies, the help topics under `help\`, and
+`synapic-inference.exe`, with no pdb and no nested installer. It has a
+`Synapic | help` directory under the `ProgramFiles64Folder` row, two
+`LaunchCondition` rows (the runtime check above, plus WiX's own
+`NOT WIX_DOWNGRADE_DETECTED` from `MajorUpgrade`), and three custom-action rows:
+the runtime check and the two indexer service actions. Long file names appear in
+the `File` table in the `shortname|longname` form Windows Installer uses, so
+search for the long half.
+
+`wix msi validate` reports two warnings and no errors: the documented `ICE61`
+from `AllowSameVersionUpgrades`, and `ICE60` on one versioned DLL that carries no
+language column. Neither fails the build.
 
 `wix burn extract` lists what a bundle actually carries:
 
@@ -310,19 +336,40 @@ wix burn extract -o artifacts/msi/bundle artifacts/msi/Synapic-Setup-win-x64-msi
 Two payloads of about 60 MB and 232 MB: the runtime installer and the MSI, in
 that order.
 
+#### What the MSI path was verified against
+
+The package is a supported channel as of v1.2 Phase 9: rebuilt from a fresh
+publish, installed silently, upgraded in place over a second build of the same
+version, and uninstalled, on Windows 11 with the recorded transcripts in
+`.planning/phases/09-msi-and-bundle-as-a-supported-channel/`. The recorded facts:
+
+- `msiexec /i Synapic-win-x64.msi /qn` exits 0; Add/Remove Programs holds one
+  entry; `C:\Program Files\Synapic` holds 87 files, none of them a pdb or a
+  nested setup exe; the installed `Synapic.dll` hashes equal to the published one.
+- The service comes up `NT AUTHORITY\LocalService`, `AUTO_START`, recovery
+  restart/60000 x3, reset period 86400 - the same state the Inno acceptance
+  recorded, from the package's own custom action.
+- Installing a second build at the same version (a new `ProductCode`, the same
+  `UpgradeCode`) replaces the first: one Programs entry, the old product code
+  gone, one service, no side-by-side copy.
+- Uninstall exits 0, `sc query SynapicIndexer` returns 1060, Program Files is
+  gone, and `%ProgramData%\Synapic` keeps its queue (same size and timestamp) and
+  logs.
+- The installed app launches on the dashboard - the four operation panels and
+  none of the retired wizard chrome - which is the defect `03-UAT.md` recorded
+  when the installed package was older than the UI.
+
 #### Limitations of the MSI path
 
-- **The release build of it has never succeeded.** The release workflow does
-  produce the MSI and the bundle - it installs the WiX tool and runs
-  `package-windows-msi.ps1` for the Windows leg - but it is wrapped in
-  `continue-on-error`, so a failure leaves the release without its MSI rather
-  than failing outright. Nothing has built them on a runner yet; the first
-  successful run is the point at which that guard can be dropped.
-- **`smoke.log` ships.** It is a leftover from a manual sidecar smoke run sitting
-  in `artifacts/win-x64` (uvicorn's startup output, not anything a script writes
-  there), and both installers glob that directory, so both carry it into the
-  install folder. Excluding it in one installer only would be worse - the two
-  would disagree about what the payload is - so it wants fixing where it lives.
+- **The release workflow's MSI leg has not run on a runner.** It installs the WiX
+  tool and runs `package-windows-msi.ps1` for the Windows leg, wrapped in
+  `continue-on-error`; it is still the point at which that guard could be dropped.
+- **Two things were not exercised.** Registration rollback (`Return="check"`
+  on `InstallIndexerService`) was not induced - that needs a deliberately
+  failing `--install` inside a live transaction - and the bundle's own install
+  was not run, because this machine already had .NET 10 and
+  `netfx:DotNetCoreSearch` would have skipped the chained runtime, leaving the
+  MSI install already verified here. The bundle compiled; it was not installed.
 - **Nothing is signed.** The MSI and the bundle are produced unsigned unless
   `SIGNING_CERT_THUMBPRINT` is set, so SmartScreen warns on first run. When it is
   set, the script signs the MSI *before* the bundle is built, so the copy inside

@@ -52,7 +52,7 @@ entry: [MILESTONES.md](MILESTONES.md)
 
 **v1.2 Release Integrity (Planning)**
 
-- [ ] **Phase 9: MSI and bundle as a supported channel** - Rebuild with the indexer payload; verify silent install, upgrade, uninstall and service parity with Inno
+- [x] **Phase 9: MSI and bundle as a supported channel** - Rebuilt with the indexer payload; silent install, in-place reinstall, major upgrade, uninstall and service parity with Inno verified (5/5 plans, completed 2026-10-23)
 - [ ] **Phase 10: Live Daminion round trip** - Tag, check in, read back and survive a real outage against the provided server
 - [ ] **Phase 11: Close the UI-refactor gate** - Restate §10 criterion 6 as a finite claim, prove it with an inventory-backed test set, re-run 03-05
 - [ ] **Phase 12: UI acceptance and release** - Execute the six pending UAT scenarios on the installed build, then archive and tag v1.0
@@ -89,7 +89,21 @@ than the UI again — the root cause `03-UAT.md` recorded for "no dashboard on l
   4. A second install at the same product version replaces in place (one Programs entry, one service); uninstall gives `sc query` 1060 and leaves `%ProgramData%\Synapic` readable
   5. `docs/packaging.md` states the MSI's role, commands and parity with Inno; a check fails if the two payloads drift
 
-**Plans:** TBD
+**Plans:** 5/5 complete — completed 2026-10-23
+
+| Plan | What it did | Summary |
+|------|-------------|---------|
+| 09-01 | One payload definition, one guard | [09-01-SUMMARY.md](phases/09-msi-and-bundle-as-a-supported-channel/09-01-SUMMARY.md) |
+| 09-02 | The MSI registers the indexer itself | [09-02-SUMMARY.md](phases/09-msi-and-bundle-as-a-supported-channel/09-02-SUMMARY.md) |
+| 09-03 | One command, against a checked package | [09-03-SUMMARY.md](phases/09-msi-and-bundle-as-a-supported-channel/09-03-SUMMARY.md) |
+| 09-04 | Install, dashboard, reinstall, upgrade, uninstall | [09-04-SUMMARY.md](phases/09-msi-and-bundle-as-a-supported-channel/09-04-SUMMARY.md) |
+| 09-05 | The channel, documented | [09-05-SUMMARY.md](phases/09-msi-and-bundle-as-a-supported-channel/09-05-SUMMARY.md) |
+
+**Outcome:** all five success criteria met on this machine, with three stated limits — registration rollback
+not induced, the bundle compiled but not installed (the runtime was already present), and the release
+workflow's MSI leg still guarded by `continue-on-error` because no runner has produced it yet. The phase
+found a payload drift the v1.1 MSI could not have survived: because both installers glob `artifacts/win-x64`,
+the MSI would have installed the 302 MB Inno setup exe into `Program Files`.
 
 ### Phase 10: Live Daminion round trip
 

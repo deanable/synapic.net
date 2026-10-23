@@ -142,6 +142,15 @@ if ($LASTEXITCODE -ne 0) {
     throw "Refusing to build: an installer identity no longer matches the shipped UpgradeCodes, or a ProductCode has been pinned."
 }
 
+# The Inno and MSI sources glob the same payload folder and exclude the same
+# files. That agreement used to be two comments; check-installer-payloads.py
+# makes it a build gate, because the MSI was missing the Inno setup exe's
+# exclusion and would have installed a 300 MB copy of the other installer.
+& $guardPython (Join-Path $repoRoot "build/check-installer-payloads.py")
+if ($LASTEXITCODE -ne 0) {
+    throw "Refusing to build: the Inno and MSI payload definitions have drifted apart."
+}
+
 # --- the runtime the bundle chains ------------------------------------------
 # The same staged file the Inno installer bundles, staged by the same script.
 $runtimePath = & (Join-Path $repoRoot "build/stage-dotnet-runtime.ps1") -ArtifactsDir $ArtifactsDir
@@ -164,6 +173,76 @@ Write-Host "Compiling $msi (version $AppVersion, x64)..."
     -o $msi `
     (Join-Path $repoRoot "build/wix/Synapic.Msi.wxs")
 if ($LASTEXITCODE -ne 0) { throw "wix build failed for the MSI with exit code $LASTEXITCODE" }
+
+# --- verify what the package actually carries -------------------------------
+# The payload checks above prove the folder is complete; they say nothing about
+# what the glob selected. A mis-scoped Include or an Exclude that matches too
+# much produces a package that builds, installs, and is missing the service - so
+# the File table is read back and compared with the folder it came from.
+function Get-MsiFileNames([string]$MsiPath) {
+    # InvokeMember rather than direct calls: PowerShell 7 binds COM methods
+    # inconsistently, and these calls are the documented Windows Installer API.
+    $installer = New-Object -ComObject WindowsInstaller.Installer
+    $database = $installer.GetType().InvokeMember('OpenDatabase', 'InvokeMethod', $null, $installer, @($MsiPath, 0))
+    $view = $database.GetType().InvokeMember('OpenView', 'InvokeMethod', $null, $database, @('SELECT `FileName` FROM `File`'))
+    # [void] on every call whose COM method returns nothing: InvokeMember hands
+    # back $null, and a bare $null statement is emitted into this function's
+    # output - it arrived downstream as a file with an empty name.
+    [void]$view.GetType().InvokeMember('Execute', 'InvokeMethod', $null, $view, $null)
+    $names = [System.Collections.Generic.List[string]]::new()
+    while ($null -ne ($record = $view.GetType().InvokeMember('Fetch', 'InvokeMethod', $null, $view, $null))) {
+        $raw = [string]$record.GetType().InvokeMember('StringData', 'GetProperty', $null, $record, @(1))
+        # Windows Installer stores "shortname|longname" when they differ.
+        $names.Add(($raw -split '\|')[-1])
+    }
+    # [void]: a bare $null statement is emitted to the pipeline, and a stray null
+    # in the returned list reads as a file with an empty name further down.
+    [void]$view.GetType().InvokeMember('Close', 'InvokeMethod', $null, $view, $null)
+    foreach ($com in @($view, $database, $installer)) {
+        [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($com)
+    }
+    return $names
+}
+
+$msiFiles = Get-MsiFileNames $msi
+if ($msiFiles.Count -eq 0) { throw "$msi has no File rows - the payload glob matched nothing." }
+
+# The same three the Inno path refuses to ship without, plus the app's own entry
+# point. Named one by one so the failure says which file is missing.
+foreach ($required in @("Synapic.exe", "Synapic.Indexer.exe", "Synapic.Core.dll", "synapic-inference.exe")) {
+    if ($msiFiles -notcontains $required) {
+        throw "$msi does not contain $required - the package would install without the background indexer or the inference sidecar."
+    }
+}
+
+# And nothing the Inno path excludes: these are exactly the files the exclusion
+# list exists for, and the failure names the file rather than a file count.
+foreach ($forbidden in @("windowsdesktop-runtime-win-x64.exe", "Synapic-Setup-win-x64.exe")) {
+    if ($msiFiles -contains $forbidden) {
+        throw "$msi contains $forbidden, which both installers must exclude from the app payload."
+    }
+}
+foreach ($pdb in ($msiFiles | Where-Object { $_ -like '*.pdb' })) {
+    throw "$msi contains $pdb; debug symbols are excluded from the app payload."
+}
+
+# The whole-folder comparison: every payload file the exclusions keep must be in
+# the package, and nothing else. This is what catches a glob that silently stops
+# matching - the failure mode that shipped an MSI without the sidecar once.
+$expected = @(Get-ChildItem -Path $ArtifactsDir -Recurse -File | Where-Object {
+    $_.Name -notlike '*.pdb' -and
+    $_.Name -ne 'windowsdesktop-runtime-win-x64.exe' -and
+    $_.Name -notlike 'Synapic-Setup-*.exe'
+} | ForEach-Object { $_.Name })
+$missing = @($expected | Where-Object { $msiFiles -notcontains $_ })
+$extra = @($msiFiles | Where-Object { $expected -notcontains $_ })
+if ($missing.Count -gt 0 -or $extra.Count -gt 0) {
+    $detail = @()
+    if ($missing.Count -gt 0) { $detail += "missing from the package: " + (($missing | Select-Object -First 10) -join ', ') }
+    if ($extra.Count -gt 0) { $detail += "in the package but not in the payload: " + (($extra | Select-Object -First 10) -join ', ') }
+    throw "$msi does not match $ArtifactsDir - " + ($detail -join '; ')
+}
+Write-Host "Verified: $($msiFiles.Count) files in the MSI match $ArtifactsDir (service files present, exclusions respected)."
 
 # Sign the package before it is embedded in the bundle, not after: the bundle
 # carries the MSI as a payload, so a signature added afterwards would only be on
@@ -207,12 +286,11 @@ foreach ($file in @($msi, $bundle)) {
     Write-Host "  $file ($([math]::Round((Get-Item $file).Length / 1MB, 1)) MB)"
 }
 Write-Host "`nThe MSI is installable on its own and refuses to install without .NET $runtimeMajor. The bundle installs the runtime first and then the MSI."
-# D-11-31: the MSI ships the background indexer's files but does not register
-# the service. --install owns service creation, recovery, the event source and
-# the ProgramData ACLs; a second implementation here is how two channels start
-# disagreeing. The operator command is documented in docs/indexer-operations.md.
-Write-Host "The MSI does not register the background indexer. After installing, run (elevated):"
-Write-Host "  `"$ArtifactsDir\Synapic.Indexer.exe`" --install"
+# D-12-04: the MSI registers the service itself, through the indexer's own
+# --install/--uninstall custom actions. The implementation is still one code
+# path; only the invoker changed, so the MSI and Inno channels cannot disagree
+# about what a registered service looks like.
+Write-Host "The MSI registers the background indexer as NT AUTHORITY\LocalService on install and removes it on uninstall."
 # Advisory, not part of the build: it always reports ICE61 for the same-version
 # upgrade above, which is expected, and a warning on every build trains people to
 # ignore the checks that matter.
