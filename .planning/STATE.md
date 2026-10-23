@@ -155,6 +155,13 @@ not recorded for this milestone.
   compiled package. Verified on this machine: install, dashboard, in-place reinstall, upgrade over a
   second ProductCode, and uninstall.
 
+- 2026-10-24: **v1.0 shipped (tag `v1.0`).** The first release run failed its own CHM gate —
+  `settings-reference.html` carried two literal ellipses, and the help build refuses non-ASCII sources
+  because the compiled help is payload — fixed to `&hellip;` entities, tag moved to the fix, and the
+  re-run published the full asset set: Inno setup, **MSI and Burn bundle from the unguarded MSI leg**,
+  macOS dmg, Linux inference server, both CPU/CUDA sidecars and SHA256SUMS. The acceptance discipline
+  held to the end: the release gate caught a defect every earlier gate had missed.
+
 ### Decisions
 
 **v1.2 decisions locked at planning:**
