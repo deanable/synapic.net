@@ -24,7 +24,7 @@ catalog and commits the transcript.
 | Scope | saved search 16 (`city street`), items with empty keywords, category and description |
 | Writes | 25 items (DAM-02), then a small outage batch (DAM-03) |
 | After | tags stay in the catalog — the tags are the product's output, not test residue to erase |
-| Second server | `http://damserver.local/daminion` (192.168.0.60, 51,759 items, 17 saved searches), used when the first stopped answering at 14:39: DAM-01 re-check and DAM-03 |
+| Second server | `http://damserver.local/daminion` (192.168.0.60, 51,759 items, 17 saved searches), used when the first stopped answering at 14:39: DAM-01 re-check, the DAM-02 round trip (items 55602-55627) and DAM-03 |
 
 ## Decisions
 

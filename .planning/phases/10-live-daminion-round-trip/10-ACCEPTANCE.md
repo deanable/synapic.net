@@ -5,9 +5,9 @@
 > ignored. This file is the record; the command in each section regenerates the raw output.
 Run date: 2026-10-23, from the development machine (Windows, .NET 10).
 Servers:  http://researchserver.juicefilm.local/daminion (192.168.60.7) — DAM-01, DAM-02
-          http://damserver.local/daminion (192.168.0.60) — DAM-01 re-check, DAM-03
-          The first went offline at 14:39 and never came back; the outage fact was run
-          against the second, which is the same product path on a different catalog.
+          http://damserver.local/daminion (192.168.0.60) — DAM-01 re-check, DAM-02 re-run, DAM-03
+          The first went offline at 14:39 and never came back, so the outage fact and a second
+          round trip ran against the second — the same product path on a different catalog.
 Account:  researchserver: the saved Windows connection in HKCU\Software\Synapic\Daminion
           (user "dean", DPAPI), unprotected by build/acceptance-daminion.ps1 and handed to the
           test process's environment only; damserver: the credentials the operator supplied on
@@ -97,6 +97,23 @@ Assertions that carried the run, per item:
   * the description is the written text (descriptions are single-valued: the write replaces, it does
     not append).
 
+Re-run on the second catalog (damserver.local, after the outage fact, so the whole phase speaks from
+one server):
+
+  selection: 25 item(s) from catalog (17 saved searches, none usable for the requested scope)
+             (skipped 6 already carrying synapic-live-2026-10-23)
+  Writing to 25 item(s): 55602, 55603, 55604, 55605, 55606, 55607, 55608, 55609, 55611, 55612,
+                        55613, 55614, 55615, 55616, 55617, 55618, 55619, 55620, 55621, 55622,
+                        55623, 55624, 55625, 55626, 55627
+  batch: completed=25 transient=0 failed=0 pending=0 inflight=0 paused=False
+  batch: completed=25 transient=0 failed=0 pending=0 inflight=0 paused=False
+
+The same assertions held on every one of the 25 items after the second run: the written keyword and
+category appear exactly once, the pre-existing values are all still there (20-27 keywords and 1-2
+categories per item), the description is the written text, and the verifier reports each item Ok. The
+six items `skipped` are the outage batch DAM-03 wrote minutes earlier — the selection found their marker
+keyword and left them alone, which is the same idempotence the write path had to be fixed for.
+
 Three defects the live catalog exposed, all fixed and pinned by unit tests:
   1. The verifier matched the payload's own member names, so on the 11.x shape it could only find
      "propertyName"/"propertyValue" and reported every written field missing.
@@ -177,11 +194,11 @@ to run at all: an outage must be a block that lifts, not a network that happens 
     multi-value tags, duplicate on repeat raw add, `field:none` clauses ignored).
   * The outage is modelled as this machine losing the route to the catalog — the same client-visible
     failure the indexer handles — not as the server process stopping.
-  * DAM-03 ran on the second catalog (damserver.local, 51,759 items, 17 saved searches). Its scope
-    resolved to the catalog fallback for the same reason as the first: no saved search there is
-    "city street" and the one numbered 16 is an unrelated, empty one. The two catalogs disagree
-    about saved-search numbering, which is exactly why the id is verified against records and not
-    trusted.
+  * DAM-02 and DAM-03 both ran on the second catalog (damserver.local, 51,759 items, 17 saved
+    searches); DAM-01's report is from the first and its re-check from the second. Their scopes
+    resolved to the catalog fallback for the same reason: no saved search there is "city street" and
+    the one numbered 16 is an unrelated, empty one. The two catalogs disagree about saved-search
+    numbering, which is exactly why the id is verified against records and not trusted.
   * An earlier note in this file said damserver.local's catalog was empty. That note was wrong: it
     came from a one-off shell probe, not the client. The client counts 51,759 items there, which is
     what the DAM-01 re-check and DAM-03 both ran against.

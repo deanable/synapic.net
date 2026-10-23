@@ -40,7 +40,19 @@ duplicate copies of the marker and the category. The phase's own run is items 26
 left in place rather than deleted — deleting catalog values to tidy a test is the more destructive mistake,
 and the transcript says exactly which items and values they are.
 
+## Re-run on the second catalog
+
+After the first server went offline, the same fact was run against `damserver.local` (51,759 items) so the
+phase's write evidence and its outage evidence come from one catalog:
+
+- `selection: 25 item(s) ... (skipped 6 already carrying synapic-live-2026-10-23)` — the six skipped items
+  are the outage batch DAM-03 had just written, found by their marker keyword and left alone;
+- items 55602-55627, both batches `completed=25 transient=0 failed=0`, verifier Ok per item;
+- after the second run each item still carries exactly one copy of the marker keyword and the written
+  category, with 20-27 pre-existing keywords and 1-2 categories preserved.
+
 ## Verification
 
 - `pwsh build/acceptance-daminion.ps1 -Filter "FullyQualifiedName~Live_round_trip"` → 1 passed (1 min).
+- The same fact against `damserver.local` → 1 passed (30 s), 25 items written twice.
 - `dotnet test tests/Synapic.Core.Tests -c Release --filter "FullyQualifiedName~DaminionVerifyMetadata"` → 13 passed.
