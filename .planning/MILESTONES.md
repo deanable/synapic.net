@@ -9,6 +9,26 @@ git tags.
 ---
 ---
 
+## v1.4 — Service Console application
+
+**Shipped:** 2026-10-24
+**Phases:** 14 (1 phase, 1 plan)
+**Requirements:** 2/2 (SVC-06 the split, SVC-07 the verified save)
+**Record:** [REQUIREMENTS.md](REQUIREMENTS.md) / [ROADMAP.md](ROADMAP.md) (current tree); evidence in [phases/14-service-console/](phases/14-service-console/)
+
+### Delivered
+
+The service's management UI became its own application —
+`Synapic.ServiceConsole.exe` ("Synapic Service") — shipped by both installers
+with its own Start-menu shortcut; the main app carries no service-management
+surface. The watch-folder save became a verified round trip: the elevated
+`--apply-config` writes a result file, the console awaits the process and
+reports applied/restarted, applied/next-start, the refusal reasons, or
+not-started — closing the fire-and-forget hole behind the "watch folder does
+not persist" report.
+
+---
+
 ## v1.3 — Service Console
 
 **Shipped:** 2026-10-24
@@ -23,6 +43,8 @@ service install/Start/Stop/Uninstall as single UAC launches of the indexer's
 own verbs, watch folders saved through the validated `--apply-config` round
 trip, and the durable queue live (counts, failures, audit activity) through the
 new `Synapic.Indexer.Contract` shared library. UI-01, delivered.
+*(Its surface moved to the console application in v1.4, one milestone later;
+the archive records it in the form it shipped.)*
 
 ## v1.2 — Release Integrity (and the v1.0 ship)
 

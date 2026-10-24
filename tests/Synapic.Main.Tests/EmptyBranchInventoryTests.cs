@@ -38,7 +38,7 @@ public sealed class EmptyBranchInventoryTests
     [Fact]
     public void Every_inventory_row_names_a_test_that_exists()
     {
-        var testsDirectory = FindDirectory("tests", "Synapic.Main.Tests");
+        var testsDirectory = FindDirectory("tests");
         var violations = Check(File.ReadAllText(FindDoc()),
             (className, method) => TestExists(testsDirectory, className, method));
 
@@ -192,14 +192,20 @@ public sealed class EmptyBranchInventoryTests
             .Select(line => line.Split('|'))
             .Where(cells => cells.Length == 7);
 
-    /// <summary>A test is present when its class file exists and declares the method.</summary>
+    /// <summary>
+    /// A test is present when a class file under any tests/ project declares the
+    /// method. The rows name facts from whichever project owns the surface —
+    /// the main app's, or the service console's.
+    /// </summary>
     private static bool TestExists(string testsDirectory, string className, string method)
     {
-        var file = Path.Combine(testsDirectory, className + ".cs");
-        if (!File.Exists(file)) return false;
-
         var declaration = new Regex(@"\b" + Regex.Escape(method) + @"\s*\(");
-        return declaration.IsMatch(File.ReadAllText(file));
+        foreach (var project in Directory.GetDirectories(testsDirectory))
+        {
+            var file = Path.Combine(project, className + ".cs");
+            if (File.Exists(file) && declaration.IsMatch(File.ReadAllText(file))) return true;
+        }
+        return false;
     }
 
     private static string FindDoc() => FindFile("docs", "ui-empty-branches.md");

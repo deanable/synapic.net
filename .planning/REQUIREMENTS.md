@@ -1,46 +1,34 @@
-# Requirements: Synapic.NET — v1.3 Service Console
+# Requirements: Synapic.NET — v1.4 Service Console application
 
 **Defined:** 2026-10-24
-**Core Value:** The background service, managed where the rest of the product is — the app — not only from an elevated prompt.
-**Scope:** the GUI surface of the existing v1.1 indexer (UI-01, realized). No new engine capability: the watch → queue → tag → write-into-file pipeline already ships.
+**Core Value:** The service managed by its own application — and a save you can believe.
+**Scope:** move v1.3's Settings tab into a separate app and close the fire-and-forget save hole. No new service capability.
 
-## v1.3 Requirements
+## v1.4 Requirements
 
-### The Service tab (SVC)
-
-- [x] **SVC-01**: The Settings view carries a **Service** tab (its eighth) with three sections — the background service's lifecycle, watch folders, and the durable queue — covered by the settings search and the help (a real `service.html` topic with Contents and Index entries, `check-help.py` green).
-- [x] **SVC-02**: Service lifecycle from the tab: status read unelevated (installed/not, state, start type — through the same `sc.exe` seam the installer uses), and Install / Uninstall / Start / Stop offered with the correct gating, each one UAC-elevated launch of the indexer's own verbs — the GUI itself never writes HKLM or ProgramData.
-- [x] **SVC-03**: Watch-folder management: the configured `schedule.*` (paths, recursive, detection mode, interval) is read through the shared config store and saved through one elevated `--apply-config` round trip — the patch written to `%TEMP%`, merged by the indexer command, validated before saving (a refusal leaves the config untouched), with a service restart when it was running. Unknown config members survive.
-- [x] **SVC-04**: Queue visibility: counts per state, recent failures with their errors, and the audit-trail activity, read through the shared read-only queue reader (`Synapic.Indexer.Contract`) and refreshed on tab activation plus a five-second poll; every missing-something branch (no service, no executable, no queue, unreadable queue, not Windows) is inventoried in `docs/ui-empty-branches.md` (S-03…S-08) with the test that names it.
-
-## Structural
-
-- [x] **SVC-05**: The GUI and the service share one type set — `src/Synapic.Indexer.Contract` (net10.0): paths, job states, queue summaries/events, the read-only reader, and the configuration model/store. The service consumes the same types it writes with; a drift between the GUI's queries and the service's schema is a failing test (`ContractQueueReaderTests`), not a silent empty tab.
+- [x] **SVC-06 — the split**: the service-management surface (lifecycle, watch folders, queue) lives in its own application, `Synapic.ServiceConsole.exe` ("Synapic Service"), shipped in both installers with its own Start-menu shortcut (Inno + MSI). The main application carries no service-management surface (seven tabs again, no `Synapic.Indexer.Contract` reference); the console carries no engine, sidecar host, or tagging surface.
+- [x] **SVC-07 — the verified save**: `--apply-config` writes `<patch>.result.json` (exit code, restarted, messages) before exiting; the console awaits the elevated process (3-minute budget for the UAC prompt) and reads the result, so the note reports *applied and restarted*, *applied for the next start*, the exact refusal messages (edit stays dirty), or that the command never started. A declined prompt or refused config can no longer look like a saved change — the hole that made v1.3's watch-folder save appear not to persist.
 
 ## Deferred (carried forward)
 
-- **UI-02**: fuller service history (filtering, per-folder views) — the audit trail is already retained forever; this is surface, not data.
-- **DIST-01** (indexer self-update), **BG-01/02** (background dedup/upscale), **help corpus wizard names**, **installer signing** — unchanged from v1.2's deferred list.
+Unchanged from v1.3: UI-02 (fuller service history), DIST-01, BG-01/02, help-corpus wizard names, installer signing.
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| New indexer engine behavior | The pipeline the tab manages already ships (v1.1); this milestone is its console |
-| Editing engine/Daminion settings of the service from the tab | Those keep their CLI/config story (`--set-daminion-password`, the JSON file); the tab manages what it can validate end to end |
-| Non-Windows service management | There is no service to manage; the tab says so |
+| F1/CHM help inside the console | The console has no help system; the topic lives in the main app's compiled help and names the console |
+| Wiring the main app's source folder to the service's watch folders | They are different settings; the console's UI now says so instead |
+| Sharing one inference sidecar between app and service | A design decision of its own (lifecycle ownership, device/model choice); recorded as a candidate, not smuggled into this milestone |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SVC-01 | Phase 13 | Complete |
-| SVC-02 | Phase 13 | Complete |
-| SVC-03 | Phase 13 | Complete |
-| SVC-04 | Phase 13 | Complete |
-| SVC-05 | Phase 13 | Complete |
+| SVC-06 | Phase 14 | Complete |
+| SVC-07 | Phase 14 | Complete |
 
-**Coverage:** 5 total, 5 mapped, 0 unmapped.
+**Coverage:** 2 total, 2 mapped, 0 unmapped.
 
 ---
 *Requirements defined: 2026-10-24*

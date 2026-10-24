@@ -30,6 +30,12 @@ public sealed class ApplyConfigCommandTests : IDisposable
 
     private IndexerConfigStore Store() => new(configFilePathOverride: ConfigPath);
 
+    private static JsonObject? ReadResult(string patchPath)
+    {
+        var path = patchPath + ".result.json";
+        return File.Exists(path) ? JsonNode.Parse(File.ReadAllText(path)) as JsonObject : null;
+    }
+
     private void WriteConfig(string json) => File.WriteAllText(ConfigPath, json);
     private void WritePatch(string json) => File.WriteAllText(PatchPath, json);
     private void WritePatch(JsonObject patch) =>
@@ -101,6 +107,13 @@ public sealed class ApplyConfigCommandTests : IDisposable
         Assert.Equal(WatchFolder, saved["schedule"]!["watchPaths"]![0]!.GetValue<string>());
         Assert.False(saved["schedule"]!["watchRecursive"]!.GetValue<bool>());
         Assert.True(saved["future"]!["unknown"]!.GetValue<bool>(), "an unknown member must survive the merge");
+
+        // The result file is the caller's verified feedback: exit, restart, messages.
+        var result = ReadResult(PatchPath);
+        Assert.NotNull(result);
+        Assert.Equal(0, (int)result!["exit"]!);
+        Assert.False(result["restarted"]!.GetValue<bool>());
+        Assert.Contains(result["messages"]!.AsArray(), m => m!.GetValue<string>().Contains("Applied"));
     }
 
     [Fact]
@@ -118,6 +131,14 @@ public sealed class ApplyConfigCommandTests : IDisposable
         Assert.Contains("unchanged", error.ToString());
         Assert.Equal(before, File.ReadAllText(ConfigPath));
         Assert.Empty(sc.Calls);
+
+        // The refusal lands in the result file too: the console shows exactly
+        // these messages, never a success-shaped silence.
+        var result = ReadResult(PatchPath);
+        Assert.NotNull(result);
+        Assert.Equal(2, (int)result!["exit"]!);
+        Assert.Contains(result["messages"]!.AsArray(), m => m!.GetValue<string>().Contains("intervalMinutes"));
+        Assert.Contains(result["messages"]!.AsArray(), m => m!.GetValue<string>().Contains("unchanged"));
     }
 
     [Fact]

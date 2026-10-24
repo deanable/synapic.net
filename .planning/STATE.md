@@ -1,9 +1,9 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.3
-milestone_name: Service Console
+milestone: v1.4
+milestone_name: Service Console application
 status: complete
-last_updated: "2026-10-24T04:30:00.000Z"
+last_updated: "2026-10-24T07:00:00.000Z"
 last_activity: 2026-10-24
 progress:
   total_phases: 1
@@ -27,20 +27,19 @@ Daminion) and finally ship v1.0. Requirements: [REQUIREMENTS.md](REQUIREMENTS.md
 
 ## Current Position
 
-**v1.3 Service Console complete (2026-10-24).** SVC-01..05 done in one phase
-(phase 13): the Settings view's eighth tab manages the background indexer —
-service install/Start/Stop/Uninstall as single UAC launches of the indexer's
-own verbs, watch folders saved through the new `--apply-config` (validate
-before save, unknown members preserved, restart when running), and the durable
-queue live (counts, failures, audit activity) through the new
-`Synapic.Indexer.Contract` shared library — the first GUI-service bridge, with
-a drift test pinning the contract's queries against the service's schema. The
-tab's reachable absences are inventoried (S-03..S-08, each named by a test).
-Evidence: `phases/13-service-tab/13-01-SUMMARY.md`; the v1.0 shipped service on
-this machine showed RUNNING with live counts in the smoke.
+**v1.4 Service Console application complete (2026-10-24).** The service's
+management surface moved out of the main app into `Synapic.ServiceConsole.exe`
+("Synapic Service", shipped by both installers with its own Start-menu
+shortcut); the main app is back to seven Settings tabs with no service code.
+The watch-folder save is now a verified round trip: `--apply-config` writes a
+result file, the console awaits the elevated process and reports what actually
+happened — closing the fire-and-forget hole behind the "folder does not
+persist" report (the config file had not been written since 2026-10-23 06:26;
+changes were being made to the app's own source folder, a different setting).
+Evidence: `phases/14-service-console/14-01-SUMMARY.md`.
 
-Next milestone: not yet chosen — PROJECT.md -> Candidates After v1.2 (minus
-UI-01, now delivered).
+Next milestone: not yet chosen — PROJECT.md → Candidates (a shared
+inference sidecar for app and service is now on the list).
 
 ## Deferred Items
 

@@ -18,11 +18,14 @@ the app uses. The model's keywords and description are written <em>into</em>
 each image file, which is what lets Windows itself index and search them.</p>
 
 <div class="note">
-<p class="first">Everything lives on the Service tab of Settings.</p>
-<p>Open <span class="ui">Settings</span> and pick the
-<span class="ui">Service</span> tab. It has three parts: the service itself
-(install, start, stop, uninstall), the folders it watches, and the queue
-showing what is waiting, running, done or failed.</p>
+<p class="first">Everything lives in the Synapic Service console.</p>
+<p>The service is managed by <span class="ui">Synapic
+Service</span> &mdash; its own small application (in the Start menu beside
+Synapic). It has three parts: the service itself (install, start, stop,
+uninstall), the folders it watches, and the queue showing what is waiting,
+running, done or failed. The folders it watches are the <em>service's</em>
+setting; the folder chosen in the Synapic app's Connection tab is a different
+thing, used by the operations you run by hand.</p>
 </div>
 
 <h2>Installing and controlling the service</h2>
@@ -54,7 +57,10 @@ scan also catches files that arrived while nothing was watching.</p>
 <p>Saving asks for permission once. The change is validated before it is
 saved &mdash; a folder that does not exist is refused rather than silently
 breaking the service &mdash; and the service is restarted if it was running,
-because it reads its configuration at startup.</p>
+because it reads its configuration at startup. The console waits for the
+answer and reports it: either <em>applied</em> (and restarted, or picked up at
+the next start) or <em>not applied</em> with the exact reason &mdash; a
+refused change never looks like a saved one.</p>
 
 <h2><a name="queue"></a>The queue</h2>
 

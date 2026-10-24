@@ -69,6 +69,9 @@ Source: "{#ArtifactsDir}\{#RuntimeExe}"; DestDir: "{tmp}"; Flags: deleteafterins
 
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"
+; The service console (v1.4) sits beside the app in the Start menu: it manages
+; the background indexer, and a user looking for "the service thing" finds it.
+Name: "{group}\Synapic Service"; Filename: "{app}\Synapic.ServiceConsole.exe"
 Name: "{group}\{cm:UninstallProgram,{#AppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
 

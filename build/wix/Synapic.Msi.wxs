@@ -173,6 +173,18 @@
         <RegistryValue Root="HKCU" Key="Software\Synapic" Name="StartMenuShortcut" Type="integer" Value="1" KeyPath="yes" />
       </Component>
 
+      <!-- The service console (v1.4) sits beside the app in the Start menu: it
+           manages the background indexer, and a user looking for "the service
+           thing" finds it. -->
+      <Component Id="ServiceConsoleStartMenuShortcut" Directory="ApplicationProgramsFolder" Guid="6D3E0FA9-28C4-4B7A-9E15-70A2C88D4B37">
+        <Shortcut Id="ServiceConsoleStartMenuShortcut"
+                  Name="Synapic Service"
+                  Description="Manage the Synapic background tagging service"
+                  Target="[INSTALLFOLDER]Synapic.ServiceConsole.exe"
+                  WorkingDirectory="INSTALLFOLDER" />
+        <RegistryValue Root="HKCU" Key="Software\Synapic" Name="ServiceConsoleStartMenuShortcut" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+
       <Component Id="ApplicationDesktopShortcut" Directory="DesktopFolder" Guid="B7C2E8D1-4A63-4E97-8F25-1C9D0B6A3E58">
         <Shortcut Id="DesktopShortcut"
                   Name="Synapic"

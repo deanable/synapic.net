@@ -8,11 +8,16 @@ namespace Synapic.Indexer.Install;
 /// <summary>
 /// <c>--apply-config &lt;file&gt;</c>: merge a partial JSON configuration over the
 /// current one, validate the result, and save it — or refuse and exit 2 with the
-/// file untouched. The desktop app's Service tab is the caller: it cannot write
+/// file untouched. The service console is the caller: it cannot write
 /// <c>%ProgramData%</c> unelevated, so it writes the patch to the user's temp
 /// folder and this elevated command applies it, preserving every config member
 /// this build does not know about (the same JSON-tree rule as
 /// <c>--set-daminion-password</c>, D-11-07).
+///
+/// Before exiting, the command writes <c>&lt;patch&gt;.result.json</c> — exit
+/// code, whether the service was restarted, and the messages — so the caller can
+/// report what actually happened. A save that only looks like it happened is
+/// worse than one that visibly failed.
 /// </summary>
 public static class ApplyConfigCommand
 {
@@ -29,6 +34,9 @@ public static class ApplyConfigCommand
         TextWriter output,
         TextWriter error)
     {
+        bool restarted = false;
+        var messages = new List<string>();
+
         JsonObject patch;
         try
         {
@@ -42,7 +50,9 @@ public static class ApplyConfigCommand
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException)
         {
-            error.WriteLine($"Could not read the patch {patchPath}: {e.Message}");
+            var message = $"Could not read the patch {patchPath}: {e.Message}";
+            error.WriteLine(message);
+            WriteResult(patchPath, 1, restarted, new[] { message });
             return 1;
         }
 
@@ -53,7 +63,9 @@ public static class ApplyConfigCommand
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
-            error.WriteLine($"Could not read {store.ConfigFilePath}: {e.Message}");
+            var message = $"Could not read {store.ConfigFilePath}: {e.Message}";
+            error.WriteLine(message);
+            WriteResult(patchPath, 1, restarted, new[] { message });
             return 1;
         }
 
@@ -70,8 +82,15 @@ public static class ApplyConfigCommand
             if (problems.Count > 0)
             {
                 foreach (var problem in problems)
-                    error.WriteLine($"Synapic Indexer configuration error - {problem}");
-                error.WriteLine($"Nothing was saved; {store.ConfigFilePath} is unchanged.");
+                {
+                    var line = $"Synapic Indexer configuration error - {problem}";
+                    error.WriteLine(line);
+                    messages.Add(problem.ToString());
+                }
+                var notSaved = $"Nothing was saved; {store.ConfigFilePath} is unchanged.";
+                error.WriteLine(notSaved);
+                messages.Add(notSaved);
+                WriteResult(patchPath, 2, restarted, messages);
                 return 2;
             }
 
@@ -79,7 +98,9 @@ public static class ApplyConfigCommand
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
-            error.WriteLine($"Could not write {store.ConfigFilePath}: {e.Message}");
+            var message = $"Could not write {store.ConfigFilePath}: {e.Message}";
+            error.WriteLine(message);
+            WriteResult(patchPath, 1, restarted, new[] { message });
             return 1;
         }
         finally
@@ -87,11 +108,38 @@ public static class ApplyConfigCommand
             try { File.Delete(tempPath); } catch (IOException) { }
         }
 
-        var restarted = await installer.RestartIfRunningAsync().ConfigureAwait(false);
-        output.WriteLine(restarted
+        restarted = await installer.RestartIfRunningAsync().ConfigureAwait(false);
+        var summary = restarted
             ? $"Applied {patchPath} to {store.ConfigFilePath}; the service was restarted to pick it up."
-            : $"Applied {patchPath} to {store.ConfigFilePath}; the service was not running, so it will read the change at its next start.");
+            : $"Applied {patchPath} to {store.ConfigFilePath}; the service was not running, so it will read the change at its next start.";
+        output.WriteLine(summary);
+        messages.Add(summary);
+        WriteResult(patchPath, 0, restarted, messages);
         return 0;
+    }
+
+    /// <summary>
+    /// The result file the console reads after the process exits. Best effort:
+    /// a command that cannot even write its result still exits with a code, and
+    /// the caller treats a missing file as "assume nothing".
+    /// </summary>
+    private static void WriteResult(string patchPath, int exit, bool restarted, IReadOnlyList<string> messages)
+    {
+        try
+        {
+            var result = new JsonObject
+            {
+                ["exit"] = exit,
+                ["restarted"] = restarted,
+                ["messages"] = new JsonArray(messages.Select(m => (JsonNode?)m).ToArray()),
+            };
+            File.WriteAllText(patchPath + ".result.json",
+                result.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // The exit code is still the truth; the caller's fallback handles it.
+        }
     }
 
     /// <summary>

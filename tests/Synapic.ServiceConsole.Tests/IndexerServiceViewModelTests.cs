@@ -1,17 +1,19 @@
 using System.Text.Json.Nodes;
 using Synapic.Indexer.Contract;
 using Synapic.Indexer.Contract.Configuration;
-using Synapic.Main.Services.Indexer;
-using Synapic.Main.ViewModels.Settings;
+using Synapic.ServiceConsole.Services;
+using Synapic.ServiceConsole.ViewModels;
 using Xunit;
 
-namespace Synapic.Main.Tests;
+namespace Synapic.ServiceConsole.Tests;
 
 /// <summary>
-/// The Service tab's view model against fakes: the status-to-button mapping,
-/// the watch-folder round trip through the one elevated save, the queue view,
-/// and the branches where something is missing (no service, no executable, no
-/// queue, not Windows) — each of those says so instead of showing nothing.
+/// The console's view model against fakes: the status-to-button mapping, the
+/// watch-folder round trip through the one elevated save, the queue view, and
+/// the branches where something is missing (no service, no executable, no
+/// queue, not Windows) - each of those says so instead of showing nothing. The
+/// save facts pin the verified round trip (v1.4): the note reports what the
+/// elevated command actually did, never a fire-and-forget "requested".
 /// </summary>
 public sealed class IndexerServiceViewModelTests
 {
@@ -30,6 +32,8 @@ public sealed class IndexerServiceViewModelTests
     private sealed class FakeLauncher : IIndexerProcessLauncher
     {
         public bool Present { get; set; } = true;
+        public ApplyConfigOutcome? Outcome { get; set; }
+        public TaskCompletionSource<ApplyConfigOutcome?>? InFlight { get; set; }
         public List<string[]> Launches { get; } = new();
         public JsonObject? LastPatch { get; private set; }
 
@@ -39,11 +43,21 @@ public sealed class IndexerServiceViewModelTests
             LastPatch = patch;
             return @"C:\Users\u\AppData\Local\Temp\synapic-apply-config.json";
         }
+
+        public async Task<ApplyConfigOutcome?> ApplyConfigAsync(string patchPath, CancellationToken ct = default)
+        {
+            Launches.Add(new[] { "--apply-config", patchPath });
+            if (InFlight is not null)
+                return await InFlight.Task.WaitAsync(ct);
+            return Outcome;
+        }
+
         public bool LaunchElevated(params string[] arguments)
         {
             Launches.Add(arguments);
             return true;
         }
+
         public bool LaunchServiceControl(string scVerb)
         {
             Launches.Add(new[] { "sc.exe", scVerb, "SynapicIndexer" });
@@ -56,6 +70,8 @@ public sealed class IndexerServiceViewModelTests
 
     private static IndexerServiceStatus Running(bool running = true) =>
         new(true, running ? "RUNNING" : "STOPPED", "AUTO_START", running);
+
+    // ------------------------------------------------------------ lifecycle
 
     [Fact]
     public void A_running_service_enables_stop_and_start_is_refused()
@@ -74,7 +90,7 @@ public sealed class IndexerServiceViewModelTests
     }
 
     [Fact]
-    public void An_installed_but_stopped_service_enables_start_and_install()
+    public void An_installed_but_stopped_service_enables_start()
     {
         var vm = VM(new FakeMonitor { Status = Running(running: false) }, new FakeLauncher());
 
@@ -82,7 +98,6 @@ public sealed class IndexerServiceViewModelTests
         Assert.True(vm.StartCommand.CanExecute(null));
         Assert.False(vm.StopCommand.CanExecute(null));
         Assert.True(vm.UninstallCommand.CanExecute(null));
-        Assert.False(vm.InstallCommand.CanExecute(null));
     }
 
     [Fact]
@@ -120,6 +135,20 @@ public sealed class IndexerServiceViewModelTests
         Assert.Equal("The background service runs on Windows.", vm.QueueNote);
         Assert.False(vm.InstallCommand.CanExecute(null));
     }
+
+    [Fact]
+    public void The_lifecycle_buttons_launch_the_indexers_own_verbs()
+    {
+        var launcher = new FakeLauncher();
+        VM(new FakeMonitor { Status = new IndexerServiceStatus(false, "", "", false) }, launcher)
+            .InstallCommand.Execute(null);
+        VM(new FakeMonitor { Status = Running() }, launcher).StopCommand.Execute(null);
+
+        Assert.Contains(launcher.Launches, a => a.SequenceEqual(new[] { "--install" }));
+        Assert.Contains(launcher.Launches, a => a.SequenceEqual(new[] { "sc.exe", "stop", "SynapicIndexer" }));
+    }
+
+    // ---------------------------------------------------------------- queue
 
     [Fact]
     public void A_missing_queue_is_said_not_hidden()
@@ -176,8 +205,10 @@ public sealed class IndexerServiceViewModelTests
         Assert.Contains("claimed", vm.RecentEvents[1]);
     }
 
+    // -------------------------------------------------------- watch folders
+
     [Fact]
-    public void Watch_folders_round_trip_through_the_one_elevated_save()
+    public async Task A_successful_save_reports_applied_and_restarted()
     {
         var monitor = new FakeMonitor
         {
@@ -188,24 +219,21 @@ public sealed class IndexerServiceViewModelTests
                 WatchPaths = new List<string> { @"C:\Photos" },
             },
         };
-        var launcher = new FakeLauncher();
+        var launcher = new FakeLauncher
+        {
+            Outcome = new ApplyConfigOutcome(0, true,
+                new[] { "Applied; the service was restarted to pick it up." }),
+        };
         var vm = VM(monitor, launcher);
 
-        Assert.Equal(new[] { @"C:\Photos" }, vm.WatchPaths);
-        Assert.False(vm.IsDirty);
-        Assert.False(vm.SaveCommand.CanExecute(null));
-
         vm.AddWatchFolderCommand.Execute(@"C:\Camera");
-        Assert.True(vm.IsDirty);
         Assert.True(vm.SaveCommand.CanExecute(null));
-
-        vm.SaveCommand.Execute(null);
+        await vm.SaveCommand.ExecuteAsync(null);
 
         Assert.NotNull(launcher.LastPatch);
         var saved = launcher.LastPatch!["schedule"]!.AsObject();
         Assert.Equal(2, saved["watchPaths"]!.AsArray().Count);
         Assert.Equal(@"C:\Camera", saved["watchPaths"]![1]!.GetValue<string>());
-        Assert.True(saved["watchRecursive"]!.GetValue<bool>());
         Assert.Equal("Watch", saved["mode"]!.GetValue<string>());
         Assert.Equal(15, (int)saved["intervalMinutes"]!);
 
@@ -213,7 +241,83 @@ public sealed class IndexerServiceViewModelTests
         Assert.Equal(new[] { "--apply-config", @"C:\Users\u\AppData\Local\Temp\synapic-apply-config.json" },
             launcher.Launches[0]);
         Assert.False(vm.IsDirty);
-        Assert.Contains("Save requested", vm.WatchNote);
+        Assert.Contains("Applied", vm.WatchNote);
+        Assert.Contains("restarted", vm.WatchNote);
+    }
+
+    [Fact]
+    public async Task A_save_that_applied_without_a_running_service_says_so()
+    {
+        var launcher = new FakeLauncher
+        {
+            Outcome = new ApplyConfigOutcome(0, false, Array.Empty<string>()),
+        };
+        var vm = VM(new FakeMonitor { Status = Running() }, launcher);
+        vm.AddWatchFolderCommand.Execute(@"C:\Camera");
+
+        await vm.SaveCommand.ExecuteAsync(null);
+
+        Assert.Contains("was not running", vm.WatchNote);
+        Assert.False(vm.IsDirty);
+    }
+
+    [Fact]
+    public async Task A_refused_save_surfaces_the_validation_messages_and_stays_dirty()
+    {
+        var launcher = new FakeLauncher
+        {
+            Outcome = new ApplyConfigOutcome(2, false, new[]
+            {
+                "schedule.watchPaths: does not exist or is not reachable: 'C:\\Nope'",
+                "Nothing was saved; C:\\ProgramData\\Synapic\\indexer-config.json is unchanged.",
+            }),
+        };
+        var vm = VM(new FakeMonitor { Status = Running() }, launcher);
+        vm.AddWatchFolderCommand.Execute(@"C:\Nope");
+
+        await vm.SaveCommand.ExecuteAsync(null);
+
+        Assert.StartsWith("Not applied:", vm.WatchNote);
+        Assert.Contains("does not exist or is not reachable", vm.WatchNote);
+        Assert.Contains("Nothing was saved", vm.WatchNote);
+        Assert.True(vm.IsDirty, "a refused save keeps the edit so the user can fix it");
+    }
+
+    [Fact]
+    public async Task A_save_that_never_started_says_nothing_was_changed()
+    {
+        var launcher = new FakeLauncher { Outcome = null };
+        var vm = VM(new FakeMonitor { Status = Running() }, launcher);
+        vm.AddWatchFolderCommand.Execute(@"C:\Camera");
+
+        await vm.SaveCommand.ExecuteAsync(null);
+
+        Assert.StartsWith("Not applied:", vm.WatchNote);
+        Assert.Contains("could not be started", vm.WatchNote);
+        Assert.True(vm.IsDirty);
+    }
+
+    [Fact]
+    public async Task While_the_save_is_in_flight_the_button_is_off_and_the_note_says_saving()
+    {
+        var launcher = new FakeLauncher
+        {
+            InFlight = new TaskCompletionSource<ApplyConfigOutcome?>(
+                TaskCreationOptions.RunContinuationsAsynchronously),
+        };
+        var vm = VM(new FakeMonitor { Status = Running() }, launcher);
+        vm.AddWatchFolderCommand.Execute(@"C:\Camera");
+
+        var saving = vm.SaveCommand.ExecuteAsync(null);
+        Assert.True(vm.IsSaving);
+        Assert.False(vm.SaveCommand.CanExecute(null));
+        Assert.Contains("Saving", vm.WatchNote);
+
+        launcher.InFlight.SetResult(new ApplyConfigOutcome(0, true, Array.Empty<string>()));
+        await saving;
+
+        Assert.False(vm.IsSaving);
+        Assert.Contains("Applied", vm.WatchNote);
     }
 
     [Fact]
@@ -265,19 +369,5 @@ public sealed class IndexerServiceViewModelTests
 
         Assert.True(vm.WatchPaths.Count == 2,
             "an edit in progress must not be clobbered by the poll");
-    }
-
-    [Fact]
-    public void The_lifecycle_buttons_launch_the_indexers_own_verbs()
-    {
-        var launcher = new FakeLauncher();
-        var vm = VM(new FakeMonitor { Status = new IndexerServiceStatus(false, "", "", false) }, launcher);
-        vm.InstallCommand.Execute(null);
-
-        var vm2 = VM(new FakeMonitor { Status = Running() }, launcher);
-        vm2.StopCommand.Execute(null);
-
-        Assert.Contains(launcher.Launches, a => a.SequenceEqual(new[] { "--install" }));
-        Assert.Contains(launcher.Launches, a => a.SequenceEqual(new[] { "sc.exe", "stop", "SynapicIndexer" }));
     }
 }

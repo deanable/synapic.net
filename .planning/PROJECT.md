@@ -17,16 +17,16 @@ queue, and writing back while nobody is at the desk.
 Pick a source and get correct, reviewable results written back — without the user ever fighting the
 UI, and without anyone needing to be at the desk for the routine tagging to happen.
 
-## Current Milestone: v1.3 Service Console — shipped 2026-10-24
+## Current Milestone: v1.4 Service Console application — shipped 2026-10-24
 
-**One phase, one plan:** the Settings view's Service tab (UI-01, realized) —
-service lifecycle, watch folders, and the live queue, over the shipped v1.1
-indexer. The GUI and the service now share `Synapic.Indexer.Contract`, and the
-tab's one write path is the indexer's own validated `--apply-config`. All five
-requirements (SVC-01..05) complete; records in
+One phase, one plan: the service's management surface became its own
+application (`Synapic.ServiceConsole.exe`), the main app returned to seven
+Settings tabs, and the elevated watch-folder save became a verified round trip
+(`--apply-config` result file, awaited process, reported outcome). Records:
 [REQUIREMENTS.md](REQUIREMENTS.md) / [ROADMAP.md](ROADMAP.md).
 
-**Next milestone:** not yet chosen — see Candidates below (UI-01 is delivered).
+**Next milestone:** not yet chosen — see Candidates below (new: a shared
+inference sidecar for the app and the service).
 
 ## Current State
 
@@ -203,4 +203,4 @@ Full record: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md).
 
 ---
 
-*Last updated: 2026-10-24 — v1.3 Service Console shipped (phase 13).*
+*Last updated: 2026-10-24 — v1.4 Service Console application shipped (phase 14).*

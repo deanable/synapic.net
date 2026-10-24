@@ -273,10 +273,15 @@ service reads its configuration once at startup.
 Applied \Temp\synapic-apply-config.json to C:\ProgramData\Synapic\indexer-config.json; the service was restarted to pick it up.
 ```
 
-This is also what the desktop app’s **Settings → Service** tab runs when you
-save watch folders: the app (running unelevated) writes the patch to your temp
-folder, then launches this elevated command, so the GUI never writes ProgramData
-directly and one validation implementation serves both the CLI and the GUI.
+This is also what **Synapic.ServiceConsole.exe** (the service's own UI, v1.4)
+runs when you save watch folders: the console (running unelevated) writes the
+patch to your temp folder, then launches this elevated command and waits for
+it, so the GUI never writes ProgramData directly and one validation
+implementation serves both the CLI and the GUI. Before exiting, the command
+writes `<patch>.result.json` — the exit code, whether the service was
+restarted, and the messages — and the console reads it after the process
+exits, so a save either visibly happened or visibly did not (a declined UAC
+prompt or a refused configuration is reported, never silently dropped).
 
 ### Logs
 

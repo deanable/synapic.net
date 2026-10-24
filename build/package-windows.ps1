@@ -67,6 +67,15 @@ Write-Host "Publishing the background indexer into $ArtifactsDir..."
     -c Release -r $Rid --self-contained false -p:PublishSingleFile=false -o $ArtifactsDir
 if ($LASTEXITCODE -ne 0) { throw "dotnet publish of the indexer failed with exit code $LASTEXITCODE" }
 
+# v1.4: the service console publishes into the same payload - it is the
+# service's UI, shipped with it. A missing console is not a broken service (the
+# CLI still manages everything), so it is not in the required-file list; the
+# harvest below and in the MSI carries it into both installers.
+Write-Host "Publishing the service console into $ArtifactsDir..."
+& dotnet publish (Join-Path $repoRoot "src/Synapic.ServiceConsole/Synapic.ServiceConsole.csproj") `
+    -c Release -r $Rid --self-contained false -p:PublishSingleFile=false -o $ArtifactsDir
+if ($LASTEXITCODE -ne 0) { throw "dotnet publish of the service console failed with exit code $LASTEXITCODE" }
+
 # A payload missing the service would produce an installer that silently omits
 # the feature this release is about, so every required file is checked by name.
 foreach ($required in @("Synapic.Indexer.exe", "Synapic.Core.dll", "synapic-inference.exe")) {

@@ -1,0 +1,128 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Synapic.ServiceConsole.ViewModels"
+             x:Class="Synapic.ServiceConsole.Views.ServiceSection"
+             x:DataType="vm:IndexerServiceViewModel">
+
+  <!-- The service console's whole face: three sections - the service's
+       lifecycle, the folders it watches, and its durable queue. Every elevated
+       action is one UAC launch of the indexer's own control verbs; everything
+       shown is read unelevated through the shared Synapic.Indexer.Contract, so
+       this app and the service cannot disagree about what is queued or
+       scheduled. The save is a verified round trip: the note reports what the
+       elevated command actually did. -->
+  <StackPanel Spacing="12">
+
+    <Border Classes="card settingsCard" x:Name="SectionService" Padding="16">
+      <StackPanel Spacing="8">
+        <TextBlock Text="Background service" Classes="sectionTitle" />
+        <TextBlock Classes="hint" TextWrapping="Wrap"
+                   Text="The Windows service that tags images with nobody at the desk: it watches the folders below, queues what lands, and writes the model's keywords and description into each file so Windows can index them." />
+
+        <WrapPanel>
+          <Ellipse Width="12" Height="12" VerticalAlignment="Center" Margin="0,0,8,8"
+                   Fill="{Binding StatusBrush}" />
+          <TextBlock Text="{Binding ServiceStatusText}" VerticalAlignment="Center"
+                     FontWeight="SemiBold" FontSize="12" Margin="0,0,12,8" />
+          <TextBlock Text="{Binding StartTypeText}" IsVisible="{Binding IsInstalled}"
+                     VerticalAlignment="Center" FontSize="11" Opacity="0.75" Margin="0,0,12,8" />
+        </WrapPanel>
+
+        <WrapPanel>
+          <Button Content="Install" Command="{Binding InstallCommand}" Margin="0,0,8,8"
+                  ToolTip.Tip="Register SynapicIndexer as a Windows service (LocalService, auto start, restart on failure). Windows asks for permission." />
+          <Button Content="Uninstall" Command="{Binding UninstallCommand}" Margin="0,0,8,8"
+                  ToolTip.Tip="Stop and remove the service. Logs and data under ProgramData are kept." />
+          <Button Content="Start" Command="{Binding StartCommand}" Margin="0,0,8,8" />
+          <Button Content="Stop" Command="{Binding StopCommand}" Margin="0,0,8,8" />
+          <Button Content="Open log folder" Command="{Binding OpenLogsCommand}" Margin="0,0,8,8"
+                  ToolTip.Tip="%ProgramData%\Synapic\Logs" />
+        </WrapPanel>
+        <TextBlock Classes="hint" TextWrapping="Wrap" Text="{Binding ActionNote}"
+                   IsVisible="{Binding ActionNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      </StackPanel>
+    </Border>
+
+    <Border Classes="card settingsCard" x:Name="SectionWatchFolders" Padding="16">
+      <StackPanel Spacing="8">
+        <TextBlock Text="Watch folders" Classes="sectionTitle" />
+        <TextBlock Classes="hint" TextWrapping="Wrap"
+                   Text="Folders the service monitors: a file that lands in one is queued and tagged. Saving asks for permission once - the change is validated, applied, and the service restarts if it was running. This is the service's own setting; the main app's source folder is a different thing." />
+
+        <ListBox ItemsSource="{Binding WatchPaths}"
+                 SelectedItem="{Binding SelectedWatchPath}"
+                 MinHeight="48" MaxHeight="140" />
+
+        <WrapPanel>
+          <Button Content="Add folder…" Click="OnAddWatchFolder" Margin="0,0,8,8" />
+          <Button Content="Remove selected" Command="{Binding RemoveWatchFolderCommand}" Margin="0,0,8,8"
+                  IsEnabled="{Binding SelectedWatchPath, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        </WrapPanel>
+
+        <WrapPanel Margin="0,4,0,0">
+          <CheckBox Content="Include subfolders" IsChecked="{Binding WatchRecursive}"
+                    Margin="0,0,16,8" VerticalAlignment="Center" />
+          <TextBlock Text="Detection:" VerticalAlignment="Center" Margin="0,0,8,8" />
+          <ComboBox SelectedIndex="{Binding ModeIndex}" MinWidth="170" Margin="0,0,16,8">
+            <ComboBoxItem Content="Watch folders only" />
+            <ComboBoxItem Content="Scan on an interval" />
+            <ComboBoxItem Content="Both" />
+          </ComboBox>
+          <TextBlock Text="Interval (minutes):" VerticalAlignment="Center" Margin="0,0,8,8" />
+          <NumericUpDown Value="{Binding IntervalMinutes}" Minimum="1" Maximum="1440"
+                         Width="100" Margin="0,0,8,8" />
+        </WrapPanel>
+
+        <WrapPanel>
+          <Button Content="Save &amp; restart service" Command="{Binding SaveCommand}"
+                  Classes="accent" Margin="0,0,8,8" />
+          <ProgressBar IsIndeterminate="True" Width="120" Height="18" VerticalAlignment="Center"
+                       IsVisible="{Binding IsSaving}" />
+        </WrapPanel>
+        <TextBlock Classes="hint" TextWrapping="Wrap" Text="{Binding WatchNote}"
+                   IsVisible="{Binding WatchNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      </StackPanel>
+    </Border>
+
+    <Border Classes="card settingsCard" x:Name="SectionQueue" Padding="16">
+      <StackPanel Spacing="8">
+        <TextBlock Text="Queue" Classes="sectionTitle" />
+        <TextBlock Classes="hint" TextWrapping="Wrap"
+                   Text="The durable queue: what is waiting, in flight, done, or failed. The counts refresh while this window is open; completed rows are the service's history." />
+
+        <TextBlock Text="{Binding QueueNote}" Classes="hint" TextWrapping="Wrap"
+                   IsVisible="{Binding QueueNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+        <Grid ColumnDefinitions="*,*,*,*,*" IsVisible="{Binding IsSupported}">
+          <StackPanel Grid.Column="0" Spacing="2">
+            <TextBlock Classes="hint" Text="Pending" />
+            <TextBlock Text="{Binding PendingCount}" FontWeight="SemiBold" />
+          </StackPanel>
+          <StackPanel Grid.Column="1" Spacing="2">
+            <TextBlock Classes="hint" Text="In flight" />
+            <TextBlock Text="{Binding InFlightCount}" FontWeight="SemiBold" />
+          </StackPanel>
+          <StackPanel Grid.Column="2" Spacing="2">
+            <TextBlock Classes="hint" Text="Completed" />
+            <TextBlock Text="{Binding CompletedCount}" FontWeight="SemiBold" />
+          </StackPanel>
+          <StackPanel Grid.Column="3" Spacing="2">
+            <TextBlock Classes="hint" Text="Retrying" />
+            <TextBlock Text="{Binding TransientFailureCount}" FontWeight="SemiBold" />
+          </StackPanel>
+          <StackPanel Grid.Column="4" Spacing="2">
+            <TextBlock Classes="hint" Text="Failed" />
+            <TextBlock Text="{Binding FailedCount}" FontWeight="SemiBold" />
+          </StackPanel>
+        </Grid>
+
+        <TextBlock Text="Recent failures" Classes="hint" Margin="0,8,0,0" />
+        <ListBox ItemsSource="{Binding RecentFailures}" MinHeight="0" MaxHeight="110" />
+
+        <TextBlock Text="Recent activity" Classes="hint" Margin="0,8,0,0" />
+        <ListBox ItemsSource="{Binding RecentEvents}" MinHeight="48" MaxHeight="170" />
+      </StackPanel>
+    </Border>
+
+  </StackPanel>
+</UserControl>

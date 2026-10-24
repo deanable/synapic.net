@@ -125,28 +125,33 @@ Already named, and not re-inventoried here beyond a pointer:
 | S-01 | Search that matches nothing: `No settings match “{text}”.` | `Views/Settings/SettingsTab.axaml.cs:90` | Named | `SettingsViewTests.Settings_search_filters_to_matching_sections_and_jumps_to_the_first` |
 | S-02 | Run log collapsed while empty (`HasLogLines` false) | `ViewModels/Operations/RunStateViewModel.cs:38` | Named | `StepDedupRejectActionTests.HasLogLines_Follows_The_First_And_Later_Lines` |
 
-The Service tab (v1.3, UI-01) reads a machine that may have no service, no
-executable, no queue, or no Windows at all — each absence is a branch the user
-can reach, so each says so instead of showing nothing.
+The service console (its own application since v1.4; a Settings tab in v1.3)
+reads a machine that may have no service, no executable, no queue, or no
+Windows at all — each absence is a branch the user can reach, so each says so
+instead of showing nothing. The save is a verified round trip: its note reports
+what the elevated command actually did.
 
 | Id | Branch | Where | Status | Named by |
 |----|--------|-------|--------|----------|
-| S-03 | Service not installed: the status line reads `not installed` and only Install is offered | `ViewModels/Settings/IndexerServiceViewModel.cs` (Refresh) | Named | `IndexerServiceViewModelTests.A_machine_without_the_service_shows_not_installed_and_offers_install` |
-| S-04 | Not a Windows machine: the status reads `Windows only` and the queue note explains | `ViewModels/Settings/IndexerServiceViewModel.cs` (Refresh null status) | Named | `IndexerServiceViewModelTests.Not_a_windows_machine_says_so_in_the_status_and_the_queue` |
-| S-05 | The service has never run: queue note `no queue yet`, counts zero | `ViewModels/Settings/IndexerServiceViewModel.cs` (Refresh, null summary) | Named | `IndexerServiceViewModelTests.A_missing_queue_is_said_not_hidden` |
-| S-06 | The queue cannot be read: the note names the path and the failure | `ViewModels/Settings/IndexerServiceViewModel.cs` (Refresh, noted snapshot) | Named | `IndexerServiceViewModelTests.A_queue_that_cannot_be_read_names_the_problem` |
-| S-07 | Adding a folder that is already watched: `'{path}' is already watched.` | `ViewModels/Settings/IndexerServiceViewModel.cs` (AddWatchFolder) | Named | `IndexerServiceViewModelTests.Adding_a_folder_twice_is_refused_with_a_note` |
-| S-08 | Saving watch folders: the note says permission is asked once and the service restarts | `ViewModels/Settings/IndexerServiceViewModel.cs` (Save) | Named | `IndexerServiceViewModelTests.Watch_folders_round_trip_through_the_one_elevated_save` |
+| S-03 | Service not installed: the status line reads `not installed` and only Install is offered | `Synapic.ServiceConsole/ViewModels/IndexerServiceViewModel.cs` (Refresh) | Named | `IndexerServiceViewModelTests.A_machine_without_the_service_shows_not_installed_and_offers_install` |
+| S-04 | Not a Windows machine: the status reads `Windows only` and the queue note explains | `Synapic.ServiceConsole/ViewModels/IndexerServiceViewModel.cs` (Refresh null status) | Named | `IndexerServiceViewModelTests.Not_a_windows_machine_says_so_in_the_status_and_the_queue` |
+| S-05 | The service has never run: queue note `no queue yet`, counts zero | `Synapic.ServiceConsole/ViewModels/IndexerServiceViewModel.cs` (Refresh, null summary) | Named | `IndexerServiceViewModelTests.A_missing_queue_is_said_not_hidden` |
+| S-06 | The queue cannot be read: the note names the path and the failure | `Synapic.ServiceConsole/ViewModels/IndexerServiceViewModel.cs` (Refresh, noted snapshot) | Named | `IndexerServiceViewModelTests.A_queue_that_cannot_be_read_names_the_problem` |
+| S-07 | Adding a folder that is already watched: `'{path}' is already watched.` | `Synapic.ServiceConsole/ViewModels/IndexerServiceViewModel.cs` (AddWatchFolder) | Named | `IndexerServiceViewModelTests.Adding_a_folder_twice_is_refused_with_a_note` |
+| S-08 | Saving watch folders: the note reports what the elevated command did — applied and restarted, or applied with the service reading it at next start | `Synapic.ServiceConsole/ViewModels/IndexerServiceViewModel.cs` (SaveAsync) | Named | `IndexerServiceViewModelTests.A_successful_save_reports_applied_and_restarted` |
+| S-09 | A refused save: `Not applied: <the validation messages>` — the edit stays dirty so it can be fixed | `Synapic.ServiceConsole/ViewModels/IndexerServiceViewModel.cs` (SaveAsync, non-zero exit) | Named | `IndexerServiceViewModelTests.A_refused_save_surfaces_the_validation_messages_and_stays_dirty` |
+| S-10 | A save that never started (declined prompt, missing executable): `Not applied: … nothing was changed` | `Synapic.ServiceConsole/ViewModels/IndexerServiceViewModel.cs` (SaveAsync, null outcome) | Named | `IndexerServiceViewModelTests.A_save_that_never_started_says_nothing_was_changed` |
+
 
 ## Tally
 
 | Status | Rows |
 |---|---|
-| Named | 61 |
+| Named | 63 |
 | Partial (state asserted, copy not) | 0 |
 | Gap (no test names it) | 0 |
 | Shadowed (copy a later branch replaces) | 1 |
-| **Total** | **62** |
+| **Total** | **64** |
 
 What closed the last eleven gaps:
 

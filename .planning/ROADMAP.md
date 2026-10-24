@@ -1,47 +1,41 @@
 # Roadmap: Synapic.NET
 
-**Milestone:** v1.3 Service Console · **Defined:** 2026-10-24 · Requirements: [REQUIREMENTS.md](REQUIREMENTS.md)
+**Milestone:** v1.4 Service Console application · **Defined:** 2026-10-24 · Requirements: [REQUIREMENTS.md](REQUIREMENTS.md)
 
-Previous milestones are archived under [milestones/](milestones/) — v1.0 UI Refactor
-and v1.2 Release Integrity shipped 2026-10-24 (`v1.0` tag), v1.1 Windows Indexer
-shipped 2026-10-23 (`v1.1` tag). Release history: [MILESTONES.md](MILESTONES.md).
+Earlier milestones are archived under [milestones/](milestones/) — v1.0/v1.2 shipped
+2026-10-24 (`v1.0` tag), v1.1 shipped 2026-10-23 (`v1.1` tag), v1.3 (the service
+tab) shipped 2026-10-24 and its surface moved to the console app in this milestone.
+Release history: [MILESTONES.md](MILESTONES.md).
 
-## Active milestone: v1.3 Service Console
+## Active milestone: v1.4 Service Console application
 
-### Phase 13: The Service tab
+### Phase 14: The split and the verified save
 
-**Goal:** Manage the background indexer from the app (UI-01): service
-installation and lifecycle, watch-folder management, and a live queue view —
-the existing watch → queue → tag → write-into-file pipeline with its GUI face.
+**Goal:** The service gets its own UI — `Synapic.ServiceConsole.exe` — and the
+watch-folder save becomes a round trip whose outcome the user sees.
 
-**Requirements**: SVC-01..05
-**Depends on**: nothing (builds on the shipped v1.1 service and v1.0 UI)
+**Requirements**: SVC-06, SVC-07
+**Depends on**: v1.3 (the surface to move)
 
 **Success Criteria** (what must be TRUE):
 
-  1. The Settings view's eighth tab carries the three Service sections, covered by settings search and the compiled help (`check-help.py` green, `HelpScopeTests` green)
-  2. Lifecycle actions are single UAC-elevated launches of the indexer's own verbs with correct gating; status is read unelevated
-  3. Watch folders save through one `--apply-config` round trip that validates before saving, preserves unknown members, and restarts a running service
-  4. The queue view reads through `Synapic.Indexer.Contract`, and the contract↔schema drift is pinned by a test against a service-written database
-  5. Every reachable missing-something branch is inventoried and named (S-03…S-08); build 0/0 and the full suite green
+  1. `Synapic.ServiceConsole` builds as its own app (net10.0, contract reference only — no engine, no sidecar, no tagging surface) and publishes into the shared payload; both installers carry it, each with its own Start-menu shortcut
+  2. The main application is back to seven Settings tabs with no service-management code and no Contract reference; every pinning suite is green again at seven
+  3. `--apply-config` writes a result file on every exit path; the console awaits the elevated process and reports applied/restarted, applied/next-start, the refusal messages (edit kept dirty), or not-started
+  4. The empty-branch inventory follows the move (S-03…S-10 now name console tests; the drift check resolves citations across all test projects) and stays green
+  5. Build 0/0, full suite green, help check green, and the live round trip on the dev machine verified: a save through the elevated verb changes the config file and reports itself
 
 **Plans:** 1/1 executed (2026-10-24)
 
 | Plan | What it did | Summary |
 |------|-------------|---------|
-| 13-01 | The Service tab, the contract library, and the `--apply-config` verb | [13-01-SUMMARY.md](phases/13-service-tab/13-01-SUMMARY.md) |
-
-**Outcome:** see the plan summary; the phase's evidence is the test suite
-(`ApplyConfigCommandTests`, `ContractQueueReaderTests`,
-`IndexerServiceViewModelTests`, the pinning suites) plus the live smoke on a
-machine with the service installed and running.
+| 14-01 | The console app, the split, the verified save | [14-01-SUMMARY.md](phases/14-service-console/14-01-SUMMARY.md) |
 
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 13. The Service tab | v1.3 | 1/1 | Complete | 2026-10-24 |
+| 14. The split and the verified save | v1.4 | 1/1 | Complete | 2026-10-24 |
 
-**v1.3 remaining work:** none against SVC-01..05. Deferred items live in
-[REQUIREMENTS.md](REQUIREMENTS.md); the next milestone is chosen from
-PROJECT.md → Candidates.
+**v1.4 remaining work:** none against SVC-06/07. The next milestone is chosen
+from PROJECT.md → Candidates (a shared inference sidecar is now on that list).

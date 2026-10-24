@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>Synapic.ServiceConsole</RootNamespace>
+    <AssemblyName>Synapic.ServiceConsole</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>..\..\assets\icons\Icon.ico</ApplicationIcon>
+    <!-- Same identity as the main app's shell icon. -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The console is the service's own UI (v1.4): deliberately small, net10.0
+         like the main app, referencing only the shared contract. It carries no
+         engine, no sidecar host, no tagging surface - if it grows one of those,
+         the split has failed. -->
+    <PackageReference Include="Avalonia" Version="$(AvaloniaVersion)" />
+    <PackageReference Include="Avalonia.Desktop" Version="$(AvaloniaVersion)" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="$(AvaloniaVersion)" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="$(AvaloniaVersion)" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="$(CommunityToolkitMvvmVersion)" />
+    <!-- Overrides the vulnerable transitive 0.16.0 (via Avalonia) — GHSA-xrw6-gwf8-vvr9,
+         the same override the main app carries. -->
+    <PackageReference Include="Tmds.DBus.Protocol" Version="0.21.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Synapic.Indexer.Contract\Synapic.Indexer.Contract.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="..\..\assets\icons\Icon.ico" Link="Assets\Icon.ico" />
+  </ItemGroup>
+
+</Project>

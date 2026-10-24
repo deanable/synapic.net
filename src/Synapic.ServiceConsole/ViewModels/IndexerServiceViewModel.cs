@@ -4,17 +4,24 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Synapic.Indexer.Contract;
 using Synapic.Indexer.Contract.Configuration;
-using Synapic.Main.Services.Indexer;
+using Synapic.ServiceConsole.Services;
 
-namespace Synapic.Main.ViewModels.Settings;
+namespace Synapic.ServiceConsole.ViewModels;
 
 /// <summary>
-/// The Service tab's view model: install/lifecycle for the background indexer
-/// service, the watch folders that feed it, and a live view of its durable
-/// queue. Every elevated action is one launch (UAC) — the indexer's own verbs
-/// do the work — and everything the tab shows is read unelevated through the
-/// shared contract, so the GUI and the service can never disagree about what
-/// the queue holds or what the schedule says.
+/// The service console's one view model: install/lifecycle for the background
+/// indexer service, the folders it watches, and a live view of its durable
+/// queue. Every elevated action is one launch (UAC) - the indexer's own verbs
+/// do the work - and everything shown is read unelevated through the shared
+/// contract, so this app and the service cannot disagree about what is queued
+/// or scheduled.
+///
+/// Saving watch folders is a verified round trip (v1.4): the elevated
+/// <c>--apply-config</c> writes a result file beside the patch, this view model
+/// awaits the process and reads it, and the note reports what actually
+/// happened - "applied, service restarted" or the validation refusals - instead
+/// of the v1.3 tab's fire-and-forget "requested", which could hide a declined
+/// UAC prompt or a refused config behind a success-shaped note.
 /// </summary>
 public partial class IndexerServiceViewModel : ObservableObject
 {
@@ -49,7 +56,7 @@ public partial class IndexerServiceViewModel : ObservableObject
         OnPropertyChanged(nameof(StatusBrush));
     }
 
-    /// <summary>The status dot's colour, the same idiom the sidecar status uses.</summary>
+    /// <summary>The status dot's colour, the same idiom the main app's server status uses.</summary>
     public Avalonia.Media.IBrush StatusBrush =>
         IsRunning ? Avalonia.Media.Brushes.SeaGreen : Avalonia.Media.Brushes.Gray;
 
@@ -70,7 +77,7 @@ public partial class IndexerServiceViewModel : ObservableObject
     private void Install()
     {
         ActionNote = _launcher.LaunchElevated("--install")
-            ? "Install requested — Windows will ask for permission; the status follows on the next refresh."
+            ? "Install requested - Windows will ask for permission; the status follows on the next refresh."
             : "The indexer executable could not be started.";
     }
 
@@ -78,7 +85,7 @@ public partial class IndexerServiceViewModel : ObservableObject
     private void Uninstall()
     {
         ActionNote = _launcher.LaunchElevated("--uninstall")
-            ? "Uninstall requested — Windows will ask for permission; logs and data are kept."
+            ? "Uninstall requested - Windows will ask for permission; logs and data are kept."
             : "The indexer executable could not be started.";
     }
 
@@ -124,12 +131,14 @@ public partial class IndexerServiceViewModel : ObservableObject
     [ObservableProperty] private bool _isDirty;
     [ObservableProperty] private string _watchNote = "";
     [ObservableProperty] private string? _selectedWatchPath;
+    [ObservableProperty] private bool _isSaving;
 
     public ObservableCollection<string> WatchPaths { get; } = new();
 
     partial void OnWatchRecursiveChanged(bool value) => MarkDirty();
     partial void OnModeIndexChanged(int value) => MarkDirty();
     partial void OnIntervalMinutesChanged(int value) => MarkDirty();
+    partial void OnIsSavingChanged(bool value) => SaveCommand.NotifyCanExecuteChanged();
 
     private void MarkDirty()
     {
@@ -138,7 +147,7 @@ public partial class IndexerServiceViewModel : ObservableObject
         SaveCommand.NotifyCanExecuteChanged();
     }
 
-    private bool CanSave => IsSupported && IsDirty && _launcher.IndexerExecutablePresent;
+    private bool CanSave => IsSupported && IsDirty && _launcher.IndexerExecutablePresent && !IsSaving;
 
     /// <summary>Called by the view's folder picker; a duplicate is refused with a note.</summary>
     [RelayCommand]
@@ -165,12 +174,14 @@ public partial class IndexerServiceViewModel : ObservableObject
     }
 
     /// <summary>
-    /// One elevated round trip: the schedule patch is written to the user's temp
-    /// folder and applied by the indexer's <c>--apply-config</c>, which validates
-    /// before saving and restarts the service if it was running.
+    /// The verified elevated save: the patch goes to the user's temp folder, the
+    /// indexer's <c>--apply-config</c> applies it (validating before saving) and
+    /// writes a result file, and this awaits that result so the note states what
+    /// actually happened. A declined UAC prompt or a refused configuration is a
+    /// visible failure, never a success-shaped silence.
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanSave))]
-    private void Save()
+    private async Task SaveAsync()
     {
         var patch = new JsonObject
         {
@@ -191,15 +202,36 @@ public partial class IndexerServiceViewModel : ObservableObject
             return;
         }
 
-        if (!_launcher.LaunchElevated("--apply-config", patchPath))
+        IsSaving = true;
+        WatchNote = "Saving - Windows will ask for permission; the note below will say what happened.";
+        ApplyConfigOutcome? outcome;
+        try
         {
-            WatchNote = "The indexer executable could not be started; nothing was applied.";
+            outcome = await _launcher.ApplyConfigAsync(patchPath).ConfigureAwait(true);
+        }
+        finally
+        {
+            IsSaving = false;
+        }
+
+        if (outcome is null)
+        {
+            WatchNote = "Not applied: the elevated command could not be started (was the permission prompt declined?). Nothing was changed.";
             return;
         }
 
-        WatchNote = "Save requested — Windows will ask for permission; the command validates, applies, and restarts the service if it was running.";
-        IsDirty = false;
-        SaveCommand.NotifyCanExecuteChanged();
+        if (outcome.Applied)
+        {
+            IsDirty = false;
+            WatchNote = outcome.Restarted
+                ? $"Applied - the service was restarted with the new configuration. {outcome.Summary}"
+                : $"Applied - the service was not running, so it reads the change at its next start. {outcome.Summary}";
+            Refresh();
+        }
+        else
+        {
+            WatchNote = "Not applied: " + outcome.Summary;
+        }
     }
 
     // --------------------------------------------------------------- queue
@@ -217,9 +249,9 @@ public partial class IndexerServiceViewModel : ObservableObject
     // ------------------------------------------------------------- refresh
 
     /// <summary>
-    /// Re-reads everything the tab shows. The view calls this on activation and
-    /// on a five-second timer while the tab is visible; each read is cheap and
-    /// never elevated.
+    /// Re-reads everything the console shows. The window calls this on
+    /// activation and on a five-second timer while it is open; each read is
+    /// cheap and never elevated.
     /// </summary>
     [RelayCommand]
     public void Refresh()
@@ -267,7 +299,7 @@ public partial class IndexerServiceViewModel : ObservableObject
             }
         }
 
-        if (!IsDirty)
+        if (!IsDirty && !IsSaving)
         {
             _loading = true;
             var schedule = _monitor.ReadSchedule();
@@ -279,7 +311,8 @@ public partial class IndexerServiceViewModel : ObservableObject
                 IntervalMinutes = schedule.IntervalMinutes;
                 ModeIndex = Math.Max(0, ModeOptions.ToList().FindIndex(m =>
                     string.Equals(m, schedule.Mode.Trim(), StringComparison.OrdinalIgnoreCase)));
-                WatchNote = "";
+                // A completed save's note survives the refresh that confirms it;
+                // an in-progress edit is not clobbered either (guarded above).
             }
             _loading = false;
         }
@@ -288,7 +321,7 @@ public partial class IndexerServiceViewModel : ObservableObject
     private static string TimeOf(string? timestamp)
     {
         if (string.IsNullOrEmpty(timestamp)) return "";
-        // The events carry round-trip UTC stamps; the tab shows the clock time.
+        // The events carry round-trip UTC stamps; the console shows the clock time.
         return DateTime.TryParse(timestamp, null, System.Globalization.DateTimeStyles.RoundtripKind, out var time)
             ? time.ToLocalTime().ToString("HH:mm:ss")
             : timestamp;

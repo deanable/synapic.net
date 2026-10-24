@@ -64,6 +64,12 @@ walking up from the test output directory.
 
 ---
 
+## `tests/Synapic.ServiceConsole.Tests` (xUnit)
+
+| File | What it pins down |
+|------|-------------------|
+| `IndexerServiceViewModelTests` | The service console's view model against fakes: the status→button mapping, the watch-folder round trip through the one elevated save (patch JSON asserted field by field), the **verified** save — the note reports applied+restarted, applied+not-running, the refusal messages, and a save that never started, each said out loud — the queue view, and every missing-something branch (no service, no executable, no queue, not Windows). |
+
 ## `tests/Synapic.Indexer.Tests` (xUnit, Windows)
 
 The service host's suite: `net10.0-windows`, no Avalonia, and no real SCM. `sc.exe`
@@ -112,7 +118,6 @@ machine. The one real sidecar process (and real model) is the opt-in
 | `EmptyBranchInventoryTests` | The drift check behind `docs/ui-design.md` §10 criterion 6: every row of [`ui-empty-branches.md`](ui-empty-branches.md) that names a test resolves to a class and method that exist, a `Named`/`Partial` row with no test and an unknown status fail, and the table cannot shrink below the branches it was built from. One fact runs the same check over a table whose tests are gone, so the failure path is pinned rather than assumed. |
 | `HelpScopeTests` | The context-aware half of the help: `HelpScope.Topic` annotations resolve to the nearest annotated ancestor, an anchored annotation beats a coarser one, a rejected topic falls through to the next scope up, annotations are normalized, F1 opens the focused control's scope rather than the fallback (and falls back to the sidecar topic when nothing covers the focus), and every annotation in the views points at a topic, anchor and `Synapic.hhp` `[FILES]` entry that exist. |
 | `OperationContractTests` | The Phase 1 operation contract: the exact nine template members, no datasource member on a mode, the adapters' keys and titles, `Run` being the wrapped mode's own command, `IsRunEnabled` mirroring that command's `CanExecute`, a source-gated mode starting disabled with a reason, adapters re-raising their members when the wrapped mode changes, and — the similar-image case — the similarity search being its own operation over the same adapter (distinct key, title, description, help topic and threshold). |
-| `IndexerServiceViewModelTests` | The Service tab’s view model against fakes: the status→button mapping, the watch-folder round trip through the one elevated save (patch JSON asserted field by field), the queue view with failures and activity, and every missing-something branch — no service, no executable, no queue, not Windows — each said out loud. |
 | `SettingsViewTests` | The Settings view: its four-section app-preferences form, the theme and log-level changes applying to the running app and persisting, the diagnostics toggle showing and hiding the shell log view, defaults seeding a session with no saved engine state, the device auto-selection in a file without defaults, the inference-server section operating the server through the shell, the settings search filtering to matching sections and jumping to the first, every suggestion finding at least one section, and About reporting the version and links. |
 | `OperationGatingTests` | The tagging run's own gate: Start stays disabled until at least one tag field is on, while opening the tagging mode is never blocked by the tag fields (the wizard's half of that gate is gone with the step chain). |
 | `OperationLockWiringTests` | The run lock's re-arming: a running batch locks navigation and Home/A row unlock when it stops — the host raises `NavigationLockChanged` when a run's `IsRunning` flips, without which a running batch left Home clickable. |

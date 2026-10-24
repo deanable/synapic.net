@@ -885,20 +885,26 @@ null when absent so callers fall back to file time.
 Types: `HashAlgorithm`, `DedupAction`, `ServerHashMatchMode`, `DedupOptions`, `DedupProgress`,
 `DuplicateGroup`, `DedupResult`.
 
-### The background service surface (`Services/Indexer/`, `ViewModels/Settings/IndexerServiceViewModel`, `Views/Settings/ServiceSection`)
+### The service console (`src/Synapic.ServiceConsole` — a separate application since v1.4)
 
-The Settings view’s Service tab (UI-01, v1.3). `IndexerServiceMonitor` reads
-what needs no permission — the SCM through the same `sc.exe` seam the service’s
-own installer uses, the durable queue through the shared reader, the schedule
-through the shared config store — and `IndexerProcessLauncher` owns the
-elevated half: `UseShellExecute` launches of the indexer’s control verbs (UAC)
-and the `%TEMP%` patch file that `--apply-config` applies. The view model takes
-both as seams, so its behavior (status→button mapping, the watch-folder round
-trip, the queue view, every "something is missing" branch) is pinned headless.
-The reads and types the GUI and the service share live in
-`src/Synapic.Indexer.Contract` (net10.0): paths, the five job states, queue
-summaries and audit events, the read-only queue reader, and the configuration
-model/store — one type set instead of two that agree by convention.
+**Synapic.ServiceConsole.exe**, the background service's own UI (v1.4; the v1.3
+Settings tab moved here wholesale). One window, three sections: the service's
+lifecycle, watch folders, and the durable queue. `Services/IndexerServiceMonitor`
+reads what needs no permission — the SCM through the same `sc.exe` seam the
+service's own installer uses, the queue through the shared reader, the schedule
+through the shared config store — and `Services/IndexerProcessLauncher` owns
+the elevated half: `UseShellExecute` launches of the indexer's control verbs
+(UAC) and the **verified** `--apply-config` round trip: the patch is written to
+`%TEMP%`, the elevated command applies it and writes a result file, and the
+launcher awaits the process and reads the result, so the note in the UI reports
+what actually happened. The view model takes both as seams, so its behavior
+(status→button mapping, the save round trip, the queue view, every
+"something is missing" branch) is pinned headless in
+`tests/Synapic.ServiceConsole.Tests`. The types the console and the service
+share live in `src/Synapic.Indexer.Contract` (net10.0): paths, the five job
+states, queue summaries and audit events, the read-only queue reader, and the
+configuration model/store — one type set instead of two that agree by
+convention. The main application carries no service-management surface.
 
 ### Media & metadata
 

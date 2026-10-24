@@ -1,0 +1,21 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="using:Synapic.ServiceConsole.Views"
+        x:Class="Synapic.ServiceConsole.Views.MainWindow"
+        xmlns:vm="using:Synapic.ServiceConsole.ViewModels"
+        x:DataType="vm:IndexerServiceViewModel"
+        Title="Synapic Service"
+        Width="820" Height="720" MinWidth="640" MinHeight="520"
+        Icon="avares://Synapic.ServiceConsole/Assets/Icon.ico">
+
+  <!-- One window, one purpose: the background service's console. The timer in
+       the code-behind keeps the status and queue current while it is open. -->
+  <ScrollViewer Padding="16">
+    <StackPanel Spacing="4">
+      <TextBlock Text="Synapic Service" Classes="stepTitle" />
+      <TextBlock Classes="hint" Margin="0,0,0,8"
+                 Text="The console for the background image-tagging service - install it, point it at folders to watch, and watch its queue. This window is separate from the Synapic app on purpose: what the service monitors is the service's setting." />
+      <views:ServiceSection />
+    </StackPanel>
+  </ScrollViewer>
+</Window>
