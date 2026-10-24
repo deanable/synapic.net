@@ -69,3 +69,4 @@ UpgradeLog*.htm
 # other logs above - seen as untracked noise in build/wix/ after every
 # HeatWave install or upgrade.
 build/wix/HeatWaveConvert*.log
+/.zcode/plans
