@@ -1,4 +1,4 @@
-namespace Synapic.Indexer.Configuration;
+namespace Synapic.Indexer.Contract.Configuration;
 
 /// <summary>
 /// The indexer's configuration, matching <c>docs/windows-indexer.md</c> §5.2

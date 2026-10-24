@@ -153,6 +153,14 @@
         </ScrollViewer>
       </TabItem>
 
+      <TabItem x:Name="TabService" Header="Service">
+        <ScrollViewer>
+          <StackPanel Spacing="12" Margin="0,8,0,0">
+            <settings:ServiceSection />
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
       <TabItem x:Name="TabApp" Header="App">
         <ScrollViewer>
           <StackPanel Spacing="12" Margin="0,8,0,0">

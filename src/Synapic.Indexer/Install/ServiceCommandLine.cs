@@ -9,9 +9,10 @@ public enum ServiceMode
     Console,
     SetDaminionPassword,
     Status,
+    ApplyConfig,
 }
 
-public sealed record ServiceInvocation(ServiceMode Mode, bool FailedOnly = false);
+public sealed record ServiceInvocation(ServiceMode Mode, bool FailedOnly = false, string? ConfigPath = null);
 
 /// <summary>
 /// The control surface's contract (D-11-10, HOST-07). A mistyped flag must fail
@@ -42,11 +43,13 @@ public static class ServiceCommandLine
           Synapic.Indexer.exe --install           Register the service, its recovery actions and directories
           Synapic.Indexer.exe --uninstall         Stop and remove the service (keeps logs and data)
           Synapic.Indexer.exe --set-daminion-password   Store the Daminion password with DPAPI
+          Synapic.Indexer.exe --apply-config <file>     Merge a partial JSON config over the current one,
+                                                  validate it, save, and restart the service if it runs
           Synapic.Indexer.exe --status             Show queue counts and recent failures (read-only)
           Synapic.Indexer.exe --status --failed    List up to 50 failed and retrying items with their errors
           Synapic.Indexer.exe --help              Show this text
 
-        --install and --uninstall need an elevated prompt.
+        --install, --uninstall and --apply-config need an elevated prompt.
         """;
 
     public static bool TryParse(string[] args, out ServiceInvocation invocation, out string? error)
@@ -56,9 +59,10 @@ public static class ServiceCommandLine
 
         var modes = new List<ServiceMode>();
         var failedOnly = false;
-        foreach (var arg in args)
+        string? configPath = null;
+        for (var i = 0; i < args.Length; i++)
         {
-            var normalized = arg.Trim().ToLowerInvariant();
+            var normalized = args[i].Trim().ToLowerInvariant();
             switch (normalized)
             {
                 case "" or "--service":
@@ -81,12 +85,26 @@ public static class ServiceCommandLine
                 case "--failed":
                     failedOnly = true;
                     break;
+                case "--apply-config":
+                {
+                    // The patch is a file path, not an inline value: the GUI writes
+                    // it to %TEMP% so no quoting rule and no secret ever has to
+                    // survive a command line.
+                    if (i + 1 >= args.Length)
+                    {
+                        error = "--apply-config needs the path of the partial JSON file.";
+                        return false;
+                    }
+                    configPath = args[++i];
+                    modes.Add(ServiceMode.ApplyConfig);
+                    break;
+                }
                 case "--help" or "-h" or "/?":
                     error = null;
                     invocation = new ServiceInvocation(ServiceMode.Service);
                     return false;
                 default:
-                    error = $"Unknown argument '{arg}'.";
+                    error = $"Unknown argument '{args[i]}'.";
                     return false;
             }
         }
@@ -106,7 +124,9 @@ public static class ServiceCommandLine
         }
 
         invocation = new ServiceInvocation(
-            modes.Count == 0 ? ServiceMode.Service : modes[0], failedOnly && modes.Contains(ServiceMode.Status));
+            modes.Count == 0 ? ServiceMode.Service : modes[0],
+            failedOnly && modes.Contains(ServiceMode.Status),
+            configPath);
         return true;
     }
 
@@ -117,6 +137,7 @@ public static class ServiceCommandLine
         ServiceMode.Console => "--console",
         ServiceMode.SetDaminionPassword => "--set-daminion-password",
         ServiceMode.Status => "--status",
+        ServiceMode.ApplyConfig => "--apply-config",
         _ => "(service)",
     };
 

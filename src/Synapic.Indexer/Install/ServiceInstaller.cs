@@ -154,6 +154,51 @@ public sealed class ServiceInstaller
         return 0;
     }
 
+    /// <summary>
+    /// Stops and starts the service when it is running, so a configuration
+    /// applied by <c>--apply-config</c> takes effect immediately; a stopped or
+    /// absent service is left alone and reported as not restarted.
+    /// </summary>
+    public async Task<bool> RestartIfRunningAsync(CancellationToken ct = default)
+    {
+        var query = await _runner.RunAsync(ServiceCommandLine.BuildQueryArguments(), ct).ConfigureAwait(false);
+        if (query.ExitCode != 0 || !query.Output.Contains("RUNNING", StringComparison.OrdinalIgnoreCase))
+        {
+            SynapicLog.Info(nameof(ServiceInstaller),
+                $"{ServiceCommandLine.ServiceName} is not running; no restart is needed.");
+            return false;
+        }
+
+        var stop = await _runner.RunAsync(ServiceCommandLine.BuildStopArguments(), ct).ConfigureAwait(false);
+        if (stop.ExitCode != 0)
+        {
+            SynapicLog.Warning(nameof(ServiceInstaller),
+                $"sc stop returned {stop.ExitCode}: {stop.Output.Trim()} (continuing; the service will read the change at its next start).");
+            return false;
+        }
+
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+        while (DateTime.UtcNow < deadline)
+        {
+            var state = await _runner.RunAsync(ServiceCommandLine.BuildQueryArguments(), ct).ConfigureAwait(false);
+            if (state.ExitCode != 0 || state.Output.Contains("STOPPED", StringComparison.OrdinalIgnoreCase))
+                break;
+            await Task.Delay(TimeSpan.FromMilliseconds(250), ct).ConfigureAwait(false);
+        }
+
+        var start = await _runner.RunAsync(ServiceCommandLine.BuildStartArguments(), ct).ConfigureAwait(false);
+        if (start.ExitCode != 0)
+        {
+            SynapicLog.Error(nameof(ServiceInstaller),
+                $"sc start returned {start.ExitCode}: {start.Output.Trim()}");
+            return false;
+        }
+
+        SynapicLog.Info(nameof(ServiceInstaller),
+            $"{ServiceCommandLine.ServiceName} restarted to pick up a configuration change.");
+        return true;
+    }
+
     private static void EnsureEventLogSource()
     {
         if (IndexerLogging.EventLogSourceExists())

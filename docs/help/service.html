@@ -1,0 +1,80 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>The background service</title>
+<link rel="stylesheet" type="text/css" href="help.css">
+</head>
+<body>
+
+<p class="trail"><a href="index.html">Synapic Help</a> &rsaquo; Settings &rsaquo; The background service</p>
+
+<h1>The background service</h1>
+
+<p class="lead">Synapic can tag images with nobody at the desk. A Windows
+service &mdash; <span class="ui">SynapicIndexer</span> &mdash; watches folders you
+choose, queues every file that lands in them, and runs the same tagging engine
+the app uses. The model's keywords and description are written <em>into</em>
+each image file, which is what lets Windows itself index and search them.</p>
+
+<div class="note">
+<p class="first">Everything lives on the Service tab of Settings.</p>
+<p>Open <span class="ui">Settings</span> and pick the
+<span class="ui">Service</span> tab. It has three parts: the service itself
+(install, start, stop, uninstall), the folders it watches, and the queue
+showing what is waiting, running, done or failed.</p>
+</div>
+
+<h2>Installing and controlling the service</h2>
+
+<p>The service is normally installed by the Windows installer. The tab can do
+the same by hand: <span class="ui">Install</span> registers
+<span class="ui">SynapicIndexer</span> to run as the low-privilege LocalService
+account, start automatically at boot, and restart itself if it fails.
+<span class="ui">Start</span> and <span class="ui">Stop</span> control it,
+<span class="ui">Uninstall</span> removes it &mdash; logs and data under
+<code>%ProgramData%\Synapic</code> are kept.</p>
+
+<p>Each of these asks Windows for permission once (a UAC prompt), because
+registering and controlling a service is an administrator's act. The tab
+itself only ever <em>reads</em> the service state &mdash; that needs no
+permission.</p>
+
+<h2><a name="watch-folders"></a>Watch folders</h2>
+
+<p>A watch folder is a directory the service monitors: when an image file
+lands in it &mdash; copied in, saved by a camera import, produced by another
+tool &mdash; the file is fingerprinted, queued, and tagged when its turn
+comes. Subfolders can be included or ignored.</p>
+
+<p>Detection has three modes: watching the folders only, scanning them on an
+interval, or both. Watching reacts the moment a file is stable; the interval
+scan also catches files that arrived while nothing was watching.</p>
+
+<p>Saving asks for permission once. The change is validated before it is
+saved &mdash; a folder that does not exist is refused rather than silently
+breaking the service &mdash; and the service is restarted if it was running,
+because it reads its configuration at startup.</p>
+
+<h2><a name="queue"></a>The queue</h2>
+
+<p>Every file is one durable queue row: <span class="ui">Pending</span>
+(waiting), <span class="ui">In flight</span> (being tagged),
+<span class="ui">Completed</span>, <span class="ui">Retrying</span> (a
+transient problem &mdash; a locked file, a server pause &mdash; will be tried
+again) or <span class="ui">Failed</span>. The counts refresh while the tab is
+open; recent failures show their error, and the activity list is the service's
+history.</p>
+
+<p>The queue lives in <code>%ProgramData%\Synapic\state\indexer.db</code> and
+survives restarts: work that was in flight when the machine stopped is picked
+up again when it starts. Nothing in it is deleted &mdash; completed rows are
+the record of what the service has done.</p>
+
+<p>See also <a href="settings-reference.html">the Settings reference</a> and
+<a href="workflow-overview.html">how a run works</a> &mdash; the service runs
+the same engine, the same model and the same write-back rules the app's
+tagging view uses.</p>
+
+</body>
+</html>

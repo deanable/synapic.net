@@ -1,4 +1,4 @@
-namespace Synapic.Indexer.State;
+namespace Synapic.Indexer.Contract;
 
 /// <summary>Counts per state plus the newest failures — everything <c>--status</c> prints.</summary>
 public sealed record QueueSummary
@@ -26,3 +26,7 @@ public sealed record QueueSummary
 
 /// <summary>One of the newest failed or transient rows, with the error that stopped it.</summary>
 public sealed record QueueFailure(long Id, string Key, string? LastError, int Attempts);
+
+/// <summary>One audit row from <c>job_events</c>: the queue's history, newest first.</summary>
+public sealed record QueueEvent(
+    long JobId, string FileName, string? At, string? FromState, string? ToState, string? Detail);

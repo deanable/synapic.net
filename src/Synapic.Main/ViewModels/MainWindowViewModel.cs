@@ -78,7 +78,9 @@ public partial class MainWindowViewModel : ViewModelBase
         ConfigService? configService = null,
         AppSettingsRegistryStore? appSettingsStore = null,
         Func<ComputeAvailability>? computeAvailabilityProbe = null,
-        DedupFingerprintCache? dedupFingerprintCache = null)
+        DedupFingerprintCache? dedupFingerprintCache = null,
+        Services.Indexer.IIndexerServiceMonitor? indexerMonitor = null,
+        Services.Indexer.IIndexerProcessLauncher? indexerLauncher = null)
     {
         _sidecar = sidecar;
         _download = download ?? new SidecarDownloadService();
@@ -115,6 +117,13 @@ public partial class MainWindowViewModel : ViewModelBase
                 OnPropertyChanged(nameof(IsDiagnosticsVisible));
         };
         if (engineStore?.Load() is null) AppSettings.ApplyDefaultsToNewSession();
+
+        // The Service tab's view model: real seams by default, fakes in tests.
+        // Constructed last so nothing below depends on its reads — it polls the
+        // service and queue on the timer the view owns, not on shell events.
+        IndexerService = new ViewModels.Settings.IndexerServiceViewModel(
+            indexerMonitor ?? new Services.Indexer.IndexerServiceMonitor(),
+            indexerLauncher ?? new Services.Indexer.IndexerProcessLauncher());
 
         Operations = new OperationShellViewModel(
             _session, _sidecar, connectionStore, engineStore, presetStore, computeAvailabilityProbe, appSettingsStore,
@@ -173,9 +182,16 @@ public partial class MainWindowViewModel : ViewModelBase
     /// Inference server section reaches the server through
     /// <see cref="SettingsViewModel.Shell"/>, which this shell sets.
     /// (Named AppSettings because the shell already has a Settings *command* —
-    /// the shortcut that opens this view.)
+    /// see below; the shortcut that opens this view is that command.)
     /// </summary>
     public SettingsViewModel AppSettings { get; }
+
+    /// <summary>
+    /// The Service tab's view model: install/lifecycle, watch folders and the
+    /// queue of the background indexer (UI-01). Bound to the Settings view's
+    /// Service tab; polls on the timer that view owns.
+    /// </summary>
+    public ViewModels.Settings.IndexerServiceViewModel IndexerService { get; }
 
     /// <summary>
     /// Diagnostics drawer (ui-design D7): the in-app log view is hidden unless

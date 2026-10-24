@@ -1,4 +1,4 @@
-namespace Synapic.Indexer.State;
+namespace Synapic.Indexer.Contract;
 
 /// <summary>
 /// The five queue states from the spec (§5.1) and the transitions between them

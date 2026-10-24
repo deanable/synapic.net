@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Synapic.Indexer\Synapic.Indexer.csproj" />
+    <ProjectReference Include="..\..\src\Synapic.Indexer.Contract\Synapic.Indexer.Contract.csproj" />
   </ItemGroup>
 
 </Project>

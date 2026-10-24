@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Synapic.Indexer.Contract</RootNamespace>
+    <AssemblyName>Synapic.Indexer.Contract</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Plain net10.0 on purpose: the desktop app (net10.0, cross-platform) and
+         the service (net10.0-windows) both reference this library, so the
+         queue/config surface the GUI reads and the service writes is one type
+         set, not two that agree by convention. RegistryKey needs no package on
+         net10.0 (it ships in the runtime, Windows-only at run time) and the GUI
+         guards the call with an OS check. -->
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+  </ItemGroup>
+
+</Project>

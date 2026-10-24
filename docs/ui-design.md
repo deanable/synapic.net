@@ -260,7 +260,9 @@ open findings):
 
 ## 5. Settings view
 
-Own layout: **six tabs, one concern per tab** (revised 2026-10-11 — the long
+Own layout: **eight tabs, one concern per tab** (revised 2026-10-11; the
+Similar tab arrived with the similar-image operation and the Service tab with
+UI-01 in v1.3 — the long
 single scrolling column made it hard to see where one concern ended and the
 next began, and the search box now shows the tab a setting lives on rather than
 filtering a column):
@@ -271,7 +273,9 @@ filtering a column):
 | **Inference server** | status (stopped / starting / ready / error), Start/Stop Server, auto-launch toggle, Build/Download sidecar variants (CPU/CUDA), device fallback warning, health details |
 | **Tagging engine** | the model picker, device, tag fields, scoring and prompts — every tagging run's settings |
 | **Dedup** | hash algorithm, similarity threshold, server-hash matching, keep-set auto-select rules |
+| **Similar** | the similarity search’s own threshold and keep-set rules — looser than Dedup’s (added with the Similar images operation) |
 | **Upscale** | workflow, scale factor, precision, output format and quality, denoise, sharpen, overwrite |
+| **Service** | the background indexer (UI-01, v1.3): install/Start/Stop/Uninstall (one UAC prompt each), watch folders with their detection mode and interval behind one validated elevated save, and the live durable-queue view — counts per state, recent failures, recent activity |
 | **App preferences** | appearance (theme), logging (level, open folder, diagnostics toggle), defaults applied to a new session, about (version, links) |
 
 A search box above the tab strip switches to the tab a query names (with

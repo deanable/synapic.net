@@ -25,6 +25,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Synapic.Core.Tests", "tests
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Synapic.Indexer", "src\Synapic.Indexer\Synapic.Indexer.csproj", "{B3D7765C-49F4-48CA-9DC8-7F6739EF2247}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Synapic.Indexer.Contract", "src\Synapic.Indexer.Contract\Synapic.Indexer.Contract.csproj", "{C7A4E210-6B31-4D9E-9C05-31D64A0F2A18}"
+EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Synapic.Indexer.Tests", "tests\Synapic.Indexer.Tests\Synapic.Indexer.Tests.csproj", "{4E4E03C6-321D-492E-B083-82C7F8D8C9B7}"
 EndProject
 Global
@@ -132,12 +134,24 @@ Global
 		{F1B737E1-8014-48A5-8CD6-B566E0E247B5}.Release|x86.ActiveCfg = Release|Any CPU
 		{F1B737E1-8014-48A5-8CD6-B566E0E247B5}.Release|x86.Build.0 = Release|Any CPU
 		{B3D7765C-49F4-48CA-9DC8-7F6739EF2247}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C7A4E210-6B31-4D9E-9C05-31D64A0F2A18}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C7A4E210-6B31-4D9E-9C05-31D64A0F2A18}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C7A4E210-6B31-4D9E-9C05-31D64A0F2A18}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{C7A4E210-6B31-4D9E-9C05-31D64A0F2A18}.Debug|x64.Build.0 = Debug|Any CPU
+		{C7A4E210-6B31-4D9E-9C05-31D64A0F2A18}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{C7A4E210-6B31-4D9E-9C05-31D64A0F2A18}.Debug|x86.Build.0 = Debug|Any CPU
 		{B3D7765C-49F4-48CA-9DC8-7F6739EF2247}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B3D7765C-49F4-48CA-9DC8-7F6739EF2247}.Debug|x64.ActiveCfg = Debug|Any CPU
 		{B3D7765C-49F4-48CA-9DC8-7F6739EF2247}.Debug|x64.Build.0 = Debug|Any CPU
 		{B3D7765C-49F4-48CA-9DC8-7F6739EF2247}.Debug|x86.ActiveCfg = Debug|Any CPU
 		{B3D7765C-49F4-48CA-9DC8-7F6739EF2247}.Debug|x86.Build.0 = Debug|Any CPU
 		{B3D7765C-49F4-48CA-9DC8-7F6739EF2247}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C7A4E210-6B31-4D9E-9C05-31D64A0F2A18}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C7A4E210-6B31-4D9E-9C05-31D64A0F2A18}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C7A4E210-6B31-4D9E-9C05-31D64A0F2A18}.Release|x64.ActiveCfg = Release|Any CPU
+		{C7A4E210-6B31-4D9E-9C05-31D64A0F2A18}.Release|x64.Build.0 = Release|Any CPU
+		{C7A4E210-6B31-4D9E-9C05-31D64A0F2A18}.Release|x86.ActiveCfg = Release|Any CPU
+		{C7A4E210-6B31-4D9E-9C05-31D64A0F2A18}.Release|x86.Build.0 = Release|Any CPU
 		{B3D7765C-49F4-48CA-9DC8-7F6739EF2247}.Release|Any CPU.Build.0 = Release|Any CPU
 		{B3D7765C-49F4-48CA-9DC8-7F6739EF2247}.Release|x64.ActiveCfg = Release|Any CPU
 		{B3D7765C-49F4-48CA-9DC8-7F6739EF2247}.Release|x64.Build.0 = Release|Any CPU

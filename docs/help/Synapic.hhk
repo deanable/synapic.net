@@ -401,5 +401,21 @@
 		<param name="Name" value="XMP metadata">
 		<param name="Local" value="metadata-written.html">
 		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="background service">
+		<param name="Local" value="service.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="watch folders">
+		<param name="Local" value="service.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="service queue">
+		<param name="Local" value="service.html">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="Windows service">
+		<param name="Local" value="service.html">
+		</OBJECT>
 </UL>
 </BODY></HTML>

@@ -236,7 +236,7 @@ public sealed class LocalFolderScanSourceTests : IDisposable
     private async Task<List<string>> SummaryKeysAsync()
     {
         var keys = new List<string>();
-        using var connection = IndexingQueueRepository.TryOpenReadOnly(_databasePath)!;
+        using var connection = IndexerQueueReader.TryOpenReadOnly(_databasePath)!;
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT key FROM jobs;";
         using var reader = await command.ExecuteReaderAsync();

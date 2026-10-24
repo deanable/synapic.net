@@ -74,13 +74,4 @@ public static class QueueSchema
         version.CommandText = $"PRAGMA user_version={Version};";
         version.ExecuteNonQuery();
     }
-
-    /// <summary>The read-only check <c>--status</c> uses: never create, never repair.</summary>
-    public static bool IsInitialized(SqliteConnection connection)
-    {
-        using var command = connection.CreateCommand();
-        command.CommandText =
-            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('jobs','job_events');";
-        return Convert.ToInt64(command.ExecuteScalar()) == 2;
-    }
 }

@@ -1,6 +1,6 @@
 using Microsoft.Data.Sqlite;
+using Synapic.Indexer.Contract;
 using Synapic.Indexer.Hosting;
-using Synapic.Indexer.State;
 
 namespace Synapic.Indexer.Commands;
 
@@ -26,7 +26,7 @@ public static class StatusCommand
         SqliteConnection? connection;
         try
         {
-            connection = IndexingQueueRepository.TryOpenReadOnly(databasePath);
+            connection = IndexerQueueReader.TryOpenReadOnly(databasePath);
         }
         catch (SqliteException e)
         {
@@ -42,7 +42,7 @@ public static class StatusCommand
 
         using (connection)
         {
-            if (!QueueSchema.IsInitialized(connection))
+            if (!IndexerQueueReader.IsInitialized(connection))
             {
                 output.WriteLine("no queue yet");
                 return 0;
@@ -51,7 +51,7 @@ public static class StatusCommand
             QueueSummary summary;
             try
             {
-                summary = IndexingQueueRepository.ReadSummaryAsync(
+                summary = IndexerQueueReader.ReadSummaryAsync(
                     connection,
                     failureLimit: failedOnly ? FailureDetailLimit : 5).GetAwaiter().GetResult();
             }

@@ -885,6 +885,21 @@ null when absent so callers fall back to file time.
 Types: `HashAlgorithm`, `DedupAction`, `ServerHashMatchMode`, `DedupOptions`, `DedupProgress`,
 `DuplicateGroup`, `DedupResult`.
 
+### The background service surface (`Services/Indexer/`, `ViewModels/Settings/IndexerServiceViewModel`, `Views/Settings/ServiceSection`)
+
+The Settings view’s Service tab (UI-01, v1.3). `IndexerServiceMonitor` reads
+what needs no permission — the SCM through the same `sc.exe` seam the service’s
+own installer uses, the durable queue through the shared reader, the schedule
+through the shared config store — and `IndexerProcessLauncher` owns the
+elevated half: `UseShellExecute` launches of the indexer’s control verbs (UAC)
+and the `%TEMP%` patch file that `--apply-config` applies. The view model takes
+both as seams, so its behavior (status→button mapping, the watch-folder round
+trip, the queue view, every "something is missing" branch) is pinned headless.
+The reads and types the GUI and the service share live in
+`src/Synapic.Indexer.Contract` (net10.0): paths, the five job states, queue
+summaries and audit events, the read-only queue reader, and the configuration
+model/store — one type set instead of two that agree by convention.
+
 ### Media & metadata
 
 **`MetadataWriterService`** (`IMetadataWriter`) — `ReadAsync` /

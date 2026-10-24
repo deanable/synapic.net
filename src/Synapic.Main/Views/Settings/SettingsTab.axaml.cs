@@ -6,8 +6,8 @@ using Avalonia.VisualTree;
 namespace Synapic.Main.Views.Settings;
 
 /// <summary>
-/// The Settings view as seven tabs — Connection, Inference server, Tagging engine,
-/// Deduplication, Similar images, Upscaling, App preferences — one concern per tab
+/// The Settings view as eight tabs — Connection, Inference server, Tagging engine,
+/// Deduplication, Similar images, Upscaling, Service, App preferences — one concern per tab
 /// instead of one long column for all of them (ui-design §5, 2026-10-11 revision:
 /// a new user could not see where one concern ended and the next began). The search box
 /// above the strip is the fast path: it switches to the tab the query names, and
@@ -28,6 +28,7 @@ public partial class SettingsTab : UserControl
         ("TabDedup", new[] { "Deduplication", "Duplicate", "Duplicates", "Algorithm", "Threshold", "Keep-set" }),
         ("TabSimilar", new[] { "Similar", "Similarity", "Near-match", "Similar threshold", "Algorithm", "Threshold", "Keep-set" }),
         ("TabUpscale", new[] { "Upscaling", "Workflow", "Factor", "Precision", "Output" }),
+        ("TabService", new[] { "Service", "Background service", "Watch folders", "Folder monitor", "Queue", "Indexer" }),
         ("TabApp", new[] { "Appearance", "Theme", "Logging", "Defaults", "About" }),
     };
 
@@ -43,6 +44,9 @@ public partial class SettingsTab : UserControl
         ("SectionDedup", "TabDedup"),
         ("SectionSimilar", "TabSimilar"),
         ("SectionUpscale", "TabUpscale"),
+        ("SectionService", "TabService"),
+        ("SectionWatchFolders", "TabService"),
+        ("SectionQueue", "TabService"),
         ("SectionAppearance", "TabApp"),
         ("SectionLogging", "TabApp"),
         ("SectionDefaults", "TabApp"),

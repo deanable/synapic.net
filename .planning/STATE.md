@@ -1,15 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.2
-milestone_name: Release Integrity
+milestone: v1.3
+milestone_name: Service Console
 status: complete
-last_updated: "2026-10-24T01:10:00.000Z"
+last_updated: "2026-10-24T04:30:00.000Z"
 last_activity: 2026-10-24
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 11
-  completed_plans: 11
+  total_phases: 1
+  completed_phases: 1
+  total_plans: 1
+  completed_plans: 1
   percent: 100
 ---
 
@@ -27,15 +27,21 @@ Daminion) and finally ship v1.0. Requirements: [REQUIREMENTS.md](REQUIREMENTS.md
 
 ## Current Position
 
-**v1.2 closed and v1.0 shipped (2026-10-24).** All 16 requirements complete: MSI-01..05 (channel built,
-verified, and its release-workflow guard dropped after the 2026-10-24 dry run), DAM-01..04 (live
-catalogs, real outage), GATE-01..04 (criterion 6 restated as the drift-checked inventory; 03-05 verdict
-PASSED; full suite `-m:1` 1011 passed / 0 failed / 6 credential-gated skips; build 0/0; layout audit
-20/20), UAT-01/02 (seven scenarios executed on the installed build with quoted observations), UAT-03
-(phases 1–3 archived to `milestones/v1.0-*`, MILESTONES entry, PROJECT/STATE advanced, tag `v1.0`).
-Next milestone: not yet chosen — see PROJECT.md → Candidates After v1.2 (background dedup/upscale
-BG-01/02, the operator surface UI-01/DIST-01, installer signing). The planning tree resets when it is
-defined.
+**v1.3 Service Console complete (2026-10-24).** SVC-01..05 done in one phase
+(phase 13): the Settings view's eighth tab manages the background indexer —
+service install/Start/Stop/Uninstall as single UAC launches of the indexer's
+own verbs, watch folders saved through the new `--apply-config` (validate
+before save, unknown members preserved, restart when running), and the durable
+queue live (counts, failures, audit activity) through the new
+`Synapic.Indexer.Contract` shared library — the first GUI-service bridge, with
+a drift test pinning the contract's queries against the service's schema. The
+tab's reachable absences are inventoried (S-03..S-08, each named by a test).
+Evidence: `phases/13-service-tab/13-01-SUMMARY.md`; the v1.0 shipped service on
+this machine showed RUNNING with live counts in the smoke.
+
+Next milestone: not yet chosen — PROJECT.md -> Candidates After v1.2 (minus
+UI-01, now delivered).
+
 ## Deferred Items
 
 Items acknowledged and deferred at the v1.1 milestone close on 2026-10-23:

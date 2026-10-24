@@ -28,6 +28,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Synapic.Core\Synapic.Core.csproj" />
     <ProjectReference Include="..\Synapic.Shared\Synapic.Shared.csproj" />
+    <ProjectReference Include="..\Synapic.Indexer.Contract\Synapic.Indexer.Contract.csproj" />
   </ItemGroup>
 
 </Project>

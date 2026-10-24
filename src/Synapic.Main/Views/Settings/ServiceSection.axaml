@@ -1,0 +1,131 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Synapic.Main.ViewModels"
+             xmlns:help="using:Synapic.Main.Services"
+             x:Class="Synapic.Main.Views.Settings.ServiceSection"
+             x:DataType="vm:MainWindowViewModel">
+
+  <!-- UI-01, delivered: the Service tab. Three sections — the service's
+       lifecycle, the folders it watches, and its durable queue. Every elevated
+       action is one UAC launch of the indexer's own control verbs; everything
+       shown is read unelevated through the shared Synapic.Indexer.Contract, so
+       the tab and the service cannot disagree about what is queued or
+       scheduled. Bound to the shell (its DataContext is the MainWindowViewModel)
+       through the IndexerService view model the shell owns. -->
+  <StackPanel Spacing="12">
+
+    <Border Classes="card settingsCard" x:Name="SectionService"
+            Padding="16" help:HelpScope.Topic="service.html">
+      <StackPanel Spacing="8">
+        <TextBlock Text="Background service" Classes="sectionTitle" />
+        <TextBlock Classes="hint" TextWrapping="Wrap"
+                   Text="The Windows service that tags images with nobody at the desk: it watches the folders below, queues what lands, and writes the model's keywords and description into each file so Windows can index them." />
+
+        <WrapPanel>
+          <Ellipse Width="12" Height="12" VerticalAlignment="Center" Margin="0,0,8,8"
+                   Fill="{Binding IndexerService.StatusBrush}" />
+          <TextBlock Text="{Binding IndexerService.ServiceStatusText}" VerticalAlignment="Center"
+                     FontWeight="SemiBold" FontSize="12" Margin="0,0,12,8" />
+          <TextBlock Text="{Binding IndexerService.StartTypeText}" IsVisible="{Binding IndexerService.IsInstalled}"
+                     VerticalAlignment="Center" FontSize="11" Opacity="0.75" Margin="0,0,12,8" />
+        </WrapPanel>
+
+        <WrapPanel>
+          <Button Content="Install" Command="{Binding IndexerService.InstallCommand}" Margin="0,0,8,8"
+                  ToolTip.Tip="Register SynapicIndexer as a Windows service (LocalService, auto start, restart on failure). Windows asks for permission." />
+          <Button Content="Uninstall" Command="{Binding IndexerService.UninstallCommand}" Margin="0,0,8,8"
+                  ToolTip.Tip="Stop and remove the service. Logs and data under ProgramData are kept." />
+          <Button Content="Start" Command="{Binding IndexerService.StartCommand}" Margin="0,0,8,8" />
+          <Button Content="Stop" Command="{Binding IndexerService.StopCommand}" Margin="0,0,8,8" />
+          <Button Content="Open log folder" Command="{Binding IndexerService.OpenLogsCommand}" Margin="0,0,8,8"
+                  ToolTip.Tip="%ProgramData%\Synapic\Logs" />
+        </WrapPanel>
+        <TextBlock Classes="hint" TextWrapping="Wrap" Text="{Binding IndexerService.ActionNote}"
+                   IsVisible="{Binding IndexerService.ActionNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      </StackPanel>
+    </Border>
+
+    <Border Classes="card settingsCard" x:Name="SectionWatchFolders"
+            Padding="16" help:HelpScope.Topic="service.html#watch-folders">
+      <StackPanel Spacing="8">
+        <TextBlock Text="Watch folders" Classes="sectionTitle" />
+        <TextBlock Classes="hint" TextWrapping="Wrap"
+                   Text="Folders the service monitors: a file that lands in one is queued and tagged. Saving asks for permission once — the change is validated, applied, and the service restarts if it was running." />
+
+        <ListBox ItemsSource="{Binding IndexerService.WatchPaths}"
+                 SelectedItem="{Binding IndexerService.SelectedWatchPath}"
+                 MinHeight="48" MaxHeight="140" />
+
+        <WrapPanel>
+          <Button Content="Add folder…" Click="OnAddWatchFolder" Margin="0,0,8,8" />
+          <Button Content="Remove selected" Command="{Binding IndexerService.RemoveWatchFolderCommand}" Margin="0,0,8,8"
+                  IsEnabled="{Binding IndexerService.SelectedWatchPath, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        </WrapPanel>
+
+        <WrapPanel Margin="0,4,0,0">
+          <CheckBox Content="Include subfolders" IsChecked="{Binding IndexerService.WatchRecursive}"
+                    Margin="0,0,16,8" VerticalAlignment="Center" />
+          <TextBlock Text="Detection:" VerticalAlignment="Center" Margin="0,0,8,8" />
+          <ComboBox SelectedIndex="{Binding IndexerService.ModeIndex}" MinWidth="170" Margin="0,0,16,8">
+            <ComboBoxItem Content="Watch folders only" />
+            <ComboBoxItem Content="Scan on an interval" />
+            <ComboBoxItem Content="Both" />
+          </ComboBox>
+          <TextBlock Text="Interval (minutes):" VerticalAlignment="Center" Margin="0,0,8,8" />
+          <NumericUpDown Value="{Binding IndexerService.IntervalMinutes}" Minimum="1" Maximum="1440"
+                         Width="100" Margin="0,0,8,8" />
+        </WrapPanel>
+
+        <WrapPanel>
+          <Button Content="Save &amp; restart service" Command="{Binding IndexerService.SaveCommand}"
+                  Classes="accent" Margin="0,0,8,8" />
+        </WrapPanel>
+        <TextBlock Classes="hint" TextWrapping="Wrap" Text="{Binding IndexerService.WatchNote}"
+                   IsVisible="{Binding IndexerService.WatchNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      </StackPanel>
+    </Border>
+
+    <Border Classes="card settingsCard" x:Name="SectionQueue"
+            Padding="16" help:HelpScope.Topic="service.html#queue">
+      <StackPanel Spacing="8">
+        <TextBlock Text="Queue" Classes="sectionTitle" />
+        <TextBlock Classes="hint" TextWrapping="Wrap"
+                   Text="The durable queue: what is waiting, in flight, done, or failed. The counts refresh while this tab is open; completed rows are the service's history." />
+
+        <TextBlock Text="{Binding IndexerService.QueueNote}" Classes="hint" TextWrapping="Wrap"
+                   IsVisible="{Binding IndexerService.QueueNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+        <Grid ColumnDefinitions="*,*,*,*,*" IsVisible="{Binding IndexerService.IsSupported}">
+          <StackPanel Grid.Column="0" Spacing="2">
+            <TextBlock Classes="hint" Text="Pending" />
+            <TextBlock Text="{Binding IndexerService.PendingCount}" FontWeight="SemiBold" />
+          </StackPanel>
+          <StackPanel Grid.Column="1" Spacing="2">
+            <TextBlock Classes="hint" Text="In flight" />
+            <TextBlock Text="{Binding IndexerService.InFlightCount}" FontWeight="SemiBold" />
+          </StackPanel>
+          <StackPanel Grid.Column="2" Spacing="2">
+            <TextBlock Classes="hint" Text="Completed" />
+            <TextBlock Text="{Binding IndexerService.CompletedCount}" FontWeight="SemiBold" />
+          </StackPanel>
+          <StackPanel Grid.Column="3" Spacing="2">
+            <TextBlock Classes="hint" Text="Retrying" />
+            <TextBlock Text="{Binding IndexerService.TransientFailureCount}" FontWeight="SemiBold" />
+          </StackPanel>
+          <StackPanel Grid.Column="4" Spacing="2">
+            <TextBlock Classes="hint" Text="Failed" />
+            <TextBlock Text="{Binding IndexerService.FailedCount}" FontWeight="SemiBold" />
+          </StackPanel>
+        </Grid>
+
+        <TextBlock Text="Recent failures" Classes="hint" Margin="0,8,0,0"
+                   IsVisible="{Binding IndexerService.FailedCount, Converter={x:Static ObjectConverters.IsNotNull}}" />
+        <ListBox ItemsSource="{Binding IndexerService.RecentFailures}" MinHeight="0" MaxHeight="110" />
+
+        <TextBlock Text="Recent activity" Classes="hint" Margin="0,8,0,0" />
+        <ListBox ItemsSource="{Binding IndexerService.RecentEvents}" MinHeight="48" MaxHeight="170" />
+      </StackPanel>
+    </Border>
+
+  </StackPanel>
+</UserControl>

@@ -260,6 +260,24 @@ Failures (newest first, up to 50):
   41  local|d:\media\incoming\broken.jpg  attempts=1  the image could not be decoded: cannot identify image file
 ```
 
+### Changing the configuration: `--apply-config` (elevated)
+
+`--apply-config <file>` merges a partial JSON file over the current
+configuration (members this build does not know survive), validates the merged
+result before anything is saved — a refusal exits 2 and leaves the file
+unchanged — writes it, and restarts the service if it was running, because the
+service reads its configuration once at startup.
+
+```text
+> Synapic.Indexer.exe --apply-config "%TEMP%\synapic-apply-config.json"
+Applied \Temp\synapic-apply-config.json to C:\ProgramData\Synapic\indexer-config.json; the service was restarted to pick it up.
+```
+
+This is also what the desktop app’s **Settings → Service** tab runs when you
+save watch folders: the app (running unelevated) writes the patch to your temp
+folder, then launches this elevated command, so the GUI never writes ProgramData
+directly and one validation implementation serves both the CLI and the GUI.
+
 ### Logs
 
 | Where | What |

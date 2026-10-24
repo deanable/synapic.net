@@ -231,7 +231,7 @@ public sealed class IndexingQueueRepositoryTests : IDisposable
         var row = await CompleteAsync(candidate);
 
         Assert.Equal(JobState.Completed, row.State);
-        using var connection = IndexingQueueRepository.TryOpenReadOnly(_databasePath)!;
+        using var connection = IndexerQueueReader.TryOpenReadOnly(_databasePath)!;
         using var command = connection.CreateCommand();
         command.CommandText =
             "SELECT to_state, detail FROM job_events WHERE job_id = $id ORDER BY id;";
@@ -257,7 +257,7 @@ public sealed class IndexingQueueRepositoryTests : IDisposable
         Assert.Equal(0, summary.InFlight);
         Assert.Equal(0, await _repository.RecoverInFlightAsync());
 
-        using var connection = IndexingQueueRepository.TryOpenReadOnly(_databasePath)!;
+        using var connection = IndexerQueueReader.TryOpenReadOnly(_databasePath)!;
         using var command = connection.CreateCommand();
         command.CommandText =
             "SELECT COUNT(*) FROM job_events WHERE from_state = 'InFlight' AND to_state = 'Pending' " +
@@ -351,12 +351,12 @@ public sealed class IndexingQueueRepositoryTests : IDisposable
     [Fact]
     public void Read_only_open_of_a_missing_database_returns_null()
     {
-        Assert.Null(IndexingQueueRepository.TryOpenReadOnly(Path.Combine(_directory, "nope.db")));
+        Assert.Null(IndexerQueueReader.TryOpenReadOnly(Path.Combine(_directory, "nope.db")));
     }
 
     private async Task<long> CountEventsAsync(long jobId)
     {
-        using var connection = IndexingQueueRepository.TryOpenReadOnly(_databasePath)!;
+        using var connection = IndexerQueueReader.TryOpenReadOnly(_databasePath)!;
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT COUNT(*) FROM job_events WHERE job_id = $id;";
         command.Parameters.AddWithValue("$id", jobId);

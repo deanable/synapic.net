@@ -3,7 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Win32;
 
-namespace Synapic.Indexer.Configuration;
+namespace Synapic.Indexer.Contract.Configuration;
 
 /// <summary>One configuration problem, named by the setting's dotted path.</summary>
 public sealed record ConfigError(string Path, string Message)
@@ -101,27 +101,42 @@ public sealed class IndexerConfigStore
     /// </summary>
     public void SaveDaminionPassword(string encryptedPassword)
     {
-        JsonObject root;
-        if (File.Exists(_configFilePath))
-        {
-            var text = File.ReadAllText(_configFilePath);
-            root = string.IsNullOrWhiteSpace(text)
-                ? new JsonObject()
-                : JsonNode.Parse(text) as JsonObject
-                  ?? throw new InvalidOperationException($"{_configFilePath} is not a JSON object.");
-        }
-        else
-        {
-            root = new JsonObject();
-        }
-
+        var root = ReadTree();
         root["version"] ??= 1;
         var datasource = root["datasource"] as JsonObject ?? new JsonObject();
         root["datasource"] = datasource;
         var daminion = datasource["daminion"] as JsonObject ?? new JsonObject();
         datasource["daminion"] = daminion;
         daminion["encryptedPassword"] = encryptedPassword;
+        SaveTree(root);
+    }
 
+    /// <summary>
+    /// The config file as a JSON tree, so a partial update can preserve members
+    /// this build does not know about. An absent file is an empty object; a
+    /// malformed one throws — callers that must not lose data validate first.
+    /// </summary>
+    public JsonObject ReadTree()
+    {
+        if (!File.Exists(_configFilePath)) return new JsonObject();
+        var text = File.ReadAllText(_configFilePath);
+        return string.IsNullOrWhiteSpace(text)
+            ? new JsonObject()
+            : JsonNode.Parse(text, documentOptions: new JsonDocumentOptions
+              {
+                  CommentHandling = JsonCommentHandling.Skip,
+                  AllowTrailingCommas = true,
+              }) as JsonObject
+              ?? throw new InvalidOperationException($"{_configFilePath} is not a JSON object.");
+    }
+
+    /// <summary>
+    /// Writes the whole tree, indented. The partial-update commands
+    /// (<c>--set-daminion-password</c>, <c>--apply-config</c>) go through this so
+    /// there is exactly one writer of the file.
+    /// </summary>
+    public void SaveTree(JsonObject root)
+    {
         var directory = Path.GetDirectoryName(_configFilePath);
         if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
         File.WriteAllText(_configFilePath, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
@@ -131,6 +146,10 @@ public sealed class IndexerConfigStore
     {
         values = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
         error = null;
+        // The registry defaults exist only on Windows; elsewhere the JSON file
+        // (or the built-in defaults) is the whole configuration, which is not an
+        // error. The guard also satisfies CA1416 on the cross-platform callers.
+        if (!OperatingSystem.IsWindows()) return true;
         var hive = _registryIsTestOverride ? RegistryHive.CurrentUser : RegistryHive.LocalMachine;
         try
         {

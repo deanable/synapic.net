@@ -77,6 +77,10 @@ internal static class Program
             case ServiceMode.SetDaminionPassword:
                 return PasswordCommand.Run(store, PasswordCommand.ReadWithoutEcho, Console.Out);
 
+            case ServiceMode.ApplyConfig:
+                return await ApplyConfigCommand.Run(
+                    store, new ServiceInstaller(), invocation.ConfigPath!, Console.Out, Console.Error).ConfigureAwait(false);
+
             case ServiceMode.Install:
                 return await new ServiceInstaller()
                     .InstallAsync(Environment.ProcessPath ?? Environment.GetCommandLineArgs()[0], paths)

@@ -1,4 +1,4 @@
-namespace Synapic.Indexer.Hosting;
+namespace Synapic.Indexer.Contract;
 
 /// <summary>
 /// Where the service keeps its files under <c>%ProgramData%\Synapic</c>

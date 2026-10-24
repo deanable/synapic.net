@@ -17,16 +17,16 @@ queue, and writing back while nobody is at the desk.
 Pick a source and get correct, reviewable results written back — without the user ever fighting the
 UI, and without anyone needing to be at the desk for the routine tagging to happen.
 
-## Current Milestone: none — v1.2 closed, v1.0 shipped (2026-10-24)
+## Current Milestone: v1.3 Service Console — shipped 2026-10-24
 
-**v1.2 Release Integrity is complete — 16/16 requirements.** The MSI channel is built, verified and
-now unguarded in the release workflow; the Daminion fault table is proven against real catalogs; the
-phase-3 gate is PASSED behind the finite, drift-checked empty-branch inventory; the seven UAT
-scenarios are executed on the installed build with recorded observations; and v1.0 is archived
-([milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)) and tagged `v1.0`.
+**One phase, one plan:** the Settings view's Service tab (UI-01, realized) —
+service lifecycle, watch folders, and the live queue, over the shipped v1.1
+indexer. The GUI and the service now share `Synapic.Indexer.Contract`, and the
+tab's one write path is the indexer's own validated `--apply-config`. All five
+requirements (SVC-01..05) complete; records in
+[REQUIREMENTS.md](REQUIREMENTS.md) / [ROADMAP.md](ROADMAP.md).
 
-**Next milestone:** not yet chosen — see Candidates below. The planning tree (REQUIREMENTS/ROADMAP/
-STATE) is next reset when that milestone is defined.
+**Next milestone:** not yet chosen — see Candidates below (UI-01 is delivered).
 
 ## Current State
 
@@ -203,4 +203,4 @@ Full record: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md).
 
 ---
 
-*Last updated: 2026-10-24 — v1.2 closed; v1.0 shipped and tagged.*
+*Last updated: 2026-10-24 — v1.3 Service Console shipped (phase 13).*

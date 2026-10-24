@@ -242,8 +242,9 @@ public class UiLayoutAuditTests
 
     /// <summary>
     /// The Settings view is seven tabs, one concern per tab (ui-design §5, 2026-10-11
-    /// revision). Every tab is visited at every audited size: each lays its own
-    /// sections out cleanly, and the tab strip itself shows all seven entries.
+    /// revision; the Service tab joined with v1.3's UI-01). Every tab is visited
+    /// at every audited size: each lays its own sections out cleanly, and the
+    /// tab strip itself shows all eight entries.
     /// </summary>
     [AvaloniaTheory]
     [InlineData(1600, 900)]
@@ -251,7 +252,7 @@ public class UiLayoutAuditTests
     [InlineData(1024, 700)]
     [InlineData(900, 600)]
     [InlineData(640, 480)]
-    public void Settings_view_is_seven_tabs_and_every_tab_lays_out_cleanly(double width, double height)
+    public void Settings_view_is_eight_tabs_and_every_tab_lays_out_cleanly(double width, double height)
     {
         var window = new MainWindow { DataContext = Shell("daminion") };
         window.Width = width;
@@ -265,14 +266,14 @@ public class UiLayoutAuditTests
             Assert.Equal(height, window.ClientSize.Height);
 
             var settings = Assert.Single(window.GetVisualDescendants().OfType<SettingsTab>());
-            var tabs = settings.GetVisualDescendants().OfType<TabItem>
-                ().ToList();
-            Assert.Equal(7, tabs.Count);
+            var tabs = settings.GetVisualDescendants().OfType<TabItem
+                >().ToList();
+            Assert.Equal(8, tabs.Count);
 
             foreach (var tab in new[]
                      {
                          "TabConnection", "TabServer", "TabEngine",
-                         "TabDedup", "TabSimilar", "TabUpscale", "TabApp",
+                         "TabDedup", "TabSimilar", "TabUpscale", "TabService", "TabApp",
                      })
             {
                 settings.ShowTab(tab);

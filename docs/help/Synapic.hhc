@@ -125,6 +125,10 @@
 			<param name="Name" value="Upscaling">
 			<param name="Local" value="upscale.html">
 			</OBJECT>
+		<LI> <OBJECT type="text/sitemap">
+			<param name="Name" value="The background service">
+			<param name="Local" value="service.html">
+			</OBJECT>
 	</UL>
 	<LI> <OBJECT type="text/sitemap">
 		<param name="Name" value="Logs and diagnostics">
